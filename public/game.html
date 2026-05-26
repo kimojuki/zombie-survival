@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <title>Zombie Survival</title>
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+
+<div id="connecting-screen">Connexion au serveur...</div>
+
+<canvas id="game-canvas"></canvas>
+
+<!-- HUD -->
+<div id="hud">
+  <div id="health-bar-wrap">
+    <span id="health-icon">❤️</span>
+    <div id="health-bar-bg"><div id="health-bar"></div></div>
+    <span id="health-text">100</span>
+  </div>
+  <div id="kills-display">☠️ <span id="kills-count">0</span></div>
+  <div id="ammo-display">🔫 <span id="ammo-count">30</span></div>
+  <div id="crosshair"></div>
+  <div id="damage-flash"></div>
+  <div id="wave-banner"></div>
+</div>
+
+<!-- Mobile zones -->
+<div id="left-zone"></div>
+<div id="right-zone"></div>
+<button id="shoot-btn">🔫</button>
+
+<!-- Death screen -->
+<div id="death-screen">
+  <h2>MORT</h2>
+  <p id="death-kills"></p>
+  <button id="respawn-btn" onclick="respawn()">Réapparaître</button>
+</div>
+
+<!-- Libraries -->
+<script src="/socket.io/socket.io.js"></script>
+<script src="https://unpkg.com/three@0.160.0/build/three.min.js"></script>
+<script src="https://unpkg.com/nipplejs@0.10.1/dist/nipplejs.min.js"></script>
+
+<!-- Game modules (order matters) -->
+<script src="/js/noise.js"></script>
+<script src="/js/world.js"></script>
+<script src="/js/player.js"></script>
+<script src="/js/zombie.js"></script>
+<script src="/js/network.js"></script>
+<script src="/js/ui.js"></script>
+<script src="/js/game.js"></script>
+
+</body>
+</html>

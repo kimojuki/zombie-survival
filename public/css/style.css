@@ -1,0 +1,187 @@
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --red: #e53e3e;
+  --green: #38a169;
+  --dark: #1a1a1a;
+  --panel: rgba(0,0,0,0.7);
+}
+
+body {
+  font-family: 'Segoe UI', sans-serif;
+  background: #0a0a0a;
+  color: #fff;
+  height: 100dvh;
+  overflow: hidden;
+  touch-action: none;
+  user-select: none;
+}
+
+/* ── Login page ─────────────────────────────────────────────── */
+.login-bg {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 100dvh;
+  background: radial-gradient(ellipse at center, #1a0a0a 0%, #000 70%);
+}
+
+.login-card {
+  background: var(--panel);
+  border: 1px solid #333;
+  border-radius: 16px;
+  padding: 2rem 1.5rem;
+  width: min(380px, 96vw);
+  backdrop-filter: blur(10px);
+}
+
+.login-title {
+  text-align: center;
+  font-size: 1.8rem;
+  font-weight: 900;
+  color: var(--red);
+  letter-spacing: 2px;
+  margin-bottom: 0.25rem;
+}
+.login-subtitle { text-align: center; color: #888; font-size: 0.85rem; margin-bottom: 1.5rem; }
+
+.tabs { display: flex; gap: 4px; margin-bottom: 1.5rem; }
+.tab-btn {
+  flex: 1; padding: 0.6rem; border: none; border-radius: 8px;
+  background: #222; color: #aaa; cursor: pointer; font-size: 0.95rem; transition: 0.2s;
+}
+.tab-btn.active { background: var(--red); color: #fff; font-weight: 700; }
+
+.form-group { margin-bottom: 1rem; }
+.form-group label { display: block; font-size: 0.8rem; color: #aaa; margin-bottom: 0.4rem; }
+.form-group input {
+  width: 100%; padding: 0.75rem 1rem; border: 1px solid #333; border-radius: 10px;
+  background: #111; color: #fff; font-size: 1rem; outline: none; transition: border-color 0.2s;
+}
+.form-group input:focus { border-color: var(--red); }
+
+.btn-primary {
+  width: 100%; padding: 0.85rem; border: none; border-radius: 10px;
+  background: var(--red); color: #fff; font-size: 1rem; font-weight: 700;
+  cursor: pointer; margin-top: 0.5rem; transition: opacity 0.2s;
+}
+.btn-primary:active { opacity: 0.8; }
+
+.error-msg { color: #fc8181; font-size: 0.85rem; margin-top: 0.75rem; text-align: center; min-height: 1.2em; }
+
+/* ── Game canvas ────────────────────────────────────────────── */
+#game-canvas {
+  position: fixed; inset: 0;
+  width: 100%; height: 100%;
+  display: block;
+  touch-action: none;
+}
+
+/* ── HUD ────────────────────────────────────────────────────── */
+#hud {
+  position: fixed; inset: 0;
+  pointer-events: none;
+}
+
+#health-bar-wrap {
+  position: absolute; top: 16px; left: 16px;
+  display: flex; align-items: center; gap: 8px;
+  pointer-events: none;
+}
+#health-icon { font-size: 1.2rem; }
+#health-bar-bg {
+  width: 140px; height: 14px;
+  background: rgba(0,0,0,0.5); border-radius: 7px; overflow: hidden;
+  border: 1px solid #555;
+}
+#health-bar {
+  height: 100%; width: 100%;
+  background: var(--red); border-radius: 7px; transition: width 0.3s;
+}
+#health-text { font-size: 0.85rem; color: #fff; min-width: 36px; }
+
+#ammo-display {
+  position: absolute; bottom: 80px; right: 20px;
+  font-size: 1.3rem; font-weight: 900;
+  color: #fff; text-shadow: 0 2px 8px #000;
+  pointer-events: none;
+}
+#kills-display {
+  position: absolute; top: 16px; right: 16px;
+  font-size: 0.9rem; color: #ffd700;
+  pointer-events: none;
+}
+
+#crosshair {
+  position: absolute; top: 50%; left: 50%;
+  transform: translate(-50%, -50%);
+  width: 20px; height: 20px;
+  pointer-events: none;
+}
+#crosshair::before, #crosshair::after {
+  content: ''; position: absolute;
+  background: rgba(255,255,255,0.8);
+}
+#crosshair::before { width: 2px; height: 100%; left: 9px; top: 0; }
+#crosshair::after  { width: 100%; height: 2px; top: 9px; left: 0; }
+
+#damage-flash {
+  position: absolute; inset: 0;
+  background: radial-gradient(ellipse, transparent 50%, rgba(200,0,0,0.5));
+  opacity: 0; pointer-events: none; transition: opacity 0.1s;
+}
+
+#wave-banner {
+  position: absolute; top: 50px; left: 50%; transform: translateX(-50%);
+  background: var(--panel); border: 1px solid var(--red);
+  padding: 0.4rem 1.2rem; border-radius: 20px;
+  font-size: 0.9rem; color: var(--red);
+  opacity: 0; transition: opacity 0.5s; pointer-events: none;
+}
+
+/* ── Mobile controls ────────────────────────────────────────── */
+#left-zone {
+  position: fixed; left: 0; bottom: 0;
+  width: 45%; height: 50%;
+  pointer-events: auto;
+}
+#right-zone {
+  position: fixed; right: 0; bottom: 0;
+  width: 55%; height: 100%;
+  pointer-events: auto;
+}
+
+#shoot-btn {
+  position: fixed; right: 20px; bottom: 20px;
+  width: 72px; height: 72px; border-radius: 50%;
+  background: var(--red); border: 3px solid #ff6b6b;
+  color: #fff; font-size: 1.5rem;
+  display: flex; align-items: center; justify-content: center;
+  cursor: pointer; pointer-events: auto;
+  box-shadow: 0 4px 20px rgba(229,62,62,0.5);
+  transition: transform 0.1s;
+}
+#shoot-btn:active { transform: scale(0.9); }
+
+#death-screen {
+  position: fixed; inset: 0;
+  background: rgba(0,0,0,0.85);
+  display: none; flex-direction: column;
+  align-items: center; justify-content: center;
+  gap: 1rem; z-index: 100;
+}
+#death-screen.show { display: flex; }
+#death-screen h2 { font-size: 3rem; color: var(--red); }
+#death-screen p  { color: #aaa; }
+#respawn-btn {
+  padding: 0.8rem 2rem; background: var(--red); color: #fff;
+  border: none; border-radius: 10px; font-size: 1rem; font-weight: 700;
+  cursor: pointer;
+}
+
+#connecting-screen {
+  position: fixed; inset: 0;
+  background: #000; display: flex;
+  align-items: center; justify-content: center;
+  font-size: 1.2rem; color: #aaa; z-index: 200;
+}

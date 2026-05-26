@@ -72,7 +72,7 @@ let zombieIdCounter = 0;
 function makeZombie() {
   const id = ++zombieIdCounter;
   const angle = Math.random() * Math.PI * 2;
-  const dist = 12 + Math.random() * (WORLD_RADIUS - 12);
+  const dist = 25 + Math.random() * (WORLD_RADIUS - 25);
   return {
     id,
     x: Math.cos(angle) * dist,
@@ -106,7 +106,7 @@ setInterval(() => {
       const ang = Math.atan2(nearestP.z - z.z, nearestP.x - z.x);
       z.x += Math.cos(ang) * z.speed * DT;
       z.z += Math.sin(ang) * z.speed * DT;
-      if (nearestDist < 1.5) {
+      if (nearestDist < 1.5 && !nearestP.invincible) {
         nearestP.health = Math.max(0, nearestP.health - 5);
         io.to(nearestP.socketId).emit('take-damage', { health: nearestP.health });
       }
@@ -147,8 +147,10 @@ io.on('connection', (socket) => {
     id: socket.user.id,
     username: socket.user.username,
     x: 0, y: 1, z: 0, rotY: 0,
-    health: 100, kills: 0, dirty: false
+    health: 100, kills: 0, dirty: false,
+    invincible: true
   };
+  setTimeout(() => { if (players.has(socket.id)) p.invincible = false; }, 5000);
   players.set(socket.id, p);
   console.log(`+ ${p.username} (${players.size} en ligne)`);
 

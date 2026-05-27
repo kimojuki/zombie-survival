@@ -1,5 +1,36 @@
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
+/* ── Plein écran ────────────────────────────────────────────── */
+:fullscreen body,
+:-webkit-full-screen body {
+  width: 100vw; height: 100vh;
+}
+
+/* ── Overlay portrait ──────────────────────────────────────── */
+#rotate-screen {
+  display: none;
+  position: fixed; inset: 0;
+  background: #000;
+  color: #fff;
+  z-index: 999;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  font-size: 1.1rem;
+  line-height: 1.8;
+}
+#rotate-icon {
+  font-size: 3rem;
+  animation: tilt 1.2s ease-in-out infinite alternate;
+}
+@keyframes tilt {
+  from { transform: rotate(-90deg); }
+  to   { transform: rotate(0deg);   }
+}
+@media (orientation: portrait) {
+  #rotate-screen { display: flex; }
+}
+
 :root {
   --red: #e53e3e;
   --green: #38a169;

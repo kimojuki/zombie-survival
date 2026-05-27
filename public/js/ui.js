@@ -18,22 +18,26 @@
   // ── Joystick (left zone) ─────────────────────────────────────────────────
 
   function _setupJoystick() {
-    const manager = nipplejs.create({
-      zone: document.getElementById('left-zone'),
-      mode: 'dynamic',
-      color: 'rgba(255,255,255,0.5)',
-      size: 100
-    });
-
-    manager.on('move', (_, data) => {
-      if (!data.vector) return;
-      _state.input.moveX =  data.vector.x;
-      _state.input.moveZ = -data.vector.y; // nipplejs Y+ = screen up = move forward
-    });
-    manager.on('end', () => {
-      _state.input.moveX = 0;
-      _state.input.moveZ = 0;
-    });
+    if (typeof nipplejs === 'undefined') return;
+    try {
+      const manager = nipplejs.create({
+        zone: document.getElementById('left-zone'),
+        mode: 'dynamic',
+        color: 'rgba(255,255,255,0.5)',
+        size: 100
+      });
+      manager.on('move', (_, data) => {
+        if (!data.vector) return;
+        _state.input.moveX =  data.vector.x;
+        _state.input.moveZ = -data.vector.y;
+      });
+      manager.on('end', () => {
+        _state.input.moveX = 0;
+        _state.input.moveZ = 0;
+      });
+    } catch (e) {
+      console.warn('Joystick init failed:', e);
+    }
   }
 
   // ── Look zone (right half) ───────────────────────────────────────────────

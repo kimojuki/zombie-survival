@@ -72,9 +72,21 @@
   ZS.Network.init(socket, scene, state);
 
   // ── UI ────────────────────────────────────────────────────────────────────
-  ZS.UI.init(state);
+  try { ZS.UI.init(state); } catch (e) { console.error('UI init:', e); }
   ZS.UI.setHealth(state.player.health);
   ZS.UI.setKills(state.player.kills);
+
+  // ── Plein écran + orientation paysage ─────────────────────────────────────
+  function _enterFullscreen() {
+    const el = document.documentElement;
+    if (el.requestFullscreen)              el.requestFullscreen().catch(() => {});
+    else if (el.webkitRequestFullscreen)   el.webkitRequestFullscreen();
+    if (screen.orientation && screen.orientation.lock) {
+      screen.orientation.lock('landscape').catch(() => {});
+    }
+  }
+  document.addEventListener('touchstart', _enterFullscreen, { once: true });
+  document.addEventListener('click',      _enterFullscreen, { once: true });
 
   // ── Input: keyboard ───────────────────────────────────────────────────────
   document.addEventListener('keydown', (e) => { state.keys[e.code] = true; });

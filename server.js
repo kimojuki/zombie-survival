@@ -69,6 +69,12 @@ const players = new Map();
 const zombies = new Map();
 let zombieIdCounter = 0;
 
+const DETECT_RANGE   = 12;   // unités — portée de détection
+const AGGRO_MEMORY   = 5;    // secondes d'aggro après perte de vue
+const WANDER_SPEED   = 0.25; // fraction de vitesse en mode errance
+const WANDER_TURN_MIN = 2;   // secondes min avant changement de direction
+const WANDER_TURN_MAX = 5;   // secondes max avant changement de direction
+
 function makeZombie() {
   const id = ++zombieIdCounter;
   const angle = Math.random() * Math.PI * 2;
@@ -80,6 +86,8 @@ function makeZombie() {
     z: Math.sin(angle) * dist,
     health: 100,
     wanderAngle: Math.random() * Math.PI * 2,
+    wanderTimer: WANDER_TURN_MIN + Math.random() * (WANDER_TURN_MAX - WANDER_TURN_MIN),
+    aggroTimer: 0,
     speed: 1.8 + Math.random() * 1.4
   };
 }
@@ -96,13 +104,22 @@ setInterval(() => {
   const DT = 0.1;
 
   zombies.forEach((z) => {
+    // Nearest player
     let nearestDist = Infinity, nearestP = null;
     for (const p of pList) {
       const d = Math.hypot(p.x - z.x, p.z - z.z);
       if (d < nearestDist) { nearestDist = d; nearestP = p; }
     }
 
-    if (nearestP && nearestDist < 28) {
+    // Aggro: detect when close, keep memory after losing sight
+    if (nearestDist < DETECT_RANGE) {
+      z.aggroTimer = AGGRO_MEMORY;
+    } else {
+      z.aggroTimer = Math.max(0, z.aggroTimer - DT);
+    }
+
+    if (z.aggroTimer > 0 && nearestP) {
+      // Chase at full speed
       const ang = Math.atan2(nearestP.z - z.z, nearestP.x - z.x);
       z.x += Math.cos(ang) * z.speed * DT;
       z.z += Math.sin(ang) * z.speed * DT;
@@ -111,9 +128,14 @@ setInterval(() => {
         io.to(nearestP.socketId).emit('take-damage', { health: nearestP.health });
       }
     } else {
-      z.wanderAngle += (Math.random() - 0.5) * 0.4;
-      z.x = Math.max(-WORLD_RADIUS, Math.min(WORLD_RADIUS, z.x + Math.cos(z.wanderAngle) * z.speed * 0.4 * DT));
-      z.z = Math.max(-WORLD_RADIUS, Math.min(WORLD_RADIUS, z.z + Math.sin(z.wanderAngle) * z.speed * 0.4 * DT));
+      // Wander slowly — change direction periodically, not every tick
+      z.wanderTimer -= DT;
+      if (z.wanderTimer <= 0) {
+        z.wanderAngle = Math.random() * Math.PI * 2;
+        z.wanderTimer = WANDER_TURN_MIN + Math.random() * (WANDER_TURN_MAX - WANDER_TURN_MIN);
+      }
+      z.x = Math.max(-WORLD_RADIUS, Math.min(WORLD_RADIUS, z.x + Math.cos(z.wanderAngle) * z.speed * WANDER_SPEED * DT));
+      z.z = Math.max(-WORLD_RADIUS, Math.min(WORLD_RADIUS, z.z + Math.sin(z.wanderAngle) * z.speed * WANDER_SPEED * DT));
     }
   });
 

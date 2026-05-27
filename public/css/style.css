@@ -138,21 +138,25 @@ body {
   pointer-events: none;
 }
 #kills-display {
-  position: absolute; top: 16px; right: 56px;
+  position: absolute; top: 16px; right: 62px;
   font-size: 0.9rem; color: #ffd700;
   pointer-events: none;
 }
 
 #logout-btn {
-  position: absolute; top: 12px; right: 12px;
-  width: 36px; height: 36px; border-radius: 8px;
-  background: rgba(0,0,0,0.6); border: 1px solid #555;
-  color: #fff; font-size: 1.1rem;
+  position: fixed; top: 12px; right: 12px;
+  width: 38px; height: 38px; border-radius: 10px;
+  background: rgba(0,0,0,0.65); border: 1px solid rgba(255,255,255,0.15);
+  color: #fff; padding: 7px;
   display: flex; align-items: center; justify-content: center;
   cursor: pointer; pointer-events: auto;
-  transition: background 0.2s;
+  backdrop-filter: blur(4px);
+  transition: background 0.15s, border-color 0.15s;
+  z-index: 50;
 }
-#logout-btn:active { background: var(--red); }
+#logout-btn svg { width: 100%; height: 100%; }
+#logout-btn:hover  { background: rgba(229,62,62,0.5); border-color: var(--red); }
+#logout-btn:active { background: var(--red); border-color: var(--red); }
 
 #crosshair {
   position: absolute; top: 50%; left: 50%;

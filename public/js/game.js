@@ -144,9 +144,16 @@
   function respawn() {
     state.player.health = 100;
     state.player.dead   = false;
-    state.player.x = (Math.random() - 0.5) * 6;
-    state.player.z = (Math.random() - 0.5) * 6;
+    state.player.ammo   = 30;
+
+    // Spawn aléatoire dans le monde, loin du centre
+    const angle = Math.random() * Math.PI * 2;
+    const dist  = 10 + Math.random() * 25;
+    state.player.x = Math.cos(angle) * dist;
+    state.player.z = Math.sin(angle) * dist;
+
     ZS.UI.setHealth(100);
+    ZS.UI.setAmmo(30);
     ZS.UI.hideDeath();
   }
   state.onRespawn = respawn;

@@ -15,29 +15,46 @@
     setAmmo(30);
   }
 
-  // ── Joystick (left zone) ─────────────────────────────────────────────────
+  // ── Joystick (left zone) — native touch, no nipplejs ────────────────────
 
   function _setupJoystick() {
-    if (typeof nipplejs === 'undefined') return;
-    try {
-      const manager = nipplejs.create({
-        zone: document.getElementById('left-zone'),
-        mode: 'dynamic',
-        color: 'rgba(255,255,255,0.5)',
-        size: 100
-      });
-      manager.on('move', (_, data) => {
-        if (!data.vector) return;
-        _state.input.moveX =  data.vector.x;
-        _state.input.moveZ = -data.vector.y;
-      });
-      manager.on('end', () => {
-        _state.input.moveX = 0;
-        _state.input.moveZ = 0;
-      });
-    } catch (e) {
-      console.warn('Joystick init failed:', e);
+    const zone     = document.getElementById('left-zone');
+    const MAX_DIST = 60;
+    let   originX  = null, originY = null, activeId = null;
+
+    zone.addEventListener('touchstart', (e) => {
+      e.preventDefault();
+      if (activeId !== null) return;
+      const t  = e.changedTouches[0];
+      activeId = t.identifier;
+      originX  = t.clientX;
+      originY  = t.clientY;
+    }, { passive: false });
+
+    zone.addEventListener('touchmove', (e) => {
+      e.preventDefault();
+      for (const t of e.changedTouches) {
+        if (t.identifier !== activeId) continue;
+        const dx  = t.clientX - originX;
+        const dy  = t.clientY - originY;
+        const len = Math.hypot(dx, dy) || 1;
+        const clamped = Math.min(len, MAX_DIST);
+        _state.input.moveX =  (dx / len) * (clamped / MAX_DIST);
+        _state.input.moveZ =  (dy / len) * (clamped / MAX_DIST);
+      }
+    }, { passive: false });
+
+    function _end(e) {
+      for (const t of e.changedTouches) {
+        if (t.identifier === activeId) {
+          activeId = null;
+          _state.input.moveX = 0;
+          _state.input.moveZ = 0;
+        }
+      }
     }
+    zone.addEventListener('touchend',    _end, { passive: false });
+    zone.addEventListener('touchcancel', _end, { passive: false });
   }
 
   // ── Look zone (right half) ───────────────────────────────────────────────
@@ -45,27 +62,36 @@
   function _setupLookZone() {
     const zone = document.getElementById('right-zone');
     const SENS = 0.004;
-    let lastX = null, lastY = null;
+    let lastX = null, lastY = null, activeId = null;
 
     zone.addEventListener('touchstart', (e) => {
       e.preventDefault();
-      const t = e.changedTouches[0];
+      if (activeId !== null) return;
+      const t  = e.changedTouches[0];
+      activeId = t.identifier;
       lastX = t.clientX; lastY = t.clientY;
     }, { passive: false });
 
     zone.addEventListener('touchmove', (e) => {
       e.preventDefault();
-      const t = e.changedTouches[0];
-      if (lastX === null) return;
-      const dx = t.clientX - lastX;
-      const dy = t.clientY - lastY;
-      _state.camera.yaw   -= dx * SENS;
-      _state.camera.pitch -= dy * SENS;
-      _state.camera.pitch = Math.max(-Math.PI / 2 + 0.05, Math.min(Math.PI / 2 - 0.05, _state.camera.pitch));
-      lastX = t.clientX; lastY = t.clientY;
+      for (const t of e.changedTouches) {
+        if (t.identifier !== activeId) continue;
+        const dx = t.clientX - lastX;
+        const dy = t.clientY - lastY;
+        _state.camera.yaw   -= dx * SENS;
+        _state.camera.pitch -= dy * SENS;
+        _state.camera.pitch = Math.max(-Math.PI / 2 + 0.05, Math.min(Math.PI / 2 - 0.05, _state.camera.pitch));
+        lastX = t.clientX; lastY = t.clientY;
+      }
     }, { passive: false });
 
-    zone.addEventListener('touchend', () => { lastX = null; lastY = null; });
+    function _end(e) {
+      for (const t of e.changedTouches) {
+        if (t.identifier === activeId) { activeId = null; lastX = null; lastY = null; }
+      }
+    }
+    zone.addEventListener('touchend',    _end, { passive: false });
+    zone.addEventListener('touchcancel', _end, { passive: false });
   }
 
   // ── Shoot button ─────────────────────────────────────────────────────────

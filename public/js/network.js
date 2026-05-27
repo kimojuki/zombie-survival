@@ -20,6 +20,13 @@
 
     socket.on('game-init', (data) => {
       state.selfId = data.selfId;
+      // Apply authoritative spawn position from server (overrides stale localStorage)
+      if (data.spawn) {
+        state.player.x    = data.spawn.x;
+        state.player.z    = data.spawn.z;
+        state.camera.yaw  = data.spawn.rotY || 0;
+        localStorage.setItem('zombie_spawn', JSON.stringify(data.spawn));
+      }
       ZS.Zombies.syncAll(data.zombies);
       for (const p of data.players) _addRemotePlayer(p);
     });

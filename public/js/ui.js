@@ -154,6 +154,13 @@
     document.getElementById('death-screen').classList.remove('show');
   }
 
+  function logout() {
+    ['zombie_token','zombie_username','zombie_spawn','zombie_health','zombie_kills']
+      .forEach(k => localStorage.removeItem(k));
+    window.location.href = '/';
+  }
+
   window.ZS = window.ZS || {};
-  ZS.UI = { init, setHealth, setKills, setAmmo, flashDamage, showWave, showDeath, hideDeath };
+  ZS.UI     = { init, setHealth, setKills, setAmmo, flashDamage, showWave, showDeath, hideDeath };
+  ZS.logout = logout;
 }());

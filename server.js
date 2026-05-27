@@ -163,13 +163,22 @@ io.use((socket, next) => {
   }
 });
 
-io.on('connection', (socket) => {
+io.on('connection', async (socket) => {
+  // Load saved state from DB
+  let saved = null;
+  try { saved = await getPlayer(socket.user.username); } catch {}
+
   const p = {
     socketId: socket.id,
     id: socket.user.id,
     username: socket.user.username,
-    x: 0, y: 1, z: 0, rotY: 0,
-    health: 100, kills: 0, dirty: false,
+    x:    saved?.pos_x ?? 0,
+    y:    saved?.pos_y ?? 1,
+    z:    saved?.pos_z ?? 0,
+    rotY: saved?.rot_y ?? 0,
+    health: saved?.health ?? 100,
+    kills:  saved?.kills  ?? 0,
+    dirty: false,
     invincible: true
   };
   setTimeout(() => { if (players.has(socket.id)) p.invincible = false; }, 5000);
@@ -178,6 +187,7 @@ io.on('connection', (socket) => {
 
   socket.emit('game-init', {
     selfId: socket.id,
+    spawn: { x: p.x, y: p.y, z: p.z, rotY: p.rotY },
     players: [...players.entries()]
       .filter(([sid]) => sid !== socket.id)
       .map(([sid, q]) => ({ id: sid, username: q.username, x: q.x, y: q.y, z: q.z, rotY: q.rotY })),
@@ -234,6 +244,7 @@ io.on('connection', (socket) => {
     players.delete(socket.id);
     console.log(`- ${p.username} (${players.size} en ligne)`);
     io.emit('player-leave', socket.id);
+    if (p.id) savePlayerState(p.id, p.x, p.y, p.z, p.rotY, p.health, p.kills).catch(() => {});
   });
 });
 

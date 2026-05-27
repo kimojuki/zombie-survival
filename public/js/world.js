@@ -103,10 +103,20 @@
     scene.add(new THREE.Mesh(geo, new THREE.MeshLambertMaterial({ color: 0x4a7c59 })));
   }
 
+  // PRNG déterministe — même graine = même monde à chaque chargement
+  function _makeRng(seed) {
+    let s = seed >>> 0;
+    return function () {
+      s ^= s << 13; s ^= s >>> 17; s ^= s << 5;
+      return (s >>> 0) / 0xffffffff;
+    };
+  }
+  const _rng = _makeRng(0xDEADBEEF);
+
   function spawnTrees(scene, count) {
     for (let i = 0; i < count; i++) {
-      const x = (Math.random() - 0.5) * 110;
-      const z = (Math.random() - 0.5) * 110;
+      const x = (_rng() - 0.5) * 110;
+      const z = (_rng() - 0.5) * 110;
       if (Math.hypot(x, z) < 4) continue;
       const tree = makeTree();
       tree.position.set(x, ZS.getTerrainHeight(x, z), z);
@@ -117,11 +127,11 @@
   function spawnRocks(scene, count) {
     const mat = new THREE.MeshLambertMaterial({ color: 0x888888 });
     for (let i = 0; i < count; i++) {
-      const x = (Math.random() - 0.5) * 110;
-      const z = (Math.random() - 0.5) * 110;
-      const s = 0.3 + Math.random() * 0.7;
+      const x = (_rng() - 0.5) * 110;
+      const z = (_rng() - 0.5) * 110;
+      const s = 0.3 + _rng() * 0.7;
       const rock = new THREE.Mesh(new THREE.DodecahedronGeometry(s, 0), mat);
-      rock.rotation.set(Math.random() * Math.PI, Math.random() * Math.PI, Math.random() * Math.PI);
+      rock.rotation.set(_rng() * Math.PI, _rng() * Math.PI, _rng() * Math.PI);
       rock.position.set(x, ZS.getTerrainHeight(x, z) + s * 0.3, z);
       scene.add(rock);
     }
@@ -136,11 +146,11 @@
 
   function makeTree() {
     const g = new THREE.Group();
-    const trunkH  = 1.8 + Math.random() * 1.5;
+    const trunkH  = 1.8 + _rng() * 1.5;
     const trunkMat = new THREE.MeshLambertMaterial({ color: 0x8B4513 });
 
     const trunk = new THREE.Mesh(
-      new THREE.CylinderGeometry(0.1 + Math.random() * 0.05, 0.18 + Math.random() * 0.05, trunkH, 7),
+      new THREE.CylinderGeometry(0.1 + _rng() * 0.05, 0.18 + _rng() * 0.05, trunkH, 7),
       trunkMat
     );
     trunk.position.y = trunkH / 2;
@@ -148,17 +158,17 @@
 
     const leafMat  = new THREE.MeshLambertMaterial({ color: 0x1e7a3c });
     const leafMat2 = new THREE.MeshLambertMaterial({ color: 0x2d9e52 });
-    const clusters = 2 + Math.floor(Math.random() * 3);
+    const clusters = 2 + Math.floor(_rng() * 3);
     for (let i = 0; i < clusters; i++) {
-      const r = 0.8 + Math.random() * 0.7;
+      const r = 0.8 + _rng() * 0.7;
       const leaf = new THREE.Mesh(
         new THREE.SphereGeometry(r, 7, 5),
         i % 2 === 0 ? leafMat : leafMat2
       );
       leaf.position.set(
-        (Math.random() - 0.5) * 0.9,
-        trunkH + r * 0.5 + Math.random() * 0.6,
-        (Math.random() - 0.5) * 0.9
+        (_rng() - 0.5) * 0.9,
+        trunkH + r * 0.5 + _rng() * 0.6,
+        (_rng() - 0.5) * 0.9
       );
       g.add(leaf);
     }

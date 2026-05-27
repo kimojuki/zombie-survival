@@ -53,9 +53,9 @@ app.post('/api/auth/login', async (req, res) => {
     const token = jwt.sign({ id: player.id, username }, JWT_SECRET, { expiresIn: '7d' });
     res.json({
       token, username,
-      spawn: { x: player.pos_x, y: player.pos_y, z: player.pos_z, rotY: player.rot_y },
-      health: player.health,
-      kills: player.kills
+      spawn: { x: player.pos_x ?? 0, y: player.pos_y ?? 0, z: player.pos_z ?? 0, rotY: player.rot_y ?? 0 },
+      health: player.health ?? 100,
+      kills: player.kills ?? 0
     });
   } catch (err) {
     console.error('Login:', err.message);

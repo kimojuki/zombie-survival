@@ -26,7 +26,11 @@
   // Load saved spawn position
   try {
     const sp = JSON.parse(localStorage.getItem('zombie_spawn') || 'null');
-    if (sp) { state.player.x = sp.x; state.player.z = sp.z; state.camera.yaw = sp.rotY || 0; }
+    if (sp && sp.x != null && sp.z != null) {
+      state.player.x = sp.x;
+      state.player.z = sp.z;
+      state.camera.yaw = sp.rotY || 0;
+    }
   } catch {}
 
   // ── Three.js ──────────────────────────────────────────────────────────────
@@ -58,6 +62,11 @@
   const raycaster = new THREE.Raycaster();
   const screenCenter = new THREE.Vector2(0, 0);
 
+  // Position camera at spawn before first render
+  state.player.y = ZS.getTerrainHeight(state.player.x, state.player.z) + 1.7;
+  camera.position.set(state.player.x, state.player.y, state.player.z);
+  camera.rotation.y = state.camera.yaw;
+
   // ── Socket.io ─────────────────────────────────────────────────────────────
   const socket = io({ auth: { token } });
   ZS.Network.init(socket, scene, state);
@@ -73,7 +82,8 @@
 
   // ── Input: desktop pointer lock ───────────────────────────────────────────
   let pointerLocked = false;
-  canvas.addEventListener('click', () => {
+  document.addEventListener('click', (e) => {
+    if (e.target.closest('#death-screen, #shoot-btn')) return;
     if (!pointerLocked) canvas.requestPointerLock();
   });
   document.addEventListener('pointerlockchange', () => {
@@ -138,6 +148,7 @@
     if (!state.player.dead) {
       updateMovement(dt);
     }
+    ZS.tickDayNight(dt);
     ZS.Zombies.tick(dt);
     renderer.render(scene, camera);
   }

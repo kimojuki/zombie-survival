@@ -23,7 +23,7 @@ async function getPlayer(username) {
 
 async function createPlayer(username, passwordHash) {
   const [result] = await pool.execute(
-    'INSERT INTO players (username, password_hash, inventory) VALUES (?, ?, ?)',
+    'INSERT INTO players (username, password_hash, inventory, pos_x, pos_y, pos_z, rot_y, health, kills) VALUES (?, ?, ?, 0, 0, 0, 0, 100, 0)',
     [username, passwordHash, JSON.stringify([])]
   );
   return result.insertId;

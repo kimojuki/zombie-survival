@@ -88,6 +88,17 @@
   document.addEventListener('touchstart', _enterFullscreen, { once: true });
   document.addEventListener('click',      _enterFullscreen, { once: true });
 
+  // Auto-fullscreen when rotating to landscape
+  if (screen.orientation) {
+    screen.orientation.addEventListener('change', () => {
+      if (screen.orientation.type.startsWith('landscape')) _enterFullscreen();
+    });
+  } else {
+    window.addEventListener('orientationchange', () => {
+      if (Math.abs(window.orientation) === 90) _enterFullscreen();
+    });
+  }
+
   // ── Input: keyboard ───────────────────────────────────────────────────────
   document.addEventListener('keydown', (e) => { state.keys[e.code] = true; });
   document.addEventListener('keyup',   (e) => { state.keys[e.code] = false; });
@@ -146,7 +157,6 @@
     state.player.dead   = false;
     state.player.ammo   = 30;
 
-    // Spawn aléatoire dans le monde, loin du centre
     const angle = Math.random() * Math.PI * 2;
     const dist  = 10 + Math.random() * 25;
     state.player.x = Math.cos(angle) * dist;
@@ -155,6 +165,7 @@
     ZS.UI.setHealth(100);
     ZS.UI.setAmmo(30);
     ZS.UI.hideDeath();
+    ZS.Network.sendRespawn();
   }
   state.onRespawn = respawn;
 

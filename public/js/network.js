@@ -46,8 +46,12 @@
     socket.on('take-damage', (d) => {
       state.player.health = d.health;
       ZS.UI.setHealth(d.health);
-      ZS.UI.flashDamage();
-      if (d.health <= 0) ZS.UI.showDeath(state.player.kills);
+      if (d.health <= 0 && !state.player.dead) {
+        state.player.dead = true;
+        ZS.UI.showDeath(state.player.kills);
+      } else if (d.health > 0) {
+        ZS.UI.flashDamage();
+      }
     });
 
     socket.on('score-update', (d) => {
@@ -68,6 +72,10 @@
     _socket.emit('shoot', { ox, oz, dx, dz });
   }
 
+  function sendRespawn() {
+    _socket.emit('respawn');
+  }
+
   function _addRemotePlayer(p) {
     const model = ZS.createPlayerModel();
     model.position.set(p.x, p.y, p.z);
@@ -80,5 +88,5 @@
   }
 
   window.ZS = window.ZS || {};
-  ZS.Network = { init, sendMove, sendShoot };
+  ZS.Network = { init, sendMove, sendShoot, sendRespawn };
 }());

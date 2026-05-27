@@ -201,6 +201,13 @@ io.on('connection', (socket) => {
     }
   });
 
+  socket.on('respawn', () => {
+    p.health = 100;
+    p.invincible = true;
+    setTimeout(() => { if (players.has(socket.id)) p.invincible = false; }, 3000);
+    socket.emit('take-damage', { health: 100 });
+  });
+
   socket.on('disconnect', () => {
     players.delete(socket.id);
     console.log(`- ${p.username} (${players.size} en ligne)`);

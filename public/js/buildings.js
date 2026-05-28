@@ -43,6 +43,8 @@
   function _mesh(scene, geo, mat, x, y, z) {
     const m = new THREE.Mesh(geo, mat);
     m.position.set(x, y, z);
+    m.castShadow = true;
+    m.receiveShadow = true;
     scene.add(m);
     return m;
   }
@@ -561,6 +563,45 @@
     _ribbon(scene, [[0,0],[20,6],[38,12],[44,14],[54,30],[63,47]], 1.6, M.path, false);
   }
 
+  // ── Voitures abandonnées ──────────────────────────────────────────────────────
+  function _buildAbandonedCars(scene) {
+    const rustedMat = new THREE.MeshLambertMaterial({ color: 0x5a3015 });
+    const darkMat   = new THREE.MeshLambertMaterial({ color: 0x181818 });
+    const glassMat  = new THREE.MeshLambertMaterial({ color: 0x334444, transparent: true, opacity: 0.5 });
+
+    function _car(cx, cz, rotY) {
+      const cy = ZS.getTerrainHeight(cx, cz);
+      const g  = new THREE.Group();
+
+      const body = new THREE.Mesh(new THREE.BoxGeometry(1.78, 0.72, 4.1), rustedMat);
+      body.position.y = 0.62; body.castShadow = true; body.receiveShadow = true;
+
+      const cabin = new THREE.Mesh(new THREE.BoxGeometry(1.48, 0.62, 2.15), rustedMat);
+      cabin.position.set(0, 1.25, -0.18); cabin.castShadow = true;
+
+      const windshield = new THREE.Mesh(new THREE.BoxGeometry(1.3, 0.5, 0.06), glassMat);
+      windshield.position.set(0, 1.3, -1.2);
+
+      for (const [ox, oz] of [[-0.97,-1.38],[0.97,-1.38],[-0.97,1.38],[0.97,1.38]]) {
+        const w = new THREE.Mesh(new THREE.CylinderGeometry(0.34, 0.34, 0.22, 9), darkMat);
+        w.rotation.z = Math.PI / 2;
+        w.position.set(ox, 0.37, oz);
+        g.add(w);
+      }
+
+      g.add(body); g.add(cabin); g.add(windshield);
+      g.position.set(cx, cy, cz);
+      g.rotation.y = rotY;
+      scene.add(g);
+      _colliders.push({ type: 'box', cx, cz, hw: 1.0, hd: 2.2 });
+    }
+
+    _car(-60, -38,  0.55);   // rue principale Ashwood
+    _car( 34, -57, -0.28);   // accès station service
+    _car(-55,  47,  1.18);   // route avant-poste
+    _car( 52,  33,  2.40);   // entre ruines et ferme
+  }
+
   // ── Entry point ───────────────────────────────────────────────────────────────
   function buildAll(scene) {
     _buildDirtPaths(scene);
@@ -571,6 +612,7 @@
     _buildOutpost(scene);
     _buildForestCabin(scene);
     _buildRuins(scene);
+    _buildAbandonedCars(scene);
     return _colliders;
   }
 

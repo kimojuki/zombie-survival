@@ -22,13 +22,23 @@
   }
 
   function _rawHeight(x, z) {
-    // Terrain doux style ville : collines légères, pas de montagnes
     const s = 0.022;
-    return (
+    // Base detail layer (unchanged feel up close)
+    const base = (
       smoothNoise(x * s,       z * s)       * 4.0 +
       smoothNoise(x * s * 3.2, z * s * 3.2) * 1.4 +
       smoothNoise(x * s * 8.0, z * s * 8.0) * 0.3
     ) - 2.0;
+    // Low-frequency rolling hills — bipolar so valleys form too
+    const rolls = (smoothNoise(x * 0.009, z * 0.009) - 0.5) * 9.0
+                + (smoothNoise(x * 0.004, z * 0.004) - 0.5) * 6.0;
+    // Landmark peaks — all placed at map edges, well clear of every building zone
+    const h1 = Math.max(0, 1 - Math.hypot(x -  8, z - 98) / 24) * 10; // far north
+    const h2 = Math.max(0, 1 - Math.hypot(x - 98, z + 18) / 20) *  9; // far east
+    const h3 = Math.max(0, 1 - Math.hypot(x + 95, z -  5) / 22) * 11; // far west
+    const h4 = Math.max(0, 1 - Math.hypot(x + 12, z + 98) / 20) *  8; // far south
+    const h5 = Math.max(0, 1 - Math.hypot(x - 42, z - 82) / 16) *  7; // mid-north ridge
+    return base + rolls + Math.max(h1, Math.max(h2, Math.max(h3, Math.max(h4, h5))));
   }
 
   // { cx, cz, hw, hd, flatY, blend }

@@ -32,6 +32,7 @@
     metal:    new THREE.MeshLambertMaterial({ color: 0x778899 }),
     rust:     new THREE.MeshLambertMaterial({ color: 0x8a5a30 }),
     road:     new THREE.MeshLambertMaterial({ color: 0x35302a }),
+    roadLine: new THREE.MeshLambertMaterial({ color: 0xeecc22 }),
     roadDirt: new THREE.MeshLambertMaterial({ color: 0x7a6648 }),
     stairs:   new THREE.MeshLambertMaterial({ color: 0x6b4f30 }),
   };
@@ -441,45 +442,72 @@
   }
 
   // ── Routes ────────────────────────────────────────────────────────────────────
-  function _roadSeg(scene, x0, z0, x1, z1, width, mat) {
-    const dx  = x1 - x0, dz = z1 - z0;
-    const len = Math.hypot(dx, dz);
-    if (len < 0.1) return;
-    const angle = Math.atan2(dx, dz);
-    const STEP  = 5;
-    const steps = Math.max(1, Math.ceil(len / STEP));
+  // Chaque segment est incliné pour suivre la pente du terrain (rotation Y + X).
+  function _roadSeg(scene, x0, z0, x1, z1, width, mat, withLine) {
+    const dx   = x1 - x0, dz = z1 - z0;
+    const hLen = Math.hypot(dx, dz);
+    if (hLen < 0.1) return;
+    const yaw  = Math.atan2(dx, dz);
+    const STEP = 2.5;
+    const steps = Math.max(1, Math.ceil(hLen / STEP));
 
     for (let i = 0; i < steps; i++) {
-      const t  = (i + 0.5) / steps;
-      const x  = x0 + dx * t;
-      const z  = z0 + dz * t;
-      const y  = ZS.getTerrainHeight(x, z);
-      const sl = len / steps;
-      const m  = new THREE.Mesh(new THREE.BoxGeometry(width, 0.1, sl + 0.3), mat);
-      m.rotation.y = angle;
-      m.position.set(x, y + 0.04, z);
+      const ta = i / steps, tb = (i + 1) / steps, tm = (ta + tb) / 2;
+      const xa = x0 + dx * ta, za = z0 + dz * ta;
+      const xb = x0 + dx * tb, zb = z0 + dz * tb;
+      const xm = x0 + dx * tm, zm = z0 + dz * tm;
+      const ya = ZS.getTerrainHeight(xa, za);
+      const yb = ZS.getTerrainHeight(xb, zb);
+      const ym = (ya + yb) / 2;
+      const dy = yb - ya;
+      const sH = hLen / steps;                       // longueur horizontale du seg
+      const sL = Math.hypot(dy, sH);                 // longueur réelle (hypoténuse)
+      const pitch = -Math.atan2(dy, sH);             // inclinaison selon pente
+
+      const m = new THREE.Mesh(new THREE.BoxGeometry(width, 0.14, sL + 0.06), mat);
+      m.rotation.order = 'YXZ';
+      m.rotation.y = yaw;
+      m.rotation.x = pitch;
+      m.position.set(xm, ym + 0.06, zm);
       scene.add(m);
+
+      // Ligne centrale pointillée (toutes les 2 seg)
+      if (withLine && i % 2 === 0) {
+        const lm = new THREE.Mesh(
+          new THREE.BoxGeometry(0.18, 0.16, Math.min(sL * 0.55, 1.6)),
+          M.roadLine
+        );
+        lm.rotation.order = 'YXZ';
+        lm.rotation.y = yaw;
+        lm.rotation.x = pitch;
+        lm.position.set(xm, ym + 0.13, zm);
+        scene.add(lm);
+      }
+    }
+  }
+
+  // Chemin en plusieurs points de passage
+  function _roadPath(scene, pts, width, mat, withLine) {
+    for (let i = 0; i < pts.length - 1; i++) {
+      _roadSeg(scene, pts[i][0], pts[i][1], pts[i+1][0], pts[i+1][1], width, mat, withLine);
     }
   }
 
   function _buildRoads(scene) {
-    // Route principale : village → spawn → ferme
-    _roadSeg(scene, -28, -22,  -8,  -8, 3.8, M.road);
-    _roadSeg(scene,  -8,  -8,   0,   0, 3.8, M.road);
-    _roadSeg(scene,   0,   0,  16,  14, 3.8, M.road);
-    _roadSeg(scene,  16,  14,  30,  24, 3.8, M.road);
+    // Route asphaltée principale : village → spawn → ferme
+    _roadPath(scene, [[-28,-22],[-8,-8],[0,0],[16,14],[30,24]], 4.0, M.road, true);
 
-    // Village → station service
-    _roadSeg(scene, -28, -26,  -5, -27, 3.2, M.road);
-    _roadSeg(scene,  -5, -27,  16, -33, 3.2, M.road);
+    // Route secondaire : village → station service
+    _roadPath(scene, [[-28,-26],[-5,-28],[16,-33]], 3.4, M.road, true);
 
-    // Spawn → avant-poste (chemin de terre)
-    _roadSeg(scene,   0,   0, -12,  12, 2.6, M.roadDirt);
-    _roadSeg(scene, -12,  12, -28,  27, 2.6, M.roadDirt);
+    // Route secondaire : station service → ruines → ferme (boucle est)
+    _roadPath(scene, [[16,-33],[22,-10],[25,8],[30,20],[30,24]], 2.8, M.road, false);
 
-    // Ferme → cabane forestière (sentier)
-    _roadSeg(scene,  28,  27,  10,  22, 2.0, M.roadDirt);
-    _roadSeg(scene,  10,  22, -12,  20, 2.0, M.roadDirt);
+    // Chemin de terre : spawn → avant-poste
+    _roadPath(scene, [[0,0],[-12,12],[-28,27]], 2.8, M.roadDirt, false);
+
+    // Sentier : ferme → cabane forestière
+    _roadPath(scene, [[28,27],[10,22],[-12,20]], 2.2, M.roadDirt, false);
   }
 
   // ── Entry point ───────────────────────────────────────────────────────────────

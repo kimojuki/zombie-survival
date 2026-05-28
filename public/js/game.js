@@ -105,37 +105,91 @@
   _resizeToViewport();
 
   // ── Plein écran + orientation paysage ─────────────────────────────────────
-  function _enterFullscreen() {
-    const el = document.documentElement;
+  let _fsActive = false;
 
-    // API Fullscreen standard — fonctionne sur iOS 16.4+, Android, desktop
+  function _tryFullscreen() {
+    if (_fsActive) return;
+    const el = document.documentElement;
+    // iOS 16.4+ / Android / desktop
     if (el.requestFullscreen) {
       el.requestFullscreen().catch(() => {});
     } else if (el.webkitRequestFullscreen) {
       el.webkitRequestFullscreen();
     }
-
-    // iOS < 16.4 : scroll trick pour masquer la barre d'adresse
-    if (_isIOS && !window.navigator.standalone) {
-      setTimeout(() => {
-        document.body.style.height = (window.screen.height + 1) + 'px';
-        window.scrollTo(0, 1);
-        setTimeout(() => {
-          document.body.style.height = '';
-          _resizeToViewport();
-        }, 200);
-      }, 80);
-    }
-
-    // Verrouillage orientation paysage (Android / desktop)
+    // Orientation (non-iOS)
     if (screen.orientation && screen.orientation.lock) {
       screen.orientation.lock('landscape').catch(() => {});
     }
   }
 
-  // Tentative au premier toucher/clic ET à chaque rotation
-  document.addEventListener('touchstart', _enterFullscreen, { once: true });
-  document.addEventListener('click',      _enterFullscreen, { once: true });
+  // iOS < 16.4 : scroll trick corrigé — doit temporairement autoriser l'overflow
+  function _iosScrollHide() {
+    if (!_isIOS || window.navigator.standalone || _fsActive) return;
+    const body = document.body;
+    body.style.overflow = 'scroll';
+    body.style.height   = (window.screen.height + 50) + 'px';
+    setTimeout(() => {
+      window.scrollTo(0, 50);
+      setTimeout(() => {
+        body.style.overflow = 'hidden';
+        body.style.height   = '';
+        _resizeToViewport();
+      }, 200);
+    }, 60);
+  }
+
+  document.addEventListener('fullscreenchange', () => {
+    _fsActive = !!document.fullscreenElement;
+    if (_iosBtn) _iosBtn.style.display = _fsActive ? 'none' : 'flex';
+  });
+  document.addEventListener('webkitfullscreenchange', () => {
+    _fsActive = !!document.webkitFullscreenElement;
+    if (_iosBtn) _iosBtn.style.display = _fsActive ? 'none' : 'flex';
+  });
+
+  // Bouton ⛶ persistant pour iOS (barre Safari ne peut pas être cachée
+  // autrement que via requestFullscreen ou PWA)
+  let _iosBtn = null;
+  if (_isIOS && !window.navigator.standalone) {
+    _iosBtn = document.createElement('button');
+    _iosBtn.textContent = '⛶';
+    Object.assign(_iosBtn.style, {
+      position: 'fixed', bottom: '82px', left: '12px',
+      width: '42px', height: '42px', borderRadius: '10px',
+      background: 'rgba(0,0,0,0.65)',
+      border: '1px solid rgba(255,255,255,0.3)',
+      color: '#fff', fontSize: '22px', lineHeight: '1',
+      display: 'flex', alignItems: 'center', justifyContent: 'center',
+      zIndex: '200', cursor: 'pointer',
+      backdropFilter: 'blur(4px)',
+    });
+    document.body.appendChild(_iosBtn);
+    _iosBtn.addEventListener('click', () => {
+      _tryFullscreen();
+      _iosScrollHide();
+    });
+
+    // Bannière "Ajouter à l'écran d'accueil" pour plein écran garanti
+    const hint = document.createElement('div');
+    hint.textContent = '📲 Ajouter à l\'écran d\'accueil pour le vrai plein écran';
+    Object.assign(hint.style, {
+      position: 'fixed', top: '0', left: '0', right: '0',
+      background: 'rgba(0,0,0,0.8)', color: '#fff',
+      fontSize: '12px', textAlign: 'center', padding: '6px 8px',
+      zIndex: '300', pointerEvents: 'none',
+    });
+    document.body.appendChild(hint);
+    setTimeout(() => { hint.style.display = 'none'; }, 5000);
+  }
+
+  function _enterFullscreen() {
+    _tryFullscreen();
+    _iosScrollHide();
+  }
+
+  // Retry sur chaque touch (sans { once }) jusqu'à succès
+  document.addEventListener('touchstart', _enterFullscreen);
+  document.addEventListener('click',      _enterFullscreen);
 
   if (screen.orientation) {
     screen.orientation.addEventListener('change', () => {

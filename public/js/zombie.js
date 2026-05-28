@@ -56,10 +56,10 @@
       let diff = entry.targetAngle - entry.currentAngle;
       while (diff > Math.PI)  diff -= Math.PI * 2;
       while (diff < -Math.PI) diff += Math.PI * 2;
-      entry.currentAngle += diff * Math.min(1, 10 * dt);
-      // Server angle: atan2(dz, dx) points along +X axis; Three.js rotation.y=0 faces -Z
-      // Server angle: atan2(dz, dx) where 0=+X; Three.js needs +π/2 offset (model front is -Z)
-      entry.group.rotation.y = entry.currentAngle + Math.PI / 2;
+      entry.currentAngle += diff * Math.min(1, 15 * dt);
+      // ang=0 means +X; Three.js forward is -Z; rotation.y=θ gives forward (-sin θ, 0, -cos θ)
+      // To face +X (ang=0): θ = -π/2 = -(0 + π/2) → negate the sum
+      entry.group.rotation.y = -(entry.currentAngle + Math.PI / 2);
 
       const limbs = entry.group.userData.limbs;
       if (!limbs) return;
@@ -91,7 +91,7 @@
     const group = ZS.createZombieModel();
     const initialAngle = z.angle != null ? z.angle : 0;
     group.position.set(z.x, ZS.getTerrainHeight(z.x, z.z), z.z);
-    group.rotation.y = initialAngle + Math.PI / 2;
+    group.rotation.y = -(initialAngle + Math.PI / 2);
 
     const hbGroup = _makeHealthBar();
     hbGroup.position.y = 2.4;

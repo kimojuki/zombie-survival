@@ -5,12 +5,12 @@
   // ── Register flat zones BEFORE world.js calls buildTerrain ───────────────────
   // Each zone flattens terrain to the noise height at its centre point.
   // Buildings placed inside a zone will all share the same base Y.
-  ZS.registerFlatZone(-33, -25, 14, 12, 5);   // Village Ashwood
-  ZS.registerFlatZone( 36,  27, 14, 12, 5);   // Ferme nord-est
-  ZS.registerFlatZone( 19, -34, 12,  7, 5);   // Station service
-  ZS.registerFlatZone(-34,  29, 16, 12, 5);   // Avant-poste militaire
-  ZS.registerFlatZone(-15,  20,  8,  7, 4);   // Cabane forestière
-  ZS.registerFlatZone( 25,   8,  8,  8, 4);   // Ruines
+  ZS.registerFlatZone(-58, -44, 16, 14, 6);   // Village Ashwood
+  ZS.registerFlatZone( 63,  47, 16, 14, 6);   // Ferme nord-est
+  ZS.registerFlatZone( 34, -60, 14,  9, 5);   // Station service
+  ZS.registerFlatZone(-60,  51, 16, 12, 6);   // Avant-poste militaire
+  ZS.registerFlatZone(-26,  35, 10,  9, 4);   // Cabane forestière
+  ZS.registerFlatZone( 44,  14, 10, 10, 4);   // Ruines
   ZS.registerFlatZone(  0,   0,  5,  5, 3);   // Zone de départ
 
   const _colliders = [];
@@ -31,9 +31,10 @@
     window:   new THREE.MeshLambertMaterial({ color: 0x5a8aaa, transparent: true, opacity: 0.55 }),
     metal:    new THREE.MeshLambertMaterial({ color: 0x778899 }),
     rust:     new THREE.MeshLambertMaterial({ color: 0x8a5a30 }),
-    road:     new THREE.MeshLambertMaterial({ color: 0x35302a }),
-    roadLine: new THREE.MeshLambertMaterial({ color: 0xeecc22 }),
-    roadDirt: new THREE.MeshLambertMaterial({ color: 0x7a6648 }),
+    road:     new THREE.MeshLambertMaterial({ color: 0x35302a, polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -4 }),
+    roadLine: new THREE.MeshLambertMaterial({ color: 0xeecc22, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -6 }),
+    roadDirt: new THREE.MeshLambertMaterial({ color: 0x7a6648, polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -4 }),
+    path:     new THREE.MeshLambertMaterial({ color: 0x5e4a34, polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -3 }),
     stairs:   new THREE.MeshLambertMaterial({ color: 0x6b4f30 }),
   };
 
@@ -266,39 +267,39 @@
   // ── Village Ashwood ───────────────────────────────────────────────────────────
   function _buildVillage(scene) {
     // Place 2-storey immeuble
-    _buildImmeuble2F(scene, -22, -24);
+    _buildImmeuble2F(scene, -47, -43);
 
     // Single-storey houses
-    _house(scene, -38, -16, 5.5, 5.0, 2.8, M.brick,    M.roofRed,  'S');
-    _house(scene, -38, -26, 6.0, 5.0, 3.0, M.wood,     M.roofDark, 'E');
-    _house(scene, -36, -34, 5.0, 4.5, 2.7, M.concrete, M.roofGray, 'N');
-    _house(scene, -44, -22, 3.2, 3.0, 2.2, M.wood2,    M.roofDark, 'E');
+    _house(scene, -63, -35, 5.5, 5.0, 2.8, M.brick,    M.roofRed,  'S');
+    _house(scene, -63, -45, 6.0, 5.0, 3.0, M.wood,     M.roofDark, 'E');
+    _house(scene, -61, -53, 5.0, 4.5, 2.7, M.concrete, M.roofGray, 'N');
+    _house(scene, -69, -41, 3.2, 3.0, 2.2, M.wood2,    M.roofDark, 'E');
 
     // Village square — central dirt patch
-    const sqY = ZS.getTerrainHeight(-30, -25);
-    _slab(scene, -30, -25, sqY + 0.01, 5, 5, M.dirt);
+    const sqY = ZS.getTerrainHeight(-55, -44);
+    _slab(scene, -55, -44, sqY + 0.01, 5, 5, M.dirt);
     // Puits (solide)
-    _box(scene, -30, -25, sqY + 0.55, 1.2, 1.1, 1.2, M.brick2);
-    _colliders.push({ type: 'box', cx: -30, cz: -25, hw: 0.6, hd: 0.6 });
-    _box(scene, -30, -25, sqY + 1.1,  1.4, 0.18, 1.4, M.wood2);
+    _box(scene, -55, -44, sqY + 0.55, 1.2, 1.1, 1.2, M.brick2);
+    _colliders.push({ type: 'box', cx: -55, cz: -44, hw: 0.6, hd: 0.6 });
+    _box(scene, -55, -44, sqY + 1.1,  1.4, 0.18, 1.4, M.wood2);
   }
 
   // ── Ferme nord-est ────────────────────────────────────────────────────────────
   function _buildFarm(scene) {
     // 2-storey farmhouse
-    _buildFarmhouse2F(scene, 33, 27);
+    _buildFarmhouse2F(scene, 60, 47);
 
     // Grande grange
-    _buildBarn(scene, 43, 22);
+    _buildBarn(scene, 70, 42);
 
     // Petit poulailler
-    _house(scene, 28, 35, 3.5, 3.0, 2.2, M.wood2, M.roofDark, 'S');
+    _house(scene, 55, 55, 3.5, 3.0, 2.2, M.wood2, M.roofDark, 'S');
 
     // Puits (solide)
-    const wy = ZS.getTerrainHeight(38, 30);
-    _box(scene, 38, 30, wy + 0.6, 1.2, 1.2, 1.2, M.brick2);
-    _colliders.push({ type: 'box', cx: 38, cz: 30, hw: 0.6, hd: 0.6 });
-    _box(scene, 38, 30, wy + 1.2, 1.4, 0.18, 1.4, M.wood2);
+    const wy = ZS.getTerrainHeight(65, 50);
+    _box(scene, 65, 50, wy + 0.6, 1.2, 1.2, 1.2, M.brick2);
+    _colliders.push({ type: 'box', cx: 65, cz: 50, hw: 0.6, hd: 0.6 });
+    _box(scene, 65, 50, wy + 1.2, 1.4, 0.18, 1.4, M.wood2);
   }
 
   function _buildBarn(scene, cx, cz) {
@@ -322,7 +323,7 @@
 
   // ── Station service ───────────────────────────────────────────────────────────
   function _buildGasStation(scene) {
-    const cx = 24, cz = -34;
+    const cx = 39, cz = -60;
     const W = 8, D = 6, wallH = 3.3;
     const baseY = ZS.getTerrainHeight(cx, cz);
     const T = 0.22, doorW = 1.8;
@@ -361,10 +362,10 @@
 
   // ── Avant-poste militaire ─────────────────────────────────────────────────────
   function _buildOutpost(scene) {
-    const cx = -34, cz = 30;
+    const cx = -60, cz = 52;
     const W = 7.5, D = 5.5, wallH = 2.6;
     const baseY = ZS.getTerrainHeight(cx, cz);
-    const T = 0.35, doorW = 1.4;
+    const T = 0.35, doorW = 1.8;
 
     _slab(scene, cx, cz, baseY, W, D, M.concDark);
     _wall(scene, cx, cz - D / 2, baseY, W, T, wallH, M.concDark);
@@ -396,13 +397,12 @@
       _colliders.push({ x: fx, z: fz, r: 0.12 }); // poteau solide
     }
 
-    // Sacs de sable
-    for (let i = -1; i <= 1; i++) {
-      const sx = cx + i * 1.4, sz = cz + D / 2 + 1.2;
+    // Sacs de sable — flanquent l'entrée sur les côtés, ne bloquent pas la porte
+    for (const sx of [cx - 2.8, cx + 2.8]) {
+      const sz = cz + D / 2 + 0.6;
       const sy = ZS.getTerrainHeight(sx, sz);
-      _box(scene, sx, sz, sy + 0.3, 0.8, 0.6, 0.6, M.dirt);
-      // maxY = sommet du sac — le joueur peut sauter par-dessus
-      _colliders.push({ type: 'box', cx: sx, cz: sz, hw: 0.4, hd: 0.3, maxY: sy + 0.6 });
+      _box(scene, sx, sz, sy + 0.3, 1.6, 0.6, 0.6, M.dirt);
+      _colliders.push({ type: 'box', cx: sx, cz: sz, hw: 0.8, hd: 0.3, maxY: sy + 0.6 });
     }
   }
 
@@ -424,17 +424,17 @@
 
   // ── Cabane forestière ─────────────────────────────────────────────────────────
   function _buildForestCabin(scene) {
-    _house(scene, -15, 20, 5.5, 4.5, 2.9, M.wood, M.roofDark, 'E');
-    const ty = ZS.getTerrainHeight(-11.5, 20);
-    _slab(scene, -11.5, 20, ty + 0.01, 3.0, 4.0, M.wood2);
-    _box(scene, -10,    20, ty + 0.6, 0.1, 1.2, 4.0, M.wood2);
-    _box(scene, -11.5, 18, ty + 0.6, 3.0, 1.2, 0.1, M.wood2);
-    _box(scene, -11.5, 22, ty + 0.6, 3.0, 1.2, 0.1, M.wood2);
+    _house(scene, -26, 35, 5.5, 4.5, 2.9, M.wood, M.roofDark, 'E');
+    const ty = ZS.getTerrainHeight(-22.5, 35);
+    _slab(scene, -22.5, 35, ty + 0.01, 3.0, 4.0, M.wood2);
+    _box(scene, -21,    35, ty + 0.6, 0.1, 1.2, 4.0, M.wood2);
+    _box(scene, -22.5, 33, ty + 0.6, 3.0, 1.2, 0.1, M.wood2);
+    _box(scene, -22.5, 37, ty + 0.6, 3.0, 1.2, 0.1, M.wood2);
   }
 
   // ── Ruines ────────────────────────────────────────────────────────────────────
   function _buildRuins(scene) {
-    const cx = 25, cz = 8;
+    const cx = 44, cz = 14;
     const baseY = ZS.getTerrainHeight(cx, cz);
     const T = 0.22;
 
@@ -479,7 +479,7 @@
         const t  = i / steps;
         const x  = x0 + sdx * t;
         const z  = z0 + sdz * t;
-        const y  = ZS.getTerrainHeight(x, z) + 0.05;
+        const y  = ZS.getTerrainHeight(x, z) + 0.12;
         const li = pos.length / 3; // index gauche de cette ligne
         pos.push(x - nx * hw, y, z - nz * hw); // gauche
         pos.push(x + nx * hw, y, z + nz * hw); // droite
@@ -515,7 +515,7 @@
         for (let i = (si === 0 ? 0 : 1); i <= steps; i++) {
           const t = i / steps;
           const x = x0 + sdx * t, z = z0 + sdz * t;
-          const y = ZS.getTerrainHeight(x, z) + 0.07;
+          const y = ZS.getTerrainHeight(x, z) + 0.16;
           const li = lPos.length / 3;
           lPos.push(x - nx * lW, y, z - nz * lW,
                     x + nx * lW, y, z + nz * lW);
@@ -535,16 +535,35 @@
     }
   }
 
+  // Routes pavées — segments courts autour des zones bâties uniquement
   function _buildRoads(scene) {
-    _ribbon(scene, [[-28,-22],[-8,-8],[0,0],[16,14],[30,24]], 4.0, M.road, true);
-    _ribbon(scene, [[-28,-26],[-5,-28],[16,-33]], 3.4, M.road, true);
-    _ribbon(scene, [[16,-33],[22,-10],[25,8],[30,20],[30,24]], 2.8, M.road, false);
-    _ribbon(scene, [[0,0],[-12,12],[-28,27]], 2.8, M.roadDirt, false);
-    _ribbon(scene, [[28,27],[10,22],[-12,20]], 2.2, M.roadDirt, false);
+    // Rue principale du Village Ashwood
+    _ribbon(scene, [[-71,-34],[-63,-39],[-55,-44],[-48,-44]], 3.5, M.road, true);
+    // Allée de la Ferme nord-est
+    _ribbon(scene, [[56,55],[60,47],[70,42]], 2.8, M.road, false);
+    // Parvis + accès de la Station service
+    _ribbon(scene, [[27,-56],[39,-60],[46,-63]], 3.2, M.road, false);
+    // Chemin d'accès à l'Avant-poste
+    _ribbon(scene, [[-52,44],[-60,51],[-66,58]], 2.6, M.road, false);
+  }
+
+  // Chemins de terre — reliant les zones entre elles
+  function _buildDirtPaths(scene) {
+    // Zone de départ → Village Ashwood
+    _ribbon(scene, [[0,0],[-18,-14],[-38,-28],[-52,-40]], 2.0, M.path, false);
+    // Zone de départ → Station service
+    _ribbon(scene, [[0,0],[16,-22],[28,-44],[34,-56]], 1.8, M.path, false);
+    // Village → Cabane forestière
+    _ribbon(scene, [[-55,-44],[-44,-18],[-32,8],[-26,35]], 1.8, M.path, false);
+    // Cabane forestière → Avant-poste
+    _ribbon(scene, [[-26,35],[-40,42],[-52,48],[-60,51]], 1.8, M.path, false);
+    // Zone de départ → Ruines → Ferme
+    _ribbon(scene, [[0,0],[20,6],[38,12],[44,14],[54,30],[63,47]], 1.6, M.path, false);
   }
 
   // ── Entry point ───────────────────────────────────────────────────────────────
   function buildAll(scene) {
+    _buildDirtPaths(scene);
     _buildRoads(scene);
     _buildVillage(scene);
     _buildFarm(scene);

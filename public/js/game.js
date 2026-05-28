@@ -323,8 +323,8 @@
     let newZ = p.z + (_fwd.z * (-mz) + _right.z * mx) * SPEED * dt;
 
     // World bounds
-    newX = Math.max(-85, Math.min(85, newX));
-    newZ = Math.max(-85, Math.min(85, newZ));
+    newX = Math.max(-128, Math.min(128, newX));
+    newZ = Math.max(-128, Math.min(128, newZ));
 
     // Collision avec arbres, rochers, murs — respecte la hauteur pour sauter par-dessus
     const colliders = ZS.getColliders();

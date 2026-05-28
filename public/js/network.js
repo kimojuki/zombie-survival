@@ -30,6 +30,7 @@
         state.camera.yaw = data.spawn.rotY || 0;
         localStorage.setItem('zombie_spawn', JSON.stringify(data.spawn));
       }
+      if (typeof data.worldTime === 'number') ZS.setWorldTime(data.worldTime);
       ZS.Zombies.syncAll(data.zombies);
       remotePlayers.forEach(({ mesh }) => _scene.remove(mesh));
       remotePlayers.clear();
@@ -65,7 +66,10 @@
       if (rp) { _scene.remove(rp.mesh); remotePlayers.delete(id); }
     });
 
-    socket.on('zombie-tick',  (arr) => ZS.Zombies.syncAll(arr));
+    socket.on('zombie-tick',  (d) => {
+      ZS.Zombies.syncAll(d.zombies);
+      ZS.setWorldTime(d.time);
+    });
     socket.on('zombie-spawn', (z)   => ZS.Zombies.spawn(z));
     socket.on('zombie-hit',   (d)   => ZS.Zombies.hit(d.id, d.health));
     socket.on('zombie-die',   (id)  => ZS.Zombies.die(id));

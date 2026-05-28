@@ -71,6 +71,11 @@ const items   = new Map(); // world pickup items
 let zombieIdCounter = 0;
 let itemIdCounter   = 0;
 
+// Temps mondial partagé — source de vérité pour tous les clients
+let _worldTime = 0.3; // 0–1 (0=minuit, 0.25=lever, 0.5=midi, 0.75=coucher)
+const _DAY_DURATION = 240; // secondes par cycle complet
+const _TICK_DT = 0.1;      // durée du tick zombie en secondes
+
 const DROP_CHANCE  = 0.40;
 const DROP_TYPES   = ['ammo', 'ammo', 'ammo', 'medkit', 'medkit', 'food'];
 
@@ -104,9 +109,11 @@ for (let i = 0; i < ZOMBIE_COUNT; i++) {
 
 // Zombie AI — 100ms tick
 setInterval(() => {
+  _worldTime = (_worldTime + _TICK_DT / _DAY_DURATION) % 1;
+
   if (players.size === 0) return;
   const pList = Array.from(players.values());
-  const DT = 0.1;
+  const DT = _TICK_DT;
 
   zombies.forEach((z) => {
     // Nearest player
@@ -144,7 +151,7 @@ setInterval(() => {
     }
   });
 
-  io.emit('zombie-tick', Array.from(zombies.values()));
+  io.emit('zombie-tick', { zombies: Array.from(zombies.values()), time: _worldTime });
 }, 100);
 
 // Auto-save player state every 5s
@@ -202,6 +209,7 @@ io.on('connection', async (socket) => {
       .map(([sid, q]) => ({ id: sid, username: q.username, x: q.x, y: q.y, z: q.z, rotY: q.rotY })),
     zombies: Array.from(zombies.values()),
     items:   Array.from(items.values()),
+    worldTime: _worldTime,
     inventory: savedInventory
   });
   socket.broadcast.emit('player-join', { id: socket.id, username: p.username, x: p.x, y: p.y, z: p.z, rotY: p.rotY });

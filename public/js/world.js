@@ -10,8 +10,8 @@
   // Étapes-clés indexées par hauteur du soleil (sunY: -1 → 1)
   // sky=couleur ciel, amb=couleur ambiante, ambI=intensité ambiante, sunI=intensité soleil
   const _KEYS = [
-    { t: -1.00, sky: 0x020a14, amb: 0x0a0e22, ambI: 0.04, sunI: 0.00 }, // pleine nuit
-    { t: -0.10, sky: 0x08051a, amb: 0x0a0e22, ambI: 0.05, sunI: 0.00 }, // pré-aube
+    { t: -1.00, sky: 0x0d1a2e, amb: 0x1a2a4a, ambI: 0.22, sunI: 0.00 }, // pleine nuit
+    { t: -0.10, sky: 0x101828, amb: 0x1a2a4a, ambI: 0.25, sunI: 0.00 }, // pré-aube
     { t:  0.00, sky: 0xcc3b0a, amb: 0x441a08, ambI: 0.12, sunI: 0.20 }, // lever/coucher
     { t:  0.18, sky: 0xff8c20, amb: 0xffcc88, ambI: 0.35, sunI: 0.75 }, // heure dorée
     { t:  0.45, sky: 0x7ec8e3, amb: 0xfff8e7, ambI: 0.60, sunI: 1.40 }, // journée
@@ -47,8 +47,12 @@
     tickDayNight(0);
   }
 
+  function setWorldTime(t) {
+    _timeOfDay = t;
+  }
+
   function tickDayNight(dt) {
-    _timeOfDay = (_timeOfDay + dt / _DAY_DURATION) % 1;
+    // Le temps est dicté par le serveur via setWorldTime — pas d'avancement local
 
     // sunY: -1 = minuit, 0 = horizon (lever/coucher), 1 = midi
     const angle = _timeOfDay * Math.PI * 2;
@@ -63,7 +67,7 @@
     const k = _interpKey(sunY);
 
     _sunLight.intensity   = k.sunI;
-    _moonLight.intensity  = Math.max(0, -sunY) * 0.25;
+    _moonLight.intensity  = Math.max(0, -sunY) * 0.55;
     _ambientLight.intensity = k.ambI;
     _ambientLight.color.setHex(k.amb);
     _scene.background.setHex(k.sky);
@@ -181,5 +185,6 @@
   window.ZS = window.ZS || {};
   ZS.buildWorld    = buildWorld;
   ZS.tickDayNight  = tickDayNight;
+  ZS.setWorldTime  = setWorldTime;
   ZS.getColliders  = () => _colliders;
 }());

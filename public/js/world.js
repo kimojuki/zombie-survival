@@ -43,6 +43,10 @@
     spawnRocks(scene, 40);
     buildSafeZone(scene);
 
+    // Buildings — colliders merged into _colliders for game.js
+    const buildingColliders = ZS.Buildings.buildAll(scene);
+    for (const c of buildingColliders) _colliders.push(c);
+
     // Applique l'état initial sans attendre le premier tick
     tickDayNight(0);
   }

@@ -231,17 +231,31 @@
     newX = Math.max(-57, Math.min(57, newX));
     newZ = Math.max(-57, Math.min(57, newZ));
 
-    // Collision with trees and rocks
+    // Collision with trees, rocks, and building walls
     const colliders = ZS.getColliders();
     for (const col of colliders) {
-      const dx   = newX - col.x;
-      const dz   = newZ - col.z;
-      const dist = Math.hypot(dx, dz);
-      const min  = PLAYER_R + col.r;
-      if (dist < min && dist > 0.001) {
-        const scale = min / dist;
-        newX = col.x + dx * scale;
-        newZ = col.z + dz * scale;
+      if (col.type === 'box') {
+        // Circle vs AABB — find closest point on box, push out
+        const clampX = Math.max(col.cx - col.hw, Math.min(col.cx + col.hw, newX));
+        const clampZ = Math.max(col.cz - col.hd, Math.min(col.cz + col.hd, newZ));
+        const dx = newX - clampX;
+        const dz = newZ - clampZ;
+        const dist = Math.hypot(dx, dz);
+        if (dist < PLAYER_R && dist > 0.001) {
+          const pen = PLAYER_R - dist;
+          newX += (dx / dist) * pen;
+          newZ += (dz / dist) * pen;
+        }
+      } else {
+        const dx   = newX - col.x;
+        const dz   = newZ - col.z;
+        const dist = Math.hypot(dx, dz);
+        const min  = PLAYER_R + col.r;
+        if (dist < min && dist > 0.001) {
+          const scale = min / dist;
+          newX = col.x + dx * scale;
+          newZ = col.z + dz * scale;
+        }
       }
     }
 

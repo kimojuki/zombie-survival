@@ -16,24 +16,38 @@
     const shoesMat = mat(SHOES);
 
     // Head
-    addBox(g, skinMat,  0.8,  0.8,  0.8,  0,      1.9,  0);
+    addBox(g, skinMat,  0.8,  0.8,  0.8,  0,     1.9,  0);
     // Eyes
     addBox(g, mat(0x222222), 0.15, 0.1, 0.05, -0.18, 1.97, -0.4);
     addBox(g, mat(0x222222), 0.15, 0.1, 0.05,  0.18, 1.97, -0.4);
     // Body
-    addBox(g, shirtMat, 0.6,  0.75, 0.3,  0,      1.12, 0);
-    // Left arm
-    addBox(g, skinMat,  0.25, 0.75, 0.25, -0.43,  1.12, 0);
-    // Right arm
-    addBox(g, skinMat,  0.25, 0.75, 0.25,  0.43,  1.12, 0);
-    // Left leg
-    addBox(g, pantsMat, 0.25, 0.75, 0.25, -0.15,  0.37, 0);
-    // Right leg
-    addBox(g, pantsMat, 0.25, 0.75, 0.25,  0.15,  0.37, 0);
-    // Shoes
-    addBox(g, shoesMat, 0.27, 0.12, 0.32, -0.15, -0.02, 0.03);
-    addBox(g, shoesMat, 0.27, 0.12, 0.32,  0.15, -0.02, 0.03);
+    addBox(g, shirtMat, 0.6,  0.75, 0.3,  0,     1.12, 0);
 
+    // Arms — pivot at shoulder top (y=1.495) so rotation.x animates naturally
+    const lArm = new THREE.Group();
+    lArm.position.set(-0.43, 1.495, 0);
+    addBox(lArm, skinMat, 0.25, 0.75, 0.25, 0, -0.375, 0);
+    g.add(lArm);
+
+    const rArm = new THREE.Group();
+    rArm.position.set(0.43, 1.495, 0);
+    addBox(rArm, skinMat, 0.25, 0.75, 0.25, 0, -0.375, 0);
+    g.add(rArm);
+
+    // Legs — pivot at hip top (y=0.745); shoes attached here so they follow
+    const lLeg = new THREE.Group();
+    lLeg.position.set(-0.15, 0.745, 0);
+    addBox(lLeg, pantsMat, 0.25, 0.75, 0.25, 0, -0.375, 0);
+    addBox(lLeg, shoesMat, 0.27, 0.12, 0.32, 0, -0.765, 0.03);
+    g.add(lLeg);
+
+    const rLeg = new THREE.Group();
+    rLeg.position.set(0.15, 0.745, 0);
+    addBox(rLeg, pantsMat, 0.25, 0.75, 0.25, 0, -0.375, 0);
+    addBox(rLeg, shoesMat, 0.27, 0.12, 0.32, 0, -0.765, 0.03);
+    g.add(rLeg);
+
+    g.userData.limbs = { lArm, rArm, lLeg, rLeg };
     return g;
   }
 

@@ -67,7 +67,12 @@ app.post('/api/auth/login', async (req, res) => {
 
 const players = new Map();
 const zombies = new Map();
+const items   = new Map(); // world pickup items
 let zombieIdCounter = 0;
+let itemIdCounter   = 0;
+
+const DROP_CHANCE  = 0.40;
+const DROP_TYPES   = ['ammo', 'ammo', 'ammo', 'medkit', 'medkit', 'food'];
 
 const DETECT_RANGE   = 12;   // unités — portée de détection
 const AGGRO_MEMORY   = 5;    // secondes d'aggro après perte de vue
@@ -191,9 +196,10 @@ io.on('connection', async (socket) => {
     players: [...players.entries()]
       .filter(([sid]) => sid !== socket.id)
       .map(([sid, q]) => ({ id: sid, username: q.username, x: q.x, y: q.y, z: q.z, rotY: q.rotY })),
-    zombies: Array.from(zombies.values())
+    zombies: Array.from(zombies.values()),
+    items:   Array.from(items.values())
   });
-  socket.broadcast.emit('player-join', { id: socket.id, username: p.username, x: p.x, y: p.y, z: p.z });
+  socket.broadcast.emit('player-join', { id: socket.id, username: p.username, x: p.x, y: p.y, z: p.z, rotY: p.rotY });
 
   socket.on('move', (d) => {
     p.x = d.x; p.y = d.y; p.z = d.z; p.rotY = d.rotY; p.dirty = true;
@@ -219,6 +225,19 @@ io.on('connection', async (socket) => {
       hit.health -= 34;
       if (hit.health <= 0) {
         io.emit('zombie-die', hit.id);
+        // Random drop
+        if (Math.random() < DROP_CHANCE) {
+          const type   = DROP_TYPES[Math.floor(Math.random() * DROP_TYPES.length)];
+          const dropId = ++itemIdCounter;
+          const drop   = {
+            id:   dropId,
+            type,
+            x: hit.x + (Math.random() - 0.5) * 1.6,
+            z: hit.z + (Math.random() - 0.5) * 1.6
+          };
+          items.set(dropId, drop);
+          io.emit('item-spawn', drop);
+        }
         zombies.delete(hit.id);
         p.kills++;
         io.to(socket.id).emit('score-update', { kills: p.kills });
@@ -231,6 +250,14 @@ io.on('connection', async (socket) => {
         io.emit('zombie-hit', { id: hit.id, health: hit.health });
       }
     }
+  });
+
+  socket.on('item-pickup', (d) => {
+    const item = items.get(d.id);
+    if (!item) return; // already taken
+    items.delete(d.id);
+    io.emit('item-remove', d.id);          // remove from everyone's world
+    socket.emit('item-add', { type: item.type }); // give to this player
   });
 
   socket.on('respawn', () => {

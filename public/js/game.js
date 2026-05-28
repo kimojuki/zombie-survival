@@ -13,7 +13,7 @@
       x: 0, y: 5, z: 0, rotY: 0,
       health: parseInt(localStorage.getItem('zombie_health') || '100'),
       kills:  parseInt(localStorage.getItem('zombie_kills')  || '0'),
-      ammo: 30, dead: false
+      dead: false
     },
     input:  { moveX: 0, moveZ: 0 },
     camera: { yaw: 0, pitch: 0 },
@@ -76,6 +76,9 @@
   ZS.UI.setHealth(state.player.health);
   ZS.UI.setKills(state.player.kills);
 
+  // ── Inventory ─────────────────────────────────────────────────────────────
+  ZS.Inventory.init(state, scene, socket);
+
   // ── Plein écran + orientation paysage ─────────────────────────────────────
   function _enterFullscreen() {
     const el = document.documentElement;
@@ -121,9 +124,8 @@
 
   // ── Shooting ──────────────────────────────────────────────────────────────
   function shoot() {
-    if (state.player.dead || state.player.ammo <= 0) return;
-    state.player.ammo--;
-    ZS.UI.setAmmo(state.player.ammo);
+    if (state.player.dead) return;
+    if (!ZS.Inventory.decrementAmmo()) return; // no weapon or no ammo
 
     // Muzzle flash
     fpsArms.children[1] && fpsArms.children[1].traverse((c) => {
@@ -138,8 +140,8 @@
     const dir = raycaster.ray.direction;
     ZS.Network.sendShoot(camera.position.x, camera.position.z, dir.x, dir.z);
 
-    if (state.player.ammo === 0) {
-      setTimeout(() => { state.player.ammo = 30; ZS.UI.setAmmo(30); }, 2000);
+    if (ZS.Inventory.getWeaponAmmo() === 0) {
+      setTimeout(() => ZS.Inventory.reloadWeapon(), 2000);
     }
   }
 
@@ -155,7 +157,6 @@
   function respawn() {
     state.player.health = 100;
     state.player.dead   = false;
-    state.player.ammo   = 30;
 
     const angle = Math.random() * Math.PI * 2;
     const dist  = 10 + Math.random() * 25;
@@ -163,8 +164,8 @@
     state.player.z = Math.sin(angle) * dist;
 
     ZS.UI.setHealth(100);
-    ZS.UI.setAmmo(30);
     ZS.UI.hideDeath();
+    ZS.Inventory.reloadWeapon();
     ZS.Network.sendRespawn();
   }
   state.onRespawn = respawn;
@@ -180,6 +181,8 @@
     }
     ZS.tickDayNight(dt);
     ZS.Zombies.tick(dt);
+    ZS.Network.tick(dt);
+    ZS.Inventory.tick(dt);
     renderer.render(scene, camera);
   }
 

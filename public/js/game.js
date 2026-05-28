@@ -270,18 +270,24 @@
     }
     state.jumpPressed = false;
 
-    // Vertical physics
-    const groundY = ZS.getTerrainHeight(p.x, p.z) + 1.7;
+    // Vertical physics — uses multi-floor height (stairs, 2nd floor)
+    const groundY = ZS.getEffectiveFloorHeight(p.x, p.z, p.y) + 1.7;
     if (!p.onGround) {
       p.velocityY -= GRAVITY * dt;
       p.y         += p.velocityY * dt;
       if (p.y <= groundY) {
-        p.y        = groundY;
+        p.y         = groundY;
         p.velocityY = 0;
         p.onGround  = true;
       }
     } else {
-      p.y = groundY;
+      if (groundY < p.y - 0.4) {
+        // Floor dropped away (stepped off ledge/2nd floor) — start falling
+        p.onGround  = false;
+        p.velocityY = 0;
+      } else {
+        p.y = groundY;
+      }
     }
 
     camera.position.set(p.x, p.y, p.z);

@@ -66,13 +66,13 @@
     const lArm = new THREE.Group();
     lArm.position.set(-0.43, 1.495, 0);
     addBox(lArm, skinMat, 0.25, 0.75, 0.25, 0, -0.375, 0);
-    lArm.rotation.x = -Math.PI / 2.5;
+    lArm.rotation.x = Math.PI / 2.5;
     g.add(lArm);
 
     const rArm = new THREE.Group();
     rArm.position.set(0.43, 1.495, 0);
     addBox(rArm, skinMat, 0.25, 0.75, 0.25, 0, -0.375, 0);
-    rArm.rotation.x = -Math.PI / 2.5;
+    rArm.rotation.x = Math.PI / 2.5;
     g.add(rArm);
 
     // Legs — pivot at hip

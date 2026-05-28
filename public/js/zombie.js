@@ -73,14 +73,14 @@
         limbs.lLeg.rotation.x =  swing * 0.45;
         limbs.rLeg.rotation.x = -swing * 0.45;
         // Arms counter-swing, keep zombie stretch-forward base
-        limbs.lArm.rotation.x = -Math.PI / 2.5 + (-swing * 0.28);
-        limbs.rArm.rotation.x = -Math.PI / 2.5 + ( swing * 0.28);
+        limbs.lArm.rotation.x = Math.PI / 2.5 + (-swing * 0.28);
+        limbs.rArm.rotation.x = Math.PI / 2.5 + ( swing * 0.28);
       } else {
         // Idle: ease limbs back to default pose
         limbs.lLeg.rotation.x *= 0.85;
         limbs.rLeg.rotation.x *= 0.85;
-        limbs.lArm.rotation.x += (-Math.PI / 2.5 - limbs.lArm.rotation.x) * 0.12;
-        limbs.rArm.rotation.x += (-Math.PI / 2.5 - limbs.rArm.rotation.x) * 0.12;
+        limbs.lArm.rotation.x += (Math.PI / 2.5 - limbs.lArm.rotation.x) * 0.12;
+        limbs.rArm.rotation.x += (Math.PI / 2.5 - limbs.rArm.rotation.x) * 0.12;
       }
     });
   }

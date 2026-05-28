@@ -70,7 +70,7 @@
   function _house(scene, cx, cz, W, D, wallH, wallMat, roofMat, doorDir) {
     const baseY = ZS.getTerrainHeight(cx, cz);
     const T     = 0.22;
-    const doorW = 1.8; // large pour entrer facilement
+    const doorW = 2.0;
     const doorH = Math.min(2.4, wallH - 0.1);
     const topH  = wallH - doorH;
 
@@ -139,7 +139,7 @@
     const W = 9, D = 6.5;
     const floorH = 2.9; // height of each storey
     const T = 0.28;
-    const doorW = 1.8, doorH = 2.4;
+    const doorW = 2.0, doorH = 2.4;
     const baseY = ZS.getTerrainHeight(cx, cz);
 
     // Staircase in NW interior corner, running along Z
@@ -218,7 +218,7 @@
 
     // Ground floor (door west)
     _slab(scene, cx, cz, baseY, W, D, M.wood);
-    const doorW = 1.8, doorH = 2.4, topH = floorH - doorH;
+    const doorW = 2.0, doorH = 2.4, topH = floorH - doorH;
     // N / S walls
     _wall(scene, cx, cz - D / 2, baseY, W, T, floorH, M.wood);
     _wall(scene, cx, cz + D / 2, baseY, W, T, floorH, M.wood);
@@ -326,7 +326,7 @@
     const cx = 39, cz = -60;
     const W = 8, D = 6, wallH = 3.3;
     const baseY = ZS.getTerrainHeight(cx, cz);
-    const T = 0.22, doorW = 1.8;
+    const T = 0.22, doorW = 2.0;
 
     _slab(scene, cx, cz, baseY, W, D, M.floor);
     _wall(scene, cx, cz - D / 2, baseY, W, T, wallH, M.concrete);
@@ -365,7 +365,7 @@
     const cx = -60, cz = 52;
     const W = 7.5, D = 5.5, wallH = 2.6;
     const baseY = ZS.getTerrainHeight(cx, cz);
-    const T = 0.35, doorW = 1.8;
+    const T = 0.35, doorW = 2.0;
 
     _slab(scene, cx, cz, baseY, W, D, M.concDark);
     _wall(scene, cx, cz - D / 2, baseY, W, T, wallH, M.concDark);

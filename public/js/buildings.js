@@ -277,8 +277,9 @@
     // Village square — central dirt patch
     const sqY = ZS.getTerrainHeight(-30, -25);
     _slab(scene, -30, -25, sqY + 0.01, 5, 5, M.dirt);
-    // Well
+    // Puits (solide)
     _box(scene, -30, -25, sqY + 0.55, 1.2, 1.1, 1.2, M.brick2);
+    _colliders.push({ type: 'box', cx: -30, cz: -25, hw: 0.6, hd: 0.6 });
     _box(scene, -30, -25, sqY + 1.1,  1.4, 0.18, 1.4, M.wood2);
   }
 
@@ -293,9 +294,10 @@
     // Petit poulailler
     _house(scene, 28, 35, 3.5, 3.0, 2.2, M.wood2, M.roofDark, 'S');
 
-    // Puits
+    // Puits (solide)
     const wy = ZS.getTerrainHeight(38, 30);
     _box(scene, 38, 30, wy + 0.6, 1.2, 1.2, 1.2, M.brick2);
+    _colliders.push({ type: 'box', cx: 38, cz: 30, hw: 0.6, hd: 0.6 });
     _box(scene, 38, 30, wy + 1.2, 1.4, 0.18, 1.4, M.wood2);
   }
 
@@ -344,10 +346,13 @@
     _slab(scene, canX, cz, canY, 5.5, 7, M.metal);
     for (const pz of [cz - 2.8, cz + 2.8]) {
       _box(scene, canX - 2.2, pz, baseY + 1.9, 0.22, 3.8, 0.22, M.metal);
+      _colliders.push({ x: canX - 2.2, z: pz, r: 0.16 });
       _box(scene, canX + 2.2, pz, baseY + 1.9, 0.22, 3.8, 0.22, M.metal);
+      _colliders.push({ x: canX + 2.2, z: pz, r: 0.16 });
     }
     for (const pz of [cz - 1.6, cz + 1.6]) {
       _box(scene, canX, pz, baseY + 0.85, 0.55, 1.7, 0.38, M.rust);
+      _colliders.push({ x: canX, z: pz, r: 0.32 }); // pompe à essence
       _box(scene, canX, pz, baseY + 0.55, 0.58, 0.1, 0.42, M.metal);
     }
     const apronY = ZS.getTerrainHeight(canX, cz);
@@ -388,6 +393,7 @@
       const fy = ZS.getTerrainHeight(fx, fz);
       _box(scene, fx, fz, fy + 1.1, 0.14, 2.2, 0.14, M.metal);
       _box(scene, fx, fz, fy + 2.1, 0.6,  0.06, 0.06, M.metal);
+      _colliders.push({ x: fx, z: fz, r: 0.12 }); // poteau solide
     }
 
     // Sacs de sable
@@ -405,6 +411,7 @@
     const h = 5.5, leg = 0.14;
     for (const [ox, oz] of [[-1,-1],[1,-1],[-1,1],[1,1]]) {
       _box(scene, cx + ox, cz + oz, baseY + h / 2, leg, h, leg, M.metal);
+      _colliders.push({ x: cx + ox, z: cz + oz, r: 0.12 });
     }
     _box(scene, cx, cz, baseY + h,       2.4, 0.18, 2.4, M.wood2);
     _box(scene, cx,  cz - 1.2, baseY + h + 0.4, 2.4, 0.6, leg, M.metal);
@@ -448,69 +455,92 @@
     }
   }
 
-  // ── Routes ────────────────────────────────────────────────────────────────────
-  // Segments courts horizontaux positionnés au MAX des hauteurs de terrain du segment.
-  // Garantit que la route est toujours AU-DESSUS du sol, jamais dessous.
-  function _roadSeg(scene, x0, z0, x1, z1, width, mat, withLine) {
-    const dx   = x1 - x0, dz = z1 - z0;
-    const hLen = Math.hypot(dx, dz);
-    if (hLen < 0.1) return;
-    const yaw  = Math.atan2(dx, dz);
-    const STEP = 2.0;
-    const steps = Math.max(1, Math.ceil(hLen / STEP));
-    const sl = hLen / steps;
+  // ── Routes — géométrie ribbon collée au terrain ───────────────────────────────
+  // Chaque vertex est positionné exactement à getTerrainHeight + 0.05 m.
+  // Aucun segment flottant possible.
+  function _ribbon(scene, pts, width, mat, withLine) {
+    const STEP = 0.7; // densité d'échantillonnage en mètres
+    const pos  = [];  // positions flat Float32 [x,y,z, x,y,z, ...]
+    const idx  = [];
+    let prevL  = -1;  // index du vertex gauche de la ligne précédente
 
-    for (let i = 0; i < steps; i++) {
-      const ta = i / steps, tb = (i + 1) / steps, tm = (ta + tb) / 2;
-      const xa = x0 + dx * ta, za = z0 + dz * ta;
-      const xb = x0 + dx * tb, zb = z0 + dz * tb;
-      const xm = x0 + dx * tm, zm = z0 + dz * tm;
-      // Max des 3 points du segment — route jamais sous le terrain
-      const y = Math.max(
-        ZS.getTerrainHeight(xa, za),
-        ZS.getTerrainHeight(xm, zm),
-        ZS.getTerrainHeight(xb, zb)
-      ) + 0.03;
+    for (let si = 0; si < pts.length - 1; si++) {
+      const [x0, z0] = pts[si];
+      const [x1, z1] = pts[si + 1];
+      const sdx = x1 - x0, sdz = z1 - z0;
+      const sLen = Math.hypot(sdx, sdz);
+      if (sLen < 0.01) continue;
+      // Normale perpendiculaire à gauche du sens de marche
+      const nx = -sdz / sLen, nz = sdx / sLen;
+      const hw = width / 2;
+      const steps = Math.max(1, Math.ceil(sLen / STEP));
 
-      const m = new THREE.Mesh(new THREE.BoxGeometry(width, 0.13, sl + 0.06), mat);
-      m.rotation.y = yaw;
-      m.position.set(xm, y, zm);
-      scene.add(m);
+      for (let i = (si === 0 ? 0 : 1); i <= steps; i++) {
+        const t  = i / steps;
+        const x  = x0 + sdx * t;
+        const z  = z0 + sdz * t;
+        const y  = ZS.getTerrainHeight(x, z) + 0.05;
+        const li = pos.length / 3; // index gauche de cette ligne
+        pos.push(x - nx * hw, y, z - nz * hw); // gauche
+        pos.push(x + nx * hw, y, z + nz * hw); // droite
 
-      if (withLine && i % 2 === 0) {
-        const lm = new THREE.Mesh(
-          new THREE.BoxGeometry(0.18, 0.15, Math.min(sl * 0.5, 1.0)),
-          M.roadLine
-        );
-        lm.rotation.y = yaw;
-        lm.position.set(xm, y + 0.09, zm);
-        scene.add(lm);
+        if (prevL >= 0) {
+          // Quad entre ligne précédente et ligne courante
+          idx.push(prevL, li, prevL + 1,  prevL + 1, li, li + 1);
+        }
+        prevL = li;
+      }
+    }
+
+    if (pos.length < 6) return;
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+    geo.setIndex(idx);
+    geo.computeVertexNormals();
+    scene.add(new THREE.Mesh(geo, mat));
+
+    // Ligne centrale pointillée (ribbon étroit)
+    if (withLine) {
+      const lPos = [], lIdx = [];
+      let lprev = -1, dashToggle = 0;
+      for (let si = 0; si < pts.length - 1; si++) {
+        const [x0, z0] = pts[si];
+        const [x1, z1] = pts[si + 1];
+        const sdx = x1 - x0, sdz = z1 - z0;
+        const sLen = Math.hypot(sdx, sdz);
+        if (sLen < 0.01) continue;
+        const nx = -sdz / sLen, nz = sdx / sLen;
+        const lW = 0.14;
+        const steps = Math.max(1, Math.ceil(sLen / STEP));
+        for (let i = (si === 0 ? 0 : 1); i <= steps; i++) {
+          const t = i / steps;
+          const x = x0 + sdx * t, z = z0 + sdz * t;
+          const y = ZS.getTerrainHeight(x, z) + 0.07;
+          const li = lPos.length / 3;
+          lPos.push(x - nx * lW, y, z - nz * lW,
+                    x + nx * lW, y, z + nz * lW);
+          if (lprev >= 0 && dashToggle % 4 < 2) {
+            lIdx.push(lprev, li, lprev+1,  lprev+1, li, li+1);
+          }
+          lprev = li; dashToggle++;
+        }
+      }
+      if (lPos.length >= 6 && lIdx.length > 0) {
+        const lGeo = new THREE.BufferGeometry();
+        lGeo.setAttribute('position', new THREE.Float32BufferAttribute(lPos, 3));
+        lGeo.setIndex(lIdx);
+        lGeo.computeVertexNormals();
+        scene.add(new THREE.Mesh(lGeo, M.roadLine));
       }
     }
   }
 
-  // Chemin en plusieurs points de passage
-  function _roadPath(scene, pts, width, mat, withLine) {
-    for (let i = 0; i < pts.length - 1; i++) {
-      _roadSeg(scene, pts[i][0], pts[i][1], pts[i+1][0], pts[i+1][1], width, mat, withLine);
-    }
-  }
-
   function _buildRoads(scene) {
-    // Route asphaltée principale : village → spawn → ferme
-    _roadPath(scene, [[-28,-22],[-8,-8],[0,0],[16,14],[30,24]], 4.0, M.road, true);
-
-    // Route secondaire : village → station service
-    _roadPath(scene, [[-28,-26],[-5,-28],[16,-33]], 3.4, M.road, true);
-
-    // Route secondaire : station service → ruines → ferme (boucle est)
-    _roadPath(scene, [[16,-33],[22,-10],[25,8],[30,20],[30,24]], 2.8, M.road, false);
-
-    // Chemin de terre : spawn → avant-poste
-    _roadPath(scene, [[0,0],[-12,12],[-28,27]], 2.8, M.roadDirt, false);
-
-    // Sentier : ferme → cabane forestière
-    _roadPath(scene, [[28,27],[10,22],[-12,20]], 2.2, M.roadDirt, false);
+    _ribbon(scene, [[-28,-22],[-8,-8],[0,0],[16,14],[30,24]], 4.0, M.road, true);
+    _ribbon(scene, [[-28,-26],[-5,-28],[16,-33]], 3.4, M.road, true);
+    _ribbon(scene, [[16,-33],[22,-10],[25,8],[30,20],[30,24]], 2.8, M.road, false);
+    _ribbon(scene, [[0,0],[-12,12],[-28,27]], 2.8, M.roadDirt, false);
+    _ribbon(scene, [[28,27],[10,22],[-12,20]], 2.2, M.roadDirt, false);
   }
 
   // ── Entry point ───────────────────────────────────────────────────────────────

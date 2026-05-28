@@ -2,7 +2,7 @@
 (function () {
   'use strict';
 
-  const zombieMeshes = new Map(); // id -> { group, healthBar }
+  const zombieMeshes = new Map(); // id -> entry
   let _scene = null;
 
   function init(scene) {
@@ -19,7 +19,6 @@
         _update(z);
       }
     }
-    // Remove zombies not in the latest tick
     for (const [id] of zombieMeshes) {
       if (!seen.has(id)) _remove(id);
     }
@@ -39,7 +38,6 @@
   function die(id) {
     const entry = zombieMeshes.get(id);
     if (!entry) return;
-    // Fall-down animation via flag; removed after 600ms
     entry.dying = true;
     entry.dieTimer = 0;
     setTimeout(() => _remove(id), 700);
@@ -48,15 +46,42 @@
   function tick(dt) {
     zombieMeshes.forEach((entry) => {
       if (entry.dying) {
-        entry.dieTimer = (entry.dieTimer || 0) + dt;
+        entry.dieTimer += dt;
         entry.group.rotation.x = Math.min(Math.PI / 2, entry.dieTimer * 3);
         entry.group.position.y -= dt * 0.5;
+        return;
       }
-      // Animate arms (slight sway)
-      entry.animTime = (entry.animTime || 0) + dt;
-      const sway = Math.sin(entry.animTime * 4) * 0.08;
-      if (entry.lArm) entry.lArm.rotation.z =  sway + 0.1;
-      if (entry.rArm) entry.rArm.rotation.z = -sway - 0.1;
+
+      // Smooth rotation toward server-authoritative angle
+      let diff = entry.targetAngle - entry.currentAngle;
+      while (diff > Math.PI)  diff -= Math.PI * 2;
+      while (diff < -Math.PI) diff += Math.PI * 2;
+      entry.currentAngle += diff * Math.min(1, 10 * dt);
+      // Server angle: atan2(dz, dx) points along +X axis; Three.js rotation.y=0 faces -Z
+      // Server angle: atan2(dz, dx) where 0=+X; Three.js needs +π/2 offset (model front is -Z)
+      entry.group.rotation.y = entry.currentAngle + Math.PI / 2;
+
+      const limbs = entry.group.userData.limbs;
+      if (!limbs) return;
+
+      entry.animTime += dt;
+
+      if (entry.isMoving) {
+        // Walk cycle — freq scales with zombie speed
+        const freq = entry.speed * 2.2;
+        const swing = Math.sin(entry.animTime * freq);
+        limbs.lLeg.rotation.x =  swing * 0.45;
+        limbs.rLeg.rotation.x = -swing * 0.45;
+        // Arms counter-swing, keep zombie stretch-forward base
+        limbs.lArm.rotation.x = -Math.PI / 2.5 + (-swing * 0.28);
+        limbs.rArm.rotation.x = -Math.PI / 2.5 + ( swing * 0.28);
+      } else {
+        // Idle: ease limbs back to default pose
+        limbs.lLeg.rotation.x *= 0.85;
+        limbs.rLeg.rotation.x *= 0.85;
+        limbs.lArm.rotation.x += (-Math.PI / 2.5 - limbs.lArm.rotation.x) * 0.12;
+        limbs.rArm.rotation.x += (-Math.PI / 2.5 - limbs.rArm.rotation.x) * 0.12;
+      }
     });
   }
 
@@ -64,15 +89,25 @@
 
   function _add(z) {
     const group = ZS.createZombieModel();
+    const initialAngle = z.angle != null ? z.angle : 0;
     group.position.set(z.x, ZS.getTerrainHeight(z.x, z.z), z.z);
-    group.userData.id = z.id;
+    group.rotation.y = initialAngle + Math.PI / 2;
 
-    // Health bar (floating above head)
     const hbGroup = _makeHealthBar();
     hbGroup.position.y = 2.4;
     group.add(hbGroup);
 
-    const entry = { group, hbGroup, lArm: group.children[5], rArm: group.children[6], animTime: 0 };
+    const entry = {
+      group,
+      hbGroup,
+      animTime:     0,
+      currentAngle: initialAngle,
+      targetAngle:  initialAngle,
+      speed:        z.speed || 2,
+      isMoving:     false,
+      prevX:        z.x,
+      prevZ:        z.z
+    };
     zombieMeshes.set(z.id, entry);
     _scene.add(group);
   }
@@ -80,16 +115,16 @@
   function _update(z) {
     const entry = zombieMeshes.get(z.id);
     if (!entry || entry.dying) return;
-    const target = ZS.getTerrainHeight(z.x, z.z);
-    entry.group.position.set(z.x, target, z.z);
-    // Face movement direction
-    if (z.lastX !== undefined) {
-      const dx = z.x - z.lastX, dz = z.z - z.lastZ;
-      if (Math.hypot(dx, dz) > 0.01) {
-        entry.group.rotation.y = Math.atan2(dx, dz);
-      }
-    }
-    z.lastX = z.x; z.lastZ = z.z;
+
+    entry.group.position.set(z.x, ZS.getTerrainHeight(z.x, z.z), z.z);
+
+    if (z.angle != null) entry.targetAngle = z.angle;
+    if (z.speed  != null) entry.speed = z.speed;
+
+    const moved = Math.hypot(z.x - entry.prevX, z.z - entry.prevZ);
+    entry.isMoving = moved > 0.005;
+    entry.prevX = z.x;
+    entry.prevZ = z.z;
   }
 
   function _remove(id) {

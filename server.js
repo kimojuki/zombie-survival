@@ -87,15 +87,17 @@ const WANDER_TURN_MAX = 5;   // secondes max avant changement de direction
 
 function makeZombie() {
   const id = ++zombieIdCounter;
-  const angle = Math.random() * Math.PI * 2;
+  const spawnAngle = Math.random() * Math.PI * 2;
   const dist = 25 + Math.random() * (WORLD_RADIUS - 25);
+  const wanderAngle = Math.random() * Math.PI * 2;
   return {
     id,
-    x: Math.cos(angle) * dist,
+    x: Math.cos(spawnAngle) * dist,
     y: 0,
-    z: Math.sin(angle) * dist,
+    z: Math.sin(spawnAngle) * dist,
     health: 100,
-    wanderAngle: Math.random() * Math.PI * 2,
+    angle: wanderAngle,
+    wanderAngle,
     wanderTimer: WANDER_TURN_MIN + Math.random() * (WANDER_TURN_MAX - WANDER_TURN_MIN),
     aggroTimer: 0,
     speed: 1.8 + Math.random() * 1.4
@@ -133,6 +135,7 @@ setInterval(() => {
     if (z.aggroTimer > 0 && nearestP) {
       // Chase at full speed
       const ang = Math.atan2(nearestP.z - z.z, nearestP.x - z.x);
+      z.angle = ang;
       z.x += Math.cos(ang) * z.speed * DT;
       z.z += Math.sin(ang) * z.speed * DT;
       if (nearestDist < 1.5 && !nearestP.invincible) {
@@ -146,6 +149,7 @@ setInterval(() => {
         z.wanderAngle = Math.random() * Math.PI * 2;
         z.wanderTimer = WANDER_TURN_MIN + Math.random() * (WANDER_TURN_MAX - WANDER_TURN_MIN);
       }
+      z.angle = z.wanderAngle;
       z.x = Math.max(-WORLD_RADIUS, Math.min(WORLD_RADIUS, z.x + Math.cos(z.wanderAngle) * z.speed * WANDER_SPEED * DT));
       z.z = Math.max(-WORLD_RADIUS, Math.min(WORLD_RADIUS, z.z + Math.sin(z.wanderAngle) * z.speed * WANDER_SPEED * DT));
     }

@@ -58,18 +58,35 @@
     const pantsMat = mat(0x2a2a1a);
 
     addBox(g, skinMat,  0.8,  0.8,  0.8,  0,      1.9,  0);
-    // Red zombie eyes
     addBox(g, mat(0xff2222), 0.15, 0.12, 0.05, -0.17, 1.97, -0.4);
     addBox(g, mat(0xff2222), 0.15, 0.12, 0.05,  0.17, 1.97, -0.4);
     addBox(g, shirtMat, 0.6,  0.75, 0.3,  0,      1.12, 0);
-    // Arms stretched forward (zombie pose)
-    const lArm = addBox(g, skinMat, 0.25, 0.75, 0.25, -0.43, 1.12, 0);
-    const rArm = addBox(g, skinMat, 0.25, 0.75, 0.25,  0.43, 1.12, 0);
-    lArm.rotation.x = -Math.PI / 2.5;
-    rArm.rotation.x = -Math.PI / 2.5;
-    addBox(g, pantsMat, 0.25, 0.75, 0.25, -0.15, 0.37, 0);
-    addBox(g, pantsMat, 0.25, 0.75, 0.25,  0.15, 0.37, 0);
 
+    // Arms — pivot at shoulder, stretched forward (zombie pose)
+    const lArm = new THREE.Group();
+    lArm.position.set(-0.43, 1.495, 0);
+    addBox(lArm, skinMat, 0.25, 0.75, 0.25, 0, -0.375, 0);
+    lArm.rotation.x = -Math.PI / 2.5;
+    g.add(lArm);
+
+    const rArm = new THREE.Group();
+    rArm.position.set(0.43, 1.495, 0);
+    addBox(rArm, skinMat, 0.25, 0.75, 0.25, 0, -0.375, 0);
+    rArm.rotation.x = -Math.PI / 2.5;
+    g.add(rArm);
+
+    // Legs — pivot at hip
+    const lLeg = new THREE.Group();
+    lLeg.position.set(-0.15, 0.745, 0);
+    addBox(lLeg, pantsMat, 0.25, 0.75, 0.25, 0, -0.375, 0);
+    g.add(lLeg);
+
+    const rLeg = new THREE.Group();
+    rLeg.position.set(0.15, 0.745, 0);
+    addBox(rLeg, pantsMat, 0.25, 0.75, 0.25, 0, -0.375, 0);
+    g.add(rLeg);
+
+    g.userData.limbs = { lArm, rArm, lLeg, rLeg };
     return g;
   }
 

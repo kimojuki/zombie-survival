@@ -82,15 +82,14 @@
     if (!def) return;
 
     if (type === 'ammo') {
-      // Stack with existing ammo or find a slot
       for (let i = 1; i < _slots.length; i++) {
         const s = _slots[i];
-        if (s && s.type === 'ammo' && s.qty < def.maxStack) { s.qty++; _renderSlots(); return; }
+        if (s && s.type === 'ammo' && s.qty < def.maxStack) { s.qty++; _renderSlots(); _syncToServer(); return; }
       }
     } else {
       for (let i = 1; i < _slots.length; i++) {
         const s = _slots[i];
-        if (s && s.type === type && s.qty < def.maxStack) { s.qty++; _renderSlots(); return; }
+        if (s && s.type === type && s.qty < def.maxStack) { s.qty++; _renderSlots(); _syncToServer(); return; }
       }
     }
 
@@ -99,6 +98,7 @@
       if (!_slots[i]) {
         _slots[i] = { type, qty: 1 };
         _renderSlots();
+        _syncToServer();
         _showPickupNotif(def);
         return;
       }
@@ -127,6 +127,30 @@
   function reloadWeapon() {
     const s = _slots[0];
     if (s && s.type === 'pistol') { s.ammo = s.maxAmmo; _renderSlots(); }
+  }
+
+  function loadFromSave(slots) {
+    if (!Array.isArray(slots) || slots.length === 0) return;
+    for (let i = 0; i < _slots.length; i++) {
+      _slots[i] = slots[i] || null;
+    }
+    if (!_slots[0] || _slots[0].type !== 'pistol') {
+      _slots[0] = { type: 'pistol', qty: 1, ammo: 30, maxAmmo: 30 };
+    }
+    _renderSlots();
+  }
+
+  function clear() {
+    _slots = [
+      { type: 'pistol', qty: 1, ammo: 30, maxAmmo: 30 },
+      null, null, null, null, null
+    ];
+    _renderSlots();
+    _syncToServer();
+  }
+
+  function _syncToServer() {
+    if (_socket) _socket.emit('inventory-sync', _slots);
   }
 
   // ── DOM ────────────────────────────────────────────────────────────────────
@@ -203,6 +227,7 @@
       item.qty--;
       if (item.qty <= 0) _slots[_active] = null;
       _renderSlots();
+      _syncToServer();
     } else if (def.category === 'ammo') {
       const pistol = _slots[0];
       if (!pistol || pistol.type !== 'pistol') return;
@@ -211,6 +236,7 @@
       item.qty--;
       if (item.qty <= 0) _slots[_active] = null;
       _renderSlots();
+      _syncToServer();
     }
   }
 
@@ -292,6 +318,7 @@
   ZS.Inventory = {
     init, tick,
     spawnWorldItem, removeWorldItem, receivePickup,
-    getActiveItem, getWeaponAmmo, decrementAmmo, reloadWeapon
+    getActiveItem, getWeaponAmmo, decrementAmmo, reloadWeapon,
+    loadFromSave, clear
   };
 }());

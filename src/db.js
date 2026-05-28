@@ -15,7 +15,7 @@ const pool = mysql.createPool({
 
 async function getPlayer(username) {
   const [rows] = await pool.execute(
-    'SELECT id, username, password_hash, pos_x, pos_y, pos_z, rot_y, health, kills FROM players WHERE username = ?',
+    'SELECT id, username, password_hash, pos_x, pos_y, pos_z, rot_y, health, kills, inventory FROM players WHERE username = ?',
     [username]
   );
   return rows[0] || null;
@@ -29,10 +29,10 @@ async function createPlayer(username, passwordHash) {
   return result.insertId;
 }
 
-async function savePlayerState(id, x, y, z, rotY, health, kills) {
+async function savePlayerState(id, x, y, z, rotY, health, kills, inventory) {
   await pool.execute(
-    'UPDATE players SET pos_x=?, pos_y=?, pos_z=?, rot_y=?, health=?, kills=? WHERE id=?',
-    [x, y, z, rotY, health, kills, id]
+    'UPDATE players SET pos_x=?, pos_y=?, pos_z=?, rot_y=?, health=?, kills=?, inventory=? WHERE id=?',
+    [x, y, z, rotY, health, kills, inventory ?? '[]', id]
   );
 }
 

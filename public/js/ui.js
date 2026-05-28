@@ -9,6 +9,7 @@
     _setupJoystick();
     _setupLookZone();
     _setupShootButton();
+    _setupJumpButton();
     _setupRespawn();
     setHealth(100);
     setKills(0);
@@ -104,6 +105,20 @@
     }, { passive: false });
     btn.addEventListener('click', () => {
       if (_state.onShoot) _state.onShoot();
+    });
+  }
+
+  // ── Jump button ──────────────────────────────────────────────────────────
+
+  function _setupJumpButton() {
+    const btn = document.getElementById('jump-btn');
+    if (!btn) return;
+    btn.addEventListener('touchstart', (e) => {
+      e.preventDefault();
+      if (_state.onJump) _state.onJump();
+    }, { passive: false });
+    btn.addEventListener('click', () => {
+      if (_state.onJump) _state.onJump();
     });
   }
 

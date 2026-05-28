@@ -151,7 +151,7 @@ setInterval(() => {
 setInterval(() => {
   players.forEach((p) => {
     if (p.dirty && p.id) {
-      savePlayerState(p.id, p.x, p.y, p.z, p.rotY, p.health, p.kills).catch(() => {});
+      savePlayerState(p.id, p.x, p.y, p.z, p.rotY, p.health, p.kills, p.inventory || '[]').catch(() => {});
       p.dirty = false;
     }
   });
@@ -183,12 +183,16 @@ io.on('connection', async (socket) => {
     rotY: saved?.rot_y ?? 0,
     health: saved?.health ?? 100,
     kills:  saved?.kills  ?? 0,
+    inventory: saved?.inventory || '[]',
     dirty: false,
     invincible: true
   };
   setTimeout(() => { if (players.has(socket.id)) p.invincible = false; }, 5000);
   players.set(socket.id, p);
   console.log(`+ ${p.username} (${players.size} en ligne)`);
+
+  let savedInventory = [];
+  try { savedInventory = JSON.parse(p.inventory || '[]'); } catch {}
 
   socket.emit('game-init', {
     selfId: socket.id,
@@ -197,7 +201,8 @@ io.on('connection', async (socket) => {
       .filter(([sid]) => sid !== socket.id)
       .map(([sid, q]) => ({ id: sid, username: q.username, x: q.x, y: q.y, z: q.z, rotY: q.rotY })),
     zombies: Array.from(zombies.values()),
-    items:   Array.from(items.values())
+    items:   Array.from(items.values()),
+    inventory: savedInventory
   });
   socket.broadcast.emit('player-join', { id: socket.id, username: p.username, x: p.x, y: p.y, z: p.z, rotY: p.rotY });
 
@@ -255,14 +260,21 @@ io.on('connection', async (socket) => {
   socket.on('item-pickup', (d) => {
     const item = items.get(d.id);
     if (!item) return; // already taken
+    // Proximity guard — reject if player is too far (3 units tolerance for latency)
+    if (Math.hypot(item.x - p.x, item.z - p.z) > 3.0) return;
     items.delete(d.id);
-    io.emit('item-remove', d.id);          // remove from everyone's world
-    socket.emit('item-add', { type: item.type }); // give to this player
+    io.emit('item-remove', item.id);       // use authoritative id, not client-supplied
+    socket.emit('item-add', { type: item.type });
+  });
+
+  socket.on('inventory-sync', (slots) => {
+    try { p.inventory = JSON.stringify(slots); p.dirty = true; } catch {}
   });
 
   socket.on('respawn', () => {
     p.health = 100;
     p.invincible = true;
+    p.inventory = '[]'; // client will send inventory-sync with cleared state
     setTimeout(() => { if (players.has(socket.id)) p.invincible = false; }, 3000);
     socket.emit('take-damage', { health: 100 });
   });
@@ -271,7 +283,7 @@ io.on('connection', async (socket) => {
     players.delete(socket.id);
     console.log(`- ${p.username} (${players.size} en ligne)`);
     io.emit('player-leave', socket.id);
-    if (p.id) savePlayerState(p.id, p.x, p.y, p.z, p.rotY, p.health, p.kills).catch(() => {});
+    if (p.id) savePlayerState(p.id, p.x, p.y, p.z, p.rotY, p.health, p.kills, p.inventory || '[]').catch(() => {});
   });
 });
 

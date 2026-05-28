@@ -3,6 +3,7 @@
   'use strict';
 
   let _scene, _ambientLight, _sunLight, _moonLight;
+  const _colliders = []; // { x, z, r } — populated during buildWorld
   let _timeOfDay = 0.3; // 0–1  (0=minuit, 0.25=lever, 0.5=midi, 0.75=coucher)
   const _DAY_DURATION = 240; // secondes par cycle complet
 
@@ -118,6 +119,7 @@
       const x = (_rng() - 0.5) * 110;
       const z = (_rng() - 0.5) * 110;
       if (Math.hypot(x, z) < 4) continue;
+      _colliders.push({ x, z, r: 0.6 });
       const tree = makeTree();
       tree.position.set(x, ZS.getTerrainHeight(x, z), z);
       scene.add(tree);
@@ -130,6 +132,7 @@
       const x = (_rng() - 0.5) * 110;
       const z = (_rng() - 0.5) * 110;
       const s = 0.3 + _rng() * 0.7;
+      _colliders.push({ x, z, r: s + 0.25 });
       const rock = new THREE.Mesh(new THREE.DodecahedronGeometry(s, 0), mat);
       rock.rotation.set(_rng() * Math.PI, _rng() * Math.PI, _rng() * Math.PI);
       rock.position.set(x, ZS.getTerrainHeight(x, z) + s * 0.3, z);
@@ -178,4 +181,5 @@
   window.ZS = window.ZS || {};
   ZS.buildWorld    = buildWorld;
   ZS.tickDayNight  = tickDayNight;
+  ZS.getColliders  = () => _colliders;
 }());

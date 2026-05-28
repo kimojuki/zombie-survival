@@ -11,6 +11,8 @@
     selfId: null,
     player: {
       x: 0, y: 5, z: 0, rotY: 0,
+      velocityY: 0,
+      onGround: true,
       health: parseInt(localStorage.getItem('zombie_health') || '100'),
       kills:  parseInt(localStorage.getItem('zombie_kills')  || '0'),
       dead: false
@@ -18,9 +20,11 @@
     input:  { moveX: 0, moveZ: 0 },
     camera: { yaw: 0, pitch: 0 },
     keys:   {},
+    jumpPressed: false,
     lastTime: 0,
-    onShoot:  null,
-    onRespawn: null
+    onShoot:   null,
+    onRespawn: null,
+    onJump:    null
   };
 
   // Load saved spawn position
@@ -146,17 +150,17 @@
   }
 
   state.onShoot = shoot;
+  state.onJump  = () => { state.jumpPressed = true; };
   document.addEventListener('mousedown', (e) => {
     if (e.button === 0 && pointerLocked) shoot();
-  });
-  document.addEventListener('keydown', (e) => {
-    if (e.code === 'Space') shoot();
   });
 
   // ── Respawn ───────────────────────────────────────────────────────────────
   function respawn() {
-    state.player.health = 100;
-    state.player.dead   = false;
+    state.player.health    = 100;
+    state.player.dead      = false;
+    state.player.velocityY = 0;
+    state.player.onGround  = true;
 
     const angle = Math.random() * Math.PI * 2;
     const dist  = 10 + Math.random() * 25;
@@ -165,7 +169,7 @@
 
     ZS.UI.setHealth(100);
     ZS.UI.hideDeath();
-    ZS.Inventory.reloadWeapon();
+    ZS.Inventory.clear(); // efface l'inventaire à la mort
     ZS.Network.sendRespawn();
   }
   state.onRespawn = respawn;
@@ -193,6 +197,10 @@
   const _right = new THREE.Vector3();
   const _up    = new THREE.Vector3(0, 1, 0);
 
+  const PLAYER_R  = 0.45;
+  const GRAVITY   = 22;
+  const JUMP_V    = 8;
+
   function updateMovement(dt) {
     const SPEED = 5;
     const keys  = state.keys;
@@ -214,15 +222,53 @@
     _right.crossVectors(_fwd, _up).normalize();
 
     const p = state.player;
-    p.x += (_fwd.x * (-mz) + _right.x * mx) * SPEED * dt;
-    p.z += (_fwd.z * (-mz) + _right.z * mx) * SPEED * dt;
+
+    // Horizontal movement
+    let newX = p.x + (_fwd.x * (-mz) + _right.x * mx) * SPEED * dt;
+    let newZ = p.z + (_fwd.z * (-mz) + _right.z * mx) * SPEED * dt;
 
     // World bounds
-    p.x = Math.max(-57, Math.min(57, p.x));
-    p.z = Math.max(-57, Math.min(57, p.z));
+    newX = Math.max(-57, Math.min(57, newX));
+    newZ = Math.max(-57, Math.min(57, newZ));
 
-    // Stick to terrain (eye height = 1.7)
-    p.y = ZS.getTerrainHeight(p.x, p.z) + 1.7;
+    // Collision with trees and rocks
+    const colliders = ZS.getColliders();
+    for (const col of colliders) {
+      const dx   = newX - col.x;
+      const dz   = newZ - col.z;
+      const dist = Math.hypot(dx, dz);
+      const min  = PLAYER_R + col.r;
+      if (dist < min && dist > 0.001) {
+        const scale = min / dist;
+        newX = col.x + dx * scale;
+        newZ = col.z + dz * scale;
+      }
+    }
+
+    p.x = newX;
+    p.z = newZ;
+
+    // Jump
+    if (p.onGround && (keys['Space'] || state.jumpPressed)) {
+      p.velocityY    = JUMP_V;
+      p.onGround     = false;
+      state.jumpPressed = false;
+    }
+    state.jumpPressed = false;
+
+    // Vertical physics
+    const groundY = ZS.getTerrainHeight(p.x, p.z) + 1.7;
+    if (!p.onGround) {
+      p.velocityY -= GRAVITY * dt;
+      p.y         += p.velocityY * dt;
+      if (p.y <= groundY) {
+        p.y        = groundY;
+        p.velocityY = 0;
+        p.onGround  = true;
+      }
+    } else {
+      p.y = groundY;
+    }
 
     camera.position.set(p.x, p.y, p.z);
     camera.rotation.y = state.camera.yaw;

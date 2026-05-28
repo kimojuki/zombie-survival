@@ -31,12 +31,14 @@
         localStorage.setItem('zombie_spawn', JSON.stringify(data.spawn));
       }
       ZS.Zombies.syncAll(data.zombies);
-      // Rebuild remote player list from authoritative server state
       remotePlayers.forEach(({ mesh }) => _scene.remove(mesh));
       remotePlayers.clear();
       for (const p of data.players) _addRemotePlayer(p);
-      // Restore world items
       for (const item of (data.items || [])) ZS.Inventory.spawnWorldItem(item);
+      // Restore saved inventory (empty array = keep default pistol)
+      if (Array.isArray(data.inventory) && data.inventory.length > 0) {
+        ZS.Inventory.loadFromSave(data.inventory);
+      }
     });
 
     socket.on('player-join', (p) => {

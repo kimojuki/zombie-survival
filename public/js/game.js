@@ -48,11 +48,7 @@
   camera.rotation.order = 'YXZ';
   scene.add(camera);
 
-  window.addEventListener('resize', () => {
-    renderer.setSize(window.innerWidth, window.innerHeight);
-    camera.aspect = window.innerWidth / window.innerHeight;
-    camera.updateProjectionMatrix();
-  });
+  // Le resize global est géré par _resizeToViewport plus bas (visualViewport).
 
   // ── Build world ───────────────────────────────────────────────────────────
   ZS.buildWorld(scene);
@@ -83,19 +79,64 @@
   // ── Inventory ─────────────────────────────────────────────────────────────
   ZS.Inventory.init(state, scene, socket);
 
+  // ── Viewport sizing — adapte le rendu à la vraie zone visible ───────────────
+  const _isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) ||
+                 (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+
+  function _resizeToViewport() {
+    // visualViewport donne la vraie zone visible (sous la barre Safari sur iOS)
+    const vp = window.visualViewport;
+    const w  = vp ? vp.width  : window.innerWidth;
+    const h  = vp ? vp.height : window.innerHeight;
+    renderer.setSize(w, h);
+    camera.aspect = w / h;
+    camera.updateProjectionMatrix();
+    canvas.style.width  = w + 'px';
+    canvas.style.height = h + 'px';
+    canvas.style.top    = (vp ? vp.offsetTop  : 0) + 'px';
+    canvas.style.left   = (vp ? vp.offsetLeft : 0) + 'px';
+  }
+
+  if (window.visualViewport) {
+    window.visualViewport.addEventListener('resize', _resizeToViewport);
+    window.visualViewport.addEventListener('scroll', _resizeToViewport);
+  }
+  window.addEventListener('resize', _resizeToViewport);
+  _resizeToViewport();
+
   // ── Plein écran + orientation paysage ─────────────────────────────────────
   function _enterFullscreen() {
     const el = document.documentElement;
-    if (el.requestFullscreen)              el.requestFullscreen().catch(() => {});
-    else if (el.webkitRequestFullscreen)   el.webkitRequestFullscreen();
+
+    // API Fullscreen standard — fonctionne sur iOS 16.4+, Android, desktop
+    if (el.requestFullscreen) {
+      el.requestFullscreen().catch(() => {});
+    } else if (el.webkitRequestFullscreen) {
+      el.webkitRequestFullscreen();
+    }
+
+    // iOS < 16.4 : scroll trick pour masquer la barre d'adresse
+    if (_isIOS && !window.navigator.standalone) {
+      setTimeout(() => {
+        document.body.style.height = (window.screen.height + 1) + 'px';
+        window.scrollTo(0, 1);
+        setTimeout(() => {
+          document.body.style.height = '';
+          _resizeToViewport();
+        }, 200);
+      }, 80);
+    }
+
+    // Verrouillage orientation paysage (Android / desktop)
     if (screen.orientation && screen.orientation.lock) {
       screen.orientation.lock('landscape').catch(() => {});
     }
   }
+
+  // Tentative au premier toucher/clic ET à chaque rotation
   document.addEventListener('touchstart', _enterFullscreen, { once: true });
   document.addEventListener('click',      _enterFullscreen, { once: true });
 
-  // Auto-fullscreen when rotating to landscape
   if (screen.orientation) {
     screen.orientation.addEventListener('change', () => {
       if (screen.orientation.type.startsWith('landscape')) _enterFullscreen();

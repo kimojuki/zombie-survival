@@ -46,9 +46,15 @@
     return m;
   }
 
-  function _wall(scene, x, z, baseY, lenX, lenZ, height, mat) {
+  // noCollide=true → visuel uniquement (ex: linteaux de porte au-dessus de la tête)
+  // maxY → hauteur max : le joueur peut sauter par-dessus si ses pieds dépassent maxY
+  function _wall(scene, x, z, baseY, lenX, lenZ, height, mat, noCollide, maxY) {
     _mesh(scene, new THREE.BoxGeometry(lenX, height, lenZ), mat, x, baseY + height / 2, z);
-    _colliders.push({ type: 'box', cx: x, cz: z, hw: lenX / 2, hd: lenZ / 2 });
+    if (!noCollide) {
+      const col = { type: 'box', cx: x, cz: z, hw: lenX / 2, hd: lenZ / 2 };
+      if (maxY !== undefined) col.maxY = maxY;
+      _colliders.push(col);
+    }
   }
 
   function _slab(scene, x, z, y, w, d, mat) {
@@ -78,7 +84,7 @@
           _wall(scene, cx - g - side / 2, z, baseY, side, T, wallH, wallMat);
           _wall(scene, cx + g + side / 2, z, baseY, side, T, wallH, wallMat);
         }
-        if (topH > 0.05) _wall(scene, cx, z, baseY + doorH, doorW, T, topH, wallMat);
+        if (topH > 0.05) _wall(scene, cx, z, baseY + doorH, doorW, T, topH, wallMat, true);
       }
     }
 
@@ -91,7 +97,7 @@
           _wall(scene, x, cz - g - side / 2, baseY, T, side, wallH, wallMat);
           _wall(scene, x, cz + g + side / 2, baseY, T, side, wallH, wallMat);
         }
-        if (topH > 0.05) _wall(scene, x, cz, baseY + doorH, T, doorW, topH, wallMat);
+        if (topH > 0.05) _wall(scene, x, cz, baseY + doorH, T, doorW, topH, wallMat, true);
       }
     }
 
@@ -152,7 +158,7 @@
     const g = doorW / 2, side = W / 2 - g;
     _wall(scene, cx - g - side / 2, cz + D / 2, baseY, side,  T, floorH, M.concrete); // S left
     _wall(scene, cx + g + side / 2, cz + D / 2, baseY, side,  T, floorH, M.concrete); // S right
-    _wall(scene, cx, cz + D / 2, baseY + doorH, doorW, T, floorH - doorH, M.concrete); // S header
+    _wall(scene, cx, cz + D / 2, baseY + doorH, doorW, T, floorH - doorH, M.concrete, true); // S header
     _wall(scene, cx - W / 2, cz, baseY, T, D, floorH, M.concrete);           // W
     _wall(scene, cx + W / 2, cz, baseY, T, D, floorH, M.concrete);           // E
 
@@ -221,7 +227,7 @@
     const g = doorW / 2, sideD = D / 2 - g;
     _wall(scene, cx - W / 2, cz - g - sideD / 2, baseY, T, sideD, floorH, M.wood);
     _wall(scene, cx - W / 2, cz + g + sideD / 2, baseY, T, sideD, floorH, M.wood);
-    if (topH > 0.05) _wall(scene, cx - W / 2, cz, baseY + doorH, T, doorW, topH, M.wood);
+    if (topH > 0.05) _wall(scene, cx - W / 2, cz, baseY + doorH, T, doorW, topH, M.wood, true);
 
     // Inter-floor slab
     _slab(scene, cx, cz, baseY + floorH, W - T, D - T, M.floor);
@@ -303,7 +309,7 @@
     const g = doorW / 2, side = W / 2 - g;
     _wall(scene, cx - g - side / 2, cz + D / 2, baseY, side, T, wallH, M.wood2);
     _wall(scene, cx + g + side / 2, cz + D / 2, baseY, side, T, wallH, M.wood2);
-    _wall(scene, cx, cz + D / 2, baseY + 3.0, doorW, T, wallH - 3.0, M.wood2);
+    _wall(scene, cx, cz + D / 2, baseY + 3.0, doorW, T, wallH - 3.0, M.wood2, true);
     _wall(scene, cx - W / 2, cz, baseY, T, D, wallH, M.wood2);
     _wall(scene, cx + W / 2, cz, baseY, T, D, wallH, M.wood2);
     _slab(scene, cx, cz, baseY + wallH, W + 0.5, D + 0.5, M.roofDark);
@@ -326,7 +332,7 @@
     const g = doorW / 2, side = D / 2 - g;
     _wall(scene, cx - W / 2, cz - g - side / 2, baseY, T, side, wallH, M.concrete);
     _wall(scene, cx - W / 2, cz + g + side / 2, baseY, T, side, wallH, M.concrete);
-    _wall(scene, cx - W / 2, cz, baseY + 2.2, T, doorW, wallH - 2.2, M.concrete);
+    _wall(scene, cx - W / 2, cz, baseY + 2.2, T, doorW, wallH - 2.2, M.concrete, true);
     _slab(scene, cx, cz, baseY + wallH, W + 0.3, D + 0.3, M.roofGray);
 
     _box(scene, cx, cz - D / 2 - 0.02, baseY + 1.4, 2.2, 1.0, 0.07, M.window);
@@ -360,7 +366,7 @@
     const g = doorW / 2, side = W / 2 - g;
     _wall(scene, cx - g - side / 2, cz + D / 2, baseY, side, T, wallH, M.concDark);
     _wall(scene, cx + g + side / 2, cz + D / 2, baseY, side, T, wallH, M.concDark);
-    _wall(scene, cx, cz + D / 2, baseY + 2.0, doorW, T, wallH - 2.0, M.concDark);
+    _wall(scene, cx, cz + D / 2, baseY + 2.0, doorW, T, wallH - 2.0, M.concDark, true);
     _wall(scene, cx - W / 2, cz, baseY, T, D, wallH, M.concDark);
     _wall(scene, cx + W / 2, cz, baseY, T, D, wallH, M.concDark);
     _slab(scene, cx, cz, baseY + wallH, W + 0.5, D + 0.5, M.concDark);
@@ -389,7 +395,8 @@
       const sx = cx + i * 1.4, sz = cz + D / 2 + 1.2;
       const sy = ZS.getTerrainHeight(sx, sz);
       _box(scene, sx, sz, sy + 0.3, 0.8, 0.6, 0.6, M.dirt);
-      _colliders.push({ type: 'box', cx: sx, cz: sz, hw: 0.4, hd: 0.3 });
+      // maxY = sommet du sac — le joueur peut sauter par-dessus
+      _colliders.push({ type: 'box', cx: sx, cz: sz, hw: 0.4, hd: 0.3, maxY: sy + 0.6 });
     }
   }
 
@@ -424,11 +431,11 @@
     const baseY = ZS.getTerrainHeight(cx, cz);
     const T = 0.22;
 
-    _wall(scene, cx,       cz - 4, baseY, 8,  T,   2.8, M.brick2);
-    _wall(scene, cx - 4,   cz,     baseY, T,  8,   1.4, M.brick2);
-    _wall(scene, cx + 4,   cz - 2, baseY, T,  4,   2.5, M.brick2);
-    _wall(scene, cx + 4,   cz + 3, baseY, T,  2,   0.9, M.brick2);
-    _wall(scene, cx - 1.5, cz + 4, baseY, 5,  T,   0.7, M.brick2);
+    _wall(scene, cx,       cz - 4, baseY, 8,  T,   2.8, M.brick2);                      // mur nord — non franchissable
+    _wall(scene, cx - 4,   cz,     baseY, T,  8,   1.4, M.brick2);                      // mur ouest
+    _wall(scene, cx + 4,   cz - 2, baseY, T,  4,   2.5, M.brick2);                      // fragment est haut
+    _wall(scene, cx + 4,   cz + 3, baseY, T,  2,   0.9, M.brick2, false, baseY + 0.9);  // bas — franchissable en sautant
+    _wall(scene, cx - 1.5, cz + 4, baseY, 5,  T,   0.7, M.brick2, false, baseY + 0.7);  // très bas — franchissable
     _slab(scene, cx, cz, baseY + 0.01, 8, 8, M.dirt);
 
     for (const [rx, rz, rw, rh, rd] of [
@@ -442,45 +449,41 @@
   }
 
   // ── Routes ────────────────────────────────────────────────────────────────────
-  // Chaque segment est incliné pour suivre la pente du terrain (rotation Y + X).
+  // Segments courts horizontaux positionnés au MAX des hauteurs de terrain du segment.
+  // Garantit que la route est toujours AU-DESSUS du sol, jamais dessous.
   function _roadSeg(scene, x0, z0, x1, z1, width, mat, withLine) {
     const dx   = x1 - x0, dz = z1 - z0;
     const hLen = Math.hypot(dx, dz);
     if (hLen < 0.1) return;
     const yaw  = Math.atan2(dx, dz);
-    const STEP = 2.5;
+    const STEP = 2.0;
     const steps = Math.max(1, Math.ceil(hLen / STEP));
+    const sl = hLen / steps;
 
     for (let i = 0; i < steps; i++) {
       const ta = i / steps, tb = (i + 1) / steps, tm = (ta + tb) / 2;
       const xa = x0 + dx * ta, za = z0 + dz * ta;
       const xb = x0 + dx * tb, zb = z0 + dz * tb;
       const xm = x0 + dx * tm, zm = z0 + dz * tm;
-      const ya = ZS.getTerrainHeight(xa, za);
-      const yb = ZS.getTerrainHeight(xb, zb);
-      const ym = (ya + yb) / 2;
-      const dy = yb - ya;
-      const sH = hLen / steps;                       // longueur horizontale du seg
-      const sL = Math.hypot(dy, sH);                 // longueur réelle (hypoténuse)
-      const pitch = -Math.atan2(dy, sH);             // inclinaison selon pente
+      // Max des 3 points du segment — route jamais sous le terrain
+      const y = Math.max(
+        ZS.getTerrainHeight(xa, za),
+        ZS.getTerrainHeight(xm, zm),
+        ZS.getTerrainHeight(xb, zb)
+      ) + 0.03;
 
-      const m = new THREE.Mesh(new THREE.BoxGeometry(width, 0.14, sL + 0.06), mat);
-      m.rotation.order = 'YXZ';
+      const m = new THREE.Mesh(new THREE.BoxGeometry(width, 0.13, sl + 0.06), mat);
       m.rotation.y = yaw;
-      m.rotation.x = pitch;
-      m.position.set(xm, ym + 0.06, zm);
+      m.position.set(xm, y, zm);
       scene.add(m);
 
-      // Ligne centrale pointillée (toutes les 2 seg)
       if (withLine && i % 2 === 0) {
         const lm = new THREE.Mesh(
-          new THREE.BoxGeometry(0.18, 0.16, Math.min(sL * 0.55, 1.6)),
+          new THREE.BoxGeometry(0.18, 0.15, Math.min(sl * 0.5, 1.0)),
           M.roadLine
         );
-        lm.rotation.order = 'YXZ';
         lm.rotation.y = yaw;
-        lm.rotation.x = pitch;
-        lm.position.set(xm, ym + 0.13, zm);
+        lm.position.set(xm, y + 0.09, zm);
         scene.add(lm);
       }
     }

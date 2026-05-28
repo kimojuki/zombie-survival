@@ -14,8 +14,8 @@ const io = new Server(server, { cors: { origin: '*' } });
 
 const PORT = process.env.PORT || 3000;
 const JWT_SECRET = process.env.JWT_SECRET || 'dev_secret_CHANGE_ME';
-const WORLD_RADIUS = 55;
-const ZOMBIE_COUNT = 25;
+const WORLD_RADIUS = 83;
+const ZOMBIE_COUNT = 35;
 
 app.use(express.json());
 app.use(express.static('public'));

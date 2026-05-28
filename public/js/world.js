@@ -39,8 +39,8 @@
     scene.add(_moonLight);
 
     buildTerrain(scene);
-    spawnTrees(scene, 80);
-    spawnRocks(scene, 40);
+    spawnTrees(scene, 120);
+    spawnRocks(scene, 55);
     buildSafeZone(scene);
 
     // Buildings — colliders merged into _colliders for game.js
@@ -101,7 +101,7 @@
   }
 
   function buildTerrain(scene) {
-    const SIZE = 130, SEG = 100;
+    const SIZE = 190, SEG = 130;
     const geo = new THREE.PlaneGeometry(SIZE, SIZE, SEG, SEG);
     geo.rotateX(-Math.PI / 2);
     const pos = geo.attributes.position;
@@ -124,10 +124,10 @@
 
   function spawnTrees(scene, count) {
     for (let i = 0; i < count; i++) {
-      const x = (_rng() - 0.5) * 110;
-      const z = (_rng() - 0.5) * 110;
+      const x = (_rng() - 0.5) * 160;
+      const z = (_rng() - 0.5) * 160;
       if (Math.hypot(x, z) < 4) continue;
-      _colliders.push({ x, z, r: 0.6 });
+      _colliders.push({ x, z, r: 0.6 }); // arbres : pas de topY, non franchissables
       const tree = makeTree();
       tree.position.set(x, ZS.getTerrainHeight(x, z), z);
       scene.add(tree);
@@ -137,13 +137,15 @@
   function spawnRocks(scene, count) {
     const mat = new THREE.MeshLambertMaterial({ color: 0x888888 });
     for (let i = 0; i < count; i++) {
-      const x = (_rng() - 0.5) * 110;
-      const z = (_rng() - 0.5) * 110;
+      const x = (_rng() - 0.5) * 160;
+      const z = (_rng() - 0.5) * 160;
       const s = 0.3 + _rng() * 0.7;
-      _colliders.push({ x, z, r: s + 0.25 });
+      const baseY = ZS.getTerrainHeight(x, z);
+      // topY = sommet approx du rocher — franchissable en sautant
+      _colliders.push({ x, z, r: s + 0.25, topY: baseY + s * 1.4 });
       const rock = new THREE.Mesh(new THREE.DodecahedronGeometry(s, 0), mat);
       rock.rotation.set(_rng() * Math.PI, _rng() * Math.PI, _rng() * Math.PI);
-      rock.position.set(x, ZS.getTerrainHeight(x, z) + s * 0.3, z);
+      rock.position.set(x, baseY + s * 0.3, z);
       scene.add(rock);
     }
   }

@@ -22,12 +22,13 @@
   }
 
   function _rawHeight(x, z) {
-    const s = 0.035;
+    // Terrain doux style ville : collines légères, pas de montagnes
+    const s = 0.022;
     return (
-      smoothNoise(x * s,       z * s)       * 9 +
-      smoothNoise(x * s * 2.7, z * s * 2.7) * 3 +
-      smoothNoise(x * s * 6.3, z * s * 6.3) * 0.8
-    ) - 5;
+      smoothNoise(x * s,       z * s)       * 4.0 +
+      smoothNoise(x * s * 3.2, z * s * 3.2) * 1.4 +
+      smoothNoise(x * s * 8.0, z * s * 8.0) * 0.3
+    ) - 2.0;
   }
 
   // { cx, cz, hw, hd, flatY, blend }

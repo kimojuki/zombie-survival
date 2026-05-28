@@ -269,14 +269,17 @@
     let newZ = p.z + (_fwd.z * (-mz) + _right.z * mx) * SPEED * dt;
 
     // World bounds
-    newX = Math.max(-57, Math.min(57, newX));
-    newZ = Math.max(-57, Math.min(57, newZ));
+    newX = Math.max(-85, Math.min(85, newX));
+    newZ = Math.max(-85, Math.min(85, newZ));
 
-    // Collision with trees, rocks, and building walls
+    // Collision avec arbres, rochers, murs — respecte la hauteur pour sauter par-dessus
     const colliders = ZS.getColliders();
+    const feetY = p.y - 1.7; // Y des pieds du joueur
+
     for (const col of colliders) {
       if (col.type === 'box') {
-        // Circle vs AABB — find closest point on box, push out
+        // Sauter par-dessus si les pieds dépassent le sommet de l'obstacle
+        if (col.maxY !== undefined && feetY >= col.maxY - 0.05) continue;
         const clampX = Math.max(col.cx - col.hw, Math.min(col.cx + col.hw, newX));
         const clampZ = Math.max(col.cz - col.hd, Math.min(col.cz + col.hd, newZ));
         const dx = newX - clampX;
@@ -288,6 +291,8 @@
           newZ += (dz / dist) * pen;
         }
       } else {
+        // Cylindrique (arbres, rochers) — sautable si topY défini
+        if (col.topY !== undefined && feetY >= col.topY - 0.05) continue;
         const dx   = newX - col.x;
         const dz   = newZ - col.z;
         const dist = Math.hypot(dx, dz);

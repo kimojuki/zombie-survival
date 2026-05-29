@@ -3,7 +3,7 @@
   'use strict';
 
   let _scene, _ambientLight, _sunLight, _moonLight;
-  let _fireLight = null, _fireMesh = null;
+  const _fireLights = [];
   const _colliders = [];
   let _timeOfDay = 0.3;
 
@@ -25,7 +25,7 @@
   function buildWorld(scene) {
     _scene = scene;
     scene.background = new THREE.Color(0x7ec8e3);
-    scene.fog = new THREE.Fog(0x7ec8e3, 80, 200);
+    scene.fog = new THREE.Fog(0x7ec8e3, 150, 450);
 
     _ambientLight = new THREE.AmbientLight(0xfff8e7, 0.6);
     scene.add(_ambientLight);
@@ -37,10 +37,10 @@
     _sunLight.shadow.mapSize.height = 2048;
     _sunLight.shadow.camera.near   = 1;
     _sunLight.shadow.camera.far    = 600;
-    _sunLight.shadow.camera.left   = -180;
-    _sunLight.shadow.camera.right  = 180;
-    _sunLight.shadow.camera.top    = 180;
-    _sunLight.shadow.camera.bottom = -180;
+    _sunLight.shadow.camera.left   = -320;
+    _sunLight.shadow.camera.right  = 320;
+    _sunLight.shadow.camera.top    = 320;
+    _sunLight.shadow.camera.bottom = -320;
     _sunLight.shadow.bias          = -0.0003;
     _sunLight.shadow.normalBias    = 0.02;
     scene.add(_sunLight);
@@ -49,11 +49,9 @@
     scene.add(_moonLight);
 
     buildTerrain(scene);
-    spawnTrees(scene, 200);
-    spawnDeadTrees(scene);
-    spawnRocks(scene, 80);
-    spawnBushes(scene, 160);
-    buildSafeZone(scene);
+    spawnTrees(scene, 500);
+    spawnRocks(scene, 200);
+    spawnBushes(scene, 400);
 
     const buildingColliders = ZS.Buildings.buildAll(scene);
     for (const c of buildingColliders) _colliders.push(c);
@@ -79,20 +77,20 @@
     _scene.background.setHex(k.sky);
     _scene.fog.color.setHex(k.sky);
 
-    // Night fog — thick and oppressive for horror atmosphere
     const night = Math.max(0, Math.min(1, -sunY * 2.2));
-    _scene.fog.near = 80  - night * 54;  // 80 (day) → 26 (night)
-    _scene.fog.far  = 200 - night * 122; // 200 (day) → 78 (night)
+    _scene.fog.near = 150 - night * 90;   // 150 (day) → 60 (night)
+    _scene.fog.far  = 450 - night * 270;  // 450 (day) → 180 (night)
 
-    // Campfire flicker (multi-freq sum avoids repeating pattern)
-    if (_fireLight) {
+    if (_fireLights.length > 0) {
       const t = Date.now();
       const f = 0.82
         + Math.sin(t * 0.011) * 0.09
         + Math.sin(t * 0.019) * 0.06
         + Math.sin(t * 0.034) * 0.04;
-      _fireLight.intensity = f * 2.2;
-      if (_fireMesh) _fireMesh.scale.y = 0.85 + f * 0.22;
+      for (const fl of _fireLights) {
+        fl.light.intensity = f * 2.2;
+        if (fl.mesh) fl.mesh.scale.y = 0.85 + f * 0.22;
+      }
     }
   }
 
@@ -141,7 +139,7 @@
   }
 
   function buildTerrain(scene) {
-    const SIZE = 290, SEG = 240;
+    const SIZE = 600, SEG = 300;
     const geo  = new THREE.PlaneGeometry(SIZE, SIZE, SEG, SEG);
     geo.rotateX(-Math.PI / 2);
     const pos  = geo.attributes.position;
@@ -174,8 +172,8 @@
 
   function spawnTrees(scene, count) {
     for (let i = 0; i < count; i++) {
-      const x = (_rng() - 0.5) * 260;
-      const z = (_rng() - 0.5) * 260;
+      const x = (_rng() - 0.5) * 560;
+      const z = (_rng() - 0.5) * 560;
       if (Math.hypot(x, z) < 4) continue;
       _colliders.push({ x, z, r: 0.6 });
       const tree = _rng() < 0.28 ? makePineTree() : makeTree();
@@ -230,25 +228,30 @@
     return g;
   }
 
-  // Arbres morts — clusters près des ruines / avant-poste (ambiance zombie)
-  function spawnDeadTrees(scene) {
-    const clusters = [
-      { cx:  44, cz:  14, n: 14, spread: 16 },  // autour des ruines
-      { cx: -60, cz:  52, n: 10, spread: 13 },  // avant-poste
-      { cx: -26, cz:  35, n:  7, spread: 11 },  // cabane forestière
-      { cx:  20, cz: -30, n:  5, spread:  9 },  // no-man's-land
-    ];
-    for (const cl of clusters) {
-      for (let i = 0; i < cl.n; i++) {
-        const a = _rng() * Math.PI * 2;
-        const d = 2 + _rng() * cl.spread;
-        const x = cl.cx + Math.cos(a) * d;
-        const z = cl.cz + Math.sin(a) * d;
-        const tree = makeDeadTree();
-        tree.position.set(x, ZS.getTerrainHeight(x, z), z);
-        scene.add(tree);
-        _colliders.push({ x, z, r: 0.25 });
-      }
+  function spawnDeadTreesAt(scene, cx, cz, count, spread) {
+    for (let i = 0; i < count; i++) {
+      const a = _rng() * Math.PI * 2;
+      const d = 2 + _rng() * spread;
+      const x = cx + Math.cos(a) * d;
+      const z = cz + Math.sin(a) * d;
+      const tree = makeDeadTree();
+      tree.position.set(x, ZS.getTerrainHeight(x, z), z);
+      scene.add(tree);
+      _colliders.push({ x, z, r: 0.25 });
+    }
+  }
+
+  function spawnTreesAt(scene, cx, cz, count, radius, pineRatio, skipNear) {
+    for (let i = 0; i < count; i++) {
+      const a = _rng() * Math.PI * 2;
+      const r = _rng() * radius;
+      const x = cx + Math.cos(a) * r;
+      const z = cz + Math.sin(a) * r;
+      if (skipNear && skipNear.some(s => Math.hypot(x - s[0], z - s[1]) < s[2])) continue;
+      _colliders.push({ x, z, r: 0.6 });
+      const tree = _rng() < (pineRatio || 0.28) ? makePineTree() : makeTree();
+      tree.position.set(x, ZS.getTerrainHeight(x, z), z);
+      scene.add(tree);
     }
   }
 
@@ -281,8 +284,8 @@
       new THREE.MeshLambertMaterial({ color: 0x6a6872 }),
     ];
     for (let i = 0; i < count; i++) {
-      const x  = (_rng() - 0.5) * 260;
-      const z  = (_rng() - 0.5) * 260;
+      const x  = (_rng() - 0.5) * 560;
+      const z  = (_rng() - 0.5) * 560;
       const s  = 0.3 + _rng() * 0.8;
       const by = ZS.getTerrainHeight(x, z);
       _colliders.push({ x, z, r: s + 0.25, topY: by + s * 1.4 });
@@ -299,11 +302,11 @@
     const mats = [
       new THREE.MeshLambertMaterial({ color: 0x2d5a25 }),
       new THREE.MeshLambertMaterial({ color: 0x3a6530 }),
-      new THREE.MeshLambertMaterial({ color: 0x4a5828 }), // buisson sec
+      new THREE.MeshLambertMaterial({ color: 0x4a5828 }),
     ];
     for (let i = 0; i < count; i++) {
-      const x = (_rng() - 0.5) * 250;
-      const z = (_rng() - 0.5) * 250;
+      const x = (_rng() - 0.5) * 540;
+      const z = (_rng() - 0.5) * 540;
       if (Math.hypot(x, z) < 5) continue;
       const r    = 0.28 + _rng() * 0.45;
       const bush = new THREE.Mesh(new THREE.SphereGeometry(r, 6, 4), mats[Math.floor(_rng() * 3)]);
@@ -314,52 +317,19 @@
     }
   }
 
-  // ── Zone de départ — feu de camp ─────────────────────────────────────────────
-
-  function buildSafeZone(scene) {
-    const baseY = ZS.getTerrainHeight(0, 0);
-    const platMat = new THREE.MeshLambertMaterial({ color: 0x8B7355 });
-    const plat = new THREE.Mesh(new THREE.CylinderGeometry(3, 3.5, 0.4, 16), platMat);
-    plat.position.set(0, baseY + 0.2, 0);
-    plat.receiveShadow = true;
-    scene.add(plat);
-
-    // Pierres autour du feu
-    const stoneMat = new THREE.MeshLambertMaterial({ color: 0x585858 });
-    for (let i = 0; i < 7; i++) {
-      const a = i / 7 * Math.PI * 2;
-      const stone = new THREE.Mesh(new THREE.SphereGeometry(0.18 + Math.random() * 0.09, 5, 4), stoneMat);
-      stone.position.set(Math.cos(a) * 0.62, baseY + 0.34, Math.sin(a) * 0.62);
-      stone.castShadow = true;
-      scene.add(stone);
-    }
-    // Bûches croisées
-    const logMat = new THREE.MeshLambertMaterial({ color: 0x5a3010 });
-    for (let i = 0; i < 3; i++) {
-      const a   = i / 3 * Math.PI * 2;
-      const log = new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.1, 1.1, 6), logMat);
-      log.position.set(Math.cos(a) * 0.28, baseY + 0.38, Math.sin(a) * 0.28);
-      log.rotation.z = 0.72;
-      log.rotation.y = a;
-      log.castShadow = true;
-      scene.add(log);
-    }
-    // Flamme (cône émissif animé en tickDayNight)
-    const fireMat = new THREE.MeshLambertMaterial({ color: 0xff7700, emissive: 0xff3300, emissiveIntensity: 1.5 });
-    const fire    = new THREE.Mesh(new THREE.ConeGeometry(0.26, 0.82, 7), fireMat);
-    fire.position.set(0, baseY + 0.82, 0);
-    scene.add(fire);
-    _fireMesh = fire;
-
-    // Lueur orange — portée 22 unités
-    _fireLight = new THREE.PointLight(0xff8830, 2.2, 22);
-    _fireLight.position.set(0, baseY + 1.5, 0);
-    scene.add(_fireLight);
+  function registerFireLight(light, mesh) {
+    _fireLights.push({ light, mesh });
   }
 
   window.ZS = window.ZS || {};
-  ZS.buildWorld    = buildWorld;
-  ZS.tickDayNight  = tickDayNight;
-  ZS.setWorldTime  = setWorldTime;
-  ZS.getColliders  = () => _colliders;
+  ZS.buildWorld        = buildWorld;
+  ZS.tickDayNight      = tickDayNight;
+  ZS.setWorldTime      = setWorldTime;
+  ZS.getColliders      = () => _colliders;
+  ZS.registerFireLight = registerFireLight;
+  ZS.spawnTreesAt      = spawnTreesAt;
+  ZS.spawnDeadTreesAt  = spawnDeadTreesAt;
+  ZS.makeTree          = makeTree;
+  ZS.makePineTree      = makePineTree;
+  ZS.makeDeadTree      = makeDeadTree;
 }());

@@ -234,10 +234,10 @@
   function _buildStreetLights(scene, B) {
     const poleMat  = new THREE.MeshLambertMaterial({ color: 0x3a3a3a });
     const lightMat = new THREE.MeshLambertMaterial({
-      color: 0xffffcc, emissive: 0xffff88, emissiveIntensity: 0.5,
+      color: 0xffffcc, emissive: 0xffeeaa, emissiveIntensity: 1.2,
     });
 
-    // Côté nord puis sud de la route principale
+    // [x, z, côté bras vers la route]
     const lamps = [
       [-132, -3.5, -1], [-158, -3.5, -1], [-180, -3.5, -1], [-202, -3.5, -1], [-222, -3.5, -1],
       [-144,  3.5,  1], [-168,  3.5,  1], [-192,  3.5,  1], [-215,  3.5,  1],
@@ -245,6 +245,8 @@
 
     for (const [lx, lz, armSide] of lamps) {
       const ly = ZS.getTerrainHeight(lx, lz);
+      const fixtureZ = lz + armSide * 1.55;
+      const fixtureY = ly + 5.5;
 
       // Poteau
       const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.09, 5.8, 7), poleMat);
@@ -252,15 +254,20 @@
       pole.castShadow = true;
       scene.add(pole);
 
-      // Bras vers la route (armSide = +1 vers sud, -1 vers nord)
+      // Bras
       const arm = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.06, 1.8), poleMat);
       arm.position.set(lx, ly + 5.6, lz + armSide * 0.7);
       scene.add(arm);
 
-      // Fixture lumineuse
-      const fix = new THREE.Mesh(new THREE.BoxGeometry(0.38, 0.22, 0.6), lightMat);
-      fix.position.set(lx, ly + 5.5, lz + armSide * 1.55);
+      // Fixture (émissive visible de jour)
+      const fix = new THREE.Mesh(new THREE.BoxGeometry(0.42, 0.24, 0.65), lightMat);
+      fix.position.set(lx, fixtureY, fixtureZ);
       scene.add(fix);
+
+      // PointLight — éclaire la route autour du lampadaire
+      const ptLight = new THREE.PointLight(0xffeecc, 2.4, 28);
+      ptLight.position.set(lx, fixtureY - 0.15, fixtureZ);
+      scene.add(ptLight);
 
       B.addCollider({ x: lx, z: lz, r: 0.12 });
     }
@@ -269,8 +276,8 @@
   // ── Véhicules abandonnés ──────────────────────────────────────────────────────
 
   function _buildAbandonedVehicles(scene, B) {
-    // Bus bloquant le centre de la route principale
-    _buildBus(scene, B, -170, 1.5, 0.04);
+    // Bus en travers de la route — déplacé loin du spawn (-170,0)
+    _buildBus(scene, B, -158, 3.5, 0.18);
 
     // Embouteillage sur la route principale
     B.car(scene, -136, -2.0,  0.08);

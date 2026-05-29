@@ -1,19 +1,21 @@
 // SECTOR 02 — SMALL TOWN
-// Premier vrai point d'intérêt. Ville abandonnée, voitures partout, loot intermédiaire.
+// Ville abandonnée, loot intermédiaire, premiers grands groupes de zombies.
 (function () {
   'use strict';
 
-  // ── Flat zone — couvre toute la ville ─────────────────────────────────────────
-  ZS.registerFlatZone(-170, -2, 60, 40, 10);
+  // ── Flat zone étendue ─────────────────────────────────────────────────────────
+  ZS.registerFlatZone(-177, 0, 78, 50, 12);
 
   // ── Build ─────────────────────────────────────────────────────────────────────
 
   function build(scene) {
     const B = ZS.B;
-    _buildConnectingRoad(scene, B);
-    _buildTownStreets(scene, B);
+    _buildAllRoads(scene, B);
     _buildMiniMarket(scene, B);
     _buildPharmacy(scene, B);
+    _buildPoliceStation(scene, B);
+    _buildSuperMarche(scene, B);
+    _buildChapel(scene, B);
     _buildHouses(scene, B);
     _buildApartment(scene, B);
     _buildParking(scene, B);
@@ -22,407 +24,607 @@
     _buildStreetProps(scene, B);
   }
 
-  // ── Route de connexion S01 → S02 (route asphaltée principale) ────────────────
+  // ── Routes ────────────────────────────────────────────────────────────────────
 
-  function _buildConnectingRoad(scene, B) {
-    B.ribbon(scene, [
-      [  2,  0], [-28,  1], [-62, -1], [-98,  0],
-      [-128, 1], [-155,  0], [-180, 1], [-210,  0], [-238,  1]
-    ], 6.2, B.M.road, true);
-  }
-
-  // ── Rues internes ─────────────────────────────────────────────────────────────
-
-  function _buildTownStreets(scene, B) {
+  function _buildAllRoads(scene, B) {
     const { M, ribbon } = B;
 
+    // Route principale E-O (connexion S01 → S02, continue vers ouest)
+    ribbon(scene, [
+      [2,0],[-28,1],[-62,-1],[-98,0],[-128,1],
+      [-155,0],[-180,1],[-210,0],[-250,1],[-295,0]
+    ], 6.2, M.road, true);
+
     // Rue résidentielle nord
-    ribbon(scene, [
-      [-128, -16], [-150, -16], [-172, -16], [-196, -16], [-222, -16]
-    ], 4.0, M.road, false);
-
+    ribbon(scene, [[-118,-16],[-145,-16],[-170,-16],[-198,-16],[-228,-16],[-252,-16]], 4.0, M.road, false);
     // Rue résidentielle sud
-    ribbon(scene, [
-      [-128, 16], [-150, 16], [-172, 16], [-196, 16], [-222, 16]
-    ], 4.0, M.road, false);
+    ribbon(scene, [[-118,16],[-145,16],[-170,16],[-198,16],[-228,16],[-252,16]], 4.0, M.road, false);
 
-    // Rue transversale N-S (centre-ville)
-    ribbon(scene, [
-      [-170, -40], [-170, -20], [-170, 0], [-170, 20], [-170, 38]
-    ], 4.5, M.road, false);
+    // Ruelle arrière nord (derrière les maisons)
+    ribbon(scene, [[-118,-30],[-145,-30],[-170,-30],[-200,-30],[-230,-30],[-252,-30]], 3.2, M.roadDirt, false);
+    // Ruelle arrière sud
+    ribbon(scene, [[-118,30],[-145,30],[-170,30],[-200,30],[-230,30],[-252,30]], 3.2, M.roadDirt, false);
+
+    // Rue transversale N-S — centre-ville
+    ribbon(scene, [[-170,-48],[-170,-30],[-170,-16],[-170,0],[-170,16],[-170,30],[-170,46]], 4.5, M.road, false);
+    // Rue transversale est
+    ribbon(scene, [[-136,-46],[-136,-30],[-136,-16],[-136,0],[-136,16],[-136,30],[-136,46]], 3.8, M.road, false);
+    // Rue transversale ouest
+    ribbon(scene, [[-210,-46],[-210,-30],[-210,-16],[-210,0],[-210,16],[-210,30],[-210,46]], 3.8, M.road, false);
+
+    // Trottoirs béton le long de la route principale (nord et sud)
+    B.slab(scene, -177, -4.5, ZS.getTerrainHeight(-177,-4.5)+0.07, 120, 2.2, B.M.concDark);
+    B.slab(scene, -177,  4.5, ZS.getTerrainHeight(-177, 4.5)+0.07, 120, 2.2, B.M.concDark);
   }
 
-  // ── Mini marché ───────────────────────────────────────────────────────────────
+  // ── Helpers mobilier ──────────────────────────────────────────────────────────
+
+  // Rayonnage — panneau arrière + 3 étagères
+  function _fShelf(scene, B, cx, cz, y, len, axis) {
+    const mat = new THREE.MeshLambertMaterial({ color: 0x8a7a4a });
+    if (axis === 'x') {
+      B.box(scene, cx, cz, y + 1.0, len, 2.0, 0.1, mat);
+      for (const h of [0.42, 0.88, 1.45])
+        B.box(scene, cx, cz - 0.2, y + h, len, 0.05, 0.44, mat);
+    } else {
+      B.box(scene, cx, cz, y + 1.0, 0.1, 2.0, len, mat);
+      for (const h of [0.42, 0.88, 1.45])
+        B.box(scene, cx - 0.2, cz, y + h, 0.44, 0.05, len, mat);
+    }
+  }
+
+  // Comptoir / bar
+  function _fCounter(scene, B, cx, cz, y, lenX, lenZ) {
+    B.box(scene, cx, cz, y + 0.52, lenX, 1.04, lenZ, B.M.concDark);
+    B.box(scene, cx, cz, y + 1.08, lenX + 0.08, 0.07, lenZ + 0.08, B.M.floor);
+  }
+
+  // Canapé simple
+  function _fSofa(scene, cx, cz, y, rotY) {
+    const mat = new THREE.MeshLambertMaterial({ color: 0x4a4a6a });
+    const g   = new THREE.Group();
+    g.add(Object.assign(new THREE.Mesh(new THREE.BoxGeometry(2.0, 0.42, 0.8),  mat), { position: new THREE.Vector3(0, y+0.28, 0) }));
+    g.add(Object.assign(new THREE.Mesh(new THREE.BoxGeometry(2.0, 0.55, 0.14), mat), { position: new THREE.Vector3(0, y+0.66,-0.33) }));
+    for (const ox of [-0.96, 0.96])
+      g.add(Object.assign(new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.16, 0.82), mat), { position: new THREE.Vector3(ox, y+0.56, 0) }));
+    g.rotation.y = rotY || 0;
+    g.position.set(cx, 0, cz);
+    scene.add(g);
+  }
+
+  // Lit
+  function _fBed(scene, cx, cz, y, rotY) {
+    const frameMat   = new THREE.MeshLambertMaterial({ color: 0x5a3a1a });
+    const mattMat    = new THREE.MeshLambertMaterial({ color: 0xddccbb });
+    const pillowMat  = new THREE.MeshLambertMaterial({ color: 0xeeeedd });
+    const g = new THREE.Group();
+    g.add(Object.assign(new THREE.Mesh(new THREE.BoxGeometry(1.6, 0.3, 2.2),  frameMat), { position: new THREE.Vector3(0, y+0.15, 0) }));
+    g.add(Object.assign(new THREE.Mesh(new THREE.BoxGeometry(1.5, 0.18, 2.0), mattMat),  { position: new THREE.Vector3(0, y+0.42, 0) }));
+    g.add(Object.assign(new THREE.Mesh(new THREE.BoxGeometry(1.6, 0.65, 0.1), frameMat), { position: new THREE.Vector3(0, y+0.55,-1.05) }));
+    for (const ox of [-0.3, 0.3])
+      g.add(Object.assign(new THREE.Mesh(new THREE.BoxGeometry(0.62, 0.12, 0.38), pillowMat), { position: new THREE.Vector3(ox, y+0.54,-0.8) }));
+    g.rotation.y = rotY || 0;
+    g.position.set(cx, 0, cz);
+    scene.add(g);
+  }
+
+  // Table + 2 chaises
+  function _fTable(scene, B, cx, cz, y) {
+    const woodMat = new THREE.MeshLambertMaterial({ color: 0x7a5030 });
+    B.box(scene, cx, cz, y + 0.76, 1.4, 0.06, 0.85, woodMat);
+    for (const [ox,oz] of [[-0.58,-0.33],[0.58,-0.33],[-0.58,0.33],[0.58,0.33]])
+      B.box(scene, cx+ox, cz+oz, y+0.38, 0.07, 0.75, 0.07, woodMat);
+    for (const oz of [-0.76, 0.76]) {
+      B.box(scene, cx, cz+oz, y+0.46, 0.58, 0.06, 0.52, woodMat);
+      B.box(scene, cx, cz+oz+(oz<0?-0.21:0.21), y+0.71, 0.58, 0.46, 0.06, woodMat);
+    }
+  }
+
+  // ── Mini marché (agrandi + intérieur) ─────────────────────────────────────────
 
   function _buildMiniMarket(scene, B) {
-    const cx = -152, cz = -9;
-    const W = 12, D = 8, wallH = 3.4;
+    const cx = -152, cz = -10;
+    const W = 15, D = 11, wallH = 3.6;
     const baseY = ZS.getTerrainHeight(cx, cz);
     const T = 0.24;
 
-    // Sol + toit plat
     B.slab(scene, cx, cz, baseY, W, D, B.M.floor);
     B.slab(scene, cx, cz, baseY + wallH, W + 0.3, D + 0.3, B.M.concDark);
+    // Parapet
+    for (const [ax,az,w,d] of [
+      [cx, cz-D/2-0.01, W+0.34, T*0.7], [cx, cz+D/2+0.01, W+0.34, T*0.7],
+      [cx-W/2-0.01, cz, T*0.7, D+0.34], [cx+W/2+0.01, cz, T*0.7, D+0.34],
+    ]) B.box(scene, ax, az, baseY+wallH+0.28, w, 0.55, d, B.M.concDark);
 
-    // Parapet sur le toit (décoratif, pas de collision)
-    B.box(scene, cx, cz - D/2 - 0.01, baseY + wallH + 0.28, W + 0.34, 0.55, T * 0.7, B.M.concDark);
-    B.box(scene, cx, cz + D/2 + 0.01, baseY + wallH + 0.28, W + 0.34, 0.55, T * 0.7, B.M.concDark);
-    B.box(scene, cx - W/2 - 0.01, cz,  baseY + wallH + 0.28, T * 0.7, 0.55, D + 0.34, B.M.concDark);
-    B.box(scene, cx + W/2 + 0.01, cz,  baseY + wallH + 0.28, T * 0.7, 0.55, D + 0.34, B.M.concDark);
+    // Murs extérieurs
+    B.wall(scene, cx,       cz-D/2, baseY, W, T, wallH, B.M.concrete);
+    B.wall(scene, cx-W/2,   cz,     baseY, T, D, wallH, B.M.concrete);
+    B.wall(scene, cx+W/2,   cz,     baseY, T, D, wallH, B.M.concrete);
 
-    // Murs (nord, est, ouest)
-    B.wall(scene, cx,       cz - D/2, baseY, W, T, wallH, B.M.concrete);
-    B.wall(scene, cx - W/2, cz,       baseY, T, D, wallH, B.M.concrete);
-    B.wall(scene, cx + W/2, cz,       baseY, T, D, wallH, B.M.concrete);
+    // Façade sud : vitrine large + porte double
+    const doorW = 3.2, winW = (W - doorW - 1.2) / 2;
+    const lX = cx - doorW/2 - 0.6 - winW/2, rX = cx + doorW/2 + 0.6 + winW/2;
+    B.wall(scene, lX, cz+D/2, baseY, winW, T, wallH, B.M.concrete);
+    B.wall(scene, rX, cz+D/2, baseY, winW, T, wallH, B.M.concrete);
+    B.wall(scene, cx, cz+D/2, baseY+2.8, doorW, T, wallH-2.8, B.M.concrete, true);
+    B.box(scene, lX, cz+D/2+0.01, baseY+1.4, winW*0.84, 2.0, 0.06, B.M.window);
+    B.box(scene, rX, cz+D/2+0.01, baseY+1.4, winW*0.84, 2.0, 0.06, B.M.window);
 
-    // Façade sud — porte centrale + deux vitrines
-    const doorW = 2.6;
-    const winW  = (W - doorW - 1.0) / 2;   // ~4.2
-    const lX    = cx - doorW / 2 - 0.5 - winW / 2;
-    const rX    = cx + doorW / 2 + 0.5 + winW / 2;
-    B.wall(scene, lX, cz + D/2, baseY, winW, T, wallH, B.M.concrete);
-    B.wall(scene, rX, cz + D/2, baseY, winW, T, wallH, B.M.concrete);
-    B.wall(scene, cx, cz + D/2, baseY + 2.6, doorW, T, wallH - 2.6, B.M.concrete, true);
-    // Grandes vitrines
-    B.box(scene, lX, cz + D/2 + 0.01, baseY + 1.3, winW * 0.82, 1.9, 0.06, B.M.window);
-    B.box(scene, rX, cz + D/2 + 0.01, baseY + 1.3, winW * 0.82, 1.9, 0.06, B.M.window);
-
-    // Enseigne verte
-    const signMat = new THREE.MeshLambertMaterial({ color: 0x1e5a2a });
-    B.box(scene, cx, cz + D/2 + 0.22, baseY + wallH - 0.5, W - 0.4, 0.68, 0.28, signMat);
-
-    // Auvent rouge au-dessus de l'entrée
+    const signMat   = new THREE.MeshLambertMaterial({ color: 0x1e5a2a });
     const awningMat = new THREE.MeshLambertMaterial({ color: 0x8a2a10 });
-    B.box(scene, cx, cz + D/2 + 1.0, baseY + 2.5, doorW + 1.2, 0.12, 2.0, awningMat);
+    B.box(scene, cx, cz+D/2+0.24, baseY+wallH-0.5, W-0.4, 0.72, 0.3, signMat);
+    B.box(scene, cx, cz+D/2+1.2,  baseY+2.6, doorW+1.4, 0.12, 2.4, awningMat);
+    B.slab(scene, cx, cz+D/2+1.8, baseY+0.07, W+1.0, 3.6, B.M.concDark);
 
-    // Trottoir béton devant
-    B.slab(scene, cx, cz + D/2 + 1.6, baseY + 0.06, W + 1.0, 3.2, B.M.concDark);
+    // ── Intérieur ──
+    // 4 rayons d'articles courant le long de Z
+    for (const [sx, face] of [[-5.2,'z'],[-2.2,'z'],[0.8,'z'],[3.8,'z']]) {
+      _fShelf(scene, B, cx+sx, cz-1.0, baseY, 7.0, face);
+    }
+    // Comptoir caisse près de l'entrée
+    _fCounter(scene, B, cx, cz+3.8, baseY, 5.0, 1.0);
+    // Caisse enregistreuse (boîte)
+    B.box(scene, cx-1.5, cz+3.8, baseY+1.15, 0.5, 0.3, 0.35, B.M.metal);
+    B.box(scene, cx+1.5, cz+3.8, baseY+1.15, 0.5, 0.3, 0.35, B.M.metal);
+    // Présentoir réfrigéré (côté est — vitres)
+    B.box(scene, cx+W/2-0.6, cz-1.5, baseY+1.0, 0.6, 2.0, 7.5, B.M.metal);
+    B.box(scene, cx+W/2-0.35, cz-1.5, baseY+1.0, 0.05, 1.8, 7.3, B.M.window);
+    // Rayon renversé au sol (ambiance zombie)
+    const shelfMat = new THREE.MeshLambertMaterial({ color: 0x8a7a4a });
+    const fallen = new THREE.Mesh(new THREE.BoxGeometry(0.1, 7.0, 2.0), shelfMat);
+    fallen.rotation.z = Math.PI / 2;
+    fallen.position.set(cx-5.8, baseY+0.55, cz+1.5);
+    scene.add(fallen);
+    // Produits éparpillés
+    const prodMats = [0xcc3322, 0x22aacc, 0xddaa00, 0x44aa22].map(c => new THREE.MeshLambertMaterial({color:c}));
+    for (let i = 0; i < 8; i++) {
+      const px = cx-5.5 + (i%4)*0.5, pz = cz+0.5+(Math.floor(i/4)*1.2);
+      B.box(scene, px, pz, baseY+0.18, 0.28, 0.28, 0.22, prodMats[i%4]);
+    }
   }
 
-  // ── Pharmacie ─────────────────────────────────────────────────────────────────
+  // ── Pharmacie (agrandie + intérieur) ──────────────────────────────────────────
 
   function _buildPharmacy(scene, B) {
-    const cx = -190, cz = -9;
-    const W = 9, D = 7, wallH = 3.2;
+    const cx = -192, cz = -10;
+    const W = 11, D = 9, wallH = 3.4;
     const baseY = ZS.getTerrainHeight(cx, cz);
     const T = 0.22;
 
     B.slab(scene, cx, cz, baseY, W, D, B.M.floor);
-    B.slab(scene, cx, cz, baseY + wallH, W + 0.28, D + 0.28, B.M.roofGray);
+    B.slab(scene, cx, cz, baseY+wallH, W+0.28, D+0.28, B.M.roofGray);
 
-    // Murs
-    B.wall(scene, cx,       cz - D/2, baseY, W, T, wallH, B.M.brick);
-    B.wall(scene, cx - W/2, cz,       baseY, T, D, wallH, B.M.brick);
-    B.wall(scene, cx + W/2, cz,       baseY, T, D, wallH, B.M.brick);
+    B.wall(scene, cx,       cz-D/2, baseY, W, T, wallH, B.M.brick);
+    B.wall(scene, cx-W/2,   cz,     baseY, T, D, wallH, B.M.brick);
+    B.wall(scene, cx+W/2,   cz,     baseY, T, D, wallH, B.M.brick);
 
-    // Façade sud — porte + fenêtres latérales
-    const doorW = 1.8;
-    const side  = W / 2 - doorW / 2 - 0.15;
-    B.wall(scene, cx - doorW/2 - side/2, cz + D/2, baseY, side, T, wallH, B.M.brick);
-    B.wall(scene, cx + doorW/2 + side/2, cz + D/2, baseY, side, T, wallH, B.M.brick);
-    B.wall(scene, cx, cz + D/2, baseY + 2.4, doorW, T, wallH - 2.4, B.M.brick, true);
-    B.box(scene, cx - doorW/2 - side/2, cz + D/2 + 0.01, baseY + 1.2, side * 0.72, 1.5, 0.06, B.M.window);
-    B.box(scene, cx + doorW/2 + side/2, cz + D/2 + 0.01, baseY + 1.2, side * 0.72, 1.5, 0.06, B.M.window);
+    const doorW = 1.8, side = W/2 - doorW/2 - 0.15;
+    B.wall(scene, cx-doorW/2-side/2, cz+D/2, baseY, side, T, wallH, B.M.brick);
+    B.wall(scene, cx+doorW/2+side/2, cz+D/2, baseY, side, T, wallH, B.M.brick);
+    B.wall(scene, cx, cz+D/2, baseY+2.4, doorW, T, wallH-2.4, B.M.brick, true);
+    B.box(scene, cx-doorW/2-side/2, cz+D/2+0.01, baseY+1.2, side*0.72, 1.5, 0.06, B.M.window);
+    B.box(scene, cx+doorW/2+side/2, cz+D/2+0.01, baseY+1.2, side*0.72, 1.5, 0.06, B.M.window);
 
-    // Croix de pharmacie (verte)
     const crossMat = new THREE.MeshLambertMaterial({ color: 0x10aa44 });
-    B.box(scene, cx, cz + D/2 + 0.18, baseY + wallH - 0.65, 1.1, 0.2, 0.2, crossMat);
-    B.box(scene, cx, cz + D/2 + 0.18, baseY + wallH - 0.65, 0.2, 1.1, 0.2, crossMat);
+    B.box(scene, cx, cz+D/2+0.18, baseY+wallH-0.65, 1.1, 0.2, 0.2, crossMat);
+    B.box(scene, cx, cz+D/2+0.18, baseY+wallH-0.65, 0.2, 1.1, 0.2, crossMat);
+    B.slab(scene, cx, cz+D/2+1.3, baseY+0.07, W+0.8, 2.6, B.M.concDark);
 
-    // Trottoir
-    B.slab(scene, cx, cz + D/2 + 1.3, baseY + 0.06, W + 0.8, 2.6, B.M.concDark);
+    // ── Intérieur ──
+    // Comptoir pharmacien (en L) au fond nord
+    _fCounter(scene, B, cx, cz-D/2+1.0, baseY, W-0.6, 1.0);
+    _fCounter(scene, B, cx+W/2-1.0, cz-D/2+2.5, baseY, 1.0, 3.5);
+    // Rayons muraux nord et est
+    _fShelf(scene, B, cx, cz-D/2+0.12, baseY, W-0.6, 'x');
+    _fShelf(scene, B, cx+W/2-0.12, cz-1.0, baseY, 5.0, 'z');
+    // Zone d'attente (côté sud) — 3 chaises
+    const chairMat = new THREE.MeshLambertMaterial({ color: 0x3a6a9a });
+    for (let i = 0; i < 3; i++) {
+      B.box(scene, cx-2+i*2, cz+D/2-1.5, baseY+0.46, 0.55, 0.06, 0.5, chairMat);
+      B.box(scene, cx-2+i*2, cz+D/2-1.72, baseY+0.72, 0.55, 0.48, 0.06, chairMat);
+    }
+    // Médicaments éparpillés au sol
+    const medMat = new THREE.MeshLambertMaterial({ color: 0xaaaaff });
+    for (let i = 0; i < 5; i++)
+      B.box(scene, cx-2.5+i*0.8, cz+1.0, baseY+0.06, 0.22, 0.12, 0.16, medMat);
   }
 
-  // ── Maisons résidentielles ────────────────────────────────────────────────────
+  // ── Commissariat de police ────────────────────────────────────────────────────
+
+  function _buildPoliceStation(scene, B) {
+    const cx = -138, cz = -36;
+    const W = 14, D = 10, wallH = 3.6;
+    const baseY = ZS.getTerrainHeight(cx, cz);
+    const T = 0.28;
+
+    B.slab(scene, cx, cz, baseY, W, D, B.M.concDark);
+    B.slab(scene, cx, cz, baseY+wallH, W+0.35, D+0.35, B.M.concDark);
+    // Parapet
+    for (const [ax,az,w,d] of [
+      [cx,cx-0,cz-D/2-0.01,0],[cx,cx-0,cz+D/2+0.01,0],
+    ]) {} // skip — use boxes
+    B.box(scene,cx,cz-D/2-0.01,baseY+wallH+0.3,W+0.38,0.6,T*0.7,B.M.concDark);
+    B.box(scene,cx,cz+D/2+0.01,baseY+wallH+0.3,W+0.38,0.6,T*0.7,B.M.concDark);
+    B.box(scene,cx-W/2-0.01,cz,baseY+wallH+0.3,T*0.7,0.6,D+0.38,B.M.concDark);
+    B.box(scene,cx+W/2+0.01,cz,baseY+wallH+0.3,T*0.7,0.6,D+0.38,B.M.concDark);
+
+    // Murs
+    B.wall(scene, cx,     cz-D/2, baseY, W, T, wallH, B.M.concrete);
+    B.wall(scene, cx-W/2, cz,     baseY, T, D, wallH, B.M.concrete);
+    B.wall(scene, cx+W/2, cz,     baseY, T, D, wallH, B.M.concrete);
+
+    // Façade sud — porte + deux fenêtres
+    const doorW = 2.0, sideW = (W-doorW-1.4)/2;
+    B.wall(scene, cx-doorW/2-0.7-sideW/2, cz+D/2, baseY, sideW, T, wallH, B.M.concrete);
+    B.wall(scene, cx+doorW/2+0.7+sideW/2, cz+D/2, baseY, sideW, T, wallH, B.M.concrete);
+    B.wall(scene, cx, cz+D/2, baseY+2.4, doorW, T, wallH-2.4, B.M.concrete, true);
+    B.box(scene, cx-doorW/2-0.7-sideW/2, cz+D/2+0.01, baseY+1.3, sideW*0.75, 1.5, 0.06, B.M.window);
+    B.box(scene, cx+doorW/2+0.7+sideW/2, cz+D/2+0.01, baseY+1.3, sideW*0.75, 1.5, 0.06, B.M.window);
+
+    // Bande bleue distinctive
+    const blueStripMat = new THREE.MeshLambertMaterial({ color: 0x1a3a8a });
+    B.box(scene, cx, cz+D/2+0.01, baseY+wallH*0.4, W-0.02, wallH*0.18, 0.04, blueStripMat);
+
+    // Enseigne POLICE
+    const signMat = new THREE.MeshLambertMaterial({ color: 0x0a2060 });
+    B.box(scene, cx, cz+D/2+0.22, baseY+wallH-0.55, W-0.4, 0.65, 0.28, signMat);
+
+    // Parvis + voiture de police
+    B.slab(scene, cx, cz+D/2+2.5, baseY+0.07, W+2.0, 5.0, B.M.concDark);
+    const copCarMat = new THREE.MeshLambertMaterial({ color: 0x111133 });
+    B.car(scene, cx-3, cz+D/2+4.0, 0.05);
+    B.car(scene, cx+3, cz+D/2+4.0, -0.05);
+
+    // ── Intérieur ──
+    // Accueil (comptoir central)
+    _fCounter(scene, B, cx, cz, baseY, 5.0, 1.2);
+    // Cellules (côté ouest, barreaux simulés)
+    const barMat = new THREE.MeshLambertMaterial({ color: 0x555555 });
+    for (let bar = 0; bar < 5; bar++)
+      B.box(scene, cx-W/2+1.8, cz-D/2+0.5+bar*0.55, baseY+1.35, 0.06, 2.7, 0.06, barMat);
+    B.box(scene, cx-W/2+1.8, cz-D/2+1.7, baseY+0.06, 0.06, 0.06, 3.0, barMat); // sol cellule
+    // Casiers équipements (côté est)
+    for (const oz of [-1.5, -0.5, 0.5]) {
+      B.box(scene, cx+W/2-0.8, cz+oz, baseY+1.1, 0.6, 2.2, 0.9, B.M.metal);
+      B.box(scene, cx+W/2-0.5, cz+oz, baseY+1.1, 0.02, 2.0, 0.85, B.M.concDark);
+    }
+    // Bureau avec ordinateur
+    _fCounter(scene, B, cx+2.0, cz+D/2-1.5, baseY, 2.5, 0.9);
+    B.box(scene, cx+2.0, cz+D/2-1.5, baseY+1.2, 0.5, 0.4, 0.32, B.M.concDark);
+  }
+
+  // ── Supermarché ───────────────────────────────────────────────────────────────
+
+  function _buildSuperMarche(scene, B) {
+    const cx = -175, cz = 36;
+    const W = 20, D = 14, wallH = 4.2;
+    const baseY = ZS.getTerrainHeight(cx, cz);
+    const T = 0.28;
+
+    B.slab(scene, cx, cz, baseY, W, D, B.M.floor);
+    B.slab(scene, cx, cz, baseY+wallH, W+0.4, D+0.4, B.M.concDark);
+    B.box(scene,cx,cz-D/2-0.01,baseY+wallH+0.3,W+0.44,0.65,T*0.7,B.M.concDark);
+    B.box(scene,cx,cz+D/2+0.01,baseY+wallH+0.3,W+0.44,0.65,T*0.7,B.M.concDark);
+    B.box(scene,cx-W/2-0.01,cz,baseY+wallH+0.3,T*0.7,0.65,D+0.44,B.M.concDark);
+    B.box(scene,cx+W/2+0.01,cz,baseY+wallH+0.3,T*0.7,0.65,D+0.44,B.M.concDark);
+
+    B.wall(scene, cx,     cz+D/2, baseY, W, T, wallH, B.M.concrete);
+    B.wall(scene, cx-W/2, cz,     baseY, T, D, wallH, B.M.concrete);
+    B.wall(scene, cx+W/2, cz,     baseY, T, D, wallH, B.M.concrete);
+
+    // Façade nord (entrée) — grandes vitrines
+    const doorW = 4.0, winW = (W-doorW-1.6)/2;
+    const lX = cx-doorW/2-0.8-winW/2, rX = cx+doorW/2+0.8+winW/2;
+    B.wall(scene, lX, cz-D/2, baseY, winW, T, wallH, B.M.concrete);
+    B.wall(scene, rX, cz-D/2, baseY, winW, T, wallH, B.M.concrete);
+    B.wall(scene, cx, cz-D/2, baseY+3.2, doorW, T, wallH-3.2, B.M.concrete, true);
+    B.box(scene, lX, cz-D/2-0.01, baseY+1.5, winW*0.85, 2.6, 0.06, B.M.window);
+    B.box(scene, rX, cz-D/2-0.01, baseY+1.5, winW*0.85, 2.6, 0.06, B.M.window);
+
+    const signMat = new THREE.MeshLambertMaterial({ color: 0x8a1010 });
+    B.box(scene, cx, cz-D/2-0.24, baseY+wallH-0.55, W-0.4, 0.8, 0.32, signMat);
+    B.slab(scene, cx, cz-D/2-2.0, baseY+0.07, W+2.0, 4.0, B.M.concDark);
+
+    // ── Intérieur — 5 rayons + caisses + réserve ──
+    for (let i = 0; i < 5; i++) {
+      const sx = cx - 7.5 + i * 3.5;
+      _fShelf(scene, B, sx, cz, baseY, 9.0, 'z');
+    }
+    // 3 caisses à l'entrée
+    for (let i = 0; i < 3; i++)
+      _fCounter(scene, B, cx-3+i*3, cz-D/2+1.5, baseY, 1.2, 0.9);
+    // Zone fruits/légumes (sol coloré)
+    const prodFloor = new THREE.MeshLambertMaterial({ color: 0x3a6a2a });
+    B.slab(scene, cx+7, cz+4.5, baseY+0.02, 4.5, 5.0, prodFloor);
+    // Présentoirs fruits (boîtes colorées)
+    const fruitMats = [0xdd3322,0xffaa00,0x33aa22,0xffdd00].map(c=>new THREE.MeshLambertMaterial({color:c}));
+    for (let i = 0; i < 4; i++)
+      B.box(scene, cx+5.5+i*0.9, cz+4.5, baseY+0.9, 0.8, 0.6, 0.8, fruitMats[i]);
+    // Réserve (cloison arrière)
+    B.wall(scene, cx, cz+D/2-2.5, baseY, W, T*0.8, wallH*0.7, B.M.concDark);
+    B.wall(scene, cx, cz+D/2-2.5, baseY+wallH*0.7+0.5, 2.5, T*0.8, 1.0, B.M.concDark, true);
+  }
+
+  // ── Chapelle ──────────────────────────────────────────────────────────────────
+
+  function _buildChapel(scene, B) {
+    const cx = -224, cz = -34;
+    const W = 9, D = 13, wallH = 5.0;
+    const baseY = ZS.getTerrainHeight(cx, cz);
+    const T = 0.32;
+
+    B.slab(scene, cx, cz, baseY, W, D, B.M.floor);
+    // Toit pentu (approx avec deux slabs)
+    B.slab(scene, cx, cz, baseY+wallH, W+0.4, D+0.4, B.M.roofGray);
+
+    B.wall(scene, cx,     cz-D/2, baseY, W, T, wallH, B.M.brick);
+    B.wall(scene, cx,     cz+D/2, baseY, W, T, wallH, B.M.brick);
+    B.wall(scene, cx-W/2, cz,     baseY, T, D, wallH, B.M.brick);
+
+    // Façade est — grande ouverture + fenêtres
+    const chapDoorW = 2.2;
+    const sideC = (W-chapDoorW-0.8)/2;
+    B.wall(scene, cx+W/2-sideC/2-0.4, cz, baseY, sideC, T, wallH, B.M.brick);
+    B.wall(scene, cx-W/2+sideC/2+0.4, cz, baseY, sideC, T, wallH, B.M.brick);
+    B.wall(scene, cx, cz, baseY+3.5, chapDoorW, T, wallH-3.5, B.M.brick, true);
+    // Fenêtres en ogive (approx)
+    B.box(scene, cx+W/2-sideC/2-0.4, cz+T+0.01, baseY+1.8, sideC*0.55, 2.2, 0.06, B.M.window);
+    B.box(scene, cx-W/2+sideC/2+0.4, cz+T+0.01, baseY+1.8, sideC*0.55, 2.2, 0.06, B.M.window);
+
+    // Clocher (tour)
+    const towerW = 3.0;
+    const towerH = 4.0;
+    B.wall(scene, cx, cz-D/2-towerW/2, baseY+wallH, towerW, T, towerH, B.M.brick);
+    B.wall(scene, cx, cz-D/2+towerW/2, baseY+wallH, towerW, T, towerH, B.M.brick);
+    B.wall(scene, cx-towerW/2, cz-D/2, baseY+wallH, T, towerW, towerH, B.M.brick);
+    B.wall(scene, cx+towerW/2, cz-D/2, baseY+wallH, T, towerW, towerH, B.M.brick);
+    // Toit du clocher
+    const steeple = new THREE.Mesh(new THREE.ConeGeometry(towerW*0.75, 3.5, 4), B.M.roofGray);
+    steeple.rotation.y = Math.PI/4;
+    steeple.position.set(cx, baseY+wallH+towerH+1.75, cz-D/2);
+    scene.add(steeple);
+
+    // ── Intérieur — bancs + autel ──
+    const pewMat  = new THREE.MeshLambertMaterial({ color: 0x6a4a1a });
+    const altarMat= new THREE.MeshLambertMaterial({ color: 0xf5f0e8 });
+    // 4 rangées de bancs (2 côtés)
+    for (let row = 0; row < 4; row++) {
+      for (const sx of [-2.0, 2.0]) {
+        const pz = cz - 3.5 + row * 2.2;
+        B.box(scene, cx+sx, pz, baseY+0.5, 1.8, 0.1, 0.5, pewMat);
+        B.box(scene, cx+sx, pz-0.22, baseY+0.75, 1.8, 0.48, 0.1, pewMat);
+        for (const lx of [cx+sx-0.85, cx+sx+0.85])
+          B.box(scene, lx, pz, baseY+0.25, 0.1, 0.5, 0.5, pewMat);
+      }
+    }
+    // Autel
+    B.box(scene, cx, cz+D/2-1.5, baseY+0.55, 3.0, 1.1, 1.2, altarMat);
+    B.box(scene, cx, cz+D/2-1.5, baseY+1.7,  0.15, 1.8, 0.15, altarMat);
+    B.box(scene, cx, cz+D/2-1.5, baseY+2.0,  1.2, 0.12, 0.12, altarMat);
+  }
+
+  // ── Maisons résidentielles + intérieurs ───────────────────────────────────────
 
   function _buildHouses(scene, B) {
-    // Nord de la route principale
-    B.house(scene, -141, -22, 5.5, 5.0, 2.9, B.M.brick,    B.M.roofRed,  'S');
-    B.house(scene, -162, -24, 6.2, 5.5, 3.0, B.M.wood,     B.M.roofDark, 'E');
-    B.house(scene, -192, -22, 5.2, 4.8, 2.8, B.M.concrete, B.M.roofGray, 'S');
-    B.house(scene, -215, -17, 4.8, 4.5, 2.7, B.M.brick2,   B.M.roofDark, 'W');
+    const houses = [
+      // [cx, cz, W, D, wallH, wallMat, roofMat, door]
+      [-141,-22, 6.0, 5.5, 3.0, B.M.brick,    B.M.roofRed,  'S'],
+      [-162,-24, 6.5, 5.5, 3.1, B.M.wood,     B.M.roofDark, 'E'],
+      [-193,-22, 5.5, 5.0, 2.9, B.M.concrete, B.M.roofGray, 'S'],
+      [-216,-18, 5.0, 4.8, 2.8, B.M.brick2,   B.M.roofDark, 'W'],
+      [-140, 22, 6.0, 5.5, 2.9, B.M.wood,     B.M.roofRed,  'N'],
+      [-163, 25, 6.5, 5.5, 3.0, B.M.brick,    B.M.roofDark, 'N'],
+      [-193, 22, 5.5, 5.0, 2.8, B.M.wood2,    B.M.roofGray, 'N'],
+      [-215, 18, 5.0, 4.8, 2.9, B.M.concrete, B.M.roofDark, 'E'],
+    ];
 
-    // Sud de la route principale
-    B.house(scene, -140, 22, 5.5, 5.0, 2.8, B.M.wood,     B.M.roofRed,  'N');
-    B.house(scene, -163, 25, 6.0, 5.2, 3.0, B.M.brick,    B.M.roofDark, 'N');
-    B.house(scene, -191, 22, 5.2, 4.8, 2.7, B.M.wood2,    B.M.roofGray, 'N');
-    B.house(scene, -214, 17, 5.0, 4.5, 2.8, B.M.concrete, B.M.roofDark, 'E');
+    for (const [cx, cz, W, D, wH, wM, rM, door] of houses) {
+      B.house(scene, cx, cz, W, D, wH, wM, rM, door);
+      _furnishHouse(scene, B, cx, cz, ZS.getTerrainHeight(cx, cz), W, D, door);
+    }
 
-    // Maison partiellement détruite (ambiance zombie)
-    _buildRuinedHouse(scene, B, -204, -31);
+    _buildRuinedHouse(scene, B, -205, -32);
+    _buildGarage(scene, B, -245, -6);
+    // Maisons supplémentaires (deuxième rangée nord)
+    B.house(scene, -145, -33, 5.5, 5.0, 2.9, B.M.wood2,    B.M.roofDark, 'S');
+    B.house(scene, -220, -28, 5.0, 4.5, 2.8, B.M.brick,    B.M.roofRed,  'S');
+    // Deuxième rangée sud
+    B.house(scene, -145,  33, 5.5, 5.0, 2.8, B.M.brick2,   B.M.roofGray, 'N');
+    B.house(scene, -220,  27, 5.0, 4.5, 2.7, B.M.concrete, B.M.roofDark, 'N');
+  }
 
-    // Garage isolé côté ouest
-    _buildGarage(scene, B, -228, -7);
+  function _furnishHouse(scene, B, cx, cz, baseY, W, D, doorDir) {
+    // Cuisine (contre le mur opposé à la porte)
+    const kitchenZ = doorDir === 'N' ? cz + D/2 - 0.8 : cz - D/2 + 0.8;
+    const kitchenX = doorDir === 'E' ? cx + W/2 - 0.8 : (doorDir === 'W' ? cx - W/2 + 0.8 : cx);
+    _fCounter(scene, B, kitchenX, kitchenZ, baseY, doorDir==='N'||doorDir==='S' ? W*0.65 : 0.9, doorDir==='N'||doorDir==='S' ? 0.9 : D*0.55);
+
+    // Table + chaises au centre
+    _fTable(scene, B, cx, cz, baseY);
+
+    // Canapé près de la porte
+    const sofaZ = doorDir === 'S' ? cz + D/2 - 1.5 : (doorDir === 'N' ? cz - D/2 + 1.5 : cz);
+    const sofaX = doorDir === 'E' ? cx + W/2 - 1.5 : (doorDir === 'W' ? cx - W/2 + 1.5 : cx);
+    const sofaRot = doorDir === 'S' ? Math.PI : (doorDir === 'E' ? -Math.PI/2 : (doorDir === 'W' ? Math.PI/2 : 0));
+    _fSofa(scene, sofaX, sofaZ, baseY, sofaRot);
+
+    // Lit dans un coin
+    _fBed(scene, cx + W*0.25, cz - D*0.25, baseY, 0);
   }
 
   function _buildRuinedHouse(scene, B, cx, cz) {
     const baseY = ZS.getTerrainHeight(cx, cz);
-    const W = 5.5, D = 4.5;
-    const T = 0.22;
-
-    B.slab(scene, cx, cz, baseY, W, D, B.M.dirt);
-    // Murs partiels
-    B.wall(scene, cx,       cz - D/2, baseY, W, T, 1.6, B.M.brick2);
-    B.wall(scene, cx - W/2, cz,       baseY, T, D, 2.6, B.M.brick2);
-    B.wall(scene, cx + W/2, cz - 1.0, baseY, T, 3.5, 2.0, B.M.brick2);
-    // Débris au sol
-    for (const [rx, rz, rw, rh, rd] of [
-      [cx + 1.5, cz + 0.5, 1.0, 0.5, 0.8],
-      [cx - 1.0, cz + 1.5, 0.8, 0.4, 0.6],
-      [cx + 0.5, cz - 1.2, 1.2, 0.3, 0.7],
-      [cx - 0.5, cz - 0.5, 0.6, 0.6, 0.5],
-    ]) {
-      const ry = ZS.getTerrainHeight(rx, rz);
-      B.box(scene, rx, rz, ry + rh / 2, rw, rh, rd, B.M.brick2);
-    }
+    B.slab(scene, cx, cz, baseY, 5.5, 4.5, B.M.dirt);
+    B.wall(scene, cx,       cz-2.25, baseY, 5.5, 0.22, 1.6, B.M.brick2);
+    B.wall(scene, cx-2.75,  cz,      baseY, 0.22, 4.5, 2.6, B.M.brick2);
+    B.wall(scene, cx+2.75,  cz-1.0,  baseY, 0.22, 2.5, 2.0, B.M.brick2);
+    for (const [rx,rz,rw,rh,rd] of [
+      [cx+1.5,cz+0.5,1.0,0.5,0.8],[cx-1.0,cz+1.5,0.8,0.4,0.6],[cx+0.5,cz-1.0,1.2,0.3,0.7],
+    ]) B.box(scene, rx, rz, ZS.getTerrainHeight(rx,rz)+rh/2, rw, rh, rd, B.M.brick2);
   }
 
   function _buildGarage(scene, B, cx, cz) {
     const baseY = ZS.getTerrainHeight(cx, cz);
-    const W = 6.5, D = 5.5, wallH = 3.0;
-    const T = 0.25;
-
+    const W = 7.0, D = 6.0, wallH = 3.2;
     B.slab(scene, cx, cz, baseY, W, D, B.M.concDark);
-    B.slab(scene, cx, cz, baseY + wallH, W + 0.3, D + 0.3, B.M.concDark);
+    B.slab(scene, cx, cz, baseY+wallH, W+0.3, D+0.3, B.M.concDark);
+    B.wall(scene, cx,     cz-D/2, baseY, W, 0.25, wallH, B.M.concrete);
+    B.wall(scene, cx-W/2, cz,     baseY, 0.25, D, wallH, B.M.concrete);
+    B.wall(scene, cx+W/2, cz,     baseY, 0.25, D, wallH, B.M.concrete);
+    const doorW = 3.5, doorH = 2.8, sideW = (W-doorW)/2;
+    B.wall(scene, cx-doorW/2-sideW/2, cz+D/2, baseY, sideW, 0.25, wallH, B.M.concrete);
+    B.wall(scene, cx+doorW/2+sideW/2, cz+D/2, baseY, sideW, 0.25, wallH, B.M.concrete);
+    B.wall(scene, cx, cz+D/2, baseY+doorH, doorW, 0.25, wallH-doorH, B.M.concrete, true);
+    B.box(scene, cx, cz+D/2+0.01, baseY+doorH/2, doorW-0.1, doorH, 0.06, B.M.metal);
 
-    B.wall(scene, cx,       cz - D/2, baseY, W, T, wallH, B.M.concrete);
-    B.wall(scene, cx - W/2, cz,       baseY, T, D, wallH, B.M.concrete);
-    B.wall(scene, cx + W/2, cz,       baseY, T, D, wallH, B.M.concrete);
-
-    // Porte de garage (ouverture côté sud, métal rouillé)
-    const doorW = 3.2, doorH = 2.6;
-    const side  = (W - doorW) / 2;
-    B.wall(scene, cx - doorW/2 - side/2, cz + D/2, baseY, side, T, wallH, B.M.concrete);
-    B.wall(scene, cx + doorW/2 + side/2, cz + D/2, baseY, side, T, wallH, B.M.concrete);
-    B.wall(scene, cx, cz + D/2, baseY + doorH, doorW, T, wallH - doorH, B.M.concrete, true);
-    // Panneau de porte (visuel uniquement)
-    B.box(scene, cx, cz + D/2 + 0.01, baseY + doorH / 2, doorW - 0.1, doorH, 0.06, B.M.metal);
-
-    // Voiture à l'intérieur (partiellement visible)
-    B.car(scene, cx, cz - 0.5, 0);
+    // Voiture + établi + étagère
+    B.car(scene, cx, cz-0.8, 0);
+    _fCounter(scene, B, cx-W/2+1.0, cz-D/2+0.9, baseY, 0.9, 2.5);
+    _fShelf(scene, B, cx+W/2-0.12, cz-0.5, baseY, 3.5, 'z');
+    // Tonneaux de pétrole
+    const oilMat = new THREE.MeshLambertMaterial({ color: 0x222222 });
+    for (const [ox,oz] of [[cx-2.5, cz-2.0],[cx-2.5, cz-1.1]]) {
+      const oy = ZS.getTerrainHeight(ox,oz);
+      B.box(scene, ox, oz, oy+0.46, 0.55, 0.92, 0.55, oilMat);
+    }
   }
 
-  // ── Immeuble 2 étages (point de repère visuel dominant) ──────────────────────
+  // ── Immeuble ──────────────────────────────────────────────────────────────────
 
   function _buildApartment(scene, B) {
-    B.immeuble2F(scene, -170, -31);
+    B.immeuble2F(scene, -170, -32);
   }
 
-  // ── Parking devant le mini-marché ─────────────────────────────────────────────
+  // ── Parking ───────────────────────────────────────────────────────────────────
 
   function _buildParking(scene, B) {
-    const cx = -152, cz = 5;
+    const cx = -152, cz = 7;
     const baseY = ZS.getTerrainHeight(cx, cz);
-
-    // Dalle béton
-    B.slab(scene, cx, cz, baseY + 0.05, 18, 9, B.M.concDark);
-
-    // Marquage au sol (lignes de places)
+    B.slab(scene, cx, cz, baseY+0.05, 20, 9, B.M.concDark);
     const lineMat = new THREE.MeshLambertMaterial({
-      color: 0xcccccc,
-      polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -4,
+      color: 0xcccccc, polygonOffset:true, polygonOffsetFactor:-2, polygonOffsetUnits:-4
     });
-    for (let i = -3; i <= 3; i++) {
-      B.box(scene, cx + i * 2.5, cz - 4.2, baseY + 0.09, 0.1, 0.01, 7.8, lineMat);
-    }
-    B.box(scene, cx, cz,       baseY + 0.09, 18.2, 0.01, 0.1, lineMat);
-    B.box(scene, cx, cz - 4.2, baseY + 0.09, 18.2, 0.01, 0.1, lineMat);
+    for (let i = -4; i <= 4; i++)
+      B.box(scene, cx+i*2.2, cz-4.3, baseY+0.09, 0.1, 0.01, 8.0, lineMat);
+    B.box(scene, cx, cz,     baseY+0.09, 20.4, 0.01, 0.1, lineMat);
+    B.box(scene, cx, cz-4.3, baseY+0.09, 20.4, 0.01, 0.1, lineMat);
   }
 
   // ── Lampadaires ───────────────────────────────────────────────────────────────
 
   function _buildStreetLights(scene, B) {
     const poleMat  = new THREE.MeshLambertMaterial({ color: 0x3a3a3a });
-    const lightMat = new THREE.MeshLambertMaterial({
-      color: 0xffffcc, emissive: 0xffeeaa, emissiveIntensity: 2.5,
-    });
-
-    // [x, z, côté bras vers la route]
+    const lightMat = new THREE.MeshLambertMaterial({ color:0xffffcc, emissive:0xffeeaa, emissiveIntensity:2.5 });
     const lamps = [
-      [-132, -3.5, -1], [-158, -3.5, -1], [-180, -3.5, -1], [-202, -3.5, -1], [-222, -3.5, -1],
-      [-144,  3.5,  1], [-168,  3.5,  1], [-192,  3.5,  1], [-215,  3.5,  1],
+      [-132,-3.5,-1],[-158,-3.5,-1],[-180,-3.5,-1],[-202,-3.5,-1],[-222,-3.5,-1],[-244,-3.5,-1],
+      [-144, 3.5, 1],[-168, 3.5, 1],[-192, 3.5, 1],[-215, 3.5, 1],[-238, 3.5, 1],
     ];
-
-    for (const [lx, lz, armSide] of lamps) {
+    for (const [lx,lz,side] of lamps) {
       const ly = ZS.getTerrainHeight(lx, lz);
-      const fixtureZ = lz + armSide * 1.55;
-      const fixtureY = ly + 5.5;
-
-      // Poteau
-      const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.09, 5.8, 7), poleMat);
-      pole.position.set(lx, ly + 2.9, lz);
-      pole.castShadow = true;
-      scene.add(pole);
-
-      // Bras
-      const arm = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.06, 1.8), poleMat);
-      arm.position.set(lx, ly + 5.6, lz + armSide * 0.7);
-      scene.add(arm);
-
-      // Fixture (émissive visible de jour)
-      const fix = new THREE.Mesh(new THREE.BoxGeometry(0.42, 0.24, 0.65), lightMat);
-      fix.position.set(lx, fixtureY, fixtureZ);
-      scene.add(fix);
-
-      // PointLight — éclaire la route autour du lampadaire
-      const ptLight = new THREE.PointLight(0xffeecc, 6.0, 40);
-      ptLight.position.set(lx, fixtureY - 0.15, fixtureZ);
-      scene.add(ptLight);
-
-      B.addCollider({ x: lx, z: lz, r: 0.12 });
+      const fz = lz + side*1.55, fy = ly+5.5;
+      const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.06,0.09,5.8,7), poleMat);
+      pole.position.set(lx, ly+2.9, lz); pole.castShadow=true; scene.add(pole);
+      const arm = new THREE.Mesh(new THREE.BoxGeometry(0.06,0.06,1.8), poleMat);
+      arm.position.set(lx, ly+5.6, lz+side*0.7); scene.add(arm);
+      const fix = new THREE.Mesh(new THREE.BoxGeometry(0.42,0.24,0.65), lightMat);
+      fix.position.set(lx, fy, fz); scene.add(fix);
+      const pt = new THREE.PointLight(0xffeecc, 6.0, 40);
+      pt.position.set(lx, fy-0.15, fz); scene.add(pt);
+      B.addCollider({ x:lx, z:lz, r:0.12 });
     }
   }
 
   // ── Véhicules abandonnés ──────────────────────────────────────────────────────
 
   function _buildAbandonedVehicles(scene, B) {
-    // Bus en travers de la route — déplacé loin du spawn (-170,0)
     _buildBus(scene, B, -158, 3.5, 0.18);
-
-    // Embouteillage sur la route principale
-    B.car(scene, -136, -2.0,  0.08);
-    B.car(scene, -144,  2.2, -0.05);
-    B.car(scene, -157, -1.8,  3.18);
-    B.car(scene, -182,  2.0,  0.10);
-    B.car(scene, -196, -1.5, -0.08);
-    B.car(scene, -209,  2.2,  3.12);
-    B.car(scene, -222, -1.0,  0.06);
-
-    // Voitures dans les rues résidentielles
-    B.car(scene, -146, -19,  0.50);
-    B.car(scene, -183, -20, -0.40);
-    B.car(scene, -145,  19,  3.20);
-    B.car(scene, -200,  20,  0.25);
-
-    // Parking (quelques voitures restées)
-    B.car(scene, -143, 4.5, -0.15);
-    B.car(scene, -158, 4.5,  0.05);
+    // Embouteillage
+    for (const [x,z,r] of [
+      [-136,-2,0.08],[-144,2.2,-0.05],[-157,-1.8,3.18],[-182,2,0.10],
+      [-196,-1.5,-0.08],[-209,2.2,3.12],[-222,-1,0.06],[-240,1.8,-0.1],
+    ]) B.car(scene, x, z, r);
+    // Rues résidentielles
+    for (const [x,z,r] of [
+      [-146,-19,0.5],[-183,-20,-0.4],[-145,19,3.2],[-200,20,0.25],
+      [-145,-32,0.3],[-220,-26,-0.2],[-145,32,0.15],
+    ]) B.car(scene, x, z, r);
+    // Parking
+    B.car(scene, -143, 5.5, -0.15);
+    B.car(scene, -158, 5.5,  0.05);
+    B.car(scene, -174, 5.5,  0.08);
   }
 
   function _buildBus(scene, B, cx, cz, rotY) {
-    const py      = ZS.getTerrainHeight(cx, cz);
-    const bodyMat = new THREE.MeshLambertMaterial({ color: 0x1e2a6a });
-    const darkMat = new THREE.MeshLambertMaterial({ color: 0x181818 });
-    const glassMat= new THREE.MeshLambertMaterial({ color: 0x3a5566, transparent: true, opacity: 0.55 });
-    const g       = new THREE.Group();
-
-    // Corps
-    const body = new THREE.Mesh(new THREE.BoxGeometry(2.5, 2.1, 9.0), bodyMat);
-    body.position.y = 1.12; body.castShadow = true; body.receiveShadow = true;
-    g.add(body);
-
-    // Toit
-    const roof = new THREE.Mesh(new THREE.BoxGeometry(2.4, 0.28, 8.8), bodyMat);
-    roof.position.y = 2.24; g.add(roof);
-
-    // Fenêtres latérales (5 de chaque côté)
-    for (let i = 0; i < 5; i++) {
-      for (const sx of [-1.27, 1.27]) {
-        const win = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.75, 1.3), glassMat);
-        win.position.set(sx, 1.65, -3.0 + i * 1.52);
-        g.add(win);
-      }
+    const py=ZS.getTerrainHeight(cx,cz);
+    const bodyMat=new THREE.MeshLambertMaterial({color:0x1e2a6a});
+    const darkMat=new THREE.MeshLambertMaterial({color:0x181818});
+    const glassMat=new THREE.MeshLambertMaterial({color:0x3a5566,transparent:true,opacity:0.55});
+    const stripMat=new THREE.MeshLambertMaterial({color:0xddcc00});
+    const g=new THREE.Group();
+    g.add(Object.assign(new THREE.Mesh(new THREE.BoxGeometry(2.5,2.1,9.0),bodyMat),{position:new THREE.Vector3(0,1.12,0),castShadow:true,receiveShadow:true}));
+    g.add(Object.assign(new THREE.Mesh(new THREE.BoxGeometry(2.4,0.28,8.8),bodyMat),{position:new THREE.Vector3(0,2.24,0)}));
+    for(let i=0;i<5;i++) for(const sx of[-1.27,1.27]){
+      const w=new THREE.Mesh(new THREE.BoxGeometry(0.05,0.75,1.3),glassMat);
+      w.position.set(sx,1.65,-3.0+i*1.52); g.add(w);
     }
-    // Pare-brises
-    const fw = new THREE.Mesh(new THREE.BoxGeometry(2.1, 1.0, 0.05), glassMat);
-    fw.position.set(0, 1.65, -4.46); g.add(fw);
-    const bw = new THREE.Mesh(new THREE.BoxGeometry(2.1, 1.0, 0.05), glassMat);
-    bw.position.set(0, 1.65, 4.46); g.add(bw);
-
-    // Bande jaune de flanc
-    const stripMat = new THREE.MeshLambertMaterial({ color: 0xddcc00 });
-    for (const sx of [-1.27, 1.27]) {
-      const strip = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.22, 8.6), stripMat);
-      strip.position.set(sx, 0.6, 0); g.add(strip);
+    const fw=new THREE.Mesh(new THREE.BoxGeometry(2.1,1.0,0.05),glassMat); fw.position.set(0,1.65,-4.46); g.add(fw);
+    const bw=new THREE.Mesh(new THREE.BoxGeometry(2.1,1.0,0.05),glassMat); bw.position.set(0,1.65,4.46);  g.add(bw);
+    for(const sx of[-1.27,1.27]){const s=new THREE.Mesh(new THREE.BoxGeometry(0.04,0.22,8.6),stripMat);s.position.set(sx,0.6,0);g.add(s);}
+    for(const[ox,oz]of[[-1.3,-3.1],[1.3,-3.1],[-1.3,0],[1.3,0],[-1.3,3.1],[1.3,3.1]]){
+      const w=new THREE.Mesh(new THREE.CylinderGeometry(0.46,0.46,0.28,9),darkMat);
+      w.rotation.z=Math.PI/2; w.position.set(ox,0.48,oz); g.add(w);
     }
-
-    // Roues (6)
-    for (const [ox, oz] of [[-1.3,-3.1],[1.3,-3.1],[-1.3,0],[1.3,0],[-1.3,3.1],[1.3,3.1]]) {
-      const w = new THREE.Mesh(new THREE.CylinderGeometry(0.46, 0.46, 0.28, 9), darkMat);
-      w.rotation.z = Math.PI / 2;
-      w.position.set(ox, 0.48, oz);
-      g.add(w);
-    }
-
-    g.position.set(cx, py, cz);
-    g.rotation.y = rotY;
-    scene.add(g);
-    B.addCollider({ type: 'box', cx, cz, hw: 1.35, hd: 4.6 });
+    g.position.set(cx,py,cz); g.rotation.y=rotY; scene.add(g);
+    B.addCollider({type:'box',cx,cz,hw:1.35,hd:4.6});
   }
 
   // ── Décors de rue ─────────────────────────────────────────────────────────────
 
   function _buildStreetProps(scene, B) {
-    const darkMat = new THREE.MeshLambertMaterial({ color: 0x2a2a2a });
-    const redMat  = new THREE.MeshLambertMaterial({ color: 0x992222 });
+    const darkMat=new THREE.MeshLambertMaterial({color:0x2a2a2a});
+    const redMat =new THREE.MeshLambertMaterial({color:0x992222});
+    const concMat=new THREE.MeshLambertMaterial({color:0x888070});
 
-    // Poubelles renversées
-    for (const [bx, bz, rz] of [
-      [-143,  3.5, 0    ], [-161, -4.0,  Math.PI/2],
-      [-196,  3.5, 0.3  ], [-183, -3.5, -0.4      ],
-      [-225,  4.0, 0.1  ],
-    ]) {
-      const by = ZS.getTerrainHeight(bx, bz);
-      const bin = new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.26, 0.68, 7), darkMat);
-      bin.rotation.z = rz;
-      bin.position.set(bx, by + (Math.abs(rz) > 0.2 ? 0.22 : 0.35), bz);
-      bin.castShadow = true;
-      scene.add(bin);
-      B.addCollider({ x: bx, z: bz, r: 0.3 });
+    for(const[bx,bz,rz]of[
+      [-143,3.5,0],[-161,-4,Math.PI/2],[-196,3.5,0.3],[-183,-3.5,-0.4],[-225,4,0.1],[-243,-3.5,0.2],
+    ]){
+      const by=ZS.getTerrainHeight(bx,bz);
+      const bin=new THREE.Mesh(new THREE.CylinderGeometry(0.22,0.26,0.68,7),darkMat);
+      bin.rotation.z=rz; bin.position.set(bx,by+(Math.abs(rz)>0.2?0.22:0.35),bz); bin.castShadow=true;
+      scene.add(bin); B.addCollider({x:bx,z:bz,r:0.3});
     }
-
-    // Cônes de signalisation
-    for (const [cx, cz] of [[-160, 1.2], [-178, -1.8], [-194, 1.5]]) {
-      const cy = ZS.getTerrainHeight(cx, cz);
-      const cone = new THREE.Mesh(new THREE.ConeGeometry(0.18, 0.58, 6), redMat);
-      cone.position.set(cx, cy + 0.30, cz);
-      scene.add(cone);
+    for(const[cx,cz]of[[-160,1.2],[-178,-1.8],[-194,1.5],[-215,-2]]){
+      const cy=ZS.getTerrainHeight(cx,cz);
+      scene.add(Object.assign(new THREE.Mesh(new THREE.ConeGeometry(0.18,0.58,6),redMat),{position:new THREE.Vector3(cx,cy+0.3,cz)}));
     }
-
-    // Barricades (blocs de béton anti-véhicule)
-    const concreteMat = new THREE.MeshLambertMaterial({ color: 0x888070 });
-    for (const [bx, bz, rotY] of [
-      [-130, -1.5, 0.1], [-130, 1.8, -0.05],
-    ]) {
-      const by = ZS.getTerrainHeight(bx, bz);
-      const block = new THREE.Mesh(new THREE.BoxGeometry(0.55, 0.95, 1.6), concreteMat);
-      block.position.set(bx, by + 0.48, bz);
-      block.rotation.y = rotY;
-      block.castShadow = true;
-      scene.add(block);
-      B.addCollider({ type: 'box', cx: bx, cz: bz, hw: 0.85, hd: 0.3 });
+    for(const[bx,bz,ry]of[[-130,-1.5,0.1],[-130,1.8,-0.05],[-248,-2,0.08],[-248,2,0.0]]){
+      const by=ZS.getTerrainHeight(bx,bz);
+      const bl=new THREE.Mesh(new THREE.BoxGeometry(0.55,0.95,1.6),concMat);
+      bl.position.set(bx,by+0.48,bz); bl.rotation.y=ry; bl.castShadow=true; scene.add(bl);
+      B.addCollider({type:'box',cx:bx,cz:bz,hw:0.85,hd:0.3});
     }
-
-    // Bancs sur trottoir nord
-    for (const lx of [-144, -196]) {
-      const by = ZS.getTerrainHeight(lx, -6.5);
-      _buildBench(scene, B, lx, -6.5, by);
+    for(const lx of[-144,-196,-220]){
+      const by=ZS.getTerrainHeight(lx,-6.5);
+      _buildBench(scene,B,lx,-6.5,by);
     }
-
-    // Boîtes aux lettres
-    const mailMat = new THREE.MeshLambertMaterial({ color: 0x3a5a8a });
-    for (const [mx, mz] of [[-143, -8], [-190, -8]]) {
-      const my = ZS.getTerrainHeight(mx, mz);
-      B.box(scene, mx, mz, my + 1.1, 0.22, 0.28, 0.28, mailMat);
-      B.box(scene, mx, mz, my + 0.55, 0.1, 1.1, 0.1, mailMat);
+    const mailMat=new THREE.MeshLambertMaterial({color:0x3a5a8a});
+    for(const[mx,mz]of[[-141,-8],[-192,-8],[-215,-8]]){
+      const my=ZS.getTerrainHeight(mx,mz);
+      B.box(scene,mx,mz,my+1.1,0.22,0.28,0.28,mailMat);
+      B.box(scene,mx,mz,my+0.55,0.1,1.1,0.1,mailMat);
     }
   }
 
   function _buildBench(scene, B, cx, cz, baseY) {
-    const benchMat = new THREE.MeshLambertMaterial({ color: 0x6a4a20 });
-    const metalMat = new THREE.MeshLambertMaterial({ color: 0x3a3a3a });
-
-    // Assise
-    B.box(scene, cx, cz, baseY + 0.48, 1.9, 0.08, 0.4, benchMat);
-    // Dossier
-    B.box(scene, cx, cz - 0.16, baseY + 0.74, 1.9, 0.06, 0.28, benchMat);
-    // Pieds métalliques
-    for (const lx of [cx - 0.72, cx + 0.72]) {
-      const leg = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.52, 0.42), metalMat);
-      leg.position.set(lx, baseY + 0.26, cz);
-      scene.add(leg);
+    const benchMat=new THREE.MeshLambertMaterial({color:0x6a4a20});
+    const metalMat=new THREE.MeshLambertMaterial({color:0x3a3a3a});
+    B.box(scene,cx,cz,baseY+0.48,1.9,0.08,0.4,benchMat);
+    B.box(scene,cx,cz-0.16,baseY+0.74,1.9,0.06,0.28,benchMat);
+    for(const lx of[cx-0.72,cx+0.72]){
+      const leg=new THREE.Mesh(new THREE.BoxGeometry(0.06,0.52,0.42),metalMat);
+      leg.position.set(lx,baseY+0.26,cz); scene.add(leg);
     }
-    B.addCollider({ type: 'box', cx, cz, hw: 1.0, hd: 0.25 });
+    B.addCollider({type:'box',cx,cz,hw:1.0,hd:0.25});
   }
 
   // ─────────────────────────────────────────────────────────────────────────────

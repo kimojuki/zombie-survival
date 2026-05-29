@@ -93,10 +93,9 @@
 
     // Feu éteint — cercle de cendres + bûches calcinées
     const ashMat = new THREE.MeshLambertMaterial({ color: 0x252018 });
-    scene.add(Object.assign(
-      new THREE.Mesh(new THREE.CylinderGeometry(0.45, 0.55, 0.1, 8), ashMat),
-      { position: new THREE.Vector3(cx, baseY + 0.06, cz - 4) }
-    ));
+    const ashMesh = new THREE.Mesh(new THREE.CylinderGeometry(0.45, 0.55, 0.1, 8), ashMat);
+    ashMesh.position.set(cx, baseY + 0.06, cz - 4);
+    scene.add(ashMesh);
     const charMat = new THREE.MeshLambertMaterial({ color: 0x181410 });
     for (let i = 0; i < 3; i++) {
       const a   = i / 3 * Math.PI * 2;
@@ -309,13 +308,12 @@
       [ 82, -100, 20],  // station
     ];
 
-    ZS.spawnTreesAt(scene, 0, 0, 220, 135, 0.55, noSpawn);
+    ZS.spawnTreesAt(scene, 0, 0, 80, 130, 0.55, noSpawn);
   }
 
   function _spawnDeadTrees(scene) {
-    ZS.spawnDeadTreesAt(scene,  30, -50, 9,  14);   // lisière est
-    ZS.spawnDeadTreesAt(scene, -40,  60, 7,  12);   // lisière nord
-    ZS.spawnDeadTreesAt(scene,  -5, -90, 6,  10);   // bord sud
+    ZS.spawnDeadTreesAt(scene,  30, -50, 5, 14);   // lisière est
+    ZS.spawnDeadTreesAt(scene, -40,  60, 4, 12);   // lisière nord
   }
 
   // ── Voitures abandonnées ──────────────────────────────────────────────────────

@@ -49,9 +49,9 @@
     scene.add(_moonLight);
 
     buildTerrain(scene);
-    spawnTrees(scene, 500);
-    spawnRocks(scene, 200);
-    spawnBushes(scene, 400);
+    spawnTrees(scene, 180);
+    spawnRocks(scene, 60);
+    spawnBushes(scene, 120);
 
     const buildingColliders = ZS.Buildings.buildAll(scene);
     for (const c of buildingColliders) _colliders.push(c);
@@ -139,7 +139,7 @@
   }
 
   function buildTerrain(scene) {
-    const SIZE = 600, SEG = 300;
+    const SIZE = 600, SEG = 180;
     const geo  = new THREE.PlaneGeometry(SIZE, SIZE, SEG, SEG);
     geo.rotateX(-Math.PI / 2);
     const pos  = geo.attributes.position;

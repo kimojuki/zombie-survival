@@ -420,56 +420,77 @@
   // ── Poteaux électriques le long de la route principale ───────────────────────
 
   function _buildUtilityPoles(scene, B) {
-    const poleMat  = new THREE.MeshLambertMaterial({ color: 0x6a4a20 });
-    const wireMat  = new THREE.MeshLambertMaterial({ color: 0x222222 });
-    const insMat   = new THREE.MeshLambertMaterial({ color: 0x8a8a8a });
+    const poleMat = new THREE.MeshLambertMaterial({ color: 0x6a4a20 });
+    const wireMat = new THREE.MeshLambertMaterial({ color: 0x1a1a1a });
+    const insMat  = new THREE.MeshLambertMaterial({ color: 0x8a8a8a });
 
-    // Positions le long de la route N-S principale
-    const poles = [
-      [ 16, -118, 0.35], [ 11,  -83, 0], [  7,  -49, 0.1],
-      [  3,  -16, 0],    [ -3,   16, 0.2], [ -7,   47, 0],
-      [-11,   76, 0.15], [-14,  108, 0],
+    const poleDefs = [
+      [ 16, -118, 0.35], [ 11,  -83, 0  ], [  7,  -49, 0.1 ],
+      [  3,  -16, 0  ],  [ -3,   16, 0.2], [ -7,   47, 0  ],
+      [-11,   76, 0.15], [-14,  108, 0  ],
     ];
 
-    let prevPole = null;
-    for (const [px, pz, tilt] of poles) {
+    // ── Phase 1 : poteaux + traverses + isolateurs ────────────────────────────
+    // On mémorise la position exacte de chaque isolateur pour la phase 2.
+    const isoPositions = []; // [[left3D, right3D], ...]
+
+    for (const [px, pz, tilt] of poleDefs) {
       const py = ZS.getTerrainHeight(px, pz);
 
-      // Poteau
       const p = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.13, 5.8, 6), poleMat);
       p.position.set(px, py + 2.9, pz);
       p.rotation.z = tilt * 0.15;
       p.castShadow = true;
       scene.add(p);
 
-      // Traverse (crossbar)
-      const c = new THREE.Mesh(new THREE.BoxGeometry(2.4, 0.12, 0.12), poleMat);
-      c.position.set(px, py + 5.5, pz);
-      scene.add(c);
+      const bar = new THREE.Mesh(new THREE.BoxGeometry(2.4, 0.12, 0.12), poleMat);
+      bar.position.set(px, py + 5.52, pz);
+      scene.add(bar);
 
-      // Isolateurs
+      // Isolateurs — position exacte en 3D enregistrée
+      const isoY = py + 5.46;
+      const row  = [];
       for (const ox of [-0.95, 0.95]) {
         const ins = new THREE.Mesh(new THREE.SphereGeometry(0.09, 5, 4), insMat);
-        ins.position.set(px + ox, py + 5.45, pz);
+        ins.position.set(px + ox, isoY, pz);
         scene.add(ins);
+        row.push(new THREE.Vector3(px + ox, isoY, pz));
       }
-
-      // Fil entre poteaux consécutifs (léger affaissement)
-      if (prevPole) {
-        const [ppx, ppz, ppy] = prevPole;
-        const mid = new THREE.Mesh(
-          new THREE.CylinderGeometry(0.025, 0.025,
-            Math.hypot(px - ppx, pz - ppz), 4),
-          wireMat
-        );
-        mid.position.set((px + ppx) / 2, (py + ppy) / 2 + 5.3, (pz + ppz) / 2);
-        mid.rotation.z = Math.PI / 2;
-        mid.rotation.y = Math.atan2(pz - ppz, px - ppx);
-        scene.add(mid);
-      }
-      prevPole = [px, pz, py];
+      isoPositions.push(row);
 
       B.addCollider({ x: px, z: pz, r: 0.16 });
+    }
+
+    // ── Phase 2 : fils connectés précisément aux isolateurs ───────────────────
+    const yAxis = new THREE.Vector3(0, 1, 0);
+
+    for (let i = 0; i < isoPositions.length - 1; i++) {
+      // 2 fils : gauche (index 0) et droit (index 1)
+      for (let side = 0; side < 2; side++) {
+        const A = isoPositions[i][side];
+        const B2 = isoPositions[i + 1][side];
+
+        const dir    = new THREE.Vector3().subVectors(B2, A);
+        const length = dir.length();
+        const dirN   = dir.clone().normalize();
+
+        const wire = new THREE.Mesh(
+          new THREE.CylinderGeometry(0.022, 0.022, length, 4),
+          wireMat
+        );
+
+        // Centre du fil — légère courbure vers le bas (caténaire visuel)
+        wire.position.set(
+          (A.x + B2.x) / 2,
+          (A.y + B2.y) / 2 - 0.18,
+          (A.z + B2.z) / 2
+        );
+
+        // Orientation 3D correcte : axe Y du cylindre → direction A→B
+        wire.quaternion.setFromUnitVectors(yAxis, dirN);
+
+        scene.add(wire);
+      }
     }
   }
 

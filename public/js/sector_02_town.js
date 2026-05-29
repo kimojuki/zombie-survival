@@ -234,7 +234,7 @@
   function _buildStreetLights(scene, B) {
     const poleMat  = new THREE.MeshLambertMaterial({ color: 0x3a3a3a });
     const lightMat = new THREE.MeshLambertMaterial({
-      color: 0xffffcc, emissive: 0xffeeaa, emissiveIntensity: 1.2,
+      color: 0xffffcc, emissive: 0xffeeaa, emissiveIntensity: 2.5,
     });
 
     // [x, z, côté bras vers la route]
@@ -265,7 +265,7 @@
       scene.add(fix);
 
       // PointLight — éclaire la route autour du lampadaire
-      const ptLight = new THREE.PointLight(0xffeecc, 2.4, 28);
+      const ptLight = new THREE.PointLight(0xffeecc, 6.0, 40);
       ptLight.position.set(lx, fixtureY - 0.15, fixtureZ);
       scene.add(ptLight);
 

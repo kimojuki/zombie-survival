@@ -71,6 +71,50 @@ const items   = new Map(); // world pickup items
 let zombieIdCounter = 0;
 let itemIdCounter   = 0;
 
+// ── Collision géométrique (transmise une fois par le premier client) ──────────
+// Le client construit la géométrie : il est la source de vérité unique. On ne garde
+// que l'empreinte 2D et on ignore les murs d'étage (minY), les zombies restant au sol.
+// Les portes n'ont aucun collider → les zombies passent par les ouvertures comme les joueurs.
+let worldColliders = [];
+const ZOMBIE_R = 0.5;
+
+function resolveZombieCollision(nx, nz) {
+  for (const c of worldColliders) {
+    if (c.type === 'box') {
+      const clampX = Math.max(c.cx - c.hw, Math.min(c.cx + c.hw, nx));
+      const clampZ = Math.max(c.cz - c.hd, Math.min(c.cz + c.hd, nz));
+      const dx = nx - clampX, dz = nz - clampZ;
+      const dist = Math.hypot(dx, dz);
+      if (dist > 0.0001) {
+        if (dist < ZOMBIE_R) {
+          const pen = ZOMBIE_R - dist;
+          nx += (dx / dist) * pen;
+          nz += (dz / dist) * pen;
+        }
+      } else {
+        // Centre à l'intérieur de la boîte → on ressort par le bord le plus proche
+        const l = nx - (c.cx - c.hw), r = (c.cx + c.hw) - nx;
+        const t = nz - (c.cz - c.hd), b = (c.cz + c.hd) - nz;
+        const m = Math.min(l, r, t, b);
+        if      (m === l) nx = c.cx - c.hw - ZOMBIE_R;
+        else if (m === r) nx = c.cx + c.hw + ZOMBIE_R;
+        else if (m === t) nz = c.cz - c.hd - ZOMBIE_R;
+        else              nz = c.cz + c.hd + ZOMBIE_R;
+      }
+    } else {
+      const dx = nx - c.x, dz = nz - c.z;
+      const dist = Math.hypot(dx, dz);
+      const min = ZOMBIE_R + (c.r || 0.3);
+      if (dist < min && dist > 0.0001) {
+        const scale = min / dist;
+        nx = c.x + dx * scale;
+        nz = c.z + dz * scale;
+      }
+    }
+  }
+  return [nx, nz];
+}
+
 // Temps mondial partagé — source de vérité pour tous les clients
 let _worldTime = 0.3; // 0–1 (0=minuit, 0.25=lever, 0.5=midi, 0.75=coucher)
 const _DAY_DURATION = 240; // secondes par cycle complet
@@ -136,8 +180,11 @@ setInterval(() => {
       // Chase at full speed
       const ang = Math.atan2(nearestP.z - z.z, nearestP.x - z.x);
       z.angle = ang;
-      z.x += Math.cos(ang) * z.speed * DT;
-      z.z += Math.sin(ang) * z.speed * DT;
+      // Déplacement + collision murs/objets (glisse le long, entre par les portes)
+      const chase = resolveZombieCollision(z.x + Math.cos(ang) * z.speed * DT,
+                                           z.z + Math.sin(ang) * z.speed * DT);
+      z.x = chase[0];
+      z.z = chase[1];
       if (nearestDist < 1.5 && !nearestP.invincible) {
         nearestP.health = Math.max(0, nearestP.health - 5);
         io.to(nearestP.socketId).emit('take-damage', { health: nearestP.health });
@@ -150,8 +197,11 @@ setInterval(() => {
         z.wanderTimer = WANDER_TURN_MIN + Math.random() * (WANDER_TURN_MAX - WANDER_TURN_MIN);
       }
       z.angle = z.wanderAngle;
-      z.x = Math.max(-WORLD_RADIUS, Math.min(WORLD_RADIUS, z.x + Math.cos(z.wanderAngle) * z.speed * WANDER_SPEED * DT));
-      z.z = Math.max(-WORLD_RADIUS, Math.min(WORLD_RADIUS, z.z + Math.sin(z.wanderAngle) * z.speed * WANDER_SPEED * DT));
+      const wx = Math.max(-WORLD_RADIUS, Math.min(WORLD_RADIUS, z.x + Math.cos(z.wanderAngle) * z.speed * WANDER_SPEED * DT));
+      const wz = Math.max(-WORLD_RADIUS, Math.min(WORLD_RADIUS, z.z + Math.sin(z.wanderAngle) * z.speed * WANDER_SPEED * DT));
+      const wander = resolveZombieCollision(wx, wz);
+      z.x = wander[0];
+      z.z = wander[1];
     }
   });
 
@@ -217,6 +267,14 @@ io.on('connection', async (socket) => {
     inventory: savedInventory
   });
   socket.broadcast.emit('player-join', { id: socket.id, username: p.username, x: p.x, y: p.y, z: p.z, rotY: p.rotY });
+
+  // Le premier client transmet la géométrie de collision (murs, arbres, etc.).
+  socket.on('world-colliders', (cols) => {
+    if (worldColliders.length === 0 && Array.isArray(cols)) {
+      // On exclut les murs d'étage / parapets (minY) : ils ne concernent pas le sol.
+      worldColliders = cols.filter(c => c && c.minY === undefined);
+    }
+  });
 
   socket.on('move', (d) => {
     p.x = d.x; p.y = d.y; p.z = d.z; p.rotY = d.rotY; p.dirty = true;

@@ -73,6 +73,9 @@
   const socket = io({ auth: { token } });
   ZS.Network.init(socket, scene, state);
 
+  // Transmet la géométrie de collision au serveur (physique des zombies côté serveur)
+  socket.emit('world-colliders', ZS.getColliders());
+
   // ── UI ────────────────────────────────────────────────────────────────────
   try { ZS.UI.init(state); } catch (e) { console.error('UI init:', e); }
   ZS.UI.setHealth(state.player.health);

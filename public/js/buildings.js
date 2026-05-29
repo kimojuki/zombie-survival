@@ -108,7 +108,7 @@
         const t  = i / steps;
         const x  = x0 + sdx * t;
         const z  = z0 + sdz * t;
-        const y  = ZS.getTerrainHeight(x, z) + 0.12;
+        const y  = ZS.getTerrainHeight(x, z) + 0.55;
         const li = pos.length / 3;
         pos.push(x - nx * hw, y, z - nz * hw);
         pos.push(x + nx * hw, y, z + nz * hw);
@@ -139,7 +139,7 @@
         for (let i = (si === 0 ? 0 : 1); i <= steps; i++) {
           const t = i / steps;
           const x = x0 + sdx * t, z = z0 + sdz * t;
-          const y = ZS.getTerrainHeight(x, z) + 0.16;
+          const y = ZS.getTerrainHeight(x, z) + 0.60;
           const li = lPos.length / 3;
           lPos.push(x - nx * lW, y, z - nz * lW, x + nx * lW, y, z + nz * lW);
           if (lprev >= 0 && dashToggle % 4 < 2) lIdx.push(lprev, li, lprev + 1, lprev + 1, li, li + 1);

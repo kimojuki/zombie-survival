@@ -51,11 +51,14 @@
 
   // noCollide=true → visuel uniquement (ex: linteaux de porte au-dessus de la tête)
   // maxY → hauteur max : le joueur peut sauter par-dessus si ses pieds dépassent maxY
-  function _wall(scene, x, z, baseY, lenX, lenZ, height, mat, noCollide, maxY) {
+  // minY → hauteur min : le mur n'est solide que si les pieds sont au-dessus de minY
+  //        (murs d'étage / parapets ; sinon ils rebouchent la porte du rez en 2D)
+  function _wall(scene, x, z, baseY, lenX, lenZ, height, mat, noCollide, maxY, minY) {
     _mesh(scene, new THREE.BoxGeometry(lenX, height, lenZ), mat, x, baseY + height / 2, z);
     if (!noCollide) {
       const col = { type: 'box', cx: x, cz: z, hw: lenX / 2, hd: lenZ / 2 };
       if (maxY !== undefined) col.maxY = maxY;
+      if (minY !== undefined) col.minY = minY;
       _colliders.push(col);
     }
   }
@@ -173,19 +176,23 @@
     // Railing
     _box(scene, sCX - sHW + 0.04, sCZ, baseY + floorH * 0.5 + 0.3, 0.06, floorH + 0.6, sHD * 2, M.metal);
 
-    // Second floor walls (full, no door)
-    _wall(scene, cx, cz - D / 2, baseY + floorH, W, T, floorH, M.concrete);
-    _wall(scene, cx, cz + D / 2, baseY + floorH, W, T, floorH, M.concrete);
-    _wall(scene, cx - W / 2, cz, baseY + floorH, T, D, floorH, M.concrete);
-    _wall(scene, cx + W / 2, cz, baseY + floorH, T, D, floorH, M.concrete);
+    // Second floor walls (full, no door). minY → solides seulement quand le joueur
+    // est à l'étage, sinon leur collider reboucherait la porte du rez (collision 2D).
+    const upMinY = baseY + floorH - 0.6;
+    _wall(scene, cx, cz - D / 2, baseY + floorH, W, T, floorH, M.concrete, false, undefined, upMinY);
+    _wall(scene, cx, cz + D / 2, baseY + floorH, W, T, floorH, M.concrete, false, undefined, upMinY);
+    _wall(scene, cx - W / 2, cz, baseY + floorH, T, D, floorH, M.concrete, false, undefined, upMinY);
+    _wall(scene, cx + W / 2, cz, baseY + floorH, T, D, floorH, M.concrete, false, undefined, upMinY);
 
     // Roof + parapet
     const roofY = baseY + floorH * 2;
     _slab(scene, cx, cz, roofY, W + 0.4, D + 0.4, M.roofGray);
-    _wall(scene, cx, cz - D / 2 - 0.02, roofY, W + 0.44, T * 0.8, 0.5, M.concDark);
-    _wall(scene, cx, cz + D / 2 + 0.02, roofY, W + 0.44, T * 0.8, 0.5, M.concDark);
-    _wall(scene, cx - W / 2 - 0.02, cz, roofY, T * 0.8, D + 0.44, 0.5, M.concDark);
-    _wall(scene, cx + W / 2 + 0.02, cz, roofY, T * 0.8, D + 0.44, 0.5, M.concDark);
+    // Parapet : même problème, on ne le rend solide qu'au niveau du toit.
+    const parapetMinY = roofY - 0.6;
+    _wall(scene, cx, cz - D / 2 - 0.02, roofY, W + 0.44, T * 0.8, 0.5, M.concDark, false, undefined, parapetMinY);
+    _wall(scene, cx, cz + D / 2 + 0.02, roofY, W + 0.44, T * 0.8, 0.5, M.concDark, false, undefined, parapetMinY);
+    _wall(scene, cx - W / 2 - 0.02, cz, roofY, T * 0.8, D + 0.44, 0.5, M.concDark, false, undefined, parapetMinY);
+    _wall(scene, cx + W / 2 + 0.02, cz, roofY, T * 0.8, D + 0.44, 0.5, M.concDark, false, undefined, parapetMinY);
 
     // Windows floor 1
     const wY1 = baseY + 1.3;

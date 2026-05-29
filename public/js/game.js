@@ -336,6 +336,9 @@
       if (col.type === 'box') {
         // Sauter par-dessus si les pieds dépassent le sommet de l'obstacle
         if (col.maxY !== undefined && feetY >= col.maxY - 0.05) continue;
+        // Mur d'étage / parapet : solide seulement si les pieds sont assez hauts.
+        // La collision est en 2D : sans ça, le collider rebouche la porte du rez juste en dessous.
+        if (col.minY !== undefined && feetY < col.minY - 0.05) continue;
         const clampX = Math.max(col.cx - col.hw, Math.min(col.cx + col.hw, newX));
         const clampZ = Math.max(col.cz - col.hd, Math.min(col.cz + col.hd, newZ));
         const dx = newX - clampX;

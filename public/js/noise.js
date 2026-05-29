@@ -52,8 +52,9 @@
     _flatZones.push({ cx, cz, hw, hd, flatY: _rawHeight(cx, cz), blend: blend || 4 });
   }
 
-  function registerUpperFloor(cx, cz, hw, hd, y) {
-    _upperFloors.push({ cx, cz, hw, hd, y });
+  // hole (optionnel) = { cx, cz, hw, hd } : trémie d'escalier — le joueur passe au travers
+  function registerUpperFloor(cx, cz, hw, hd, y, hole) {
+    _upperFloors.push({ cx, cz, hw, hd, y, hole: hole || null });
   }
 
   // axis='z': height goes from y0 at (cz-hd) to y1 at (cz+hd)
@@ -103,6 +104,10 @@
 
     for (const floor of _upperFloors) {
       if (Math.abs(x - floor.cx) > floor.hw || Math.abs(z - floor.cz) > floor.hd) continue;
+      // Trémie d'escalier : aucun plancher au-dessus des marches → on peut redescendre
+      if (floor.hole &&
+          Math.abs(x - floor.hole.cx) <= floor.hole.hw &&
+          Math.abs(z - floor.hole.cz) <= floor.hole.hd) continue;
       if (floor.y <= playerY - 0.5) best = Math.max(best, floor.y);
     }
 

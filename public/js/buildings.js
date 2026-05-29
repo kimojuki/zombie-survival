@@ -67,6 +67,19 @@
     _mesh(scene, new THREE.BoxGeometry(w, 0.14, d), mat, x, y + 0.07, z);
   }
 
+  // Dalle percée d'une trémie rectangulaire (cage d'escalier) — émet jusqu'à 4 bandes.
+  // hole = { cx, cz, hw, hd } en coordonnées monde.
+  function _slabWithHole(scene, cx, cz, y, w, d, mat, hole) {
+    const x0 = cx - w / 2, x1 = cx + w / 2;
+    const z0 = cz - d / 2, z1 = cz + d / 2;
+    const hx0 = Math.max(x0, hole.cx - hole.hw), hx1 = Math.min(x1, hole.cx + hole.hw);
+    const hz0 = Math.max(z0, hole.cz - hole.hd), hz1 = Math.min(z1, hole.cz + hole.hd);
+    if (hz0 - z0 > 0.02) _slab(scene, cx, (z0 + hz0) / 2, y, w, hz0 - z0, mat);          // nord
+    if (z1 - hz1 > 0.02) _slab(scene, cx, (hz1 + z1) / 2, y, w, z1 - hz1, mat);          // sud
+    if (hx0 - x0 > 0.02) _slab(scene, (x0 + hx0) / 2, (hz0 + hz1) / 2, y, hx0 - x0, hz1 - hz0, mat); // ouest
+    if (x1 - hx1 > 0.02) _slab(scene, (hx1 + x1) / 2, (hz0 + hz1) / 2, y, x1 - hx1, hz1 - hz0, mat); // est
+  }
+
   function _box(scene, x, z, y, w, h, d, mat) {
     _mesh(scene, new THREE.BoxGeometry(w, h, d), mat, x, y, z);
   }
@@ -153,8 +166,9 @@
     const sHW  = 0.95;                  // x half-width
     const sHD  = 1.6;                   // z half-depth (3.2 m run)
     ZS.registerRamp(sCX, sCZ, sHW, sHD, baseY, baseY + floorH, 'z');
-    // Upper floor covers interior (all accessible once on staircase)
-    ZS.registerUpperFloor(cx, cz, W / 2 - T - 0.05, D / 2 - T - 0.05, baseY + floorH);
+    // Upper floor covers interior, sauf la trémie d'escalier (pour pouvoir redescendre)
+    ZS.registerUpperFloor(cx, cz, W / 2 - T - 0.05, D / 2 - T - 0.05, baseY + floorH,
+                          { cx: sCX, cz: sCZ, hw: sHW, hd: sHD });
 
     // Ground floor slab
     _slab(scene, cx, cz, baseY, W, D, M.floor);
@@ -168,8 +182,9 @@
     _wall(scene, cx - W / 2, cz, baseY, T, D, floorH, M.concrete);           // W
     _wall(scene, cx + W / 2, cz, baseY, T, D, floorH, M.concrete);           // E
 
-    // Inter-floor slab (visible ceiling/floor)
-    _slab(scene, cx, cz, baseY + floorH, W - T, D - T, M.concDark);
+    // Inter-floor slab (visible ceiling/floor) — percée au-dessus de l'escalier
+    _slabWithHole(scene, cx, cz, baseY + floorH, W - T, D - T, M.concDark,
+                  { cx: sCX, cz: sCZ, hw: sHW, hd: sHD });
 
     // Visual staircase
     _visualStairs(scene, sCX, sCZ, baseY, baseY + floorH, 'z', sHW * 2 - 0.1, sHD);
@@ -223,7 +238,8 @@
     const sCX = cx + W / 2 - T - 1.0;
     const sCZ = cz;
     ZS.registerRamp(sCX, sCZ, 0.9, 2.2, baseY, baseY + floorH, 'z');
-    ZS.registerUpperFloor(cx, cz, W / 2 - T - 0.05, D / 2 - T - 0.05, baseY + floorH);
+    ZS.registerUpperFloor(cx, cz, W / 2 - T - 0.05, D / 2 - T - 0.05, baseY + floorH,
+                          { cx: sCX, cz: sCZ, hw: 0.9, hd: 2.2 });
 
     // Ground floor (door west)
     _slab(scene, cx, cz, baseY, W, D, M.wood);
@@ -239,8 +255,9 @@
     _wall(scene, cx - W / 2, cz + g + sideD / 2, baseY, T, sideD, floorH, M.wood);
     if (topH > 0.05) _wall(scene, cx - W / 2, cz, baseY + doorH, T, doorW, topH, M.wood, true);
 
-    // Inter-floor slab
-    _slab(scene, cx, cz, baseY + floorH, W - T, D - T, M.floor);
+    // Inter-floor slab — percée au-dessus de l'escalier
+    _slabWithHole(scene, cx, cz, baseY + floorH, W - T, D - T, M.floor,
+                  { cx: sCX, cz: sCZ, hw: 0.9, hd: 2.2 });
 
     // Visual staircase
     _visualStairs(scene, sCX, sCZ, baseY, baseY + floorH, 'z', 1.6, 2.2);

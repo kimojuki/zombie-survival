@@ -10,7 +10,7 @@
   const state = {
     selfId: null,
     player: {
-      x: 0, y: 5, z: 0, rotY: 0,
+      x: -170, y: 5, z: 0, rotY: 0,
       velocityY: 0,
       onGround: true,
       health: parseInt(localStorage.getItem('zombie_health') || '100'),
@@ -27,15 +27,16 @@
     onJump:    null
   };
 
+  // TEST — spawn forcé sur Small Town (S02)
   // Load saved spawn position
-  try {
-    const sp = JSON.parse(localStorage.getItem('zombie_spawn') || 'null');
-    if (sp && sp.x != null && sp.z != null) {
-      state.player.x = sp.x;
-      state.player.z = sp.z;
-      state.camera.yaw = sp.rotY || 0;
-    }
-  } catch {}
+  // try {
+  //   const sp = JSON.parse(localStorage.getItem('zombie_spawn') || 'null');
+  //   if (sp && sp.x != null && sp.z != null) {
+  //     state.player.x = sp.x;
+  //     state.player.z = sp.z;
+  //     state.camera.yaw = sp.rotY || 0;
+  //   }
+  // } catch {}
 
   // ── Three.js ──────────────────────────────────────────────────────────────
   const canvas   = document.getElementById('game-canvas');

@@ -356,6 +356,11 @@
     const feetY = p.y - 1.7; // Y des pieds du joueur
 
     for (const col of colliders) {
+      // Ignore les colliders trop éloignés (optimisation — 30² = 900)
+      const _cdx = (col.cx !== undefined ? col.cx : col.x) - newX;
+      const _cdz = (col.cz !== undefined ? col.cz : col.z) - newZ;
+      if (_cdx * _cdx + _cdz * _cdz > 900) continue;
+
       if (col.type === 'box') {
         // Sauter par-dessus si les pieds dépassent le sommet de l'obstacle
         if (col.maxY !== undefined && feetY >= col.maxY - 0.05) continue;

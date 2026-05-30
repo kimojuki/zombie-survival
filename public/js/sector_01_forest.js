@@ -427,18 +427,21 @@
   }
 
   function _buildRiverBanks(scene) {
+    const stoneGeo = new THREE.DodecahedronGeometry(1, 0);
+    const mudGeo   = new THREE.CylinderGeometry(1, 1, 0.18, 6);
     const stoneMats = [0x6a6872, 0x7a7060, 0x888888, 0x5a5a68]
       .map(c => new THREE.MeshLambertMaterial({ color: c }));
     const mudMat = new THREE.MeshLambertMaterial({ color: 0x4a3828 });
 
-    // Galets et vase le long des berges
     const bankPts = [
       [-118, -270], [-112, -210], [-106, -150], [-100, -85],
       [ -96,    0], [-100,   75], [-105,  150], [ -98,  210]
     ];
-    // Graine déterministe pour les pierres
     let seed = 0x1A2B3C4D;
     function rr() { seed ^= seed << 13; seed ^= seed >>> 17; seed ^= seed << 5; return (seed >>> 0) / 0xffffffff; }
+
+    const perStone = stoneMats.map(() => []);
+    const muds     = [];
 
     for (let si = 0; si < bankPts.length - 1; si++) {
       const [x0, z0] = bankPts[si], [x1, z1] = bankPts[si + 1];
@@ -446,44 +449,67 @@
       const sLen = Math.hypot(sdx, sdz);
       if (sLen < 0.01) continue;
       const nx = -sdz / sLen, nz = sdx / sLen;
-      const steps = Math.max(2, Math.ceil(sLen / 8));
+      const steps = Math.max(2, Math.ceil(sLen / 14)); // espacés tous les 14 (était 8)
 
       for (let i = 0; i < steps; i++) {
         const t = i / steps;
         const cx = x0 + sdx * t, cz = z0 + sdz * t;
 
-        // Berge gauche et droite — bande de vase
         for (const side of [-1, 1]) {
           const bx = cx + nx * (6 + rr() * 2) * side;
           const bz = cz + nz * (6 + rr() * 2) * side;
           const by = ZS.getTerrainHeight(bx, bz);
-          const mud = new THREE.Mesh(
-            new THREE.CylinderGeometry(1.4 + rr() * 0.8, 1.6 + rr() * 0.8, 0.18, 7),
-            mudMat
-          );
-          mud.position.set(bx, by + 0.08, bz);
-          mud.rotation.y = rr() * Math.PI;
-          scene.add(mud);
+          muds.push({ x: bx, y: by + 0.08, z: bz, ry: rr() * Math.PI,
+            rx: 1.4 + rr() * 0.8, rz: 1.6 + rr() * 0.8 });
 
-          // 2–3 galets par point de berge
-          const nStones = 2 + Math.floor(rr() * 2);
+          const nStones = 1 + Math.floor(rr() * 2); // 1-2 (était 2-3)
           for (let k = 0; k < nStones; k++) {
-            const ox = (rr() - 0.5) * 3.5, oz = (rr() - 0.5) * 3.5;
-            const sx = bx + ox, sz = bz + oz;
+            const sx = bx + (rr() - 0.5) * 3.5, sz = bz + (rr() - 0.5) * 3.5;
             const sy = ZS.getTerrainHeight(sx, sz);
             const sr = 0.12 + rr() * 0.22;
-            const stone = new THREE.Mesh(
-              new THREE.DodecahedronGeometry(sr, 0),
-              stoneMats[Math.floor(rr() * stoneMats.length)]
-            );
-            stone.rotation.set(rr() * Math.PI, rr() * Math.PI, rr() * Math.PI);
-            stone.scale.set(1, 0.45 + rr() * 0.3, 1);
-            stone.position.set(sx, sy + sr * 0.2, sz);
-            stone.castShadow = true;
-            scene.add(stone);
+            const mi = Math.floor(rr() * stoneMats.length);
+            perStone[mi].push({ x: sx, y: sy + sr * 0.2, z: sz, sr,
+              sy: 0.45 + rr() * 0.3,
+              rx: rr()*Math.PI, ry: rr()*Math.PI, rz: rr()*Math.PI });
           }
         }
       }
+    }
+
+    const dummy = new THREE.Object3D();
+
+    // Galets en InstancedMesh par couleur
+    for (let mi = 0; mi < stoneMats.length; mi++) {
+      const list = perStone[mi];
+      if (!list.length) continue;
+      const im = new THREE.InstancedMesh(stoneGeo, stoneMats[mi], list.length);
+      im.castShadow = false;
+      for (let k = 0; k < list.length; k++) {
+        const s = list[k];
+        dummy.position.set(s.x, s.y, s.z);
+        dummy.rotation.set(s.rx, s.ry, s.rz);
+        dummy.scale.set(s.sr, s.sr * s.sy, s.sr);
+        dummy.updateMatrix();
+        im.setMatrixAt(k, dummy.matrix);
+      }
+      im.instanceMatrix.needsUpdate = true;
+      scene.add(im);
+    }
+
+    // Vase en InstancedMesh
+    if (muds.length > 0) {
+      const im = new THREE.InstancedMesh(mudGeo, mudMat, muds.length);
+      im.castShadow = false;
+      for (let k = 0; k < muds.length; k++) {
+        const m = muds[k];
+        dummy.position.set(m.x, m.y, m.z);
+        dummy.rotation.set(0, m.ry, 0);
+        dummy.scale.set(m.rx, 1, m.rz);
+        dummy.updateMatrix();
+        im.setMatrixAt(k, dummy.matrix);
+      }
+      im.instanceMatrix.needsUpdate = true;
+      scene.add(im);
     }
   }
 
@@ -497,7 +523,7 @@
       [-80,   42, 14],
       [ 82, -100, 20],
     ];
-    ZS.spawnTreesAt(scene, 0, 0, 80, 130, 0.55, noSpawn);
+    ZS.spawnTreesAt(scene, 0, 0, 55, 130, 0.55, noSpawn);
   }
 
   function _spawnDeadTrees(scene) {

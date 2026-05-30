@@ -51,14 +51,14 @@
 
     _sunLight = new THREE.DirectionalLight(0xfff5dd, 1.4);
     _sunLight.castShadow = true;
-    _sunLight.shadow.mapSize.width  = 2048;
-    _sunLight.shadow.mapSize.height = 2048;
+    _sunLight.shadow.mapSize.width  = 1024;
+    _sunLight.shadow.mapSize.height = 1024;
     _sunLight.shadow.camera.near    = 1;
-    _sunLight.shadow.camera.far     = 600;
-    _sunLight.shadow.camera.left    = -320;
-    _sunLight.shadow.camera.right   = 320;
-    _sunLight.shadow.camera.top     = 320;
-    _sunLight.shadow.camera.bottom  = -320;
+    _sunLight.shadow.camera.far     = 500;
+    _sunLight.shadow.camera.left    = -200;
+    _sunLight.shadow.camera.right   = 200;
+    _sunLight.shadow.camera.top     = 200;
+    _sunLight.shadow.camera.bottom  = -200;
     _sunLight.shadow.bias           = -0.0002;
     _sunLight.shadow.normalBias     = 0.02;
     scene.add(_sunLight);
@@ -67,11 +67,11 @@
     scene.add(_moonLight);
 
     buildTerrain(scene);
-    spawnFlowers(scene, 260);
-    spawnGrassTufts(scene, 320);
-    spawnTrees(scene, 200);
-    spawnRocks(scene, 65);
-    spawnBushes(scene, 130);
+    spawnFlowers(scene, 200);
+    spawnGrassTufts(scene, 220);
+    spawnTrees(scene, 130);
+    spawnRocks(scene, 50);
+    spawnBushes(scene, 90);
     spawnClouds(scene);
 
     const buildingColliders = ZS.Buildings.buildAll(scene);
@@ -213,7 +213,7 @@
   }
 
   function buildTerrain(scene) {
-    const SIZE = 600, SEG = 180;
+    const SIZE = 600, SEG = 110;
     const geo  = new THREE.PlaneGeometry(SIZE, SIZE, SEG, SEG);
     geo.rotateX(-Math.PI / 2);
     const pos = geo.attributes.position;
@@ -244,45 +244,100 @@
   // ── Fleurs ───────────────────────────────────────────────────────────────────
 
   function spawnFlowers(scene, count) {
-    const stemMat = new THREE.MeshLambertMaterial({ color: 0x2e5e1e });
-    const mats    = [0xffee22, 0xffffff, 0xcc44bb, 0xff9922, 0xaaddff, 0xffbbaa]
-                      .map(c => new THREE.MeshLambertMaterial({ color: c }));
+    const petalGeo = new THREE.CylinderGeometry(1, 0.6, 0.04, 6);
+    const stemGeo  = new THREE.CylinderGeometry(0.015, 0.020, 1, 4);
+    const stemMat  = new THREE.MeshLambertMaterial({ color: 0x2e5e1e });
+    const petalColors = [0xffee22, 0xffffff, 0xcc44bb, 0xff9922, 0xaaddff, 0xffbbaa];
+    const perColor = petalColors.map(() => []);
+    const stems    = [];
+
     for (let i = 0; i < count; i++) {
       const x = (_rng() - 0.5) * 540, z = (_rng() - 0.5) * 540;
       if (x > -262 && x < -100 && z > -55 && z < 58) continue;
       const by = ZS.getTerrainHeight(x, z);
       if (by > 9) continue;
-      const h = 0.16 + _rng() * 0.14;
-      const petal = new THREE.Mesh(new THREE.CylinderGeometry(0.08 + _rng()*0.06, 0.06, 0.04, 6), mats[Math.floor(_rng()*mats.length)]);
-      petal.position.set(x, by + h + 0.02, z);
-      petal.rotation.y = _rng() * Math.PI;
-      scene.add(petal);
-      const stem = new THREE.Mesh(new THREE.CylinderGeometry(0.015, 0.020, h, 4), stemMat);
-      stem.position.set(x, by + h * 0.5, z);
-      scene.add(stem);
+      const h    = 0.16 + _rng() * 0.14;
+      const r    = 0.08 + _rng() * 0.06;
+      const ci   = Math.floor(_rng() * petalColors.length);
+      const rotY = _rng() * Math.PI;
+      perColor[ci].push({ x, y: by + h + 0.02, z, rotY, r });
+      stems.push({ x, y: by + h * 0.5, z, h });
+    }
+
+    const dummy = new THREE.Object3D();
+    for (let ci = 0; ci < petalColors.length; ci++) {
+      const pts = perColor[ci];
+      if (!pts.length) continue;
+      const im = new THREE.InstancedMesh(petalGeo,
+        new THREE.MeshLambertMaterial({ color: petalColors[ci] }), pts.length);
+      im.castShadow = false;
+      for (let k = 0; k < pts.length; k++) {
+        const p = pts[k];
+        dummy.position.set(p.x, p.y, p.z);
+        dummy.rotation.set(0, p.rotY, 0);
+        dummy.scale.set(p.r, 1, p.r);
+        dummy.updateMatrix();
+        im.setMatrixAt(k, dummy.matrix);
+      }
+      im.instanceMatrix.needsUpdate = true;
+      scene.add(im);
+    }
+    if (stems.length > 0) {
+      const sm = new THREE.InstancedMesh(stemGeo, stemMat, stems.length);
+      sm.castShadow = false;
+      for (let k = 0; k < stems.length; k++) {
+        const s = stems[k];
+        dummy.position.set(s.x, s.y, s.z);
+        dummy.rotation.set(0, 0, 0);
+        dummy.scale.set(1, s.h, 1);
+        dummy.updateMatrix();
+        sm.setMatrixAt(k, dummy.matrix);
+      }
+      sm.instanceMatrix.needsUpdate = true;
+      scene.add(sm);
     }
   }
 
   // ── Touffes d'herbe ───────────────────────────────────────────────────────────
 
   function spawnGrassTufts(scene, count) {
+    const bladeGeo = new THREE.PlaneGeometry(1, 1);
     const mats = [0x3a7830, 0x4a8838, 0x6a8428, 0x527040]
-                   .map(c => new THREE.MeshLambertMaterial({ color: c, side: THREE.DoubleSide }));
+      .map(c => new THREE.MeshLambertMaterial({ color: c, side: THREE.DoubleSide }));
+    const perMat = mats.map(() => []);
+
     for (let i = 0; i < count; i++) {
       const x = (_rng() - 0.5) * 540, z = (_rng() - 0.5) * 540;
       if (x > -262 && x < -100 && z > -55 && z < 58) continue;
       const by = ZS.getTerrainHeight(x, z);
       if (by > 8) continue;
-      const mat = mats[Math.floor(_rng() * mats.length)];
+      const mi = Math.floor(_rng() * mats.length);
       const bw = 0.06 + _rng() * 0.05, h = 0.20 + _rng() * 0.18;
-      // 2 brins croisés
-      for (let q = 0; q < 2 + Math.floor(_rng() * 2); q++) {
-        const ay = q * Math.PI / 2 + _rng() * 0.5;
-        const blade = new THREE.Mesh(new THREE.PlaneGeometry(bw, h), mat);
-        blade.position.set(x + (_rng()-0.5)*0.12, by + h*0.5, z + (_rng()-0.5)*0.12);
-        blade.rotation.set(0, ay, (_rng()-0.5)*0.18);
-        scene.add(blade);
+      const blades = 2 + Math.floor(_rng() * 2);
+      for (let q = 0; q < blades; q++) {
+        const ay   = q * Math.PI / 2 + _rng() * 0.5;
+        const tilt = (_rng() - 0.5) * 0.18;
+        const ox   = (_rng() - 0.5) * 0.12, oz = (_rng() - 0.5) * 0.12;
+        perMat[mi].push({ x: x + ox, y: by + h * 0.5, z: z + oz, bw, h, ay, tilt });
       }
+    }
+
+    const dummy = new THREE.Object3D();
+    for (let mi = 0; mi < mats.length; mi++) {
+      const blades = perMat[mi];
+      if (!blades.length) continue;
+      const im = new THREE.InstancedMesh(bladeGeo, mats[mi], blades.length);
+      im.castShadow = false;
+      for (let k = 0; k < blades.length; k++) {
+        const b = blades[k];
+        dummy.position.set(b.x, b.y, b.z);
+        dummy.rotation.set(0, b.ay, b.tilt);
+        dummy.scale.set(b.bw, b.h, 1);
+        dummy.updateMatrix();
+        im.setMatrixAt(k, dummy.matrix);
+      }
+      im.instanceMatrix.needsUpdate = true;
+      scene.add(im);
     }
   }
 
@@ -294,28 +349,26 @@
       transparent: true, opacity: 0.88,
     });
 
-    for (let i = 0; i < 35; i++) {
-      const g  = new THREE.Group();
-      const cx = (_rng() - 0.5) * 900;
-      const cy = 60 + _rng() * 40;
-      const cz = (_rng() - 0.5) * 900;
-      const scW = 1.4 + _rng() * 1.2; // largeur du nuage
+    for (let i = 0; i < 18; i++) {
+      const g   = new THREE.Group();
+      const cx  = (_rng() - 0.5) * 900;
+      const cy  = 60 + _rng() * 40;
+      const cz  = (_rng() - 0.5) * 900;
+      const scW = 1.4 + _rng() * 1.2;
 
-      // Couche de base : sphères plates et larges (donne le fond plat du cumulus)
-      const baseParts = 3 + Math.floor(_rng() * 3);
+      const baseParts = 2 + Math.floor(_rng() * 2);
       for (let j = 0; j < baseParts; j++) {
-        const r  = 7 + _rng() * 11;
-        const s  = new THREE.Mesh(new THREE.SphereGeometry(r, 8, 6), _cloudMat);
+        const r   = 7 + _rng() * 11;
+        const s   = new THREE.Mesh(new THREE.SphereGeometry(r, 6, 5), _cloudMat);
         const ang = (j / baseParts) * Math.PI * 2;
         s.position.set(Math.cos(ang) * _rng() * 12 * scW, -1 + _rng() * 2, Math.sin(ang) * _rng() * 8);
         s.scale.set(scW * (1.2 + _rng()*0.4), 0.40 + _rng()*0.18, 1.0);
         g.add(s);
       }
-      // Sommets : sphères plus rondes au-dessus (forme cumuliforme)
-      const topParts = 2 + Math.floor(_rng() * 3);
+      const topParts = 1 + Math.floor(_rng() * 2);
       for (let j = 0; j < topParts; j++) {
-        const r  = 5 + _rng() * 8;
-        const s  = new THREE.Mesh(new THREE.SphereGeometry(r, 8, 6), _cloudMat);
+        const r   = 5 + _rng() * 8;
+        const s   = new THREE.Mesh(new THREE.SphereGeometry(r, 6, 5), _cloudMat);
         const ang = _rng() * Math.PI * 2;
         s.position.set(Math.cos(ang) * _rng() * 9 * scW * 0.5, 5 + _rng() * 8, Math.sin(ang) * _rng() * 6);
         s.scale.set(scW * 0.85, 0.70 + _rng() * 0.30, 0.9);
@@ -349,7 +402,7 @@
     const barkCol  = [0x6a3a10, 0x7a4218, 0x5a3010, 0x8a5020];
     const trunkMat = new THREE.MeshLambertMaterial({ color: barkCol[Math.floor(_rng() * barkCol.length)] });
 
-    const trunk = new THREE.Mesh(new THREE.CylinderGeometry(trunkR * 0.65, trunkR * 1.4, trunkH, 10), trunkMat);
+    const trunk = new THREE.Mesh(new THREE.CylinderGeometry(trunkR * 0.65, trunkR * 1.4, trunkH, 7), trunkMat);
     trunk.position.y = trunkH / 2;
     trunk.castShadow = true;
     g.add(trunk);
@@ -357,27 +410,26 @@
     // Racines saillantes (40% des arbres)
     if (_rng() < 0.40) {
       for (let r = 0; r < 3; r++) {
-        const ra = _rng() * Math.PI * 2;
-        const root = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.07, 0.4, 5), trunkMat);
+        const ra   = _rng() * Math.PI * 2;
+        const root = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.07, 0.4, 4), trunkMat);
         root.position.set(Math.cos(ra) * trunkR, 0.1, Math.sin(ra) * trunkR);
         root.rotation.set(0.85 + _rng() * 0.4, ra, 0);
         g.add(root);
       }
     }
 
-    // Feuillage dense : 7 – 11 sphères
+    // Feuillage : 4 – 6 sphères (moins de draw calls par arbre)
     const leafCols = [0x1e7a3c, 0x2d9e52, 0x256a38, 0x358a44, 0x1a6830, 0x2a8040];
-    const lm1 = new THREE.MeshLambertMaterial({ color: leafCols[Math.floor(_rng() * leafCols.length)] });
-    const lm2 = new THREE.MeshLambertMaterial({ color: leafCols[Math.floor(_rng() * leafCols.length)] });
-    const leafN = 7 + Math.floor(_rng() * 5);
+    const lm1  = new THREE.MeshLambertMaterial({ color: leafCols[Math.floor(_rng() * leafCols.length)] });
+    const lm2  = new THREE.MeshLambertMaterial({ color: leafCols[Math.floor(_rng() * leafCols.length)] });
+    const leafN = 4 + Math.floor(_rng() * 3);
     for (let i = 0; i < leafN; i++) {
       const r    = 0.9 + _rng() * 1.2;
       const ang  = (i / leafN) * Math.PI * 2 + _rng() * 0.8;
       const dist = 0.3 + _rng() * 1.2;
-      const leaf = new THREE.Mesh(new THREE.SphereGeometry(r, 8, 6), i % 2 === 0 ? lm1 : lm2);
+      const leaf = new THREE.Mesh(new THREE.SphereGeometry(r, 6, 5), i % 2 === 0 ? lm1 : lm2);
       leaf.position.set(Math.cos(ang) * dist, trunkH * 0.62 + _rng() * 1.8, Math.sin(ang) * dist);
       leaf.scale.y = 0.72 + _rng() * 0.3;
-      leaf.castShadow = true;
       g.add(leaf);
     }
     return g;
@@ -478,30 +530,71 @@
   }
 
   function spawnRocks(scene, count) {
-    const mats = [0x888888, 0x7a6850, 0x6a6872, 0x9a8870].map(c => new THREE.MeshLambertMaterial({ color: c }));
+    const geo  = new THREE.DodecahedronGeometry(1, 0);
+    const mats = [0x888888, 0x7a6850, 0x6a6872, 0x9a8870]
+      .map(c => new THREE.MeshLambertMaterial({ color: c }));
+    const perMat = mats.map(() => []);
+
     for (let i = 0; i < count; i++) {
-      const x = (_rng()-0.5)*560, z = (_rng()-0.5)*560;
-      const s = 0.3 + _rng() * 0.85;
+      const x  = (_rng()-0.5)*560, z = (_rng()-0.5)*560;
+      const s  = 0.3 + _rng() * 0.85;
       const by = ZS.getTerrainHeight(x, z);
       _colliders.push({ x, z, r: s + 0.25, topY: by + s * 1.4 });
-      const rock = new THREE.Mesh(new THREE.DodecahedronGeometry(s, 0), mats[Math.floor(_rng() * mats.length)]);
-      rock.rotation.set(_rng()*Math.PI, _rng()*Math.PI, _rng()*Math.PI);
-      rock.position.set(x, by + s * 0.3, z);
-      rock.castShadow = true; rock.receiveShadow = true; scene.add(rock);
+      const mi = Math.floor(_rng() * mats.length);
+      perMat[mi].push({ x, y: by + s * 0.3, z, s,
+        rx: _rng()*Math.PI, ry: _rng()*Math.PI, rz: _rng()*Math.PI });
+    }
+
+    const dummy = new THREE.Object3D();
+    for (let mi = 0; mi < mats.length; mi++) {
+      const rocks = perMat[mi];
+      if (!rocks.length) continue;
+      const im = new THREE.InstancedMesh(geo, mats[mi], rocks.length);
+      im.castShadow = true; im.receiveShadow = true;
+      for (let k = 0; k < rocks.length; k++) {
+        const r = rocks[k];
+        dummy.position.set(r.x, r.y, r.z);
+        dummy.rotation.set(r.rx, r.ry, r.rz);
+        dummy.scale.setScalar(r.s);
+        dummy.updateMatrix();
+        im.setMatrixAt(k, dummy.matrix);
+      }
+      im.instanceMatrix.needsUpdate = true;
+      scene.add(im);
     }
   }
 
   function spawnBushes(scene, count) {
+    const geo  = new THREE.SphereGeometry(1, 5, 4);
     const mats = [0x2d5a25, 0x3a6530, 0x4a5828, 0x2a5020, 0x4a6a20]
-                   .map(c => new THREE.MeshLambertMaterial({ color: c }));
+      .map(c => new THREE.MeshLambertMaterial({ color: c }));
+    const perMat = mats.map(() => []);
+
     for (let i = 0; i < count; i++) {
       const x = (_rng()-0.5)*540, z = (_rng()-0.5)*540;
       if (Math.hypot(x, z) < 5) continue;
-      const r    = 0.28 + _rng() * 0.55;
-      const bush = new THREE.Mesh(new THREE.SphereGeometry(r, 7, 5), mats[Math.floor(_rng() * mats.length)]);
-      bush.scale.set(1.0 + _rng()*0.5, 0.55 + _rng()*0.4, 1.0 + _rng()*0.4);
-      bush.position.set(x, ZS.getTerrainHeight(x, z) + r * 0.35, z);
-      bush.castShadow = true; scene.add(bush);
+      const r  = 0.28 + _rng() * 0.55;
+      const mi = Math.floor(_rng() * mats.length);
+      const sx = 1.0 + _rng()*0.5, sy = 0.55 + _rng()*0.4, sz = 1.0 + _rng()*0.4;
+      perMat[mi].push({ x, y: ZS.getTerrainHeight(x, z) + r*0.35, z, r, sx, sy, sz });
+    }
+
+    const dummy = new THREE.Object3D();
+    for (let mi = 0; mi < mats.length; mi++) {
+      const bushes = perMat[mi];
+      if (!bushes.length) continue;
+      const im = new THREE.InstancedMesh(geo, mats[mi], bushes.length);
+      im.castShadow = true;
+      for (let k = 0; k < bushes.length; k++) {
+        const b = bushes[k];
+        dummy.position.set(b.x, b.y, b.z);
+        dummy.rotation.set(0, 0, 0);
+        dummy.scale.set(b.r*b.sx, b.r*b.sy, b.r*b.sz);
+        dummy.updateMatrix();
+        im.setMatrixAt(k, dummy.matrix);
+      }
+      im.instanceMatrix.needsUpdate = true;
+      scene.add(im);
     }
   }
 

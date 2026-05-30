@@ -382,17 +382,17 @@
     _slab(scene, canX, cz, apronY + 0.01, 6, 8, M.concDark);
   }
 
-  function _car(scene, cx, cz, rotY) {
-    const cy       = ZS.getTerrainHeight(cx, cz);
-    const rusted   = new THREE.MeshLambertMaterial({ color: 0x5a3015 });
-    const dark     = new THREE.MeshLambertMaterial({ color: 0x181818 });
-    const glass    = new THREE.MeshLambertMaterial({ color: 0x334444, transparent: true, opacity: 0.5 });
-    const g        = new THREE.Group();
+  function _car(scene, cx, cz, rotY, colorHex) {
+    const cy     = ZS.getTerrainHeight(cx, cz);
+    const rusted = new THREE.MeshLambertMaterial({ color: colorHex || 0x5a3015 });
+    const dark   = new THREE.MeshLambertMaterial({ color: 0x181818 });
+    const glass  = new THREE.MeshLambertMaterial({ color: 0x334444, transparent: true, opacity: 0.5 });
+    const g      = new THREE.Group();
 
-    const body     = new THREE.Mesh(new THREE.BoxGeometry(1.78, 0.72, 4.1), rusted);
+    const body = new THREE.Mesh(new THREE.BoxGeometry(1.78, 0.72, 4.1), rusted);
     body.position.y = 0.62; body.castShadow = true; body.receiveShadow = true;
 
-    const cabin    = new THREE.Mesh(new THREE.BoxGeometry(1.48, 0.62, 2.15), rusted);
+    const cabin = new THREE.Mesh(new THREE.BoxGeometry(1.48, 0.62, 2.15), rusted);
     cabin.position.set(0, 1.25, -0.18); cabin.castShadow = true;
 
     const windshield = new THREE.Mesh(new THREE.BoxGeometry(1.3, 0.5, 0.06), glass);
@@ -408,7 +408,8 @@
     g.position.set(cx, cy, cz);
     g.rotation.y = rotY;
     scene.add(g);
-    _colliders.push({ type: 'box', cx, cz, hw: 1.0, hd: 2.2 });
+    // maxY = dessus de la carrosserie (~0.98m) — le joueur peut sauter dessus
+    _colliders.push({ type: 'box', cx, cz, hw: 1.0, hd: 2.2, maxY: cy + 0.98 });
   }
 
   // ── Sector registry ───────────────────────────────────────────────────────────

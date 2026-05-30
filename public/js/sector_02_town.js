@@ -117,6 +117,16 @@
     scene.add(g);
   }
 
+  // Armoire
+  function _fWardrobe(scene, B, cx, cz, y) {
+    const mat = new THREE.MeshLambertMaterial({ color: 0x5a3a1a });
+    const hdl = new THREE.MeshLambertMaterial({ color: 0xccaa44 });
+    B.box(scene, cx, cz, y + 1.0,  1.4, 2.0,  0.55, mat);   // corps
+    B.box(scene, cx, cz, y + 2.08, 1.44, 0.16, 0.57, mat);  // corniche
+    B.box(scene, cx + 0.32, cz - 0.3, y + 1.0, 0.05, 0.2, 0.08, hdl);
+    B.box(scene, cx - 0.32, cz - 0.3, y + 1.0, 0.05, 0.2, 0.08, hdl);
+  }
+
   // Table + 2 chaises
   function _fTable(scene, B, cx, cz, y) {
     const woodMat = new THREE.MeshLambertMaterial({ color: 0x7a5030 });
@@ -280,9 +290,8 @@
 
     // Parvis + voiture de police
     B.slab(scene, cx, cz+D/2+2.5, baseY+0.07, W+2.0, 5.0, B.M.concDark);
-    const copCarMat = new THREE.MeshLambertMaterial({ color: 0x111133 });
-    B.car(scene, cx-3, cz+D/2+4.0, 0.05);
-    B.car(scene, cx+3, cz+D/2+4.0, -0.05);
+    B.car(scene, cx-3, cz+D/2+4.0,  0.05, 0x111133);
+    B.car(scene, cx+3, cz+D/2+4.0, -0.05, 0x111133);
 
     // ── Intérieur ──
     // Accueil (comptoir central)
@@ -370,15 +379,18 @@
     B.wall(scene, cx,     cz+D/2, baseY, W, T, wallH, B.M.brick);
     B.wall(scene, cx-W/2, cz,     baseY, T, D, wallH, B.M.brick);
 
-    // Façade est — grande ouverture + fenêtres
+    // Façade est (entrée principale) — mur complet + porte en arc + fenêtres
     const chapDoorW = 2.2;
-    const sideC = (W-chapDoorW-0.8)/2;
-    B.wall(scene, cx+W/2-sideC/2-0.4, cz, baseY, sideC, T, wallH, B.M.brick);
-    B.wall(scene, cx-W/2+sideC/2+0.4, cz, baseY, sideC, T, wallH, B.M.brick);
-    B.wall(scene, cx, cz, baseY+3.5, chapDoorW, T, wallH-3.5, B.M.brick, true);
-    // Fenêtres en ogive (approx)
-    B.box(scene, cx+W/2-sideC/2-0.4, cz+T+0.01, baseY+1.8, sideC*0.55, 2.2, 0.06, B.M.window);
-    B.box(scene, cx-W/2+sideC/2+0.4, cz+T+0.01, baseY+1.8, sideC*0.55, 2.2, 0.06, B.M.window);
+    const chapDoorH = 3.5;
+    const eastSide  = (D - chapDoorW) / 2; // 5.4 de chaque côté
+    // Deux panneaux latéraux de la façade est
+    B.wall(scene, cx+W/2, cz - chapDoorW/2 - eastSide/2, baseY, T, eastSide, wallH, B.M.brick);
+    B.wall(scene, cx+W/2, cz + chapDoorW/2 + eastSide/2, baseY, T, eastSide, wallH, B.M.brick);
+    // Partie haute au-dessus de la porte (pas de collision)
+    B.wall(scene, cx+W/2, cz, baseY+chapDoorH, T, chapDoorW, wallH-chapDoorH, B.M.brick, true);
+    // Fenêtres hautes en ogive de chaque côté de l'entrée
+    B.box(scene, cx+W/2, cz - chapDoorW/2 - eastSide/2, baseY+1.9, T+0.02, 2.2, eastSide*0.5, B.M.window);
+    B.box(scene, cx+W/2, cz + chapDoorW/2 + eastSide/2, baseY+1.9, T+0.02, 2.2, eastSide*0.5, B.M.window);
 
     // Clocher (tour)
     const towerW = 3.0;
@@ -417,14 +429,16 @@
   function _buildHouses(scene, B) {
     const houses = [
       // [cx, cz, W, D, wallH, wallMat, roofMat, door]
-      [-141,-22, 6.0, 5.5, 3.0, B.M.brick,    B.M.roofRed,  'S'],
-      [-162,-24, 6.5, 5.5, 3.1, B.M.wood,     B.M.roofDark, 'E'],
-      [-193,-22, 5.5, 5.0, 2.9, B.M.concrete, B.M.roofGray, 'S'],
-      [-216,-18, 5.0, 4.8, 2.8, B.M.brick2,   B.M.roofDark, 'W'],
-      [-140, 22, 6.0, 5.5, 2.9, B.M.wood,     B.M.roofRed,  'N'],
-      [-163, 25, 6.5, 5.5, 3.0, B.M.brick,    B.M.roofDark, 'N'],
-      [-193, 22, 5.5, 5.0, 2.8, B.M.wood2,    B.M.roofGray, 'N'],
-      [-215, 18, 5.0, 4.8, 2.9, B.M.concrete, B.M.roofDark, 'E'],
+      // Rangée nord (cz=-22, porte vers rue sud)
+      [-141, -22, 9.0, 8.0, 3.2, B.M.brick,    B.M.roofRed,  'S'],
+      [-163, -22, 9.0, 8.0, 3.1, B.M.wood,     B.M.roofDark, 'S'],
+      [-192, -22, 9.0, 8.0, 3.0, B.M.concrete, B.M.roofGray, 'S'],
+      [-212, -22, 9.0, 8.0, 3.0, B.M.brick2,   B.M.roofDark, 'S'],
+      // Rangée sud (cz=+23, porte vers rue nord)
+      [-141,  23, 9.0, 8.0, 3.2, B.M.wood,     B.M.roofRed,  'N'],
+      [-163,  23, 9.0, 8.0, 3.0, B.M.brick,    B.M.roofDark, 'N'],
+      [-192,  23, 9.0, 8.0, 2.8, B.M.wood2,    B.M.roofGray, 'N'],
+      [-212,  23, 9.0, 8.0, 2.9, B.M.concrete, B.M.roofDark, 'N'],
     ];
 
     for (const [cx, cz, W, D, wH, wM, rM, door] of houses) {
@@ -434,31 +448,50 @@
 
     _buildRuinedHouse(scene, B, -205, -32);
     _buildGarage(scene, B, -245, -6);
-    // Maisons supplémentaires (deuxième rangée nord)
-    B.house(scene, -145, -33, 5.5, 5.0, 2.9, B.M.wood2,    B.M.roofDark, 'S');
-    B.house(scene, -220, -28, 5.0, 4.5, 2.8, B.M.brick,    B.M.roofRed,  'S');
+    // Deuxième rangée nord (derrière la principale)
+    B.house(scene, -145, -33, 6.5, 6.0, 2.9, B.M.wood2,    B.M.roofDark, 'S');
+    B.house(scene, -220, -28, 6.5, 6.0, 2.8, B.M.brick,    B.M.roofRed,  'S');
     // Deuxième rangée sud
-    B.house(scene, -145,  33, 5.5, 5.0, 2.8, B.M.brick2,   B.M.roofGray, 'N');
-    B.house(scene, -220,  27, 5.0, 4.5, 2.7, B.M.concrete, B.M.roofDark, 'N');
+    B.house(scene, -145,  33, 6.5, 6.0, 2.8, B.M.brick2,   B.M.roofGray, 'N');
+    B.house(scene, -220,  27, 6.5, 6.0, 2.7, B.M.concrete, B.M.roofDark, 'N');
   }
 
   function _furnishHouse(scene, B, cx, cz, baseY, W, D, doorDir) {
-    // Cuisine (contre le mur opposé à la porte)
-    const kitchenZ = doorDir === 'N' ? cz + D/2 - 0.8 : cz - D/2 + 0.8;
-    const kitchenX = doorDir === 'E' ? cx + W/2 - 0.8 : (doorDir === 'W' ? cx - W/2 + 0.8 : cx);
-    _fCounter(scene, B, kitchenX, kitchenZ, baseY, doorDir==='N'||doorDir==='S' ? W*0.65 : 0.9, doorDir==='N'||doorDir==='S' ? 0.9 : D*0.55);
+    const T   = 0.16;  // épaisseur cloison
+    const pdW = 1.8;   // largeur porte de cloison (joueur passe confortablement)
+    const wH  = 2.5;   // hauteur cloison
+    const sDir = doorDir === 'S' ? 1 : -1; // +1 = salon côté sud, -1 = salon côté nord
 
-    // Table + chaises au centre
-    _fTable(scene, B, cx, cz, baseY);
+    const salZ  = cz + sDir * D / 4;  // centre du salon
+    const chamZ = cz - sDir * D / 4;  // centre de la chambre
+    const sw    = (W - pdW) / 2;      // largeur de chaque segment de cloison
 
-    // Canapé près de la porte
-    const sofaZ = doorDir === 'S' ? cz + D/2 - 1.5 : (doorDir === 'N' ? cz - D/2 + 1.5 : cz);
-    const sofaX = doorDir === 'E' ? cx + W/2 - 1.5 : (doorDir === 'W' ? cx - W/2 + 1.5 : cx);
-    const sofaRot = doorDir === 'S' ? Math.PI : (doorDir === 'E' ? -Math.PI/2 : (doorDir === 'W' ? Math.PI/2 : 0));
-    _fSofa(scene, sofaX, sofaZ, baseY, sofaRot);
+    // ── Cloison séparatrice salon / chambre ─────────────────────────────────
+    B.wall(scene, cx - pdW/2 - sw/2, cz, baseY, sw,  T,    wH,  B.M.wood2);
+    B.wall(scene, cx + pdW/2 + sw/2, cz, baseY, sw,  T,    wH,  B.M.wood2);
+    B.box (scene, cx, cz, baseY + 2.25, pdW, 0.28, T, B.M.wood2); // linteau
 
-    // Lit dans un coin
-    _fBed(scene, cx + W*0.25, cz - D*0.25, baseY, 0);
+    // ── Salon (côté porte) ───────────────────────────────────────────────────
+    // Canapé : dos vers la cloison, face vers la porte
+    _fSofa(scene, cx, salZ - sDir * 0.8, baseY, sDir > 0 ? Math.PI : 0);
+    // Table + chaises dans la moitié salon
+    _fTable(scene, B, cx - W * 0.1, salZ + sDir * 0.9, baseY);
+    // Cuisine contre le mur est du salon
+    _fCounter(scene, B, cx + W/2 - 0.7, salZ, baseY, 0.8, D * 0.28);
+
+    // ── Chambre ──────────────────────────────────────────────────────────────
+    _fBed     (scene, cx + W * 0.15,  chamZ,            baseY, 0);
+    _fWardrobe(scene, B, cx - W * 0.25, chamZ + sDir * 0.4, baseY);
+
+    // ── Colliders mobilier ───────────────────────────────────────────────────
+    // Canapé (sautables : height ~0.6)
+    B.addCollider({ type:'box', cx,            cz: salZ  - sDir*0.8, hw:1.1,  hd:0.5,  maxY: baseY + 0.6  });
+    // Lit (sautables : height ~0.55)
+    B.addCollider({ type:'box', cx: cx+W*0.15, cz: chamZ,            hw:0.9,  hd:1.2,  maxY: baseY + 0.55 });
+    // Armoire (mur solide, pas de saut)
+    B.addCollider({ type:'box', cx: cx-W*0.25, cz: chamZ+sDir*0.4,   hw:0.75, hd:0.3               });
+    // Comptoir cuisine
+    B.addCollider({ type:'box', cx: cx+W/2-0.7, cz: salZ,            hw:0.45, hd: D * 0.14          });
   }
 
   function _buildRuinedHouse(scene, B, cx, cz) {
@@ -547,20 +580,24 @@
 
   function _buildAbandonedVehicles(scene, B) {
     _buildBus(scene, B, -158, 3.5, 0.18);
-    // Embouteillage
-    for (const [x,z,r] of [
-      [-136,-2,0.08],[-144,2.2,-0.05],[-157,-1.8,3.18],[-182,2,0.10],
-      [-196,-1.5,-0.08],[-209,2.2,3.12],[-222,-1,0.06],[-240,1.8,-0.1],
-    ]) B.car(scene, x, z, r);
+    // Embouteillage — couleurs variées
+    for (const [x,z,r,c] of [
+      [-136,-2,   0.08, 0x5a3015], [-144, 2.2,-0.05, 0x2a4a2a],
+      [-157,-1.8, 3.18, 0x1a2a4a], [-182, 2,   0.10, 0x4a3a10],
+      [-196,-1.5,-0.08, 0x3a3a3a], [-209, 2.2, 3.12, 0x5a1a1a],
+      [-222,-1,   0.06, 0x4a4010], [-240, 1.8,-0.10, 0x2a3a2a],
+    ]) B.car(scene, x, z, r, c);
     // Rues résidentielles
-    for (const [x,z,r] of [
-      [-146,-19,0.5],[-183,-20,-0.4],[-145,19,3.2],[-200,20,0.25],
-      [-145,-32,0.3],[-220,-26,-0.2],[-145,32,0.15],
-    ]) B.car(scene, x, z, r);
+    for (const [x,z,r,c] of [
+      [-146,-19, 0.5,  0x3a3a3a], [-183,-20,-0.4,  0x5a1a1a],
+      [-145, 19, 3.2,  0x2a4a2a], [-200, 20, 0.25, 0x4a3a10],
+      [-145,-32, 0.3,  0x1a2a4a], [-220,-26,-0.2,  0x5a3015],
+      [-145, 32, 0.15, 0x4a4010],
+    ]) B.car(scene, x, z, r, c);
     // Parking
-    B.car(scene, -143, 5.5, -0.15);
-    B.car(scene, -158, 5.5,  0.05);
-    B.car(scene, -174, 5.5,  0.08);
+    B.car(scene, -143, 5.5, -0.15, 0x3a3a3a);
+    B.car(scene, -158, 5.5,  0.05, 0x2a4a2a);
+    B.car(scene, -174, 5.5,  0.08, 0x5a3015);
   }
 
   function _buildBus(scene, B, cx, cz, rotY) {
@@ -586,7 +623,8 @@
       w.rotation.z=Math.PI/2; w.position.set(ox,0.48,oz); g.add(w);
     }
     g.position.set(cx,py,cz); g.rotation.y=rotY; scene.add(g);
-    B.addCollider({type:'box',cx,cz,hw:1.35,hd:4.6});
+    // maxY = toit du bus (~2.38m) — accessible depuis le toit d'une voiture
+    B.addCollider({type:'box',cx,cz,hw:1.35,hd:4.6,maxY:py+2.38});
   }
 
   // ── Décors de rue ─────────────────────────────────────────────────────────────

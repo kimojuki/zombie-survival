@@ -83,10 +83,14 @@
   function _fSofa(scene, cx, cz, y, rotY) {
     const mat = new THREE.MeshLambertMaterial({ color: 0x4a4a6a });
     const g   = new THREE.Group();
-    g.add(Object.assign(new THREE.Mesh(new THREE.BoxGeometry(2.0, 0.42, 0.8),  mat), { position: new THREE.Vector3(0, y+0.28, 0) }));
-    g.add(Object.assign(new THREE.Mesh(new THREE.BoxGeometry(2.0, 0.55, 0.14), mat), { position: new THREE.Vector3(0, y+0.66,-0.33) }));
-    for (const ox of [-0.96, 0.96])
-      g.add(Object.assign(new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.16, 0.82), mat), { position: new THREE.Vector3(ox, y+0.56, 0) }));
+    const seat = new THREE.Mesh(new THREE.BoxGeometry(2.0, 0.42, 0.8), mat);
+    seat.position.set(0, y+0.28, 0); g.add(seat);
+    const back = new THREE.Mesh(new THREE.BoxGeometry(2.0, 0.55, 0.14), mat);
+    back.position.set(0, y+0.66, -0.33); g.add(back);
+    for (const ox of [-0.96, 0.96]) {
+      const arm = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.16, 0.82), mat);
+      arm.position.set(ox, y+0.56, 0); g.add(arm);
+    }
     g.rotation.y = rotY || 0;
     g.position.set(cx, 0, cz);
     scene.add(g);
@@ -98,11 +102,16 @@
     const mattMat    = new THREE.MeshLambertMaterial({ color: 0xddccbb });
     const pillowMat  = new THREE.MeshLambertMaterial({ color: 0xeeeedd });
     const g = new THREE.Group();
-    g.add(Object.assign(new THREE.Mesh(new THREE.BoxGeometry(1.6, 0.3, 2.2),  frameMat), { position: new THREE.Vector3(0, y+0.15, 0) }));
-    g.add(Object.assign(new THREE.Mesh(new THREE.BoxGeometry(1.5, 0.18, 2.0), mattMat),  { position: new THREE.Vector3(0, y+0.42, 0) }));
-    g.add(Object.assign(new THREE.Mesh(new THREE.BoxGeometry(1.6, 0.65, 0.1), frameMat), { position: new THREE.Vector3(0, y+0.55,-1.05) }));
-    for (const ox of [-0.3, 0.3])
-      g.add(Object.assign(new THREE.Mesh(new THREE.BoxGeometry(0.62, 0.12, 0.38), pillowMat), { position: new THREE.Vector3(ox, y+0.54,-0.8) }));
+    const frame1 = new THREE.Mesh(new THREE.BoxGeometry(1.6, 0.3, 2.2), frameMat);
+    frame1.position.set(0, y+0.15, 0); g.add(frame1);
+    const matt = new THREE.Mesh(new THREE.BoxGeometry(1.5, 0.18, 2.0), mattMat);
+    matt.position.set(0, y+0.42, 0); g.add(matt);
+    const headboard = new THREE.Mesh(new THREE.BoxGeometry(1.6, 0.65, 0.1), frameMat);
+    headboard.position.set(0, y+0.55, -1.05); g.add(headboard);
+    for (const ox of [-0.3, 0.3]) {
+      const pillow = new THREE.Mesh(new THREE.BoxGeometry(0.62, 0.12, 0.38), pillowMat);
+      pillow.position.set(ox, y+0.54, -0.8); g.add(pillow);
+    }
     g.rotation.y = rotY || 0;
     g.position.set(cx, 0, cz);
     scene.add(g);
@@ -561,8 +570,10 @@
     const glassMat=new THREE.MeshLambertMaterial({color:0x3a5566,transparent:true,opacity:0.55});
     const stripMat=new THREE.MeshLambertMaterial({color:0xddcc00});
     const g=new THREE.Group();
-    g.add(Object.assign(new THREE.Mesh(new THREE.BoxGeometry(2.5,2.1,9.0),bodyMat),{position:new THREE.Vector3(0,1.12,0),castShadow:true,receiveShadow:true}));
-    g.add(Object.assign(new THREE.Mesh(new THREE.BoxGeometry(2.4,0.28,8.8),bodyMat),{position:new THREE.Vector3(0,2.24,0)}));
+    const busBody=new THREE.Mesh(new THREE.BoxGeometry(2.5,2.1,9.0),bodyMat);
+    busBody.position.set(0,1.12,0); busBody.castShadow=true; busBody.receiveShadow=true; g.add(busBody);
+    const busRoof=new THREE.Mesh(new THREE.BoxGeometry(2.4,0.28,8.8),bodyMat);
+    busRoof.position.set(0,2.24,0); g.add(busRoof);
     for(let i=0;i<5;i++) for(const sx of[-1.27,1.27]){
       const w=new THREE.Mesh(new THREE.BoxGeometry(0.05,0.75,1.3),glassMat);
       w.position.set(sx,1.65,-3.0+i*1.52); g.add(w);
@@ -595,7 +606,8 @@
     }
     for(const[cx,cz]of[[-160,1.2],[-178,-1.8],[-194,1.5],[-215,-2]]){
       const cy=ZS.getTerrainHeight(cx,cz);
-      scene.add(Object.assign(new THREE.Mesh(new THREE.ConeGeometry(0.18,0.58,6),redMat),{position:new THREE.Vector3(cx,cy+0.3,cz)}));
+      const tc=new THREE.Mesh(new THREE.ConeGeometry(0.18,0.58,6),redMat);
+      tc.position.set(cx,cy+0.3,cz); scene.add(tc);
     }
     for(const[bx,bz,ry]of[[-130,-1.5,0.1],[-130,1.8,-0.05],[-248,-2,0.08],[-248,2,0.0]]){
       const by=ZS.getTerrainHeight(bx,bz);

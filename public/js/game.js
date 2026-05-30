@@ -10,7 +10,7 @@
   const state = {
     selfId: null,
     player: {
-      x: -170, y: 5, z: 0, rotY: 0,
+      x: -200, y: 5, z: -105, rotY: Math.PI,
       velocityY: 0,
       onGround: true,
       health: parseInt(localStorage.getItem('zombie_health') || '100'),

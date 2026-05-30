@@ -4,6 +4,7 @@
 
   let _scene, _ambientLight, _sunLight, _moonLight, _hemiLight;
   const _fireLights = [];
+  const _waterMats  = []; // matériaux de surface d'eau → animés chaque frame
   const _colliders  = [];
   const _clouds     = [];
   let   _cloudMat   = null;
@@ -104,6 +105,14 @@
     const night = Math.max(0, Math.min(1, -sunY * 1.8));
     _scene.fog.near = 140 - night * 75;
     _scene.fog.far  = 420 - night * 200;
+
+    // Eau : scintillement animé (intensité emissive ondulante)
+    if (_waterMats.length > 0) {
+      const wt  = Date.now() * 0.001;
+      const rip = 0.14 + Math.sin(wt * 0.65) * 0.07 + Math.sin(wt * 1.38) * 0.04;
+      const dBr = 0.35 + k.ambI * 0.65; // plus brillant de jour
+      for (const m of _waterMats) m.emissiveIntensity = rip * dBr;
+    }
 
     // Nuages
     if (_clouds.length > 0 && _cloudMat) {
@@ -497,13 +506,15 @@
   }
 
   function registerFireLight(light, mesh) { _fireLights.push({ light, mesh }); }
+  function registerWaterMaterial(mat)     { _waterMats.push(mat); }
 
   window.ZS = window.ZS || {};
   ZS.buildWorld        = buildWorld;
   ZS.tickDayNight      = tickDayNight;
   ZS.setWorldTime      = setWorldTime;
   ZS.getColliders      = () => _colliders;
-  ZS.registerFireLight = registerFireLight;
+  ZS.registerFireLight      = registerFireLight;
+  ZS.registerWaterMaterial  = registerWaterMaterial;
   ZS.spawnTreesAt      = spawnTreesAt;
   ZS.spawnDeadTreesAt  = spawnDeadTreesAt;
   ZS.makeTree          = makeTree;

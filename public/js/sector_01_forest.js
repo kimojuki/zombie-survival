@@ -9,6 +9,12 @@
   ZS.registerFlatZone(-60, -70, 13, 11, 4);   // Cabane forestière nord
   ZS.registerFlatZone(-80,  42, 13, 11, 4);   // Cabane forestière sud
   ZS.registerFlatZone( 82,-100, 18, 11, 5);   // Station essence
+  // Lit de rivière — aplatit le terrain le long du cours d'eau
+  ZS.registerFlatZone(-116, -258, 7, 7, 5);
+  ZS.registerFlatZone(-109, -125, 7, 7, 5);
+  ZS.registerFlatZone( -97,    0, 7, 7, 5);
+  ZS.registerFlatZone(-101,   78, 7, 7, 5);
+  ZS.registerFlatZone( -99,  208, 7, 7, 5);
 
   // ── Build ─────────────────────────────────────────────────────────────────────
 
@@ -359,10 +365,13 @@
 
   function _buildRiver(scene) {
     const riverMat = new THREE.MeshLambertMaterial({
-      color: 0x1a5e8e, transparent: true, opacity: 0.88,
+      color: 0x1a5e8e, emissive: 0x0a3a6a, emissiveIntensity: 0.14,
+      transparent: true, opacity: 0.88,
       polygonOffset: true, polygonOffsetFactor: -4, polygonOffsetUnits: -8,
       depthWrite: false,
     });
+    ZS.registerWaterMaterial(riverMat);
+
     const pts = [
       [-118, -270], [-112, -210], [-106, -150], [-100, -85],
       [ -96,    0], [-100,   75], [-105,  150], [ -98,  210]
@@ -382,7 +391,6 @@
       for (let i = (si === 0 ? 0 : 1); i <= steps; i++) {
         const t  = i / steps;
         const x  = x0 + sdx * t, z = z0 + sdz * t;
-        // Hauteur fixe légèrement au-dessus du point de terrain le plus bas de la zone
         const y  = ZS.getTerrainHeight(x, z) + 0.55;
         const li = pos.length / 3;
         pos.push(x - nx * hw, y, z - nz * hw, x + nx * hw, y, z + nz * hw);
@@ -396,6 +404,69 @@
       geo.setIndex(idx);
       geo.computeVertexNormals();
       scene.add(new THREE.Mesh(geo, riverMat));
+    }
+
+    _buildRiverBanks(scene);
+  }
+
+  function _buildRiverBanks(scene) {
+    const stoneMats = [0x6a6872, 0x7a7060, 0x888888, 0x5a5a68]
+      .map(c => new THREE.MeshLambertMaterial({ color: c }));
+    const mudMat = new THREE.MeshLambertMaterial({ color: 0x4a3828 });
+
+    // Galets et vase le long des berges
+    const bankPts = [
+      [-118, -270], [-112, -210], [-106, -150], [-100, -85],
+      [ -96,    0], [-100,   75], [-105,  150], [ -98,  210]
+    ];
+    // Graine déterministe pour les pierres
+    let seed = 0x1A2B3C4D;
+    function rr() { seed ^= seed << 13; seed ^= seed >>> 17; seed ^= seed << 5; return (seed >>> 0) / 0xffffffff; }
+
+    for (let si = 0; si < bankPts.length - 1; si++) {
+      const [x0, z0] = bankPts[si], [x1, z1] = bankPts[si + 1];
+      const sdx = x1 - x0, sdz = z1 - z0;
+      const sLen = Math.hypot(sdx, sdz);
+      if (sLen < 0.01) continue;
+      const nx = -sdz / sLen, nz = sdx / sLen;
+      const steps = Math.max(2, Math.ceil(sLen / 8));
+
+      for (let i = 0; i < steps; i++) {
+        const t = i / steps;
+        const cx = x0 + sdx * t, cz = z0 + sdz * t;
+
+        // Berge gauche et droite — bande de vase
+        for (const side of [-1, 1]) {
+          const bx = cx + nx * (6 + rr() * 2) * side;
+          const bz = cz + nz * (6 + rr() * 2) * side;
+          const by = ZS.getTerrainHeight(bx, bz);
+          const mud = new THREE.Mesh(
+            new THREE.CylinderGeometry(1.4 + rr() * 0.8, 1.6 + rr() * 0.8, 0.18, 7),
+            mudMat
+          );
+          mud.position.set(bx, by + 0.08, bz);
+          mud.rotation.y = rr() * Math.PI;
+          scene.add(mud);
+
+          // 2–3 galets par point de berge
+          const nStones = 2 + Math.floor(rr() * 2);
+          for (let k = 0; k < nStones; k++) {
+            const ox = (rr() - 0.5) * 3.5, oz = (rr() - 0.5) * 3.5;
+            const sx = bx + ox, sz = bz + oz;
+            const sy = ZS.getTerrainHeight(sx, sz);
+            const sr = 0.12 + rr() * 0.22;
+            const stone = new THREE.Mesh(
+              new THREE.DodecahedronGeometry(sr, 0),
+              stoneMats[Math.floor(rr() * stoneMats.length)]
+            );
+            stone.rotation.set(rr() * Math.PI, rr() * Math.PI, rr() * Math.PI);
+            stone.scale.set(1, 0.45 + rr() * 0.3, 1);
+            stone.position.set(sx, sy + sr * 0.2, sz);
+            stone.castShadow = true;
+            scene.add(stone);
+          }
+        }
+      }
     }
   }
 

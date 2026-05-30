@@ -102,6 +102,7 @@
 
   // ── Inventory ─────────────────────────────────────────────────────────────
   ZS.Inventory.init(state, scene, socket);
+  ZS.Map.init(state, scene);
 
   // ── Viewport sizing — adapte le rendu à la vraie zone visible ───────────────
   const _isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) ||
@@ -307,6 +308,7 @@
     ZS.Zombies.tick(dt);
     ZS.Network.tick(dt);
     ZS.Inventory.tick(dt);
+    ZS.Map.tick();
     renderer.render(scene, camera);
   }
 

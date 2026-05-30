@@ -7,6 +7,7 @@
     ammo:   { label: 'Munitions',   icon: '🟡', category: 'ammo',       maxStack: 5  },
     medkit: { label: 'Trousse',     icon: '💊', category: 'consumable', maxStack: 3, healAmount: 50 },
     food:   { label: 'Nourriture',  icon: '🍗', category: 'consumable', maxStack: 5, healAmount: 25 },
+    map:    { label: 'Carte tactique', icon: '🗺️', category: 'map',   maxStack: 1  },
   };
 
   // 6 slots: slot 0 = pistol, 1-5 = free
@@ -208,7 +209,7 @@
   function _updateUseBtn() {
     const item = _slots[_active];
     const def = item ? ITEM_DEFS[item.type] : null;
-    const show = def && (def.category === 'consumable' || def.category === 'ammo');
+    const show = def && (def.category === 'consumable' || def.category === 'ammo' || def.category === 'map');
     const btn = document.getElementById('use-btn');
     if (btn) btn.style.display = show ? 'flex' : 'none';
   }
@@ -228,6 +229,9 @@
       if (item.qty <= 0) _slots[_active] = null;
       _renderSlots();
       _syncToServer();
+    } else if (def.category === 'map') {
+      if (typeof ZS.Map !== 'undefined') ZS.Map.toggleMap();
+      return;
     } else if (def.category === 'ammo') {
       const pistol = _slots[0];
       if (!pistol || pistol.type !== 'pistol') return;

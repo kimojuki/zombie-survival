@@ -30,6 +30,8 @@
     _buildHelipad(scene, B);
     _buildBunker(scene, B);
     _buildDepot(scene, B);
+    _buildTents(scene, B);
+    _buildEastBarracks(scene, B);
     _buildVehicles(scene, B);
     _buildProps(scene, B);
     _buildLights(scene, B);
@@ -143,39 +145,52 @@
     scene.add(spot);
   }
 
-  // ── Tours de garde (4 coins) ──────────────────────────────────────────────────
+  // ── Tours de garde (4 coins, montables par escalier) ─────────────────────────
 
   function _buildGuardTowers(scene, B) {
-    const positions = [
-      [X0 + 2, Z0 + 2], [X1 - 2, Z0 + 2],
-      [X0 + 2, Z1 - 2], [X1 - 2, Z1 - 2],
+    // [tx, tz, axis d'escalier, direction montée]
+    // axis='x': escalier le long de X ; axis='z': le long de Z
+    // rampCx/Cz, rampHw/Hz, y0, y1 : params registerRamp
+    const towers = [
+      { tx: X0+2, tz: Z0+2, stairAxis:'x', rCx:-269, rCz:Z0+2,  rHw:4, rHz:1.2, y0:ZS.getTerrainHeight(X0+2,Z0+2)+6, y1:ZS.getTerrainHeight(X0+2,Z0+2) },
+      { tx: X1-2, tz: Z0+2, stairAxis:'x', rCx:-131, rCz:Z0+2,  rHw:4, rHz:1.2, y0:ZS.getTerrainHeight(X1-2,Z0+2),   y1:ZS.getTerrainHeight(X1-2,Z0+2)+6 },
+      { tx: X0+2, tz: Z1-2, stairAxis:'z', rCx:X0+2, rCz:-86,   rHw:1.2, rHz:4, y0:ZS.getTerrainHeight(X0+2,Z1-2),   y1:ZS.getTerrainHeight(X0+2,Z1-2)+6 },
+      { tx: X1-2, tz: Z1-2, stairAxis:'z', rCx:X1-2, rCz:-86,   rHw:1.2, rHz:4, y0:ZS.getTerrainHeight(X1-2,Z1-2),   y1:ZS.getTerrainHeight(X1-2,Z1-2)+6 },
     ];
-    const legMat  = new THREE.MeshLambertMaterial({ color: 0x303830 });
-    const platMat = new THREE.MeshLambertMaterial({ color: 0x3a3a32 });
-    const roofMat = new THREE.MeshLambertMaterial({ color: 0x222820 });
+    const legMat   = new THREE.MeshLambertMaterial({ color: 0x303830 });
+    const platMat  = new THREE.MeshLambertMaterial({ color: 0x3a3a32 });
+    const roofMat  = new THREE.MeshLambertMaterial({ color: 0x222820 });
     const lightMat = new THREE.MeshLambertMaterial({ color: 0xffffcc, emissive: 0xffee88, emissiveIntensity: 2.5 });
 
-    for (const [tx, tz] of positions) {
+    for (const t of towers) {
+      const { tx, tz, stairAxis, rCx, rCz, rHw, rHz, y0, y1 } = t;
       const ty = ZS.getTerrainHeight(tx, tz);
       const H  = 6.0;
+
+      // Enregistrement plateforme + rampe escalier
+      ZS.registerUpperFloor(tx, tz, 1.3, 1.3, ty + H);
+      ZS.registerRamp(rCx, rCz, rHw, rHz, y0, y1, stairAxis);
+
+      // Escalier visuel
+      B.visualStairs(scene, rCx, rCz, y0, y1, stairAxis, 2.0, stairAxis==='x'?rHw:rHz);
+
       // 4 poteaux
-      for (const [ox, oz] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) {
-        B.box(scene, tx + ox, tz + oz, ty + H / 2, 0.16, H, 0.16, legMat);
-        B.addCollider({ x: tx + ox, z: tz + oz, r: 0.12 });
+      for (const [ox, oz] of [[-1,-1],[1,-1],[-1,1],[1,1]]) {
+        B.box(scene, tx+ox, tz+oz, ty+H/2, 0.16, H, 0.16, legMat);
+        B.addCollider({ x: tx+ox, z: tz+oz, r: 0.12 });
       }
       // Plateforme
-      B.box(scene, tx, tz, ty + H, 2.6, 0.22, 2.6, platMat);
+      B.box(scene, tx, tz, ty+H, 2.6, 0.22, 2.6, platMat);
       // Garde-fous
       for (const [gox, goz, gw, gd] of [
-        [0, -1.3, 2.6, 0.08], [0, 1.3, 2.6, 0.08],
-        [-1.3, 0, 0.08, 2.6], [1.3, 0, 0.08, 2.6],
-      ]) B.box(scene, tx + gox, tz + goz, ty + H + 0.55, gw, 0.9, gd, legMat);
+        [0,-1.3,2.6,0.08],[0,1.3,2.6,0.08],[-1.3,0,0.08,2.6],[1.3,0,0.08,2.6],
+      ]) B.box(scene, tx+gox, tz+goz, ty+H+0.55, gw, 0.9, gd, legMat);
       // Toit
-      B.box(scene, tx, tz, ty + H + 1.5, 2.8, 0.16, 2.8, roofMat);
+      B.box(scene, tx, tz, ty+H+1.5, 2.8, 0.16, 2.8, roofMat);
       // Projecteur
-      B.box(scene, tx, tz, ty + H + 0.5, 0.38, 0.22, 0.5, lightMat);
+      B.box(scene, tx, tz, ty+H+0.5, 0.38, 0.22, 0.5, lightMat);
       const pt = new THREE.PointLight(0xffeedd, 3.5, 40);
-      pt.position.set(tx, ty + H + 0.4, tz);
+      pt.position.set(tx, ty+H+0.4, tz);
       scene.add(pt);
     }
   }
@@ -361,6 +376,87 @@
     B.wall(scene, cx + W / 2, cz + dw / 2 + sw / 2, y, 0.22, sw, wH, dMat);
     B.wall(scene, cx + W / 2, cz, y + wH - 0.8, 0.22, dw, 0.8, dMat, true);
     B.slab(scene, cx, cz, y + wH, W + 0.4, D + 0.4, B.M.roofDark);
+  }
+
+  // ── Tentes militaires ─────────────────────────────────────────────────────────
+
+  function _tent(scene, B, cx, cz, W, D, col) {
+    const y    = ZS.getTerrainHeight(cx, cz);
+    const wH   = 1.7, rH = 3.4;
+    const canvas = new THREE.MeshLambertMaterial({ color: col, side: THREE.DoubleSide });
+    const polMat = new THREE.MeshLambertMaterial({ color: 0x3a2a10 });
+
+    // Sol sable
+    B.slab(scene, cx, cz, y + 0.02, W + 0.6, D + 0.6,
+      new THREE.MeshLambertMaterial({ color: 0x7a6a4a }));
+    // Murs bas
+    B.wall(scene, cx, cz - D/2, y, W, 0.08, wH, canvas);
+    B.wall(scene, cx, cz + D/2, y, W, 0.08, wH, canvas);
+    B.wall(scene, cx - W/2, cz, y, 0.08, D, wH, canvas);
+    B.wall(scene, cx + W/2, cz, y, 0.08, D, wH, canvas);
+    // Poteaux faîtage
+    for (const ox of [-W/2+0.3, W/2-0.3]) {
+      B.box(scene, cx+ox, cz, y + rH/2, 0.1, rH, 0.1, polMat);
+    }
+    // Faîtage horizontal
+    B.box(scene, cx, cz, y + rH, W - 0.5, 0.1, 0.1, polMat);
+    // Pans de toit inclinés
+    const span  = Math.hypot(W/2, rH - wH);
+    const angle = Math.atan2(rH - wH, W/2);
+    const midH  = y + wH + (rH - wH) / 2;
+    for (const side of [-1, 1]) {
+      const pan = new THREE.Mesh(new THREE.PlaneGeometry(span + 0.15, D + 0.25), canvas);
+      pan.rotation.z = side * angle;
+      pan.position.set(cx + side * W/4, midH, cz);
+      scene.add(pan);
+    }
+  }
+
+  function _buildTents(scene, B) {
+    const OD  = 0x4a5a30; // vert olive
+    const TAN = 0x9a8460; // beige sable
+    const DG  = 0x3a4828; // vert foncé
+
+    // Tentes autour de l'entrée (zone sud)
+    _tent(scene, B, -175, -112, 4, 6, OD);
+    _tent(scene, B, -225, -112, 4, 6, TAN);
+    // Zone centre-ouest (entre baraquements et hangar)
+    _tent(scene, B, -175, -200, 5, 8, DG);
+    _tent(scene, B, -225, -200, 5, 8, OD);
+    // Zone est (face au hangar)
+    _tent(scene, B, -145, -135, 4, 6, TAN);
+    _tent(scene, B, -145, -175, 4, 6, OD);
+    // Grande tente de commandement avancé (nord-centre)
+    _tent(scene, B, -200, -215, 6, 9, DG);
+  }
+
+  // ── Baraquements est (miroir) ─────────────────────────────────────────────────
+
+  function _buildEastBarracks(scene, B) {
+    for (const bz of [-130, -182]) {
+      const cx = -148, cz = bz;
+      const W = 14, D = 6, wH = 3.2;
+      const y    = ZS.getTerrainHeight(cx, cz);
+      const bMat = new THREE.MeshLambertMaterial({ color: 0x5a6040 });
+      const wMat = new THREE.MeshLambertMaterial({ color: 0x4a7060, transparent: true, opacity: 0.5 });
+
+      B.slab(scene, cx, cz, y, W + 0.5, D + 0.5, B.M.concDark);
+      B.wall(scene, cx, cz - D/2, y, W, 0.22, wH, bMat);
+      B.wall(scene, cx, cz + D/2, y, W, 0.22, wH, bMat);
+      B.wall(scene, cx + W/2, cz, y, 0.22, D, wH, bMat);
+      // Mur ouest : porte
+      const dw = 2.0, sw = (D - dw) / 2;
+      B.wall(scene, cx - W/2, cz - dw/2 - sw/2, y, 0.22, sw, wH, bMat);
+      B.wall(scene, cx - W/2, cz + dw/2 + sw/2, y, 0.22, sw, wH, bMat);
+      B.box( scene, cx - W/2, cz, y + wH - 0.55, 0.22, 0.55, dw, bMat);
+      // Toit
+      B.slab(scene, cx, cz, y + wH, W + 0.4, D + 0.4, B.M.roofDark);
+      // Fenêtres
+      for (const fx of [-4, 0, 4]) {
+        B.box(scene, cx - W/2 + fx + 7, cz - D/2 - 0.01, y + 1.5, 1.3, 0.85, 0.06, wMat);
+        B.box(scene, cx - W/2 + fx + 7, cz + D/2 + 0.01, y + 1.5, 1.3, 0.85, 0.06, wMat);
+      }
+    }
   }
 
   // ── Véhicules ─────────────────────────────────────────────────────────────────

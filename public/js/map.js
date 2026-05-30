@@ -10,8 +10,8 @@
   let _open   = false;
 
   // ── Projection monde → canvas ─────────────────────────────────────────────
-  const S   = 1.5;                  // pixels par unité monde
-  const OX  = 310, OZ = 270;       // décalage origine (x=-310 → canvasX=0)
+  const S   = 1.05;                 // pixels par unité monde (réduit pour inclure Main City)
+  const OX  = 580, OZ = 270;       // décalage origine (x=-580 → canvasX=0)
   function cx(x) { return (x + OX) * S; }
   function cy(z) { return (z + OZ) * S; }
 
@@ -218,6 +218,27 @@
     ctx.strokeStyle='rgba(30,50,15,0.7)'; ctx.lineWidth=1; ctx.setLineDash([4,3]);
     ctx.strokeRect(cx(-275)+2,cy(-240)+2,150*S-4,160*S-4); ctx.setLineDash([]);
 
+    // ── ZONE 03 — Main City ──
+    ctx.save(); ctx.globalAlpha=0.42;
+    const mcgr=ctx.createLinearGradient(cx(-570),cy(-115),cx(-330),cy(115));
+    mcgr.addColorStop(0,'#5a5868'); mcgr.addColorStop(1,'#6a6878');
+    ctx.fillStyle=mcgr;
+    ctx.fillRect(cx(-570),cy(-115),240*S,230*S); ctx.restore();
+    ctx.strokeStyle='#3a3848'; ctx.lineWidth=2;
+    ctx.strokeRect(cx(-570),cy(-115),240*S,230*S);
+    // Grille de rues
+    ctx.strokeStyle='rgba(200,190,160,0.35)'; ctx.lineWidth=1.5;
+    for(const sx of [-540,-455,-365]) { ctx.beginPath(); ctx.moveTo(cx(sx),cy(-115)); ctx.lineTo(cx(sx),cy(115)); ctx.stroke(); }
+    ctx.strokeStyle='rgba(200,190,160,0.3)'; ctx.lineWidth=1.5;
+    for(const sz of [-55,0,55]) { ctx.beginPath(); ctx.moveTo(cx(-570),cy(sz)); ctx.lineTo(cx(-330),cy(sz)); ctx.stroke(); }
+    // Bâtiments Main City
+    ctx.fillStyle='#3a3a48';
+    for(const[bx,bz,bw,bd] of [
+      [-513,-89,22,14],[-503,-78,10,7],[-390,-91,30,18],[-502,79,18,13],
+      [-408,83,20,12],[-355,82,20,14],[-438,2,32,20],[-345,-31,11,9],
+      [-505,-23,16,11],[-505,27,13,10],
+    ]) ctx.fillRect(cx(bx),cy(bz),bw*S,bd*S);
+
     // ── Zone inconnue (nord) — papier déchiré ──
     ctx.save(); ctx.globalAlpha=0.18;
     ctx.fillStyle='#8a6a30';
@@ -244,6 +265,12 @@
     ctx.fillText('SMALL TOWN',cx(-210),cy(-8));
     ctx.font=`${Math.round(8.5*S)}px Georgia,serif`;
     ctx.fillText('[ SECTEUR 02 ]',cx(-210),cy(4));
+    // Main City
+    ctx.fillStyle='#12121e';
+    ctx.font=`bold ${Math.round(12.5*S)}px Georgia,serif`;
+    ctx.fillText('MAIN CITY',cx(-450),cy(-5));
+    ctx.font=`${Math.round(8.5*S)}px Georgia,serif`;
+    ctx.fillText('[ SECTEUR 03 ]',cx(-450),cy(8));
     // Military
     ctx.fillStyle='#0e1e06';
     ctx.font=`bold ${Math.round(12*S)}px Georgia,serif`;

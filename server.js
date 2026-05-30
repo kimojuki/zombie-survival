@@ -117,7 +117,7 @@ function resolveZombieCollision(nx, nz) {
 
 // Temps mondial partagé — source de vérité pour tous les clients
 let _worldTime = 0.3; // 0–1 (0=minuit, 0.25=lever, 0.5=midi, 0.75=coucher)
-const _DAY_DURATION = 240; // secondes par cycle complet
+const _DAY_DURATION = 600; // secondes par cycle complet (~10 min — transitions lentes et réalistes)
 const _TICK_DT = 0.1;      // durée du tick zombie en secondes
 
 const DROP_CHANCE  = 0.40;

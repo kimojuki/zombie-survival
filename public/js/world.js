@@ -508,13 +508,27 @@
   function registerFireLight(light, mesh) { _fireLights.push({ light, mesh }); }
   function registerWaterMaterial(mat)     { _waterMats.push(mat); }
 
+  // ── Zones d'eau (rivière) ────────────────────────────────────────────────────
+  const _waterZones = []; // { x, z, r, y }
+
+  function registerWaterZone(x, z, r, y) { _waterZones.push({ x, z, r, y }); }
+
+  function getWaterSurface(px, pz) {
+    for (const wz of _waterZones) {
+      if (Math.hypot(px - wz.x, pz - wz.z) < wz.r) return wz.y;
+    }
+    return null;
+  }
+
   window.ZS = window.ZS || {};
   ZS.buildWorld        = buildWorld;
   ZS.tickDayNight      = tickDayNight;
   ZS.setWorldTime      = setWorldTime;
   ZS.getColliders      = () => _colliders;
-  ZS.registerFireLight      = registerFireLight;
-  ZS.registerWaterMaterial  = registerWaterMaterial;
+  ZS.registerFireLight     = registerFireLight;
+  ZS.registerWaterMaterial = registerWaterMaterial;
+  ZS.registerWaterZone     = registerWaterZone;
+  ZS.getWaterSurface       = getWaterSurface;
   ZS.spawnTreesAt      = spawnTreesAt;
   ZS.spawnDeadTreesAt  = spawnDeadTreesAt;
   ZS.makeTree          = makeTree;

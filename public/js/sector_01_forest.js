@@ -366,7 +366,8 @@
   function _buildRiver(scene) {
     const riverMat = new THREE.MeshLambertMaterial({
       color: 0x1a5e8e, emissive: 0x0a3a6a, emissiveIntensity: 0.14,
-      transparent: true, opacity: 0.88,
+      transparent: true, opacity: 0.82,
+      side: THREE.DoubleSide,   // visible de dessus ET dessous
       polygonOffset: true, polygonOffsetFactor: -4, polygonOffsetUnits: -8,
       depthWrite: false,
     });
@@ -376,6 +377,7 @@
       [-118, -270], [-112, -210], [-106, -150], [-100, -85],
       [ -96,    0], [-100,   75], [-105,  150], [ -98,  210]
     ];
+    const WATER_Y_OFFSET = 0.65; // légèrement plus haut pour rester visible
     const width = 10, STEP = 1.5;
     const pos = [], idx = [];
     let prevL = -1;
@@ -391,7 +393,7 @@
       for (let i = (si === 0 ? 0 : 1); i <= steps; i++) {
         const t  = i / steps;
         const x  = x0 + sdx * t, z = z0 + sdz * t;
-        const y  = ZS.getTerrainHeight(x, z) + 0.55;
+        const y  = ZS.getTerrainHeight(x, z) + WATER_Y_OFFSET;
         const li = pos.length / 3;
         pos.push(x - nx * hw, y, z - nz * hw, x + nx * hw, y, z + nz * hw);
         if (prevL >= 0) idx.push(prevL, li, prevL + 1, prevL + 1, li, li + 1);
@@ -403,7 +405,22 @@
       geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
       geo.setIndex(idx);
       geo.computeVertexNormals();
-      scene.add(new THREE.Mesh(geo, riverMat));
+      const mesh = new THREE.Mesh(geo, riverMat);
+      mesh.renderOrder = 2; // force le rendu après les objets opaques
+      scene.add(mesh);
+    }
+
+    // Enregistre les zones d'eau pour la détection joueur
+    for (let si = 0; si < pts.length - 1; si++) {
+      const [x0, z0] = pts[si], [x1, z1] = pts[si + 1];
+      const sdx = x1 - x0, sdz = z1 - z0;
+      const sLen = Math.hypot(sdx, sdz);
+      const steps = Math.max(1, Math.floor(sLen / 10));
+      for (let i = 0; i <= steps; i++) {
+        const t = i / steps;
+        const wx = x0 + sdx * t, wz = z0 + sdz * t;
+        ZS.registerWaterZone(wx, wz, 7, ZS.getTerrainHeight(wx, wz) + WATER_Y_OFFSET);
+      }
     }
 
     _buildRiverBanks(scene);

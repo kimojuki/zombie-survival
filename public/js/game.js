@@ -53,6 +53,24 @@
 
   // Le resize global est géré par _resizeToViewport plus bas (visualViewport).
 
+  // ── Overlay eau ───────────────────────────────────────────────────────────
+  const _waterOverlay = document.createElement('div');
+  Object.assign(_waterOverlay.style, {
+    position: 'fixed', inset: '0', pointerEvents: 'none', zIndex: '40',
+    background: 'linear-gradient(to top, rgba(10,60,140,0.55) 0%, rgba(10,60,140,0.18) 40%, transparent 70%)',
+    opacity: '0', transition: 'opacity 0.35s ease',
+  });
+  document.body.appendChild(_waterOverlay);
+  let _inWater = false;
+
+  function _updateWaterEffect(px, pz) {
+    const waterY = ZS.getWaterSurface(px, pz);
+    const nowIn  = waterY !== null;
+    if (nowIn === _inWater) return;
+    _inWater = nowIn;
+    _waterOverlay.style.opacity = nowIn ? '1' : '0';
+  }
+
   // ── Build world ───────────────────────────────────────────────────────────
   ZS.buildWorld(scene);
   ZS.Zombies.init(scene);
@@ -283,6 +301,7 @@
 
     if (!state.player.dead) {
       updateMovement(dt);
+      _updateWaterEffect(state.player.x, state.player.z);
     }
     ZS.tickDayNight(dt);
     ZS.Zombies.tick(dt);

@@ -10,8 +10,9 @@
   let _open   = false;
 
   // ── Projection monde → canvas ─────────────────────────────────────────────
-  const S   = 1.05;                 // pixels par unité monde (réduit pour inclure Main City)
-  const OX  = 580, OZ = 270;       // décalage origine (x=-580 → canvasX=0)
+  // Monde visible : X de -310 à +420, Z de -330 à +120
+  const S   = 1.1;                  // pixels par unité monde
+  const OX  = 310, OZ = 330;       // (x=-310 → canvasX=0, z=-330 → canvasY=0)
   function cx(x) { return (x + OX) * S; }
   function cy(z) { return (z + OZ) * S; }
 
@@ -218,26 +219,29 @@
     ctx.strokeStyle='rgba(30,50,15,0.7)'; ctx.lineWidth=1; ctx.setLineDash([4,3]);
     ctx.strokeRect(cx(-275)+2,cy(-240)+2,150*S-4,160*S-4); ctx.setLineDash([]);
 
-    // ── ZONE 03 — Main City ──
+    // ── ZONE 03 — Main City (nord-est, CX=250 CZ=-200) ──
     ctx.save(); ctx.globalAlpha=0.42;
-    const mcgr=ctx.createLinearGradient(cx(-570),cy(-115),cx(-330),cy(115));
+    const mcgr=ctx.createLinearGradient(cx(128),cy(-315),cx(372),cy(-85));
     mcgr.addColorStop(0,'#5a5868'); mcgr.addColorStop(1,'#6a6878');
     ctx.fillStyle=mcgr;
-    ctx.fillRect(cx(-570),cy(-115),240*S,230*S); ctx.restore();
+    ctx.fillRect(cx(128),cy(-315),244*S,230*S); ctx.restore();
     ctx.strokeStyle='#3a3848'; ctx.lineWidth=2;
-    ctx.strokeRect(cx(-570),cy(-115),240*S,230*S);
+    ctx.strokeRect(cx(128),cy(-315),244*S,230*S);
     // Grille de rues
     ctx.strokeStyle='rgba(200,190,160,0.35)'; ctx.lineWidth=1.5;
-    for(const sx of [-540,-455,-365]) { ctx.beginPath(); ctx.moveTo(cx(sx),cy(-115)); ctx.lineTo(cx(sx),cy(115)); ctx.stroke(); }
-    ctx.strokeStyle='rgba(200,190,160,0.3)'; ctx.lineWidth=1.5;
-    for(const sz of [-55,0,55]) { ctx.beginPath(); ctx.moveTo(cx(-570),cy(sz)); ctx.lineTo(cx(-330),cy(sz)); ctx.stroke(); }
+    for(const sx of [165,250,340]) { ctx.beginPath(); ctx.moveTo(cx(sx),cy(-315)); ctx.lineTo(cx(sx),cy(-85)); ctx.stroke(); }
+    for(const sz of [-255,-200,-145]) { ctx.beginPath(); ctx.moveTo(cx(128),cy(sz)); ctx.lineTo(cx(372),cy(sz)); ctx.stroke(); }
     // Bâtiments Main City
     ctx.fillStyle='#3a3a48';
     for(const[bx,bz,bw,bd] of [
-      [-513,-89,22,14],[-503,-78,10,7],[-390,-91,30,18],[-502,79,18,13],
-      [-408,83,20,12],[-355,82,20,14],[-438,2,32,20],[-345,-31,11,9],
-      [-505,-23,16,11],[-505,27,13,10],
+      [187,-289,22,14],[198,-278,10,7],[295,-291,30,18],[187,-125,18,13],
+      [282,-121,20,12],[335,-122,20,14],[246,-198,32,20],[349,-233,11,9],
+      [187,-225,16,11],[187,-175,13,10],
     ]) ctx.fillRect(cx(bx),cy(bz),bw*S,bd*S);
+    // Route accès forêt → Main City
+    ctx.strokeStyle='#7a5828'; ctx.lineWidth=2.5; ctx.setLineDash([6,4]);
+    ctx.beginPath(); ctx.moveTo(cx(0),cy(-5)); ctx.bezierCurveTo(cx(60),cy(-80),cx(120),cy(-150),cx(165),cy(-195)); ctx.stroke();
+    ctx.setLineDash([]);
 
     // ── Zone inconnue (nord) — papier déchiré ──
     ctx.save(); ctx.globalAlpha=0.18;
@@ -268,9 +272,9 @@
     // Main City
     ctx.fillStyle='#12121e';
     ctx.font=`bold ${Math.round(12.5*S)}px Georgia,serif`;
-    ctx.fillText('MAIN CITY',cx(-450),cy(-5));
+    ctx.fillText('MAIN CITY',cx(250),cy(-208));
     ctx.font=`${Math.round(8.5*S)}px Georgia,serif`;
-    ctx.fillText('[ SECTEUR 03 ]',cx(-450),cy(8));
+    ctx.fillText('[ SECTEUR 03 ]',cx(250),cy(-195));
     // Military
     ctx.fillStyle='#0e1e06';
     ctx.font=`bold ${Math.round(12*S)}px Georgia,serif`;

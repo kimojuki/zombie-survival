@@ -1,69 +1,60 @@
-// Inventory — 6-slot hotbar, world pickups, item use
+// Inventory — hotbar (6 slots) + sac (20 slots) + équipement
 (function () {
   'use strict';
 
-  const ITEM_DEFS = {
-    pistol: { label: 'Pistolet',    icon: '🔫', category: 'weapon',     maxStack: 1  },
-    ammo:   { label: 'Munitions',   icon: '🟡', category: 'ammo',       maxStack: 5  },
-    medkit: { label: 'Trousse',     icon: '💊', category: 'consumable', maxStack: 3, healAmount: 50 },
-    food:   { label: 'Nourriture',  icon: '🍗', category: 'consumable', maxStack: 5, healAmount: 25 },
-    map:    { label: 'Carte tactique', icon: '🗺️', category: 'map',   maxStack: 1  },
-  };
+  const HOTBAR_SIZE = 6;
+  const BAG_BASE    = 20;
 
-  // 6 slots: slot 0 = pistol, 1-5 = free
-  let _slots = [
-    { type: 'pistol', qty: 1, ammo: 30, maxAmmo: 30 },
-    null, null, null, null, null
-  ];
+  let _hotbar = Array(HOTBAR_SIZE).fill(null);
+  let _bag    = Array(BAG_BASE).fill(null);
+  let _equip  = { Tête: null, Torso: null, Mains: null, Dos: null };
   let _active = 0;
-  let _state, _scene, _socket;
+  let _panelOpen = false;
 
-  // id -> { mesh, type, x, z }
+  let _state, _scene, _socket;
   const _worldItems = new Map();
 
-  // ── Public API ─────────────────────────────────────────────────────────────
+  // ── Init ───────────────────────────────────────────────────────────────────
 
   function init(state, scene, socket) {
     _state  = state;
     _scene  = scene;
     _socket = socket;
     _buildHotbarDOM();
-    _renderSlots();
+    _buildInvPanel();
+    _renderHotbar();
     _bindKeys();
     _bindHotbarTouch();
     _setupUseBtn();
   }
 
+  // ── Tick ───────────────────────────────────────────────────────────────────
+
   function tick(dt) {
     const now = Date.now() * 0.001;
-
-    // Animate world items (bob + spin)
     _worldItems.forEach(({ mesh }) => {
       mesh.rotation.y += dt * 1.8;
       mesh.position.y = mesh.userData.baseY + Math.sin(now * 2.5) * 0.1;
     });
-
-    // Auto-pickup when close enough
-    const px = _state.player.x;
-    const pz = _state.player.z;
+    const px = _state.player.x, pz = _state.player.z;
     for (const [id, item] of _worldItems) {
       if (Math.hypot(item.x - px, item.z - pz) < 1.6) {
-        // Remove mesh immediately; wait for server item-add before updating inventory
         _scene.remove(item.mesh);
         _worldItems.delete(id);
         _socket.emit('item-pickup', { id });
-        break; // one per frame
+        break;
       }
     }
   }
 
+  // ── World items ────────────────────────────────────────────────────────────
+
   function spawnWorldItem(d) {
     if (_worldItems.has(d.id)) return;
-    const def = ITEM_DEFS[d.type];
+    const def = _def(d.type);
     if (!def) return;
-    const mesh = _makePickupMesh(d.type, def);
-    const baseY = (typeof ZS.getTerrainHeight === 'function'
-      ? ZS.getTerrainHeight(d.x, d.z) : 0) + 0.55;
+    const mesh = _makePickupMesh(def);
+    const baseY = (ZS.getTerrainHeight ? ZS.getTerrainHeight(d.x, d.z) : 0) + 0.55;
     mesh.position.set(d.x, baseY, d.z);
     mesh.userData.baseY = baseY;
     _scene.add(mesh);
@@ -77,93 +68,143 @@
     _worldItems.delete(id);
   }
 
-  // Called by network when server confirms pickup (item-add)
+  // ── Server pickup callback ─────────────────────────────────────────────────
+
   function receivePickup(type) {
-    const def = ITEM_DEFS[type];
-    if (!def) return;
-
-    if (type === 'ammo') {
-      for (let i = 1; i < _slots.length; i++) {
-        const s = _slots[i];
-        if (s && s.type === 'ammo' && s.qty < def.maxStack) { s.qty++; _renderSlots(); _syncToServer(); return; }
-      }
-    } else {
-      for (let i = 1; i < _slots.length; i++) {
-        const s = _slots[i];
-        if (s && s.type === type && s.qty < def.maxStack) { s.qty++; _renderSlots(); _syncToServer(); return; }
-      }
-    }
-
-    // First empty slot (skip 0 which is weapon slot)
-    for (let i = 1; i < _slots.length; i++) {
-      if (!_slots[i]) {
-        _slots[i] = { type, qty: 1 };
-        _renderSlots();
-        _syncToServer();
-        _showPickupNotif(def);
-        return;
-      }
-    }
-    _showPickupNotif(def, true); // full
+    const added = addItem(type, 1);
+    const def = _def(type);
+    if (def) ZS.UI.showNotif(added ? ('+1 ' + def.label) : 'Inventaire plein !');
   }
 
-  function getActiveItem() {
-    return _slots[_active] || null;
+  // ── Inventory API (utilisé par Craft + Survival) ───────────────────────────
+
+  function countItem(type) {
+    return [..._hotbar, ..._bag].reduce((n, s) => n + (s && s.type === type ? s.qty : 0), 0);
   }
+
+  function removeItem(type, qty) {
+    let left = qty;
+    for (const arr of [_hotbar, _bag]) {
+      for (let i = 0; i < arr.length && left > 0; i++) {
+        if (!arr[i] || arr[i].type !== type) continue;
+        const take = Math.min(arr[i].qty, left);
+        arr[i].qty -= take;
+        left -= take;
+        if (arr[i].qty <= 0) arr[i] = null;
+      }
+    }
+    _renderHotbar();
+    if (_panelOpen) _renderInvPanel();
+  }
+
+  function consumeOne(type) { removeItem(type, 1); }
+
+  function addItem(type, qty) {
+    const def = _def(type);
+    if (!def) return false;
+    let left = qty;
+    // Empiler d'abord
+    for (const arr of [_hotbar, _bag]) {
+      for (let i = 0; i < arr.length && left > 0; i++) {
+        if (arr[i] && arr[i].type === type && arr[i].qty < def.maxStack) {
+          const add = Math.min(def.maxStack - arr[i].qty, left);
+          arr[i].qty += add;
+          left -= add;
+        }
+      }
+    }
+    // Slots libres ensuite
+    for (const arr of [_hotbar, _bag]) {
+      for (let i = 0; i < arr.length && left > 0; i++) {
+        if (arr[i]) continue;
+        const add = Math.min(def.maxStack, left);
+        arr[i] = { type, qty: add };
+        if (def.category === 'firearm') arr[i].ammo = 0;
+        left -= add;
+      }
+    }
+    _renderHotbar();
+    if (_panelOpen) _renderInvPanel();
+    return left === 0;
+  }
+
+  // ── Armes à feu ────────────────────────────────────────────────────────────
+
+  function getActiveItem() { return _hotbar[_active] || null; }
 
   function getWeaponAmmo() {
-    const s = _slots[0];
-    return s && s.type === 'pistol' ? s.ammo : 0;
+    const s = _hotbar[_active];
+    if (!s) return 0;
+    return _def(s.type)?.category === 'firearm' ? (s.ammo || 0) : 0;
   }
 
-  // Returns false if can't fire (no weapon active, no ammo)
   function decrementAmmo() {
-    const item = getActiveItem();
-    if (!item || item.type !== 'pistol' || item.ammo <= 0) return false;
-    item.ammo--;
-    _renderSlots();
+    const s = _hotbar[_active];
+    if (!s || _def(s.type)?.category !== 'firearm' || (s.ammo || 0) <= 0) return false;
+    s.ammo--;
+    _renderHotbar();
+    ZS.UI.setAmmo(s.ammo);
     return true;
   }
 
   function reloadWeapon() {
-    const s = _slots[0];
-    if (s && s.type === 'pistol') { s.ammo = s.maxAmmo; _renderSlots(); }
+    const s = _hotbar[_active];
+    if (!s) return;
+    const def = _def(s.type);
+    if (!def || def.category !== 'firearm') return;
+    const ammoId = def.type_munition_accepte || 'ammo_pistolet';
+    const cap    = def.capacite_chargeur || 12;
+    const need   = cap - (s.ammo || 0);
+    if (need <= 0) return;
+    const load = Math.min(countItem(ammoId), need);
+    if (load > 0) {
+      removeItem(ammoId, load);
+      s.ammo = (s.ammo || 0) + load;
+      _renderHotbar();
+      ZS.UI.setAmmo(s.ammo);
+    }
   }
+
+  function getArmorValue() {
+    return Object.values(_equip).reduce((sum, s) => {
+      return sum + (s ? (_def(s.type)?.valeur_armure || 0) : 0);
+    }, 0);
+  }
+
+  // ── Sauvegarde ─────────────────────────────────────────────────────────────
 
   function loadFromSave(slots) {
     if (!Array.isArray(slots) || slots.length === 0) return;
-    for (let i = 0; i < _slots.length; i++) {
-      _slots[i] = slots[i] || null;
+    for (let i = 0; i < Math.min(slots.length, HOTBAR_SIZE); i++) {
+      _hotbar[i] = slots[i] || null;
     }
-    if (!_slots[0] || _slots[0].type !== 'pistol') {
-      _slots[0] = { type: 'pistol', qty: 1, ammo: 30, maxAmmo: 30 };
+    if (_hotbar[0] && _hotbar[0].type === 'pistol' && _hotbar[0].ammo == null) {
+      _hotbar[0].ammo = 30;
     }
-    _renderSlots();
+    _renderHotbar();
   }
 
   function clear() {
-    _slots = [
-      { type: 'pistol', qty: 1, ammo: 30, maxAmmo: 30 },
-      null, null, null, null, null
-    ];
-    _renderSlots();
+    _hotbar = Array(HOTBAR_SIZE).fill(null);
+    _bag    = Array(BAG_BASE).fill(null);
+    _equip  = { Tête: null, Torso: null, Mains: null, Dos: null };
+    _renderHotbar();
     _syncToServer();
   }
 
   function _syncToServer() {
-    if (_socket) _socket.emit('inventory-sync', _slots);
+    if (_socket) _socket.emit('inventory-sync', _hotbar);
   }
 
-  // ── DOM ────────────────────────────────────────────────────────────────────
+  // ── Hotbar DOM ─────────────────────────────────────────────────────────────
 
   function _buildHotbarDOM() {
     const bar = document.getElementById('hotbar');
     bar.replaceChildren();
-    for (let i = 0; i < 6; i++) {
+    for (let i = 0; i < HOTBAR_SIZE; i++) {
       const slot = document.createElement('div');
       slot.className = 'hb-slot' + (i === _active ? ' active' : '');
       slot.dataset.slot = i;
-      // Key hint (desktop)
       const hint = document.createElement('span');
       hint.className = 'hb-key';
       hint.textContent = i + 1;
@@ -172,29 +213,36 @@
     }
   }
 
-  function _renderSlots() {
+  function _renderHotbar() {
     const bar = document.getElementById('hotbar');
     if (!bar) return;
-    for (let i = 0; i < 6; i++) {
-      const el = bar.children[i];
-      const item = _slots[i];
-      // Keep key hint, rebuild the rest
+    for (let i = 0; i < HOTBAR_SIZE; i++) {
+      const el   = bar.children[i];
+      const item = _hotbar[i];
       const hint = el.querySelector('.hb-key');
       el.replaceChildren();
       if (hint) el.appendChild(hint);
       if (item) {
-        const def = ITEM_DEFS[item.type];
+        const def  = _def(item.type);
         const icon = document.createElement('span');
-        icon.className = 'hb-icon';
-        icon.textContent = def.icon;
+        icon.className   = 'hb-icon';
+        icon.textContent = def ? def.icon : '?';
         const count = document.createElement('span');
-        count.className = 'hb-count';
-        count.textContent = item.type === 'pistol' ? item.ammo : item.qty;
+        count.className   = 'hb-count';
+        if (def?.category === 'firearm') {
+          count.textContent = (item.ammo ?? 0) + '/' + (def.capacite_chargeur || 0);
+        } else {
+          count.textContent = item.qty > 1 ? item.qty : '';
+        }
         el.appendChild(icon);
         el.appendChild(count);
       }
     }
     _updateUseBtn();
+    const active = _hotbar[_active];
+    if (active && _def(active.type)?.category === 'firearm') {
+      ZS.UI.setAmmo(active.ammo ?? 0);
+    }
   }
 
   function _setActiveSlot(i) {
@@ -207,50 +255,191 @@
   }
 
   function _updateUseBtn() {
-    const item = _slots[_active];
-    const def = item ? ITEM_DEFS[item.type] : null;
-    const show = def && (def.category === 'consumable' || def.category === 'ammo' || def.category === 'map');
-    const btn = document.getElementById('use-btn');
+    const item = _hotbar[_active];
+    const def  = item ? _def(item.type) : null;
+    const show = def && ['food','medical','ammo','map','equipment'].includes(def.category);
+    const btn  = document.getElementById('use-btn');
     if (btn) btn.style.display = show ? 'flex' : 'none';
   }
 
+  // ── Utilisation ────────────────────────────────────────────────────────────
+
   function _useActiveItem() {
-    const item = _slots[_active];
+    const item = _hotbar[_active];
     if (!item) return;
-    const def = ITEM_DEFS[item.type];
+    const def = _def(item.type);
     if (!def) return;
 
-    if (def.category === 'consumable') {
-      if (_state.player.health >= 100) { _showMsg('Vie déjà au maximum !'); return; }
-      const newHp = Math.min(100, _state.player.health + def.healAmount);
-      _state.player.health = newHp;
-      ZS.UI.setHealth(newHp);
-      item.qty--;
-      if (item.qty <= 0) _slots[_active] = null;
-      _renderSlots();
-      _syncToServer();
-    } else if (def.category === 'map') {
-      if (typeof ZS.Map !== 'undefined') ZS.Map.toggleMap();
+    if (def.category === 'food' || def.category === 'medical') {
+      ZS.Survival.useItem(item.type);
       return;
-    } else if (def.category === 'ammo') {
-      const pistol = _slots[0];
-      if (!pistol || pistol.type !== 'pistol') return;
-      if (pistol.ammo >= pistol.maxAmmo) { _showMsg('Munitions au maximum !'); return; }
-      pistol.ammo = pistol.maxAmmo;
-      item.qty--;
-      if (item.qty <= 0) _slots[_active] = null;
-      _renderSlots();
-      _syncToServer();
+    }
+    if (def.category === 'map') {
+      ZS.Map?.toggleMap();
+      return;
+    }
+    if (def.category === 'ammo') {
+      reloadWeapon();
+      return;
+    }
+    if (def.category === 'equipment') {
+      _equipFromHotbar(_active);
+      return;
     }
   }
 
-  // ── Bindings ────────────────────────────────────────────────────────────────
+  function _equipFromHotbar(idx) {
+    const item = _hotbar[idx];
+    if (!item) return;
+    const def  = _def(item.type);
+    if (!def || def.category !== 'equipment') return;
+    const slotName = def.slot_equipement;
+    const prev = _equip[slotName];
+    _equip[slotName] = { type: item.type, qty: 1 };
+    _hotbar[idx] = prev;
+    _renderHotbar();
+    if (_panelOpen) _renderInvPanel();
+    ZS.UI.showNotif(def.label + ' équipé');
+  }
+
+  // ── Panneau inventaire ─────────────────────────────────────────────────────
+
+  function _buildInvPanel() {
+    const p = document.createElement('div');
+    p.id = 'inv-panel';
+    Object.assign(p.style, {
+      display: 'none', position: 'fixed',
+      top: '50%', left: '50%', transform: 'translate(-50%,-50%)',
+      width: '400px', maxHeight: '80vh', overflowY: 'auto',
+      background: 'rgba(8,8,6,0.97)', border: '1px solid #5a4a2a',
+      borderRadius: '8px', padding: '12px', zIndex: '450',
+      color: '#e8d090', fontFamily: 'monospace', fontSize: '12px',
+      boxShadow: '0 4px 32px rgba(0,0,0,0.8)',
+    });
+
+    const hdr = document.createElement('div');
+    hdr.style.cssText = 'display:flex;justify-content:space-between;align-items:center;'
+      + 'margin-bottom:10px;border-bottom:1px solid #5a4a2a;padding-bottom:6px';
+    hdr.innerHTML = '<span style="font-size:15px;font-weight:bold">🎒 INVENTAIRE</span>'
+      + '<span style="opacity:.45;font-size:11px">[I] fermer</span>';
+    p.appendChild(hdr);
+
+    const eqTitle = document.createElement('div');
+    eqTitle.style.cssText = 'font-size:11px;color:#8a7a5a;margin-bottom:5px';
+    eqTitle.textContent = 'ÉQUIPEMENT';
+    p.appendChild(eqTitle);
+
+    const equip = document.createElement('div');
+    equip.id = 'inv-equip';
+    equip.style.cssText = 'display:grid;grid-template-columns:repeat(4,1fr);gap:5px;margin-bottom:10px';
+    p.appendChild(equip);
+
+    const bagTitle = document.createElement('div');
+    bagTitle.style.cssText = 'font-size:11px;color:#8a7a5a;margin-bottom:5px';
+    bagTitle.textContent = 'SAC  (clic → hotbar)';
+    p.appendChild(bagTitle);
+
+    const grid = document.createElement('div');
+    grid.id = 'inv-grid';
+    grid.style.cssText = 'display:grid;grid-template-columns:repeat(5,1fr);gap:5px';
+    p.appendChild(grid);
+
+    document.body.appendChild(p);
+  }
+
+  function _renderInvPanel() {
+    const equip = document.getElementById('inv-equip');
+    if (!equip) return;
+    equip.replaceChildren();
+    for (const [slotName, item] of Object.entries(_equip)) {
+      const el = _makeSlotEl(item);
+      const lbl = document.createElement('div');
+      lbl.style.cssText = 'position:absolute;top:2px;left:3px;font-size:9px;color:#7a6a4a;line-height:1';
+      lbl.textContent = slotName;
+      el.style.position = 'relative';
+      el.appendChild(lbl);
+      if (item) {
+        el.style.cursor = 'pointer';
+        el.title = _def(item.type)?.label + ' (déséquiper)';
+        el.addEventListener('click', () => { _unequip(slotName); _renderInvPanel(); });
+      }
+      equip.appendChild(el);
+    }
+
+    const grid = document.getElementById('inv-grid');
+    grid.replaceChildren();
+    for (let i = 0; i < _bag.length; i++) {
+      const el = _makeSlotEl(_bag[i]);
+      if (_bag[i]) {
+        const idx = i;
+        el.style.cursor = 'pointer';
+        el.title = _def(_bag[i].type)?.label || '';
+        el.addEventListener('click', () => { _bagToHotbar(idx); _renderInvPanel(); });
+      }
+      grid.appendChild(el);
+    }
+  }
+
+  function _makeSlotEl(item) {
+    const el = document.createElement('div');
+    Object.assign(el.style, {
+      width: '54px', height: '54px', background: 'rgba(28,26,22,0.85)',
+      border: item ? '1px solid #6a5a2a' : '1px solid #3a3428',
+      borderRadius: '5px', display: 'flex', flexDirection: 'column',
+      alignItems: 'center', justifyContent: 'center', fontSize: '22px',
+      position: 'relative', userSelect: 'none',
+    });
+    if (item) {
+      const def = _def(item.type);
+      el.textContent = def ? def.icon : '?';
+      if (item.qty > 1) {
+        const q = document.createElement('span');
+        q.style.cssText = 'position:absolute;bottom:2px;right:4px;font-size:10px;color:#e8d090;line-height:1';
+        q.textContent = item.qty;
+        el.appendChild(q);
+      }
+    }
+    return el;
+  }
+
+  function _bagToHotbar(bagIdx) {
+    const item = _bag[bagIdx];
+    if (!item) return;
+    for (let i = 0; i < HOTBAR_SIZE; i++) {
+      if (!_hotbar[i]) {
+        _hotbar[i] = item;
+        _bag[bagIdx] = null;
+        _renderHotbar();
+        return;
+      }
+    }
+    ZS.UI.showNotif('Hotbar pleine');
+  }
+
+  function _unequip(slotName) {
+    const item = _equip[slotName];
+    if (!item) return;
+    if (addItem(item.type, 1)) _equip[slotName] = null;
+    else ZS.UI.showNotif('Inventaire plein');
+  }
+
+  function togglePanel() {
+    _panelOpen = !_panelOpen;
+    const p = document.getElementById('inv-panel');
+    if (!p) return;
+    p.style.display = _panelOpen ? 'block' : 'none';
+    if (_panelOpen) _renderInvPanel();
+  }
+
+  // ── Bindings ───────────────────────────────────────────────────────────────
 
   function _bindKeys() {
     document.addEventListener('keydown', (e) => {
       const digit = parseInt(e.key);
       if (digit >= 1 && digit <= 6) _setActiveSlot(digit - 1);
       if (e.code === 'KeyE') _useActiveItem();
+      if (e.code === 'KeyI') togglePanel();
+      if (e.code === 'Escape' && _panelOpen) togglePanel();
     });
   }
 
@@ -261,11 +450,8 @@
       if (!slotEl) return;
       const idx = parseInt(slotEl.dataset.slot);
       if (idx === _active) {
-        const item = _slots[idx];
-        const def = item ? ITEM_DEFS[item.type] : null;
-        if (def && (def.category === 'consumable' || def.category === 'ammo')) {
-          _useActiveItem();
-        }
+        const def = _hotbar[idx] ? _def(_hotbar[idx].type) : null;
+        if (def && ['food','medical','ammo','equipment'].includes(def.category)) _useActiveItem();
       } else {
         _setActiveSlot(idx);
       }
@@ -276,25 +462,20 @@
     const btn = document.getElementById('use-btn');
     if (!btn) return;
     btn.addEventListener('click', _useActiveItem);
-    btn.addEventListener('touchstart', (e) => {
-      e.preventDefault();
-      _useActiveItem();
-    }, { passive: false });
+    btn.addEventListener('touchstart', (e) => { e.preventDefault(); _useActiveItem(); }, { passive: false });
   }
 
-  // ── Helpers ─────────────────────────────────────────────────────────────────
+  // ── Helpers ────────────────────────────────────────────────────────────────
 
-  function _makePickupMesh(type, def) {
-    const palette = { pistol: 0x3B82F6, ammo: 0xFFD700, medkit: 0xff3333, food: 0x22bb44 };
-    const color = palette[type] || 0xffffff;
+  function _def(type) { return ZS.ITEMS?.[type] || null; }
+
+  function _makePickupMesh(def) {
     const g = new THREE.Group();
-    // Main box
     const box = new THREE.Mesh(
       new THREE.BoxGeometry(0.38, 0.38, 0.38),
-      new THREE.MeshLambertMaterial({ color })
+      new THREE.MeshLambertMaterial({ color: def.color || 0xffffff })
     );
     g.add(box);
-    // Small glow ring (flat torus-like cylinder on top)
     const ring = new THREE.Mesh(
       new THREE.CylinderGeometry(0.32, 0.32, 0.04, 12),
       new THREE.MeshLambertMaterial({ color: 0xffffff, transparent: true, opacity: 0.25 })
@@ -304,25 +485,12 @@
     return g;
   }
 
-  function _showPickupNotif(def, full) {
-    if (full) { _showMsg('Inventaire plein !'); return; }
-    _showMsg('+1 ' + def.label);
-  }
-
-  function _showMsg(text) {
-    const el = document.getElementById('pickup-notif');
-    if (!el) return;
-    el.textContent = text;
-    el.style.opacity = '1';
-    clearTimeout(_showMsg._t);
-    _showMsg._t = setTimeout(() => { el.style.opacity = '0'; }, 1800);
-  }
-
   window.ZS = window.ZS || {};
   ZS.Inventory = {
     init, tick,
     spawnWorldItem, removeWorldItem, receivePickup,
+    countItem, addItem, removeItem, consumeOne,
     getActiveItem, getWeaponAmmo, decrementAmmo, reloadWeapon,
-    loadFromSave, clear
+    getArmorValue, togglePanel, loadFromSave, clear,
   };
 }());

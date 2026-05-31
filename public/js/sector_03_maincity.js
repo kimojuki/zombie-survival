@@ -90,13 +90,11 @@
     B.wall(scene,cx,cz-D/2,y,W,0.26,wH,hM);
     B.wall(scene,cx-W/2,cz,y,0.26,D,wH,hM);
     B.wall(scene,cx+W/2,cz,y,0.26,D,wH,hM);
-    // Mur SUD : porte double (2.8m) au centre → accès depuis rue nord
-    const dw=2.8, sw=(D-dw)/2;
-    B.wall(scene,cx,cz+D/2,y,     W, 0.26, 0.26, hM); // seuil bas (optique)
-    // On coupe le mur sud en 2 segments avec gap
-    B.wall(scene,cx-dw/2-sw/2, cz+D/2, y, W/2-dw/2, 0.26, wH, hM);
-    B.wall(scene,cx+dw/2+sw/2, cz+D/2, y, W/2-dw/2, 0.26, wH, hM);
-    B.box(scene, cx, cz+D/2, y+wH-0.6, dw, 0.6, 0.26, hM); // linteau
+    // Mur SUD : porte 2.8m centrée
+    const dw=2.8, sw=(W-dw)/2;
+    B.wall(scene,cx-dw/2-sw/2,cz+D/2,y,sw,0.26,wH,hM);
+    B.wall(scene,cx+dw/2+sw/2,cz+D/2,y,sw,0.26,wH,hM);
+    B.box(scene,cx,cz+D/2,y+wH-0.6,dw,0.6,0.26,hM);
     // Toit
     B.slab(scene,cx,cz,y+wH,W+0.3,D+0.3,new THREE.MeshLambertMaterial({color:0x4a4840}));
     // Fenêtres
@@ -245,7 +243,14 @@
     const y=ZS.getTerrainHeight(cx,cz);
     const cM=new THREE.MeshLambertMaterial({color:0x7a7880});
     B.slab(scene,cx,cz,y,W+0.8,D+0.8,mConc);
-    B.wall(scene,cx,cz-D/2,y,W,0.24,wH,cM); B.wall(scene,cx,cz+D/2,y,W,0.24,wH,cM);
+    // Murs NORD et SUD : porte 3.0m centrée (accès rue principale)
+    const dw_ns=3.0, sw_ns=(W-dw_ns)/2;
+    B.wall(scene,cx-dw_ns/2-sw_ns/2,cz-D/2,y,sw_ns,0.24,wH,cM);
+    B.wall(scene,cx+dw_ns/2+sw_ns/2,cz-D/2,y,sw_ns,0.24,wH,cM);
+    B.box(scene,cx,cz-D/2,y+wH-0.5,dw_ns,0.5,0.24,cM);
+    B.wall(scene,cx-dw_ns/2-sw_ns/2,cz+D/2,y,sw_ns,0.24,wH,cM);
+    B.wall(scene,cx+dw_ns/2+sw_ns/2,cz+D/2,y,sw_ns,0.24,wH,cM);
+    B.box(scene,cx,cz+D/2,y+wH-0.5,dw_ns,0.5,0.24,cM);
     // Mur OUEST : porte 2.5m (vers rue N-S ouest)
     const dw=2.5, sw=(D-dw)/2;
     B.wall(scene,cx-W/2,cz-dw/2-sw/2,y,0.24,sw,wH,cM);

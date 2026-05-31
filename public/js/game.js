@@ -100,9 +100,13 @@
   ZS.UI.setHealth(state.player.health);
   ZS.UI.setKills(state.player.kills);
 
+  // ── Survival ──────────────────────────────────────────────────────────────
+  ZS.Survival.init(state);
+
   // ── Inventory ─────────────────────────────────────────────────────────────
   ZS.Inventory.init(state, scene, socket);
   ZS.Map.init(state, scene);
+  ZS.Craft.init();
 
   // ── Viewport sizing — adapte le rendu à la vraie zone visible ───────────────
   const _isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) ||
@@ -281,6 +285,7 @@
     state.player.dead      = false;
     state.player.velocityY = 0;
     state.player.onGround  = true;
+    ZS.Survival.reset();
 
     const angle = Math.random() * Math.PI * 2;
     const dist  = 10 + Math.random() * 25;
@@ -308,6 +313,7 @@
     ZS.Zombies.tick(dt);
     ZS.Network.tick(dt);
     ZS.Inventory.tick(dt);
+    ZS.Survival.tick(dt);
     ZS.Map.tick();
     renderer.render(scene, camera);
   }

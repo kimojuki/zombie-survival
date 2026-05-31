@@ -147,6 +147,49 @@
     document.getElementById('ammo-count').textContent = a;
   }
 
+  function setHunger(v) {
+    const bar = document.getElementById('hunger-bar');
+    const txt = document.getElementById('hunger-text');
+    if (bar) bar.style.width = Math.max(0, v) + '%';
+    if (bar) bar.style.background = v > 40 ? '#e8a020' : v > 15 ? '#cc6820' : '#cc2020';
+    if (txt) txt.textContent = Math.max(0, v);
+  }
+
+  function setThirst(v) {
+    const bar = document.getElementById('thirst-bar');
+    const txt = document.getElementById('thirst-text');
+    if (bar) bar.style.width = Math.max(0, v) + '%';
+    if (bar) bar.style.background = v > 40 ? '#2288cc' : v > 15 ? '#225599' : '#cc2020';
+    if (txt) txt.textContent = Math.max(0, v);
+  }
+
+  function setStatus(bleeding, infected) {
+    const el = document.getElementById('status-effects');
+    if (!el) return;
+    el.replaceChildren();
+    if (bleeding) {
+      const b = document.createElement('span');
+      b.className = 'status-badge status-bleed';
+      b.textContent = '🩸 Saignement';
+      el.appendChild(b);
+    }
+    if (infected) {
+      const i = document.createElement('span');
+      i.className = 'status-badge status-infect';
+      i.textContent = '🦠 Infection';
+      el.appendChild(i);
+    }
+  }
+
+  function showNotif(text) {
+    const el = document.getElementById('pickup-notif');
+    if (!el) return;
+    el.textContent = text;
+    el.style.opacity = '1';
+    clearTimeout(showNotif._t);
+    showNotif._t = setTimeout(() => { el.style.opacity = '0'; }, 1800);
+  }
+
   function flashDamage() {
     const el = document.getElementById('damage-flash');
     el.style.opacity = 1;
@@ -176,6 +219,6 @@
   }
 
   window.ZS = window.ZS || {};
-  ZS.UI     = { init, setHealth, setKills, setAmmo, flashDamage, showWave, showDeath, hideDeath };
+  ZS.UI     = { init, setHealth, setKills, setAmmo, setHunger, setThirst, setStatus, showNotif, flashDamage, showWave, showDeath, hideDeath };
   ZS.logout = logout;
 }());

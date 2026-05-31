@@ -144,6 +144,57 @@ body {
 #health-text { font-size: 0.85rem; color: #fff; min-width: 36px; }
 
 #ammo-display { display: none; } /* ammo shown in hotbar now */
+
+/* ── Faim & Soif ─────────────────────────────────────────────── */
+#hunger-bar-wrap, #thirst-bar-wrap {
+  position: absolute; left: 16px;
+  display: flex; align-items: center; gap: 7px;
+  pointer-events: none;
+}
+#hunger-bar-wrap { top: 40px; }
+#thirst-bar-wrap { top: 62px; }
+#hunger-bar-bg, #thirst-bar-bg {
+  width: 120px; height: 9px;
+  background: rgba(0,0,0,0.5); border-radius: 5px; overflow: hidden;
+  border: 1px solid #555;
+}
+#hunger-bar {
+  height: 100%; width: 80%;
+  background: #e8a020; border-radius: 5px; transition: width 0.6s;
+}
+#thirst-bar {
+  height: 100%; width: 80%;
+  background: #2288cc; border-radius: 5px; transition: width 0.6s;
+}
+.stat-text { font-size: 0.75rem; color: #ccc; min-width: 26px; }
+
+/* ── États (saignement, infection) ──────────────────────────── */
+#status-effects {
+  position: absolute; top: 88px; left: 16px;
+  display: flex; gap: 5px; flex-wrap: wrap;
+  pointer-events: none;
+}
+.status-badge {
+  border-radius: 4px; font-size: 11px;
+  padding: 2px 7px; color: #fff; font-weight: 700;
+}
+.status-bleed  { background: rgba(180,0,0,0.75); }
+.status-infect { background: rgba(0,120,0,0.75); }
+
+/* ── Boutons flottants craft / inventaire ───────────────────── */
+#craft-btn, #inv-btn {
+  position: fixed;
+  width: 44px; height: 44px; border-radius: 10px;
+  background: rgba(0,0,0,0.65); border: 1px solid rgba(255,255,255,0.2);
+  color: #e8d090; font-size: 18px;
+  display: flex; align-items: center; justify-content: center;
+  cursor: pointer; pointer-events: auto;
+  backdrop-filter: blur(4px);
+  z-index: 60; transition: background 0.15s;
+}
+#craft-btn { bottom: 174px; left: 16px; }
+#inv-btn   { bottom: 226px; left: 16px; }
+#craft-btn:active, #inv-btn:active { background: rgba(100,80,20,0.7); transform: scale(0.9); }
 #kills-display {
   position: absolute; top: 16px; right: 62px;
   font-size: 0.9rem; color: #ffd700;

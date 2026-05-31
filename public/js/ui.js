@@ -163,6 +163,16 @@
     if (txt) txt.textContent = Math.max(0, v);
   }
 
+  function setInfection(v) {
+    const bar  = document.getElementById('infection-bar');
+    const wrap = document.getElementById('infection-bar-wrap');
+    if (!bar || !wrap) return;
+    const pct = Math.max(0, Math.min(100, v));
+    bar.style.width = pct + '%';
+    bar.style.background = pct < 40 ? '#44aa44' : pct < 70 ? '#aaaa22' : '#cc2222';
+    wrap.style.display = pct > 0 ? 'flex' : 'none';
+  }
+
   function setStatus(bleeding, infected) {
     const el = document.getElementById('status-effects');
     if (!el) return;
@@ -176,7 +186,7 @@
     if (infected) {
       const i = document.createElement('span');
       i.className = 'status-badge status-infect';
-      i.textContent = '🦠 Infection';
+      i.textContent = '🦠 Infecté';
       el.appendChild(i);
     }
   }
@@ -219,6 +229,6 @@
   }
 
   window.ZS = window.ZS || {};
-  ZS.UI     = { init, setHealth, setKills, setAmmo, setHunger, setThirst, setStatus, showNotif, flashDamage, showWave, showDeath, hideDeath };
+  ZS.UI     = { init, setHealth, setKills, setAmmo, setHunger, setThirst, setInfection, setStatus, showNotif, flashDamage, showWave, showDeath, hideDeath };
   ZS.logout = logout;
 }());

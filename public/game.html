@@ -40,6 +40,11 @@
     <div id="thirst-bar-bg"><div id="thirst-bar"></div></div>
     <span id="thirst-text" class="stat-text">80</span>
   </div>
+  <div id="infection-bar-wrap" style="display:none">
+    <span style="font-size:1rem">🦠</span>
+    <div id="infection-bar-bg"><div id="infection-bar"></div></div>
+    <span class="stat-text" style="color:#88ff88">Infection</span>
+  </div>
   <div id="status-effects"></div>
   <div id="kills-display">☠️ <span id="kills-count">0</span></div>
   <div id="ammo-display">🔫 <span id="ammo-count">30</span></div>
@@ -64,6 +69,7 @@
 <button id="shoot-btn">🔫</button>
 <button id="craft-btn" title="Artisanat [C]">⚒</button>
 <button id="inv-btn"   title="Inventaire [I]" onclick="ZS.Inventory.togglePanel()">🎒</button>
+<button id="map-btn"   title="Carte [M]"      onclick="ZS.Map.toggleMap()">🗺️</button>
 
 <!-- Hotbar -->
 <div id="hotbar"></div>

@@ -2,19 +2,20 @@
 (function () {
   'use strict';
 
-  const HUNGER_DECAY  = 0.28;  // /s → vide en ~6 min
-  const THIRST_DECAY  = 0.42;  // /s → vide en ~4 min
-  const BLEED_DMG     = 2.0;   // hp/s
-  const INFECT_DMG    = 0.4;   // hp/s
-  const STARVE_DMG    = 0.8;   // hp/s quand faim = 0
-  const DEHYDRATE_DMG = 1.2;   // hp/s quand soif = 0
+  const HUNGER_DECAY    = 0.28;  // /s → vide en ~6 min
+  const THIRST_DECAY    = 0.42;  // /s → vide en ~4 min
+  const BLEED_DMG       = 2.0;   // hp/s
+  const STARVE_DMG      = 0.8;   // hp/s quand faim = 0
+  const DEHYDRATE_DMG   = 1.2;   // hp/s quand soif = 0
+  const INFECT_PROGRESS = 0.7;   // pts/s → 0→100 en ~2min20
+  const INFECT_BITE_CHANCE = 0.25; // proba d'infection par coup
 
   const _sv = {
     faim: 80,
     soif: 80,
     endurance: 100,
     saignement: false,
-    infection: false,
+    infection: 0,   // 0–100 ; à 100 = mort
     _timer: 0,
     _pendingType: null,
   };
@@ -43,10 +44,21 @@
     _sv.soif = Math.max(0, _sv.soif - THIRST_DECAY * dt);
     _sv.endurance = Math.min(100, _sv.endurance + 8 * dt);
 
+    // Progression de l'infection
+    if (_sv.infection > 0) {
+      _sv.infection = Math.min(100, _sv.infection + INFECT_PROGRESS * dt);
+      ZS.UI.setInfection(_sv.infection);
+      if (_sv.infection >= 100 && !_state.player.dead) {
+        _state.player.health = 0;
+        _state.player.dead   = true;
+        ZS.UI.setHealth(0);
+        ZS.UI.showDeath(_state.player.kills);
+      }
+    }
+
     // Dégâts sur le temps
     let dmg = 0;
     if (_sv.saignement) dmg += BLEED_DMG     * dt;
-    if (_sv.infection)  dmg += INFECT_DMG    * dt;
     if (_sv.faim  <= 0) dmg += STARVE_DMG    * dt;
     if (_sv.soif  <= 0) dmg += DEHYDRATE_DMG * dt;
 
@@ -113,7 +125,7 @@
       p.health = Math.min(100, p.health + (def.soin_sante || 0));
       ZS.UI.setHealth(Math.floor(p.health));
       if (def.stoppe_saignement) _sv.saignement = false;
-      if (def.guerit_infection)  _sv.infection  = false;
+      if (def.guerit_infection)  { _sv.infection = 0; ZS.UI.setInfection(0); }
       ZS.UI.showNotif('+' + def.soin_sante + ' HP');
     }
 
@@ -122,17 +134,28 @@
     ZS.Inventory.consumeOne(type);
   }
 
-  // Appelé quand le joueur reçoit des dégâts (chance de saignement)
+  // Appelé quand un zombie frappe le joueur
   function applyDamage(dmg) {
-    if (!_sv.saignement && dmg >= 15 && Math.random() < 0.25) {
+    let changed = false;
+    // Chance de saignement
+    if (!_sv.saignement && dmg >= 10 && Math.random() < 0.25) {
       _sv.saignement = true;
-      ZS.UI.setStatus(_sv.saignement, _sv.infection);
+      changed = true;
     }
+    // Chance d'infection
+    if (Math.random() < INFECT_BITE_CHANCE) {
+      const gain = 8 + Math.random() * 12; // +8 à +20 pts
+      _sv.infection = Math.min(100, _sv.infection + gain);
+      ZS.UI.setInfection(_sv.infection);
+      ZS.UI.showNotif('⚠ Morsure infectée !');
+      changed = true;
+    }
+    if (changed) ZS.UI.setStatus(_sv.saignement, _sv.infection > 0);
   }
 
   function reset() {
     _sv.faim = 80; _sv.soif = 80; _sv.endurance = 100;
-    _sv.saignement = false; _sv.infection = false;
+    _sv.saignement = false; _sv.infection = 0;
     _sv._timer = 0; _sv._pendingType = null;
     _flush();
     _save();
@@ -143,7 +166,8 @@
   function _flush() {
     ZS.UI.setHunger(Math.floor(_sv.faim));
     ZS.UI.setThirst(Math.floor(_sv.soif));
-    ZS.UI.setStatus(_sv.saignement, _sv.infection);
+    ZS.UI.setInfection(_sv.infection);
+    ZS.UI.setStatus(_sv.saignement, _sv.infection > 0);
   }
 
   function _save() {

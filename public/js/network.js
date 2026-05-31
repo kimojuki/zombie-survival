@@ -79,6 +79,7 @@
     socket.on('item-add',    (d)  => ZS.Inventory.receivePickup(d.type));
 
     socket.on('take-damage', (d) => {
+      const dmg = state.player.health - d.health;
       state.player.health = d.health;
       ZS.UI.setHealth(d.health);
       if (d.health <= 0 && !state.player.dead) {
@@ -86,6 +87,7 @@
         ZS.UI.showDeath(state.player.kills);
       } else if (d.health > 0) {
         ZS.UI.flashDamage();
+        if (dmg > 0) ZS.Survival.applyDamage(dmg);
       }
     });
 

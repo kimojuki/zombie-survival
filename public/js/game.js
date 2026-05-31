@@ -78,6 +78,8 @@
   // FPS arms attached to camera
   const fpsArms = ZS.createFPSArms();
   camera.add(fpsArms);
+  // Expose globally pour que l'inventaire puisse changer l'item en main
+  ZS.setHandItem = (type) => ZS.updateHandItem(fpsArms, type);
 
   // Raycaster for shooting
   const raycaster = new THREE.Raycaster();

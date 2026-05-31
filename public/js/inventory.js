@@ -183,6 +183,7 @@
       _hotbar[0].ammo = 30;
     }
     _renderHotbar();
+    ZS.setHandItem?.(_hotbar[_active]?.type || null);
   }
 
   function clear() {
@@ -244,6 +245,7 @@
     if (active && _def(active.type)?.category === 'firearm') {
       ZS.UI.setAmmo(active.ammo ?? 0);
     }
+    ZS.setHandItem?.(_hotbar[_active]?.type || null);
   }
 
   function _setActiveSlot(i) {
@@ -253,6 +255,7 @@
     _active = i;
     bar.children[_active].classList.add('active');
     _updateUseBtn();
+    ZS.setHandItem?.(_hotbar[_active]?.type || null);
   }
 
   function _updateUseBtn() {

@@ -12,8 +12,9 @@
     { result: 'struct_escalier_bois',  qty: 1, ingredients: { res_planche: 8, res_clous: 16 } },
   ];
 
-  let _panel   = null;
-  let _visible = false;
+  let _panel    = null;
+  let _backdrop = null;
+  let _visible  = false;
 
   function init() {
     _buildPanel();
@@ -24,17 +25,26 @@
 
   function toggle() {
     _visible = !_visible;
-    _panel.style.display = _visible ? 'flex' : 'none';
+    _panel.style.display    = _visible ? 'flex' : 'none';
+    _backdrop.style.display = _visible ? 'block' : 'none';
     if (_visible) _render();
   }
 
   function _buildPanel() {
+    // Backdrop transparent pour fermer en tapant en dehors
+    _backdrop = document.createElement('div');
+    Object.assign(_backdrop.style, {
+      display: 'none', position: 'fixed', inset: '0', zIndex: '499',
+    });
+    _backdrop.addEventListener('click', toggle);
+    document.body.appendChild(_backdrop);
+
     _panel = document.createElement('div');
     _panel.id = 'craft-panel';
     Object.assign(_panel.style, {
       display: 'none', position: 'fixed',
       top: '50%', left: '50%', transform: 'translate(-50%,-50%)',
-      width: '360px', maxHeight: '75vh', overflowY: 'auto',
+      width: 'min(360px, 96vw)', maxHeight: '80vh', overflowY: 'auto',
       background: 'rgba(8,8,6,0.97)', border: '1px solid #6a5a2a',
       borderRadius: '8px', padding: '14px 12px', zIndex: '500',
       flexDirection: 'column', gap: '6px',
@@ -45,8 +55,17 @@
     const hdr = document.createElement('div');
     hdr.style.cssText = 'display:flex;justify-content:space-between;align-items:center;'
       + 'margin-bottom:8px;border-bottom:1px solid #5a4a2a;padding-bottom:6px';
-    hdr.innerHTML = '<span style="font-size:15px;font-weight:bold">⚒ ARTISANAT</span>'
-      + '<span style="opacity:.45;font-size:11px">[C] fermer</span>';
+    const title = document.createElement('span');
+    title.style.cssText = 'font-size:15px;font-weight:bold';
+    title.textContent = '⚒ ARTISANAT';
+    const closeBtn = document.createElement('button');
+    closeBtn.textContent = '✕';
+    closeBtn.style.cssText = 'background:rgba(100,60,10,0.5);color:#e8d090;border:1px solid #8a6228;'
+      + 'border-radius:6px;padding:5px 13px;cursor:pointer;font-size:16px;line-height:1;'
+      + 'min-width:40px;min-height:36px;';
+    closeBtn.addEventListener('click', toggle);
+    hdr.appendChild(title);
+    hdr.appendChild(closeBtn);
     _panel.appendChild(hdr);
 
     const list = document.createElement('div');

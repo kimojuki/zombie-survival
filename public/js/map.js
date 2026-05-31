@@ -90,13 +90,19 @@
 
   function _bindKeys() {
     document.addEventListener('keydown', e => {
-      if (e.code === 'KeyM')     toggleMap();
+      if (e.code === 'KeyM')          toggleMap();
       if (e.code === 'Escape' && _open) _close();
     });
-    document.getElementById('map-close-btn')
-      ?.addEventListener('click', _close);
-    document.getElementById('map-overlay')
-      ?.addEventListener('click', e => { if (e.target.id === 'map-overlay') _close(); });
+    const closeBtn = document.getElementById('map-close-btn');
+    if (closeBtn) {
+      closeBtn.addEventListener('click', _close);
+      closeBtn.addEventListener('touchstart', (e) => { e.preventDefault(); _close(); }, { passive: false });
+    }
+    const overlay = document.getElementById('map-overlay');
+    if (overlay) {
+      overlay.addEventListener('click',      (e) => { if (e.target === overlay) _close(); });
+      overlay.addEventListener('touchstart', (e) => { if (e.target === overlay) _close(); }, { passive: true });
+    }
   }
 
   // ── Dessin ────────────────────────────────────────────────────────────────

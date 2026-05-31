@@ -9,7 +9,8 @@
   let _bag    = Array(BAG_BASE).fill(null);
   let _equip  = { Tête: null, Torso: null, Mains: null, Dos: null };
   let _active = 0;
-  let _panelOpen = false;
+  let _panelOpen  = false;
+  let _invBackdrop = null;
 
   let _state, _scene, _socket;
   const _worldItems = new Map();
@@ -305,12 +306,19 @@
   // ── Panneau inventaire ─────────────────────────────────────────────────────
 
   function _buildInvPanel() {
+    _invBackdrop = document.createElement('div');
+    Object.assign(_invBackdrop.style, {
+      display: 'none', position: 'fixed', inset: '0', zIndex: '449',
+    });
+    _invBackdrop.addEventListener('click', togglePanel);
+    document.body.appendChild(_invBackdrop);
+
     const p = document.createElement('div');
     p.id = 'inv-panel';
     Object.assign(p.style, {
       display: 'none', position: 'fixed',
       top: '50%', left: '50%', transform: 'translate(-50%,-50%)',
-      width: '400px', maxHeight: '80vh', overflowY: 'auto',
+      width: 'min(400px, 96vw)', maxHeight: '80vh', overflowY: 'auto',
       background: 'rgba(8,8,6,0.97)', border: '1px solid #5a4a2a',
       borderRadius: '8px', padding: '12px', zIndex: '450',
       color: '#e8d090', fontFamily: 'monospace', fontSize: '12px',
@@ -320,8 +328,17 @@
     const hdr = document.createElement('div');
     hdr.style.cssText = 'display:flex;justify-content:space-between;align-items:center;'
       + 'margin-bottom:10px;border-bottom:1px solid #5a4a2a;padding-bottom:6px';
-    hdr.innerHTML = '<span style="font-size:15px;font-weight:bold">🎒 INVENTAIRE</span>'
-      + '<span style="opacity:.45;font-size:11px">[I] fermer</span>';
+    const title = document.createElement('span');
+    title.style.cssText = 'font-size:15px;font-weight:bold';
+    title.textContent = '🎒 INVENTAIRE';
+    const closeBtn = document.createElement('button');
+    closeBtn.textContent = '✕';
+    closeBtn.style.cssText = 'background:rgba(80,50,10,0.5);color:#e8d090;border:1px solid #7a5a28;'
+      + 'border-radius:6px;padding:5px 13px;cursor:pointer;font-size:16px;line-height:1;'
+      + 'min-width:40px;min-height:36px;';
+    closeBtn.addEventListener('click', togglePanel);
+    hdr.appendChild(title);
+    hdr.appendChild(closeBtn);
     p.appendChild(hdr);
 
     const eqTitle = document.createElement('div');
@@ -428,6 +445,7 @@
     const p = document.getElementById('inv-panel');
     if (!p) return;
     p.style.display = _panelOpen ? 'block' : 'none';
+    if (_invBackdrop) _invBackdrop.style.display = _panelOpen ? 'block' : 'none';
     if (_panelOpen) _renderInvPanel();
   }
 

@@ -107,6 +107,7 @@
   ZS.Inventory.init(state, scene, socket);
   ZS.Map.init(state, scene);
   ZS.Craft.init();
+  _addTestItems();
 
   // ── Viewport sizing — adapte le rendu à la vraie zone visible ───────────────
   const _isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) ||
@@ -437,5 +438,36 @@
 
     p.rotY = state.camera.yaw;
     ZS.Network.sendMove(p.x, p.y, p.z, p.rotY);
+  }
+  // ── Items de test — un exemplaire de chaque item ─────────────────────────
+  function _addTestItems() {
+    const testItems = [
+      // Nourriture
+      ['food_eau_bouteille', 5], ['food_boisson_energisante', 3],
+      ['food_conserves', 5], ['food_haricots_boite', 5],
+      ['food_soupe_conserve', 5], ['food_pain', 3],
+      ['food_fruits', 5], ['food_viande_crue', 3], ['food_viande_cuite', 3],
+      // Médical
+      ['med_bandage', 5], ['med_kit_soin', 2], ['med_seringue_anti_infection', 3],
+      // Armes mêlée
+      ['wpn_couteau', 1], ['wpn_hache_combat', 1],
+      ['wpn_barre_fer', 1], ['wpn_machette', 1],
+      // Armes à feu
+      ['wpn_pistolet', 1], ['wpn_fusil_pompe', 1], ['wpn_fusil_chasse', 1],
+      // Munitions
+      ['ammo_pistolet', 30], ['ammo_fusil_pompe', 12], ['ammo_fusil_chasse', 10],
+      // Équipement
+      ['eq_grand_sac', 1], ['eq_casque', 1], ['eq_gilet_protection', 1], ['eq_gants', 1],
+      // Ressources
+      ['res_bois_brut', 50], ['res_planche', 30], ['res_ferraille', 20],
+      ['res_metal', 20], ['res_clous', 100], ['res_ruban_adhesif', 10],
+      ['res_chiffon', 20], ['res_corde', 15],
+      // Outils
+      ['tool_marteau', 1], ['tool_hachette', 1], ['tool_pioche', 1], ['tool_torche', 1],
+      // Structures
+      ['struct_mur_bois', 5], ['struct_porte_bois', 3],
+      ['struct_plancher_bois', 5], ['struct_escalier_bois', 3],
+    ];
+    for (const [type, qty] of testItems) ZS.Inventory.addItem(type, qty);
   }
 }());

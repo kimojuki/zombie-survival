@@ -1,16 +1,16 @@
-// Inventory — hotbar (6 slots) + sac (20 slots) + équipement
+// Inventory — hotbar (6 slots) + sac (slots selon le sac équipé) + équipement
 (function () {
   'use strict';
 
   const HOTBAR_SIZE = 6;
-  const BAG_BASE    = 20;
 
   let _hotbar = Array(HOTBAR_SIZE).fill(null);
-  let _bag    = Array(BAG_BASE).fill(null);
+  let _bag    = [];     // taille = slots_inventaire_bonus du sac équipé (0 sans sac)
   let _equip  = { Tête: null, Torso: null, Mains: null, Dos: null };
   let _active = 0;
   let _panelOpen  = false;
   let _invBackdrop = null;
+  let _sel = null;      // sélection pour déplacement : { zone:'hotbar'|'bag'|'equip', idx }
 
   let _state, _scene, _socket;
   const _worldItems = new Map();
@@ -21,12 +21,37 @@
     _state  = state;
     _scene  = scene;
     _socket = socket;
+    // Équipe le grand sac par défaut → maximum de slots disponibles
+    _equip['Dos'] = { type: 'eq_grand_sac', qty: 1 };
+    _resizeBag();
     _buildHotbarDOM();
     _buildInvPanel();
     _renderHotbar();
     _bindKeys();
     _bindHotbarTouch();
     _setupUseBtn();
+  }
+
+  // ── Capacité du sac (dépend du sac équipé) ──────────────────────────────────
+
+  function _bagCapacity() {
+    const bag = _equip['Dos'];
+    return bag ? (_def(bag.type)?.slots_inventaire_bonus || 0) : 0;
+  }
+
+  // Redimensionne _bag selon le sac équipé ; le surplus part en hotbar sinon perdu.
+  function _resizeBag() {
+    const cap   = _bagCapacity();
+    const items = _bag.filter(Boolean);
+    const next  = Array(cap).fill(null);
+    const overflow = [];
+    items.forEach((it, i) => { if (i < cap) next[i] = it; else overflow.push(it); });
+    _bag = next;
+    for (const it of overflow) {
+      let placed = false;
+      for (let i = 0; i < HOTBAR_SIZE && !placed; i++) if (!_hotbar[i]) { _hotbar[i] = it; placed = true; }
+      if (!placed) ZS.UI?.showNotif?.('Sac réduit : objets perdus');
+    }
   }
 
   // ── Tick ───────────────────────────────────────────────────────────────────
@@ -208,9 +233,12 @@
 
   function clear() {
     _hotbar = Array(HOTBAR_SIZE).fill(null);
-    _bag    = Array(BAG_BASE).fill(null);
-    _equip  = { Tête: null, Torso: null, Mains: null, Dos: null };
+    _equip  = { Tête: null, Torso: null, Mains: null, Dos: { type: 'eq_grand_sac', qty: 1 } };
+    _bag    = [];
+    _resizeBag();
+    _sel = null;
     _renderHotbar();
+    if (_panelOpen) _renderInvPanel();
     _syncToServer();
   }
 
@@ -328,9 +356,80 @@
     const prev = _equip[slotName];
     _equip[slotName] = { type: item.type, qty: 1 };
     _hotbar[idx] = prev;
+    if (slotName === 'Dos') _resizeBag();
     _renderHotbar();
     if (_panelOpen) _renderInvPanel();
     ZS.UI.showNotif(def.label + ' équipé');
+  }
+
+  // ── Déplacement d'items (tap pour sélectionner → tap pour déposer) ──────────
+
+  function _getSlot(zone, idx) {
+    if (zone === 'equip')  return _equip[idx];
+    if (zone === 'hotbar') return _hotbar[idx];
+    return _bag[idx];
+  }
+  function _setSlot(zone, idx, val) {
+    if (zone === 'equip')  { _equip[idx] = val; return; }
+    if (zone === 'hotbar') { _hotbar[idx] = val; return; }
+    _bag[idx] = val;
+  }
+
+  function _clickSlot(zone, idx) {
+    if (!_sel) {
+      if (_getSlot(zone, idx)) _sel = { zone, idx };   // ramasse
+    } else {
+      _moveOrSwap(_sel, { zone, idx });                 // dépose
+      _sel = null;
+    }
+    _renderInvPanel();
+    _renderHotbar();
+  }
+
+  function _moveOrSwap(from, to) {
+    if (from.zone === to.zone && from.idx === to.idx) return;   // même slot → annule
+    const src = _getSlot(from.zone, from.idx);
+    if (!src) return;
+    const dst = _getSlot(to.zone, to.idx);
+
+    // Validation des emplacements d'équipement (slot précis requis)
+    if (to.zone === 'equip') {
+      const def = _def(src.type);
+      if (!def || def.category !== 'equipment' || def.slot_equipement !== to.idx) {
+        ZS.UI.showNotif('Emplacement incompatible'); return;
+      }
+    }
+    if (from.zone === 'equip' && dst) {
+      const ddef = _def(dst.type);
+      if (!ddef || ddef.category !== 'equipment' || ddef.slot_equipement !== from.idx) {
+        ZS.UI.showNotif('Emplacement incompatible'); return;
+      }
+    }
+
+    // Fusion de piles identiques
+    if (dst && dst.type === src.type) {
+      const max = _def(src.type)?.maxStack || 1;
+      if (max > 1) {
+        const total = (dst.qty || 1) + (src.qty || 1);
+        dst.qty = Math.min(max, total);
+        const rest = total - dst.qty;
+        _setSlot(from.zone, from.idx, rest > 0 ? { ...src, qty: rest } : null);
+        _afterMove(from, to);
+        return;
+      }
+    }
+
+    // Échange
+    _setSlot(to.zone, to.idx, src);
+    _setSlot(from.zone, from.idx, dst || null);
+    _afterMove(from, to);
+  }
+
+  function _afterMove(from, to) {
+    const touchedDos = (from.zone === 'equip' && from.idx === 'Dos')
+                    || (to.zone === 'equip' && to.idx === 'Dos');
+    if (touchedDos) _resizeBag();
+    _syncToServer();
   }
 
   // ── Panneau inventaire ─────────────────────────────────────────────────────
@@ -371,6 +470,11 @@
     hdr.appendChild(closeBtn);
     p.appendChild(hdr);
 
+    const hint = document.createElement('div');
+    hint.style.cssText = 'font-size:10px;color:#9a8a6a;margin-bottom:8px;font-style:italic';
+    hint.textContent = 'Touchez un objet puis un emplacement pour le déplacer.';
+    p.appendChild(hint);
+
     const eqTitle = document.createElement('div');
     eqTitle.style.cssText = 'font-size:11px;color:#8a7a5a;margin-bottom:5px';
     eqTitle.textContent = 'ÉQUIPEMENT';
@@ -381,9 +485,20 @@
     equip.style.cssText = 'display:grid;grid-template-columns:repeat(4,1fr);gap:5px;margin-bottom:10px';
     p.appendChild(equip);
 
+    const hbTitle = document.createElement('div');
+    hbTitle.style.cssText = 'font-size:11px;color:#8a7a5a;margin-bottom:5px';
+    hbTitle.textContent = 'SLOTS JOUEUR';
+    p.appendChild(hbTitle);
+
+    const hbGrid = document.createElement('div');
+    hbGrid.id = 'inv-hotbar';
+    hbGrid.style.cssText = 'display:grid;grid-template-columns:repeat(6,1fr);gap:5px;margin-bottom:10px';
+    p.appendChild(hbGrid);
+
     const bagTitle = document.createElement('div');
+    bagTitle.id = 'inv-bag-title';
     bagTitle.style.cssText = 'font-size:11px;color:#8a7a5a;margin-bottom:5px';
-    bagTitle.textContent = 'SAC  (clic → hotbar)';
+    bagTitle.textContent = 'SAC';
     p.appendChild(bagTitle);
 
     const grid = document.createElement('div');
@@ -397,34 +512,51 @@
   function _renderInvPanel() {
     const equip = document.getElementById('inv-equip');
     if (!equip) return;
+
+    // ÉQUIPEMENT
     equip.replaceChildren();
     for (const [slotName, item] of Object.entries(_equip)) {
       const el = _makeSlotEl(item);
       const lbl = document.createElement('div');
       lbl.style.cssText = 'position:absolute;top:2px;left:3px;font-size:9px;color:#7a6a4a;line-height:1';
       lbl.textContent = slotName;
-      el.style.position = 'relative';
       el.appendChild(lbl);
-      if (item) {
-        el.style.cursor = 'pointer';
-        el.title = _def(item.type)?.label + ' (déséquiper)';
-        el.addEventListener('click', () => { _unequip(slotName); _renderInvPanel(); });
-      }
+      _wireSlot(el, 'equip', slotName);
       equip.appendChild(el);
     }
 
+    // SLOTS JOUEUR (hotbar)
+    const hb = document.getElementById('inv-hotbar');
+    hb.replaceChildren();
+    for (let i = 0; i < HOTBAR_SIZE; i++) {
+      const el = _makeSlotEl(_hotbar[i]);
+      if (i === _active) el.style.boxShadow = 'inset 0 0 0 2px #d4b860';
+      _wireSlot(el, 'hotbar', i);
+      hb.appendChild(el);
+    }
+
+    // SAC
+    const title = document.getElementById('inv-bag-title');
+    if (title) title.textContent = _bag.length ? `SAC  (${_bag.length} slots)` : 'SAC  (aucun sac équipé)';
     const grid = document.getElementById('inv-grid');
     grid.replaceChildren();
     for (let i = 0; i < _bag.length; i++) {
       const el = _makeSlotEl(_bag[i]);
-      if (_bag[i]) {
-        const idx = i;
-        el.style.cursor = 'pointer';
-        el.title = _def(_bag[i].type)?.label || '';
-        el.addEventListener('click', () => { _bagToHotbar(idx); _renderInvPanel(); });
-      }
+      _wireSlot(el, 'bag', i);
       grid.appendChild(el);
     }
+  }
+
+  // Rend un slot cliquable + surligne le slot sélectionné.
+  function _wireSlot(el, zone, idx) {
+    el.style.cursor = 'pointer';
+    const item = _getSlot(zone, idx);
+    if (item) el.title = _def(item.type)?.label || '';
+    if (_sel && _sel.zone === zone && _sel.idx === idx) {
+      el.style.boxShadow = 'inset 0 0 0 2px #6cf, 0 0 8px #6cf';
+      el.style.borderColor = '#6cf';
+    }
+    el.addEventListener('click', (e) => { e.stopPropagation(); _clickSlot(zone, idx); });
   }
 
   function _makeSlotEl(item) {
@@ -456,31 +588,11 @@
     return el;
   }
 
-  function _bagToHotbar(bagIdx) {
-    const item = _bag[bagIdx];
-    if (!item) return;
-    for (let i = 0; i < HOTBAR_SIZE; i++) {
-      if (!_hotbar[i]) {
-        _hotbar[i] = item;
-        _bag[bagIdx] = null;
-        _renderHotbar();
-        return;
-      }
-    }
-    ZS.UI.showNotif('Hotbar pleine');
-  }
-
-  function _unequip(slotName) {
-    const item = _equip[slotName];
-    if (!item) return;
-    if (addItem(item.type, 1)) _equip[slotName] = null;
-    else ZS.UI.showNotif('Inventaire plein');
-  }
-
   function togglePanel() {
     _panelOpen = !_panelOpen;
     const p = document.getElementById('inv-panel');
     if (!p) return;
+    _sel = null;
     p.style.display = _panelOpen ? 'block' : 'none';
     if (_invBackdrop) _invBackdrop.style.display = _panelOpen ? 'block' : 'none';
     if (_panelOpen) _renderInvPanel();

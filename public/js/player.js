@@ -66,33 +66,47 @@
   }
 
   // ── Modèles .glb (libres de droits, Quaternius CC0) ─────────────────────────
-  // type → fichier dans /models, taille cible (plus grande dimension, en m),
-  // et rotation d'orientation [x, y, z] en radians.
-  // Les types absents utilisent le modèle procédural ci-dessous (fallback).
+  // type → fichier dans /models + rotation d'orientation [x, y, z] (radians).
+  // La taille est gérée par _fit(). Les types absents → modèle procédural.
   const GLB = {
     // Armes à feu
-    wpn_pistolet:        { file: 'pistol',        fit: 0.34, rot: [0, Math.PI / 2, 0] },
-    pistol:              { file: 'pistol',        fit: 0.34, rot: [0, Math.PI / 2, 0] },
-    wpn_fusil_pompe:     { file: 'shotgun',       fit: 0.60, rot: [0, Math.PI / 2, 0] },
-    wpn_fusil_chasse:    { file: 'sniper_rifle',  fit: 0.70, rot: [0, Math.PI / 2, 0] },
+    wpn_pistolet:        { file: 'pistol',        rot: [0, Math.PI / 2, 0] },
+    pistol:              { file: 'pistol',        rot: [0, Math.PI / 2, 0] },
+    wpn_fusil_pompe:     { file: 'shotgun',       rot: [0, Math.PI / 2, 0] },
+    wpn_fusil_chasse:    { file: 'sniper_rifle',  rot: [0, Math.PI / 2, 0] },
     // Mêlée / outils
-    wpn_couteau:         { file: 'knife',         fit: 0.30, rot: [0, 0, 0] },
-    wpn_hache_combat:    { file: 'axe',           fit: 0.50, rot: [0, 0, 0] },
-    tool_hachette:       { file: 'axe',           fit: 0.42, rot: [0, 0, 0] },
-    tool_pioche:         { file: 'shovel',        fit: 0.55, rot: [0, 0, 0] },
-    tool_torche:         { file: 'wooden_torch',  fit: 0.50, rot: [0, 0, 0] },
+    wpn_couteau:         { file: 'knife',         rot: [0, 0, 0] },
+    wpn_hache_combat:    { file: 'axe',           rot: [0, 0, 0] },
+    tool_hachette:       { file: 'axe',           rot: [0, 0, 0] },
+    tool_pioche:         { file: 'shovel',        rot: [0, 0, 0] },
+    tool_torche:         { file: 'wooden_torch',  rot: [0, 0, 0] },
     // Nourriture / médical / ressources
-    food_eau_bouteille:  { file: 'water_bottle',  fit: 0.20, rot: [0, 0, 0] },
-    food_conserves:      { file: 'can',           fit: 0.14, rot: [0, 0, 0] },
-    food_haricots_boite: { file: 'can_red',       fit: 0.14, rot: [0, 0, 0] },
-    food_soupe_conserve: { file: 'can_broken',    fit: 0.14, rot: [0, 0, 0] },
-    med_kit_soin:        { file: 'first_aid_kit', fit: 0.20, rot: [0, 0, 0] },
-    res_bois_brut:       { file: 'wood_log',      fit: 0.26, rot: [0, 0, 0] },
+    food_eau_bouteille:  { file: 'water_bottle',  rot: [0, 0, 0] },
+    food_conserves:      { file: 'can',           rot: [0, 0, 0] },
+    food_haricots_boite: { file: 'can_red',       rot: [0, 0, 0] },
+    food_soupe_conserve: { file: 'can_broken',    rot: [0, 0, 0] },
+    med_kit_soin:        { file: 'first_aid_kit', rot: [0, 0, 0] },
+    res_bois_brut:       { file: 'wood_log',      rot: [0, 0, 0] },
     // Équipement (sac à dos, 3 tailles → même modèle)
-    eq_petit_sac:        { file: 'backpack',      fit: 0.26, rot: [0, Math.PI, 0] },
-    eq_sac_moyen:        { file: 'backpack',      fit: 0.30, rot: [0, Math.PI, 0] },
-    eq_grand_sac:        { file: 'backpack',      fit: 0.34, rot: [0, Math.PI, 0] },
+    eq_petit_sac:        { file: 'backpack',      rot: [0, Math.PI, 0] },
+    eq_sac_moyen:        { file: 'backpack',      rot: [0, Math.PI, 0] },
+    eq_grand_sac:        { file: 'backpack',      rot: [0, Math.PI, 0] },
   };
+
+  // Taille cible (plus grande dimension, en m) de l'item en main — volontairement
+  // généreuse pour que l'objet équipé soit bien visible.
+  function _fit(type) {
+    if (type === 'wpn_pistolet' || type === 'pistol') return 0.42;
+    if (type === 'wpn_fusil_chasse')                  return 0.82;
+    if (type === 'wpn_barre_fer' || type === 'wpn_lance_artisanale') return 0.80;
+    const cat = ZS.ITEMS?.[type]?.category || '';
+    const byCat = {
+      firearm: 0.72, melee: 0.62, tool: 0.60,
+      food: 0.32, medical: 0.32, ammo: 0.32, resource: 0.34,
+      equipment: 0.44, structure: 0.46,
+    };
+    return byCat[cat] || 0.36;
+  }
 
   const _loader = (typeof THREE !== 'undefined' && THREE.GLTFLoader) ? new THREE.GLTFLoader() : null;
   const _cache  = {};   // file → Promise<THREE.Object3D> (template chargé)
@@ -112,20 +126,31 @@
     return _cache[file];
   }
 
-  // Clone le template, le recentre, l'ajuste à `fit` (m) et applique l'orientation.
-  function _fitClone(template, fit, rot) {
-    const obj = template.clone(true);
+  // Recentre l'objet, l'ajuste à `fit` (m) et applique l'orientation `rot`.
+  function _normalize(obj, fit, rot) {
     const box = new THREE.Box3().setFromObject(obj);
     const size = new THREE.Vector3(); box.getSize(size);
     const center = new THREE.Vector3(); box.getCenter(center);
-    const maxDim = Math.max(size.x, size.y, size.z) || 1;
-    const s = fit / maxDim;
+    const s = fit / (Math.max(size.x, size.y, size.z) || 1);
     obj.scale.setScalar(s);
     obj.position.set(-center.x * s, -center.y * s, -center.z * s);
     const centered = new THREE.Group(); centered.add(obj);     // géométrie centrée à l'origine
     const pivot = new THREE.Group(); pivot.add(centered);      // pivot pour l'orientation
     if (rot) pivot.rotation.set(rot[0] || 0, rot[1] || 0, rot[2] || 0);
     return pivot;
+  }
+
+  // Renvoie une Promesse du modèle d'affichage normalisé (GLB sinon procédural).
+  // Utilisé par l'item en main ET le générateur d'icônes (ZS.Icons).
+  function getItemModel(type) {
+    const fit  = _fit(type);
+    const spec = GLB[type];
+    if (spec && _loader) {
+      return _loadGLB(spec.file)
+        .then((t) => _normalize(t.clone(true), fit, spec.rot))
+        .catch(() => _normalize(_buildModel(type), fit, null));
+    }
+    return Promise.resolve(_normalize(_buildModel(type), fit, null));
   }
 
   // ── Mise à jour de l'item en main ─────────────────────────────────────────
@@ -142,35 +167,35 @@
     holder.position.set(p.x, p.y, p.z);
     holder.rotation.set(p.rx, p.ry, p.rz);
 
-    // 1) Modèle procédural immédiat (affichage instantané, jamais de trou visuel)
-    const proc = _buildModel(type);
-    if (proc) holder.add(proc);
+    // 1) Modèle procédural normalisé immédiat (affichage instantané)
+    holder.add(_normalize(_buildModel(type), _fit(type), null));
 
-    // 2) Si un .glb existe, on le charge et on remplace le procédural une fois prêt
+    // 2) Si un .glb existe, on le charge et on remplace une fois prêt
     const spec = GLB[type];
     if (spec && _loader) {
-      _loadGLB(spec.file).then((template) => {
+      _loadGLB(spec.file).then((t) => {
         if (holder.userData.type !== type) return;             // l'item a changé entre-temps
         while (holder.children.length) holder.remove(holder.children[0]);
-        holder.add(_fitClone(template, spec.fit, spec.rot));
+        holder.add(_normalize(t.clone(true), _fit(type), spec.rot));
       }).catch(() => { /* on garde le fallback procédural */ });
     }
   }
 
-  // Position en main selon catégorie
+  // Position en main selon catégorie (rapprochée/centrée pour bien voir l'objet)
   function _pos(cat, type) {
     if (type === 'wpn_barre_fer' || type === 'wpn_lance_artisanale')
-      return { x: 0.10, y: -0.20, z: -0.52, rx: 0.2, ry: 0, rz: 0 };
+      return { x: 0.10, y: -0.16, z: -0.60, rx: 0.15, ry: 0, rz: 0 };
     const T = {
-      firearm:  { x: 0.20, y: -0.24, z: -0.46, rx: 0,    ry: 0.10, rz: 0 },
-      melee:    { x: 0.21, y: -0.21, z: -0.44, rx: 0.25, ry: 0.08, rz: 0 },
-      tool:     { x: 0.21, y: -0.21, z: -0.44, rx: 0.25, ry: 0.08, rz: 0 },
-      food:     { x: 0.19, y: -0.27, z: -0.40, rx: 0,    ry: 0.22, rz:-0.10 },
-      medical:  { x: 0.19, y: -0.27, z: -0.40, rx: 0,    ry: 0.22, rz:-0.10 },
-      ammo:     { x: 0.19, y: -0.29, z: -0.38, rx: 0,    ry: 0.22, rz:-0.10 },
-      resource: { x: 0.19, y: -0.29, z: -0.38, rx: 0,    ry: 0.22, rz:-0.10 },
+      firearm:  { x: 0.15, y: -0.18, z: -0.55, rx: 0,    ry: 0.10, rz: 0    },
+      melee:    { x: 0.17, y: -0.14, z: -0.50, rx: 0.20, ry: 0.08, rz: 0.05 },
+      tool:     { x: 0.17, y: -0.14, z: -0.50, rx: 0.20, ry: 0.08, rz: 0.05 },
+      food:     { x: 0.15, y: -0.18, z: -0.46, rx: 0,    ry: 0.20, rz: 0    },
+      medical:  { x: 0.15, y: -0.18, z: -0.46, rx: 0,    ry: 0.20, rz: 0    },
+      ammo:     { x: 0.15, y: -0.20, z: -0.46, rx: 0,    ry: 0.20, rz: 0    },
+      resource: { x: 0.15, y: -0.20, z: -0.46, rx: 0,    ry: 0.20, rz: 0    },
+      equipment:{ x: 0.14, y: -0.18, z: -0.52, rx: 0,    ry: 0.20, rz: 0    },
     };
-    return T[cat] || { x: 0.19, y: -0.27, z: -0.40, rx: 0, ry: 0.22, rz:-0.10 };
+    return T[cat] || { x: 0.15, y: -0.18, z: -0.46, rx: 0, ry: 0.20, rz: 0 };
   }
 
   // ── Constructeur principal ────────────────────────────────────────────────
@@ -539,4 +564,5 @@
   ZS.createZombieModel = createZombieModel;
   ZS.createFPSArms     = createFPSArms;
   ZS.updateHandItem    = updateHandItem;
+  ZS.getItemModel      = getItemModel;
 }());

@@ -228,7 +228,12 @@
         const def  = _def(item.type);
         const icon = document.createElement('span');
         icon.className   = 'hb-icon';
+        Object.assign(icon.style, {
+          width: '42px', height: '42px', display: 'flex',
+          alignItems: 'center', justifyContent: 'center',
+        });
         icon.textContent = def ? def.icon : '?';
+        ZS.Icons?.apply(icon, item.type);
         const count = document.createElement('span');
         count.className   = 'hb-count';
         if (def?.category === 'firearm') {
@@ -411,7 +416,14 @@
     });
     if (item) {
       const def = _def(item.type);
-      el.textContent = def ? def.icon : '?';
+      const ic = document.createElement('span');
+      Object.assign(ic.style, {
+        width: '46px', height: '46px', display: 'flex',
+        alignItems: 'center', justifyContent: 'center', fontSize: '22px',
+      });
+      ic.textContent = def ? def.icon : '?';
+      el.appendChild(ic);
+      ZS.Icons?.apply(ic, item.type);
       if (item.qty > 1) {
         const q = document.createElement('span');
         q.style.cssText = 'position:absolute;bottom:2px;right:4px;font-size:10px;color:#e8d090;line-height:1';

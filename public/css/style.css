@@ -353,6 +353,18 @@ body {
 }
 #shoot-btn:active { transform: scale(0.9); }
 
+#reload-btn {
+  position: fixed; right: 28px; bottom: 185px;
+  width: 56px; height: 56px; border-radius: 50%;
+  background: rgba(70,72,82,0.9); border: 3px solid #c9b88a;
+  color: #fff; font-size: 1.4rem;
+  display: flex; align-items: center; justify-content: center;
+  cursor: pointer; pointer-events: auto;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.45);
+  transition: transform 0.1s; z-index: 60;
+}
+#reload-btn:active { transform: scale(0.9); }
+
 #jump-btn {
   position: fixed; right: 110px; bottom: 100px;
   width: 65px; height: 65px; border-radius: 50%;

@@ -253,33 +253,129 @@
     state.camera.pitch = Math.max(-Math.PI / 2 + 0.05, Math.min(Math.PI / 2 - 0.05, state.camera.pitch));
   });
 
-  // ── Shooting ──────────────────────────────────────────────────────────────
-  function shoot() {
-    if (state.player.dead) return;
-    if (!ZS.Inventory.decrementAmmo()) return; // no weapon or no ammo
+  // ── Combat : tir, mêlée, abattage d'arbres ─────────────────────────────────
+  const FIRE_INTERVAL = {
+    wpn_pistolet: 0.28, pistol: 0.28, wpn_fusil_pompe: 0.85, wpn_fusil_chasse: 1.10,
+  };
+  let _lastAttack  = 0;     // s — dernière attaque
+  let _reloadUntil = 0;     // s — fin du rechargement en cours
+  let _swing = null;        // animation arme : { start, dur, kind }
+  const _now = () => performance.now() / 1000;
 
-    // Muzzle flash
-    fpsArms.children[1] && fpsArms.children[1].traverse((c) => {
-      if (c.isMesh) {
+  function _muzzleFlash() {
+    const holder = fpsArms.getObjectByName('itemHolder');
+    if (!holder) return;
+    holder.traverse((c) => {
+      if (c.isMesh && c.material && c.material.color) {
         const orig = c.material.color.getHex();
-        c.material.color.set(0xffff88);
-        setTimeout(() => c.material.color.setHex(orig), 60);
+        c.material.color.set(0xffee88);
+        setTimeout(() => { try { c.material.color.setHex(orig); } catch (_) {} }, 55);
       }
     });
+  }
+
+  function _sendShot(baseDir, disp, dmg, range, radius) {
+    const dx = baseDir.x + (Math.random() - 0.5) * disp;
+    const dz = baseDir.z + (Math.random() - 0.5) * disp;
+    ZS.Network.sendShoot(camera.position.x, camera.position.z, dx, dz, dmg, range, radius);
+  }
+
+  function _startReload(def) {
+    if (_now() < _reloadUntil) return;
+    if (ZS.Inventory.getWeaponAmmo() >= (def.capacite_chargeur || 12)) return;
+    if (ZS.Inventory.countItem(def.type_munition_accepte) <= 0) { ZS.UI.showNotif('Pas de munitions'); return; }
+    const t = def.temps_rechargement || 2;
+    _reloadUntil = _now() + t;
+    ZS.UI.showNotif('Rechargement…');
+    setTimeout(() => ZS.Inventory.reloadWeapon(), t * 1000);
+  }
+
+  function _fireGun(item, def) {
+    const n = _now();
+    if (n < _reloadUntil) return;
+    if (n - _lastAttack < (FIRE_INTERVAL[item.type] || 0.3)) return;
+    if ((item.ammo || 0) <= 0) {
+      if (ZS.Inventory.countItem(def.type_munition_accepte) > 0) _startReload(def);
+      else ZS.UI.showNotif('Pas de munitions');
+      return;
+    }
+    _lastAttack = n;
+    ZS.Inventory.decrementAmmo();
+    _muzzleFlash();
+    _playSwing(0.12, 'recoil');
+    raycaster.setFromCamera(screenCenter, camera);
+    const dir = raycaster.ray.direction.clone();
+    const disp = def.dispersion_balle || 0.05;
+    if (item.type === 'wpn_fusil_pompe') {
+      for (let i = 0; i < 8; i++) _sendShot(dir, Math.max(disp, 0.25), def.degats_par_balle || 12, 40, 0.9);
+    } else {
+      _sendShot(dir, disp, def.degats_par_balle || 25, 90, 0.8);
+    }
+    if ((item.ammo || 0) <= 0 && ZS.Inventory.countItem(def.type_munition_accepte) > 0) _startReload(def);
+  }
+
+  function _meleeSwing(item, def) {
+    const n = _now();
+    if (n - _lastAttack < (def.cadence_attaque || 0.5)) return;
+    _lastAttack = n;
+    _playSwing((def.cadence_attaque || 0.5) * 0.55, 'melee');
 
     raycaster.setFromCamera(screenCenter, camera);
     const dir = raycaster.ray.direction;
-    ZS.Network.sendShoot(camera.position.x, camera.position.z, dir.x, dir.z);
+    const range = def.portee_metre || 1.2;
 
-    if (ZS.Inventory.getWeaponAmmo() === 0) {
-      setTimeout(() => ZS.Inventory.reloadWeapon(), 2000);
+    // Hache : tenter d'abattre un arbre devant soi
+    if ((item.type === 'wpn_hache_combat' || item.type === 'tool_hachette') && ZS.chopTree) {
+      const dmg  = item.type === 'tool_hachette' ? 2 : 1;
+      const chop = ZS.chopTree(camera.position.x, camera.position.z, dir.x, dir.z, Math.max(range + 1.2, 2.6), dmg);
+      if (chop && chop.felled) {
+        ZS.Inventory.addItem('res_bois_brut', 3);
+        ZS.UI.showNotif('Arbre abattu : +3 Bois brut');
+      }
+    }
+
+    // Frappe les zombies dans la portée
+    ZS.Network.sendShoot(camera.position.x, camera.position.z, dir.x, dir.z, def.degats_impact || 10, range, 1.2);
+    ZS.Inventory.wearActiveWeapon();
+  }
+
+  function attack() {
+    if (state.player.dead) return;
+    const item = ZS.Inventory.getActiveItem();
+    const def  = item ? ZS.ITEMS[item.type] : null;
+    if (!def) return;
+    if (def.category === 'firearm') { _fireGun(item, def); return; }
+    if (def.category === 'melee')   { _meleeSwing(item, def); return; }
+    if (def.category === 'tool' && item.type === 'tool_hachette') { _meleeSwing(item, def); return; }
+  }
+
+  function _playSwing(dur, kind) { _swing = { start: _now(), dur, kind }; }
+  function _tickSwing() {
+    if (!_swing) return;
+    const e = (_now() - _swing.start) / _swing.dur;
+    if (e >= 1) { fpsArms.position.z = 0; fpsArms.rotation.set(0, 0, 0); _swing = null; return; }
+    const s = Math.sin(e * Math.PI);
+    if (_swing.kind === 'recoil') {
+      fpsArms.position.z = s * 0.05;
+      fpsArms.rotation.x = -s * 0.12;
+    } else {
+      fpsArms.rotation.x = -s * 0.95;
+      fpsArms.rotation.z = s * 0.30;
     }
   }
 
-  state.onShoot = shoot;
-  state.onJump  = () => { state.jumpPressed = true; };
+  state.onShoot  = attack;
+  state.onReload = () => {
+    const item = ZS.Inventory.getActiveItem();
+    const def  = item ? ZS.ITEMS[item.type] : null;
+    if (def && def.category === 'firearm') _startReload(def);
+  };
+  state.onJump   = () => { state.jumpPressed = true; };
   document.addEventListener('mousedown', (e) => {
-    if (e.button === 0 && pointerLocked) shoot();
+    if (e.button === 0 && pointerLocked) attack();
+  });
+  document.addEventListener('keydown', (e) => {
+    if (e.code === 'KeyR' && state.onReload) state.onReload();
   });
 
   // ── Respawn ───────────────────────────────────────────────────────────────
@@ -312,6 +408,7 @@
       updateMovement(dt);
       _updateWaterEffect(state.player.x, state.player.z);
     }
+    _tickSwing();
     ZS.tickDayNight(dt);
     ZS.Zombies.tick(dt);
     ZS.Network.tick(dt);

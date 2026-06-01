@@ -383,15 +383,49 @@
 
   // ── Arbres améliorés ─────────────────────────────────────────────────────────
 
+  // Registre des arbres abattables (pour l'abattage à la hache).
+  const _trees = [];
+  function _registerTree(scene, group, x, z, collider) {
+    _trees.push({ scene, group, x, z, collider, hp: 5, maxHp: 5, alive: true });
+  }
+
+  // Abat l'arbre le plus proche devant (ox,oz) dans la direction (dirX,dirZ).
+  // Renvoie { hit, felled, x, z } ou null si aucun arbre à portée.
+  function chopTree(ox, oz, dirX, dirZ, range, damage) {
+    const len = Math.hypot(dirX, dirZ) || 1;
+    const nx = dirX / len, nz = dirZ / len;
+    let best = null, bestT = Infinity;
+    for (const t of _trees) {
+      if (!t.alive) continue;
+      const proj = (t.x - ox) * nx + (t.z - oz) * nz;          // distance le long du regard
+      if (proj < 0 || proj > range) continue;
+      const perp = Math.hypot(ox + nx * proj - t.x, oz + nz * proj - t.z);
+      if (perp < 1.4 && proj < bestT) { bestT = proj; best = t; }
+    }
+    if (!best) return null;
+    best.hp -= (damage || 1);
+    if (best.hp > 0) {
+      best.group.position.x += (Math.random() - 0.5) * 0.05;   // petite secousse
+      return { hit: true, felled: false, x: best.x, z: best.z };
+    }
+    best.alive = false;
+    if (best.scene) best.scene.remove(best.group);
+    const ci = _colliders.indexOf(best.collider);
+    if (ci >= 0) _colliders.splice(ci, 1);
+    return { hit: true, felled: true, x: best.x, z: best.z };
+  }
+
   function spawnTrees(scene, count) {
     for (let i = 0; i < count; i++) {
       const x = (_rng() - 0.5) * 560, z = (_rng() - 0.5) * 560;
       if (Math.hypot(x, z) < 4) continue;
-      _colliders.push({ x, z, r: 0.55 });
+      const col = { x, z, r: 0.55 };
+      _colliders.push(col);
       const r = _rng();
       const tree = r < 0.18 ? makePineTree() : r < 0.32 ? makeBirchTree() : makeTree();
       tree.position.set(x, ZS.getTerrainHeight(x, z), z);
       scene.add(tree);
+      _registerTree(scene, tree, x, z, col);
     }
   }
 
@@ -522,10 +556,12 @@
       const a = _rng() * Math.PI * 2, r = _rng() * radius;
       const x = cx + Math.cos(a) * r, z = cz + Math.sin(a) * r;
       if (skipNear && skipNear.some(s => Math.hypot(x - s[0], z - s[1]) < s[2])) continue;
-      _colliders.push({ x, z, r: 0.55 });
+      const col = { x, z, r: 0.55 };
+      _colliders.push(col);
       const tree = _rng() < (pineRatio || 0.28) ? makePineTree() : makeTree();
       tree.position.set(x, ZS.getTerrainHeight(x, z), z);
       scene.add(tree);
+      _registerTree(scene, tree, x, z, col);
     }
   }
 
@@ -618,6 +654,7 @@
   ZS.tickDayNight      = tickDayNight;
   ZS.setWorldTime      = setWorldTime;
   ZS.getColliders      = () => _colliders;
+  ZS.chopTree          = chopTree;
   ZS.registerFireLight     = registerFireLight;
   ZS.registerWaterMaterial = registerWaterMaterial;
   ZS.registerWaterZone     = registerWaterZone;

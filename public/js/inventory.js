@@ -166,6 +166,25 @@
     }
   }
 
+  // Usure de l'arme de mêlée active : -1 durabilité par coup, casse à 0.
+  function wearActiveWeapon() {
+    const s = _hotbar[_active];
+    if (!s) return;
+    const def = _def(s.type);
+    if (!def || (def.category !== 'melee' && def.category !== 'tool')) return;
+    const max = def.durabilite_max;
+    if (max == null || max === Infinity) return;
+    if (s.durability == null) s.durability = max;
+    s.durability -= 1;
+    if (s.durability <= 0) {
+      _hotbar[_active] = null;
+      ZS.UI.showNotif((def.label || 'Arme') + ' cassé(e) !');
+      _renderHotbar();
+      _syncToServer();
+      ZS.setHandItem?.(null);
+    }
+  }
+
   function getArmorValue() {
     return Object.values(_equip).reduce((sum, s) => {
       return sum + (s ? (_def(s.type)?.valeur_armure || 0) : 0);
@@ -184,6 +203,7 @@
     }
     _renderHotbar();
     ZS.setHandItem?.(_hotbar[_active]?.type || null);
+    ZS.UI?.setWeaponUI?.(_hotbar[_active]?.type || null);
   }
 
   function clear() {
@@ -251,6 +271,7 @@
       ZS.UI.setAmmo(active.ammo ?? 0);
     }
     ZS.setHandItem?.(_hotbar[_active]?.type || null);
+    ZS.UI?.setWeaponUI?.(_hotbar[_active]?.type || null);
   }
 
   function _setActiveSlot(i) {
@@ -261,6 +282,7 @@
     bar.children[_active].classList.add('active');
     _updateUseBtn();
     ZS.setHandItem?.(_hotbar[_active]?.type || null);
+    ZS.UI?.setWeaponUI?.(_hotbar[_active]?.type || null);
   }
 
   function _updateUseBtn() {
@@ -523,7 +545,7 @@
     init, tick,
     spawnWorldItem, removeWorldItem, receivePickup,
     countItem, addItem, removeItem, consumeOne,
-    getActiveItem, getWeaponAmmo, decrementAmmo, reloadWeapon,
+    getActiveItem, getWeaponAmmo, decrementAmmo, reloadWeapon, wearActiveWeapon,
     getArmorValue, togglePanel, loadFromSave, clear,
   };
 }());

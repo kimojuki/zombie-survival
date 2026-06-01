@@ -286,18 +286,23 @@ io.on('connection', async (socket) => {
     if (len < 0.001) return;
     const nx = d.dx / len, nz = d.dz / len;
 
+    // Dégâts/portée/rayon fournis par le client (arme), bornés côté serveur.
+    const dmg    = Math.max(1, Math.min(250, Number(d.dmg)    || 34));
+    const range  = Math.max(0.5, Math.min(120, Number(d.range)  || 80));
+    const radius = Math.max(0.4, Math.min(2.0, Number(d.radius) || 0.8));
+
     let hit = null, minT = Infinity;
     zombies.forEach((z) => {
       const tx = z.x - d.ox, tz = z.z - d.oz;
       const t = tx * nx + tz * nz;
-      if (t < 0 || t > 80) return;
-      if (Math.hypot(d.ox + nx * t - z.x, d.oz + nz * t - z.z) < 0.8 && t < minT) {
+      if (t < 0 || t > range) return;
+      if (Math.hypot(d.ox + nx * t - z.x, d.oz + nz * t - z.z) < radius && t < minT) {
         minT = t; hit = z;
       }
     });
 
     if (hit) {
-      hit.health -= 34;
+      hit.health -= dmg;
       if (hit.health <= 0) {
         io.emit('zombie-die', hit.id);
         // Random drop

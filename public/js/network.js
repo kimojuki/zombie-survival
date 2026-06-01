@@ -150,8 +150,8 @@
     _socket.emit('move', { x, y, z, rotY });
   }
 
-  function sendShoot(ox, oz, dx, dz) {
-    _socket.emit('shoot', { ox, oz, dx, dz });
+  function sendShoot(ox, oz, dx, dz, dmg, range, radius) {
+    _socket.emit('shoot', { ox, oz, dx, dz, dmg, range, radius });
   }
 
   function sendRespawn() {

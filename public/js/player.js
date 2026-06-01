@@ -1,4 +1,4 @@
-// Character models + FPS arms avec sprites items.png (12×6 grille 128px)
+// Modèles personnages + bras FPS + items en main (modèles .glb + fallback procédural)
 (function () {
   'use strict';
 
@@ -7,143 +7,125 @@
   const PANTS = 0x1E3A8A;
   const SHOES = 0x333333;
 
-  // ── Sprite map : type → [colonne, rangée] dans la grille 12×6 de items.png ──
-  // Ouvrir worlDesign/items/grid-preview.html pour voir les coordonnées exactes
-  const SPRITE_MAP = {
-    // ── Row 0 : NOURRITURE ──────────────────────────────────────────────────
-    food_eau_bouteille:           [1, 0],
-    food_boisson_energisante:     [2, 0],
-    food_conserves:               [3, 0],
-    food_haricots_boite:          [4, 0],
-    food_soupe_conserve:          [5, 0],
-    food_pain:                    [6, 0],
-    food_fruits:                  [7, 0],
-    food_viande_crue:             [8, 0],
-    food_viande_cuite:            [9, 0],
-    // ── Row 1 : MÉDICAL + ARMES À FEU + ARTISANALES ─────────────────────────
-    med_bandage:                  [1, 1],
-    med_kit_soin:                 [2, 1],
-    med_seringue_anti_infection:  [3, 1],
-    wpn_pistolet:                 [5, 1],
-    wpn_fusil_pompe:              [6, 1],
-    wpn_fusil_chasse:             [7, 1],
-    wpn_lance_artisanale:         [9, 1],
-    wpn_batte_cloutee:            [10, 1],
-    // ── Row 2 : CORPS À CORPS + RESSOURCES ──────────────────────────────────
-    wpn_couteau:                  [1, 2],
-    wpn_hache_combat:             [2, 2],
-    wpn_barre_fer:                [3, 2],
-    wpn_machette:                 [4, 2],
-    res_bois_brut:                [6, 2],
-    res_planche:                  [7, 2],
-    res_ferraille:                [8, 2],
-    res_metal:                    [9, 2],
-    res_clous:                    [10, 2],
-    res_ruban_adhesif:            [11, 2],
-    // ── Row 3 : suite RESSOURCES + ÉQUIPEMENT ───────────────────────────────
-    res_chiffon:                  [0, 3],
-    res_corde:                    [1, 3],
-    eq_petit_sac:                 [3, 3],
-    eq_sac_moyen:                 [4, 3],
-    eq_grand_sac:                 [5, 3],
-    eq_casque:                    [7, 3],
-    eq_gilet_protection:          [8, 3],
-    eq_gants:                     [9, 3],
-    // ── Row 4 : MUNITIONS + OUTILS ──────────────────────────────────────────
-    ammo_pistolet:                [1, 4],
-    ammo_fusil_pompe:             [2, 4],
-    ammo_fusil_chasse:            [3, 4],
-    tool_marteau:                 [5, 4],
-    tool_hachette:                [6, 4],
-    tool_pioche:                  [7, 4],
-    tool_torche:                  [8, 4],
-    // ── Row 5 : CONSTRUCTION ────────────────────────────────────────────────
-    struct_mur_bois:              [1, 5],
-    struct_porte_bois:            [2, 5],
-    struct_grande_porte_bois:     [3, 5],
-    struct_plancher_bois:         [4, 5],
-    struct_escalier_bois:         [5, 5],
-    // ── Legacy IDs ──────────────────────────────────────────────────────────
-    pistol:   [5, 1],
-    medkit:   [2, 1],
-    food:     [3, 0],
-    ammo:     [1, 4],
-  };
-
-  // Texture chargée une seule fois
-  let _spriteTex = null;
-  function _tex() {
-    if (!_spriteTex) {
-      _spriteTex = new THREE.TextureLoader().load('/img/items.png');
-      _spriteTex.magFilter = THREE.NearestFilter;
-      _spriteTex.minFilter = THREE.NearestFilter;
-    }
-    return _spriteTex;
-  }
-
-  // ── Player / Zombie models ─────────────────────────────────────────────────
+  // ── Personnages ────────────────────────────────────────────────────────────
 
   function createPlayerModel() {
     const g = new THREE.Group();
-    const skM = mat(SKIN), shM = mat(SHIRT), paM = mat(PANTS), soM = mat(SHOES);
-    addBox(g, skM, 0.8,  0.8,  0.8,  0,     1.9,  0);
-    addBox(g, mat(0x222222), 0.15, 0.1, 0.05, -0.18, 1.97, -0.4);
-    addBox(g, mat(0x222222), 0.15, 0.1, 0.05,  0.18, 1.97, -0.4);
-    addBox(g, shM, 0.6,  0.75, 0.3,  0,     1.12, 0);
-    const lArm = limb(g, skM, -0.43, 1.495);
-    const rArm = limb(g, skM,  0.43, 1.495);
-    const lLeg = legLimb(g, paM, soM, -0.15, 0.745);
-    const rLeg = legLimb(g, paM, soM,  0.15, 0.745);
+    addBox(g, m(SKIN),  0.8,  0.8,  0.8,  0, 1.9, 0);
+    addBox(g, m(0x222222), 0.15, 0.1, 0.05, -0.18, 1.97, -0.4);
+    addBox(g, m(0x222222), 0.15, 0.1, 0.05,  0.18, 1.97, -0.4);
+    addBox(g, m(SHIRT), 0.6, 0.75, 0.3, 0, 1.12, 0);
+    const lArm = armGroup(g, m(SKIN), -0.43);
+    const rArm = armGroup(g, m(SKIN),  0.43);
+    const lLeg = legGroup(g, -0.15);
+    const rLeg = legGroup(g,  0.15);
     g.userData.limbs = { lArm, rArm, lLeg, rLeg };
     return g;
   }
 
   function createZombieModel() {
     const g = new THREE.Group();
-    const skM = mat(0x6daf6d), shM = mat(0x3a3a2a), paM = mat(0x2a2a1a);
-    addBox(g, skM, 0.8, 0.8, 0.8, 0, 1.9, 0);
-    addBox(g, mat(0xff2222), 0.15, 0.12, 0.05, -0.17, 1.97, -0.4);
-    addBox(g, mat(0xff2222), 0.15, 0.12, 0.05,  0.17, 1.97, -0.4);
-    addBox(g, shM, 0.6, 0.75, 0.3, 0, 1.12, 0);
-    const lArm = new THREE.Group(); lArm.position.set(-0.43, 1.495, 0);
-    addBox(lArm, skM, 0.25, 0.75, 0.25, 0, -0.375, 0);
-    lArm.rotation.x = Math.PI / 2.5; g.add(lArm);
-    const rArm = new THREE.Group(); rArm.position.set(0.43, 1.495, 0);
-    addBox(rArm, skM, 0.25, 0.75, 0.25, 0, -0.375, 0);
-    rArm.rotation.x = Math.PI / 2.5; g.add(rArm);
-    const lLeg = legLimb(g, paM, null, -0.15, 0.745);
-    const rLeg = legLimb(g, paM, null,  0.15, 0.745);
+    addBox(g, m(0x6daf6d), 0.8, 0.8, 0.8, 0, 1.9, 0);
+    addBox(g, m(0xff2222), 0.15, 0.12, 0.05, -0.17, 1.97, -0.4);
+    addBox(g, m(0xff2222), 0.15, 0.12, 0.05,  0.17, 1.97, -0.4);
+    addBox(g, m(0x3a3a2a), 0.6, 0.75, 0.3, 0, 1.12, 0);
+    const lArm = armGroup(g, m(0x6daf6d), -0.43);
+    const rArm = armGroup(g, m(0x6daf6d),  0.43);
+    lArm.rotation.x = rArm.rotation.x = Math.PI / 2.5;
+    const lLeg = legGroup(g, -0.15, 0x2a2a1a);
+    const rLeg = legGroup(g,  0.15, 0x2a2a1a);
     g.userData.limbs = { lArm, rArm, lLeg, rLeg };
     return g;
   }
 
-  function limb(parent, m, x, y) {
-    const g = new THREE.Group(); g.position.set(x, y, 0);
-    addBox(g, m, 0.25, 0.75, 0.25, 0, -0.375, 0); parent.add(g); return g;
+  function armGroup(parent, mat_, x) {
+    const g = new THREE.Group(); g.position.set(x, 1.495, 0);
+    addBox(g, mat_, 0.25, 0.75, 0.25, 0, -0.375, 0); parent.add(g); return g;
   }
-  function legLimb(parent, mPant, mShoe, x, y) {
-    const g = new THREE.Group(); g.position.set(x, y, 0);
-    addBox(g, mPant, 0.25, 0.75, 0.25, 0, -0.375, 0);
-    if (mShoe) addBox(g, mShoe, 0.27, 0.12, 0.32, 0, -0.765, 0.03);
+  function legGroup(parent, x, pantColor = PANTS) {
+    const g = new THREE.Group(); g.position.set(x, 0.745, 0);
+    addBox(g, m(pantColor),  0.25, 0.75, 0.25, 0, -0.375,  0);
+    addBox(g, m(SHOES), 0.27, 0.12, 0.32, 0, -0.765, 0.03);
     parent.add(g); return g;
   }
 
-  // ── FPS Arms ──────────────────────────────────────────────────────────────
+  // ── Bras FPS ──────────────────────────────────────────────────────────────
 
   function createFPSArms() {
     const g = new THREE.Group();
-    // Bras visible (manche + main)
     const arm = new THREE.Group();
-    addBox(arm, mat(SHIRT), 0.20, 0.55, 0.20,  0,  0.00, 0);
-    addBox(arm, mat(SKIN),  0.18, 0.20, 0.18,  0, -0.38, 0);
-    arm.rotation.x = 0.6;
-    arm.position.set(0.23, -0.28, -0.38);
+    addBox(arm, m(SHIRT), 0.20, 0.55, 0.20, 0,  0.00, 0);
+    addBox(arm, m(SKIN),  0.18, 0.22, 0.18, 0, -0.38, 0);
+    arm.rotation.x = 0.65;
+    arm.position.set(0.22, -0.27, -0.36);
     g.add(arm);
-    // Conteneur de l'item en main
     const holder = new THREE.Group();
     holder.name = 'itemHolder';
     g.add(holder);
     return g;
+  }
+
+  // ── Modèles .glb (libres de droits, Quaternius CC0) ─────────────────────────
+  // type → fichier dans /models, taille cible (plus grande dimension, en m),
+  // et rotation d'orientation [x, y, z] en radians.
+  // Les types absents utilisent le modèle procédural ci-dessous (fallback).
+  const GLB = {
+    // Armes à feu
+    wpn_pistolet:        { file: 'pistol',        fit: 0.34, rot: [0, Math.PI / 2, 0] },
+    pistol:              { file: 'pistol',        fit: 0.34, rot: [0, Math.PI / 2, 0] },
+    wpn_fusil_pompe:     { file: 'shotgun',       fit: 0.60, rot: [0, Math.PI / 2, 0] },
+    wpn_fusil_chasse:    { file: 'sniper_rifle',  fit: 0.70, rot: [0, Math.PI / 2, 0] },
+    // Mêlée / outils
+    wpn_couteau:         { file: 'knife',         fit: 0.30, rot: [0, 0, 0] },
+    wpn_hache_combat:    { file: 'axe',           fit: 0.50, rot: [0, 0, 0] },
+    tool_hachette:       { file: 'axe',           fit: 0.42, rot: [0, 0, 0] },
+    tool_pioche:         { file: 'shovel',        fit: 0.55, rot: [0, 0, 0] },
+    tool_torche:         { file: 'wooden_torch',  fit: 0.50, rot: [0, 0, 0] },
+    // Nourriture / médical / ressources
+    food_eau_bouteille:  { file: 'water_bottle',  fit: 0.20, rot: [0, 0, 0] },
+    food_conserves:      { file: 'can',           fit: 0.14, rot: [0, 0, 0] },
+    food_haricots_boite: { file: 'can_red',       fit: 0.14, rot: [0, 0, 0] },
+    food_soupe_conserve: { file: 'can_broken',    fit: 0.14, rot: [0, 0, 0] },
+    med_kit_soin:        { file: 'first_aid_kit', fit: 0.20, rot: [0, 0, 0] },
+    res_bois_brut:       { file: 'wood_log',      fit: 0.26, rot: [0, 0, 0] },
+    // Équipement (sac à dos, 3 tailles → même modèle)
+    eq_petit_sac:        { file: 'backpack',      fit: 0.26, rot: [0, Math.PI, 0] },
+    eq_sac_moyen:        { file: 'backpack',      fit: 0.30, rot: [0, Math.PI, 0] },
+    eq_grand_sac:        { file: 'backpack',      fit: 0.34, rot: [0, Math.PI, 0] },
+  };
+
+  const _loader = (typeof THREE !== 'undefined' && THREE.GLTFLoader) ? new THREE.GLTFLoader() : null;
+  const _cache  = {};   // file → Promise<THREE.Object3D> (template chargé)
+
+  function _loadGLB(file) {
+    if (_cache[file]) return _cache[file];
+    _cache[file] = new Promise((resolve, reject) => {
+      if (!_loader) { reject(new Error('GLTFLoader indisponible')); return; }
+      _loader.load('/models/' + file + '.glb',
+        (g) => {
+          g.scene.traverse((o) => { if (o.isMesh) o.castShadow = true; });
+          resolve(g.scene);
+        },
+        undefined,
+        reject);
+    });
+    return _cache[file];
+  }
+
+  // Clone le template, le recentre, l'ajuste à `fit` (m) et applique l'orientation.
+  function _fitClone(template, fit, rot) {
+    const obj = template.clone(true);
+    const box = new THREE.Box3().setFromObject(obj);
+    const size = new THREE.Vector3(); box.getSize(size);
+    const center = new THREE.Vector3(); box.getCenter(center);
+    const maxDim = Math.max(size.x, size.y, size.z) || 1;
+    const s = fit / maxDim;
+    obj.scale.setScalar(s);
+    obj.position.set(-center.x * s, -center.y * s, -center.z * s);
+    const centered = new THREE.Group(); centered.add(obj);     // géométrie centrée à l'origine
+    const pivot = new THREE.Group(); pivot.add(centered);      // pivot pour l'orientation
+    if (rot) pivot.rotation.set(rot[0] || 0, rot[1] || 0, rot[2] || 0);
+    return pivot;
   }
 
   // ── Mise à jour de l'item en main ─────────────────────────────────────────
@@ -151,97 +133,406 @@
   function updateHandItem(fpsGroup, type) {
     const holder = fpsGroup.getObjectByName('itemHolder');
     if (!holder) return;
-    // Vider
     while (holder.children.length) holder.remove(holder.children[0]);
+    holder.userData.type = type || null;
     if (!type) return;
 
-    const cell = SPRITE_MAP[type];
-    const def  = ZS.ITEMS?.[type];
+    const def = ZS.ITEMS?.[type];
+    const p   = _pos(def?.category || '', type);
+    holder.position.set(p.x, p.y, p.z);
+    holder.rotation.set(p.rx, p.ry, p.rz);
 
-    if (cell) {
-      // ── Sprite depuis items.png ──────────────────────────────────────────
-      const [cx, cy] = cell;
-      const item = _makeSpriteItem(cx, cy, def);
-      const pos  = _handPos(def?.category || 'default', type);
-      holder.position.set(pos.x, pos.y, pos.z);
-      holder.rotation.set(pos.rx, pos.ry, pos.rz);
-      holder.add(item);
-    } else {
-      // ── Fallback : boîte colorée + label ────────────────────────────────
-      const col = def?.color || 0x888888;
-      const box = new THREE.Mesh(
-        new THREE.BoxGeometry(0.10, 0.10, 0.04),
-        new THREE.MeshLambertMaterial({ color: col })
-      );
-      const pos = _handPos(def?.category || 'default', type);
-      holder.position.set(pos.x, pos.y, pos.z);
-      holder.add(box);
+    // 1) Modèle procédural immédiat (affichage instantané, jamais de trou visuel)
+    const proc = _buildModel(type);
+    if (proc) holder.add(proc);
+
+    // 2) Si un .glb existe, on le charge et on remplace le procédural une fois prêt
+    const spec = GLB[type];
+    if (spec && _loader) {
+      _loadGLB(spec.file).then((template) => {
+        if (holder.userData.type !== type) return;             // l'item a changé entre-temps
+        while (holder.children.length) holder.remove(holder.children[0]);
+        holder.add(_fitClone(template, spec.fit, spec.rot));
+      }).catch(() => { /* on garde le fallback procédural */ });
     }
   }
 
-  // Crée un plan texturé pointant vers la bonne cellule du sprite sheet
-  function _makeSpriteItem(cx, cy, def) {
+  // Position en main selon catégorie
+  function _pos(cat, type) {
+    if (type === 'wpn_barre_fer' || type === 'wpn_lance_artisanale')
+      return { x: 0.10, y: -0.20, z: -0.52, rx: 0.2, ry: 0, rz: 0 };
+    const T = {
+      firearm:  { x: 0.20, y: -0.24, z: -0.46, rx: 0,    ry: 0.10, rz: 0 },
+      melee:    { x: 0.21, y: -0.21, z: -0.44, rx: 0.25, ry: 0.08, rz: 0 },
+      tool:     { x: 0.21, y: -0.21, z: -0.44, rx: 0.25, ry: 0.08, rz: 0 },
+      food:     { x: 0.19, y: -0.27, z: -0.40, rx: 0,    ry: 0.22, rz:-0.10 },
+      medical:  { x: 0.19, y: -0.27, z: -0.40, rx: 0,    ry: 0.22, rz:-0.10 },
+      ammo:     { x: 0.19, y: -0.29, z: -0.38, rx: 0,    ry: 0.22, rz:-0.10 },
+      resource: { x: 0.19, y: -0.29, z: -0.38, rx: 0,    ry: 0.22, rz:-0.10 },
+    };
+    return T[cat] || { x: 0.19, y: -0.27, z: -0.40, rx: 0, ry: 0.22, rz:-0.10 };
+  }
+
+  // ── Constructeur principal ────────────────────────────────────────────────
+
+  function _buildModel(type) {
+    switch (type) {
+      // ── Armes à feu ──────────────────────────────────────────────────────
+      case 'pistol': case 'wpn_pistolet':   return _pistol();
+      case 'wpn_fusil_pompe':               return _shotgun();
+      case 'wpn_fusil_chasse':              return _rifle();
+      // ── Mêlée ────────────────────────────────────────────────────────────
+      case 'wpn_couteau':                   return _knife();
+      case 'wpn_hache_combat':              return _axe(0x887733);
+      case 'wpn_barre_fer':                 return _ironBar();
+      case 'wpn_machette':                  return _machette();
+      case 'wpn_lance_artisanale':          return _spear();
+      case 'wpn_batte_cloutee':             return _bat();
+      // ── Outils ───────────────────────────────────────────────────────────
+      case 'tool_marteau':                  return _hammer();
+      case 'tool_hachette':                 return _axe(0x775522);
+      case 'tool_pioche':                   return _pickaxe();
+      case 'tool_torche':                   return _lighter();
+      // ── Nourriture ───────────────────────────────────────────────────────
+      case 'food_eau_bouteille':            return _bottle(0x88bbff, 0.85);
+      case 'food_boisson_energisante':      return _tallCan(0xeecc00);
+      case 'food_conserves':               return _can(0xaaaaaa);
+      case 'food_haricots_boite':           return _can(0xcc7733);
+      case 'food_soupe_conserve':           return _can(0xdd9933);
+      case 'food_pain':                     return _bread();
+      case 'food_fruits':                   return _apple();
+      case 'food_viande_crue':              return _meat(0xcc4444);
+      case 'food_viande_cuite':             return _meat(0x884422);
+      case 'food': case 'medkit':           return _can(0xcc8844);
+      // ── Médical ──────────────────────────────────────────────────────────
+      case 'med_bandage':                   return _bandage();
+      case 'med_kit_soin':                  return _medkit();
+      case 'med_seringue_anti_infection':   return _syringe();
+      // ── Munitions ────────────────────────────────────────────────────────
+      case 'ammo': case 'ammo_pistolet':    return _ammoBox(0xddcc44);
+      case 'ammo_fusil_pompe':              return _ammoBox(0xcc4422);
+      case 'ammo_fusil_chasse':             return _ammoBox(0xdd8822);
+      // ── Ressources ───────────────────────────────────────────────────────
+      case 'res_bois_brut':                 return _log();
+      case 'res_planche':                   return _plank();
+      case 'res_ferraille': case 'res_metal': return _ingot(ZS.ITEMS?.[type]?.color||0x888888);
+      case 'res_clous':                     return _nails();
+      case 'res_corde':                     return _coil(0xbb9944);
+      case 'res_ruban_adhesif':             return _coil(0xffcc00);
+      case 'res_chiffon':                   return _cloth();
+      // ── Équipement ───────────────────────────────────────────────────────
+      case 'eq_casque':                     return _helmet();
+      case 'eq_gilet_protection':           return _vest();
+      case 'eq_petit_sac': case 'eq_sac_moyen': case 'eq_grand_sac':
+                                            return _backpack(ZS.ITEMS?.[type]?.color||0x886633);
+      // ── Structures ───────────────────────────────────────────────────────
+      case 'struct_mur_bois': case 'struct_porte_bois':
+      case 'struct_grande_porte_bois': case 'struct_plancher_bois':
+      case 'struct_escalier_bois':          return _plank();
+      default: {
+        const c = ZS.ITEMS?.[type]?.color || 0x888888;
+        const g = new THREE.Group();
+        addBox(g, m(c), 0.12, 0.10, 0.06, 0, 0, 0);
+        return g;
+      }
+    }
+  }
+
+  // ── Armes à feu ───────────────────────────────────────────────────────────
+
+  function _pistol() {
     const g = new THREE.Group();
-    // Fond légèrement teinté (ombre/profondeur)
-    const shadow = new THREE.Mesh(
-      new THREE.PlaneGeometry(0.21, 0.21),
-      new THREE.MeshLambertMaterial({ color: 0x111111, transparent: true, opacity: 0.55 })
-    );
-    shadow.position.z = -0.003;
-    g.add(shadow);
-
-    // Plan avec la portion exacte du sprite
-    const geo  = new THREE.PlaneGeometry(0.19, 0.19);
-    const uAttr = geo.attributes.uv;
-    const u0 = cx / 12,       u1 = (cx + 1) / 12;
-    const v0 = (5 - cy) / 6,  v1 = (6 - cy) / 6;
-    // PlaneGeometry UV order: top-left, top-right, bottom-left, bottom-right
-    uAttr.setXY(0, u0, v1);
-    uAttr.setXY(1, u1, v1);
-    uAttr.setXY(2, u0, v0);
-    uAttr.setXY(3, u1, v0);
-    uAttr.needsUpdate = true;
-
-    const plane = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({
-      map: _tex(),
-      transparent: true,
-      alphaTest: 0.05,
-    }));
-    g.add(plane);
+    addBox(g, m(0x222233), 0.055, 0.055, 0.38,  0,     0,      0);      // canon
+    addBox(g, m(0x333344), 0.10,  0.11,  0.19,  0,    -0.055,  0.07);   // corps
+    addBox(g, m(0x333344), 0.072, 0.16,  0.072, 0,    -0.148,  0.10);   // poignée
+    addBox(g, m(0x222233), 0.03,  0.03,  0.10,  0,     0.022, -0.16);   // guidon
+    addBox(g, m(0x555566), 0.092, 0.022, 0.12,  0,    -0.055,  0.04);   // chargeur
     return g;
   }
 
-  // Position FPS selon catégorie / item
-  function _handPos(category, type) {
-    // Armes longues → plus centrées
-    if (type === 'wpn_barre_fer' || type === 'wpn_lance_artisanale')
-      return { x: 0.14, y: -0.22, z: -0.44, rx: 0, ry: 0.15, rz: 0 };
-    const T = {
-      firearm:   { x: 0.20, y: -0.22, z: -0.44, rx: 0,    ry: 0.12, rz: 0 },
-      melee:     { x: 0.20, y: -0.20, z: -0.42, rx: 0.15, ry: 0.10, rz: 0 },
-      tool:      { x: 0.20, y: -0.20, z: -0.42, rx: 0.15, ry: 0.10, rz: 0 },
-      food:      { x: 0.19, y: -0.26, z: -0.40, rx: 0,    ry: 0.20, rz:-0.12 },
-      medical:   { x: 0.19, y: -0.26, z: -0.40, rx: 0,    ry: 0.20, rz:-0.12 },
-      ammo:      { x: 0.19, y: -0.28, z: -0.38, rx: 0,    ry: 0.20, rz:-0.12 },
-      resource:  { x: 0.19, y: -0.28, z: -0.38, rx: 0,    ry: 0.20, rz:-0.12 },
-      equipment: { x: 0.19, y: -0.26, z: -0.40, rx: 0,    ry: 0.20, rz:-0.12 },
-      structure: { x: 0.17, y: -0.24, z: -0.40, rx: 0,    ry: 0.20, rz:-0.12 },
-    };
-    return T[category] || { x: 0.19, y: -0.26, z: -0.40, rx: 0, ry: 0.20, rz:-0.12 };
+  function _shotgun() {
+    const g = new THREE.Group();
+    addBox(g, m(0x553311), 0.065, 0.065, 0.55,  0,     0,      0);
+    addBox(g, m(0x885533), 0.11,  0.095, 0.34,  0,    -0.06,   0.09);
+    addBox(g, m(0x885533), 0.08,  0.16,  0.08,  0,    -0.17,   0.11);
+    addBox(g, m(0x664422), 0.10,  0.038, 0.44,  0,     0.055,  0.02);   // pompe
+    return g;
+  }
+
+  function _rifle() {
+    const g = new THREE.Group();
+    addBox(g, m(0x332211), 0.040, 0.040, 0.75,  0,     0,      0);
+    addBox(g, m(0x885533), 0.076, 0.095, 0.46,  0,    -0.046,  0.12);
+    addBox(g, m(0x332211), 0.055, 0.13,  0.055, 0,    -0.14,   0.12);
+    addBox(g, m(0x444444), 0.044, 0.036, 0.22, -0.054, 0.022, -0.04);   // lunette
+    addBox(g, m(0x333333), 0.040, 0.040, 0.10, -0.054, 0.046, -0.10);   // support lunette
+    return g;
+  }
+
+  // ── Mêlée ─────────────────────────────────────────────────────────────────
+
+  function _knife() {
+    const g = new THREE.Group();
+    addBox(g, m(0xddddcc), 0.018, 0.26, 0.052, 0,  0.09,  0);           // lame
+    addBox(g, m(0xaaaaaa), 0.024, 0.018, 0.072, 0,  -0.04, 0);          // garde
+    addBox(g, m(0x553322), 0.038, 0.12,  0.042, 0, -0.115, 0);          // manche
+    return g;
+  }
+
+  function _axe(woodColor) {
+    const g = new THREE.Group();
+    addBox(g, m(woodColor), 0.036, 0.50, 0.036, 0,    0,    0);         // manche
+    addBox(g, m(0x999988),  0.036, 0.22, 0.13,  0.04, 0.22, 0);        // tête
+    addBox(g, m(0x888877),  0.028, 0.18, 0.04,  0.04, 0.22, 0.07);     // tranchant
+    return g;
+  }
+
+  function _ironBar() {
+    const g = new THREE.Group();
+    const bar = new THREE.Mesh(new THREE.CylinderGeometry(0.022, 0.022, 0.68, 8), m(0x777788));
+    g.add(bar);
+    return g;
+  }
+
+  function _machette() {
+    const g = new THREE.Group();
+    addBox(g, m(0xccccbb), 0.018, 0.44, 0.115, 0,  0.09, 0);
+    addBox(g, m(0xaaaaaa), 0.022, 0.016, 0.13,  0, -0.14, 0);           // garde
+    addBox(g, m(0x553322), 0.040, 0.14,  0.044, 0, -0.19, 0);
+    return g;
+  }
+
+  function _spear() {
+    const g = new THREE.Group();
+    addBox(g, m(0x885533), 0.036, 0.78, 0.036, 0, 0, 0);
+    addBox(g, m(0xccccaa), 0.026, 0.16, 0.058, 0, 0.43, 0);
+    return g;
+  }
+
+  function _bat() {
+    const g = new THREE.Group();
+    addBox(g, m(0x886644), 0.058, 0.56, 0.058, 0, 0.04, 0);
+    for (let i = -1; i <= 1; i++)
+      addBox(g, m(0x999999), 0.008, 0.008, 0.076, i * 0.022, 0.22, 0);  // clous
+    return g;
+  }
+
+  // ── Outils ────────────────────────────────────────────────────────────────
+
+  function _hammer() {
+    const g = new THREE.Group();
+    addBox(g, m(0x553322), 0.036, 0.44, 0.036, 0, -0.04, 0);
+    addBox(g, m(0x555555), 0.18,  0.075, 0.058, 0,  0.19, 0);
+    addBox(g, m(0x777777), 0.032, 0.032, 0.08,  0.10, 0.16, 0.06);      // panne
+    return g;
+  }
+
+  function _pickaxe() {
+    const g = new THREE.Group();
+    addBox(g, m(0x553322), 0.036, 0.44, 0.036, 0, -0.04, 0);
+    addBox(g, m(0x888888), 0.28,  0.048, 0.048, 0,  0.20, 0);           // traverse
+    addBox(g, m(0x777777), 0.048, 0.052, 0.11,  0.14, 0.17, 0.062);     // pointe
+    return g;
+  }
+
+  function _lighter() {
+    const g = new THREE.Group();
+    addBox(g, m(0xcc3311), 0.055, 0.095, 0.028, 0, 0,     0);
+    addBox(g, m(0x888888), 0.038, 0.016, 0.022, 0, 0.056, 0);           // roue
+    const flame = new THREE.Mesh(new THREE.ConeGeometry(0.014, 0.042, 6), m(0xff8800));
+    flame.position.set(0, 0.082, 0); g.add(flame);
+    const tip = new THREE.Mesh(new THREE.ConeGeometry(0.008, 0.026, 6), m(0xffff44));
+    tip.position.set(0, 0.094, 0); g.add(tip);
+    return g;
+  }
+
+  // ── Nourriture ────────────────────────────────────────────────────────────
+
+  function _bottle(color, opacity = 1) {
+    const g = new THREE.Group();
+    const mat_ = opacity < 1
+      ? new THREE.MeshLambertMaterial({ color, transparent: true, opacity })
+      : m(color);
+    const body = new THREE.Mesh(new THREE.CylinderGeometry(0.034, 0.034, 0.19, 10), mat_);
+    g.add(body);
+    const neck = new THREE.Mesh(new THREE.CylinderGeometry(0.016, 0.034, 0.06, 8), mat_);
+    neck.position.y = 0.125; g.add(neck);
+    const cap = new THREE.Mesh(new THREE.CylinderGeometry(0.019, 0.019, 0.018, 8), m(0x555555));
+    cap.position.y = 0.160; g.add(cap);
+    return g;
+  }
+
+  function _tallCan(color) {
+    const g = new THREE.Group();
+    const body = new THREE.Mesh(new THREE.CylinderGeometry(0.028, 0.028, 0.17, 10), m(color));
+    g.add(body);
+    addBox(g, m(0x777777), 0.058, 0.011, 0.058, 0,  0.092, 0);
+    addBox(g, m(0x666666), 0.036, 0.008, 0.036, 0,  0.102, 0);
+    return g;
+  }
+
+  function _can(color) {
+    const g = new THREE.Group();
+    const body = new THREE.Mesh(new THREE.CylinderGeometry(0.040, 0.040, 0.092, 10), m(color));
+    g.add(body);
+    addBox(g, m(0x777777), 0.082, 0.009, 0.082, 0,  0.051, 0);
+    return g;
+  }
+
+  function _bread() {
+    const g = new THREE.Group();
+    addBox(g, m(0xcc9944), 0.18, 0.082, 0.12,  0,  0,     0);
+    addBox(g, m(0xddbb66), 0.10, 0.042, 0.10,  0,  0.062, 0);           // top doré
+    addBox(g, m(0xbb8833), 0.18, 0.016, 0.12,  0, -0.049, 0);           // dessous
+    return g;
+  }
+
+  function _apple() {
+    const g = new THREE.Group();
+    const sphere = new THREE.Mesh(new THREE.SphereGeometry(0.068, 10, 8), m(0xdd2222));
+    g.add(sphere);
+    addBox(g, m(0x553322), 0.010, 0.044, 0.010, 0, 0.078, 0);           // tige
+    return g;
+  }
+
+  function _meat(color) {
+    const g = new THREE.Group();
+    addBox(g, m(color),     0.16, 0.062, 0.12,  0,       0,    0);
+    addBox(g, m(0xffeedd),  0.09, 0.030, 0.07,  0.020,  0.046, 0);      // gras
+    return g;
+  }
+
+  // ── Médical ───────────────────────────────────────────────────────────────
+
+  function _bandage() {
+    const g = new THREE.Group();
+    const roll = new THREE.Mesh(new THREE.CylinderGeometry(0.042, 0.042, 0.076, 10), m(0xffffff));
+    roll.rotation.z = Math.PI / 2; g.add(roll);
+    const strip = new THREE.Mesh(new THREE.CylinderGeometry(0.044, 0.044, 0.014, 10),
+      new THREE.MeshLambertMaterial({ color: 0xffeeee, transparent: true, opacity: 0.7 }));
+    strip.rotation.z = Math.PI / 2; strip.position.x = -0.045; g.add(strip);
+    return g;
+  }
+
+  function _medkit() {
+    const g = new THREE.Group();
+    addBox(g, m(0xcc2222), 0.19, 0.125, 0.082, 0,  0,     0);
+    addBox(g, m(0xffffff), 0.018, 0.085, 0.01, 0,  0,    -0.046);       // croix
+    addBox(g, m(0xffffff), 0.085, 0.018, 0.01, 0,  0,    -0.046);
+    addBox(g, m(0x881111), 0.19,  0.012, 0.082, 0,  0.068, 0);          // couvercle
+    return g;
+  }
+
+  function _syringe() {
+    const g = new THREE.Group();
+    const barrel = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.016, 0.016, 0.20, 8),
+      new THREE.MeshLambertMaterial({ color: 0x88bbff, transparent: true, opacity: 0.70 })
+    );
+    g.add(barrel);
+    const needle = new THREE.Mesh(new THREE.CylinderGeometry(0.004, 0.002, 0.066, 6), m(0xcccccc));
+    needle.position.y = 0.133; g.add(needle);
+    addBox(g, m(0xff4444), 0.030, 0.048, 0.030, 0, -0.122, 0);          // piston
+    addBox(g, m(0xddddee), 0.036, 0.010, 0.036, 0, -0.148, 0);
+    return g;
+  }
+
+  // ── Munitions ─────────────────────────────────────────────────────────────
+
+  function _ammoBox(color) {
+    const g = new THREE.Group();
+    addBox(g, m(0x333322), 0.13, 0.068, 0.092, 0,  0,     0);
+    addBox(g, m(color),    0.11, 0.012, 0.078, 0,  0.040, 0);
+    for (let i = -1; i <= 1; i++)
+      addBox(g, m(color), 0.010, 0.030, 0.010, i * 0.036, 0.042, 0);
+    return g;
+  }
+
+  // ── Ressources ────────────────────────────────────────────────────────────
+
+  function _log() {
+    const g = new THREE.Group();
+    const log_ = new THREE.Mesh(new THREE.CylinderGeometry(0.036, 0.040, 0.22, 8), m(0x885533));
+    log_.rotation.z = Math.PI / 2; g.add(log_);
+    const end = new THREE.Mesh(new THREE.CircleGeometry(0.040, 8), m(0xaa7744));
+    end.rotation.y = Math.PI / 2; end.position.x = 0.11; g.add(end);
+    return g;
+  }
+
+  function _plank() {
+    const g = new THREE.Group();
+    addBox(g, m(0xbb8844), 0.22, 0.030, 0.088, 0, 0,  0);
+    addBox(g, m(0x997733), 0.22, 0.008, 0.088, 0, 0.019, 0);
+    return g;
+  }
+
+  function _ingot(color) {
+    const g = new THREE.Group();
+    addBox(g, m(color),     0.16, 0.052, 0.076, 0,  0,     0);
+    addBox(g, m(0xffffff), 0.025, 0.010, 0.050, 0.044, 0.032, 0);      // reflet
+    return g;
+  }
+
+  function _nails() {
+    const g = new THREE.Group();
+    for (let i = -2; i <= 2; i++) {
+      const nail = new THREE.Mesh(new THREE.CylinderGeometry(0.004, 0.004, 0.10, 5), m(0x888888));
+      nail.position.set(i * 0.020, 0, 0); g.add(nail);
+    }
+    addBox(g, m(0x333333), 0.11, 0.014, 0.014, 0, -0.056, 0);
+    return g;
+  }
+
+  function _coil(color) {
+    const g = new THREE.Group();
+    const torus = new THREE.Mesh(new THREE.TorusGeometry(0.055, 0.014, 6, 14), m(color));
+    torus.rotation.x = Math.PI / 2; g.add(torus);
+    return g;
+  }
+
+  function _cloth() {
+    const g = new THREE.Group();
+    addBox(g, m(0xddddcc), 0.18, 0.012, 0.14, 0, 0,  0);
+    addBox(g, m(0xccccbb), 0.18, 0.012, 0.14, 0.018, 0.022, 0.018);
+    return g;
+  }
+
+  // ── Équipement ────────────────────────────────────────────────────────────
+
+  function _helmet() {
+    const g = new THREE.Group();
+    const dome = new THREE.Mesh(new THREE.SphereGeometry(0.085, 8, 6, 0, Math.PI * 2, 0, Math.PI * 0.55), m(0x556644));
+    dome.position.y = 0.01; g.add(dome);
+    addBox(g, m(0x445533), 0.17, 0.026, 0.016, 0, -0.06, -0.09);        // visière
+    return g;
+  }
+
+  function _vest() {
+    const g = new THREE.Group();
+    addBox(g, m(0x333322), 0.19, 0.22, 0.072, 0,  0,    0);
+    addBox(g, m(0x444433), 0.06, 0.19, 0.076, 0.13,  0, 0);             // côté
+    addBox(g, m(0x555544), 0.04, 0.06, 0.080, 0.068, 0.095, 0);         // poche
+    return g;
+  }
+
+  function _backpack(color) {
+    const g = new THREE.Group();
+    addBox(g, m(color),     0.16, 0.20, 0.080, 0,  0,     0);
+    addBox(g, m(0xddcc88),  0.12, 0.012, 0.084, 0,  0.072, 0);          // sangle
+    addBox(g, m(0x222222),  0.04, 0.04,  0.010, 0.028,  0.008, -0.046); // fermoir
+    return g;
   }
 
   // ── Helpers ────────────────────────────────────────────────────────────────
 
   function addBox(parent, material, w, h, d, x, y, z) {
-    const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), material);
-    m.position.set(x, y, z);
-    parent.add(m);
-    return m;
+    const mesh = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), material);
+    mesh.position.set(x, y, z);
+    parent.add(mesh);
+    return mesh;
   }
 
-  function mat(color) {
-    return new THREE.MeshLambertMaterial({ color });
-  }
+  function m(color) { return new THREE.MeshLambertMaterial({ color }); }
 
   window.ZS = window.ZS || {};
   ZS.createPlayerModel = createPlayerModel;

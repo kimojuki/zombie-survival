@@ -99,26 +99,43 @@
 
 <!-- Libraries -->
 <script src="/socket.io/socket.io.js"></script>
-<script src="https://unpkg.com/three@0.160.0/build/three.min.js"></script>
 
-<!-- Game modules (order matters) -->
-<script src="/js/items.js"></script>
-<script src="/js/survival.js"></script>
-<script src="/js/craft.js"></script>
-<script src="/js/noise.js"></script>
-<script src="/js/buildings.js"></script>
-<script src="/js/sector_01_forest.js"></script>
-<script src="/js/sector_02_town.js"></script>
-<script src="/js/sector_03_maincity.js"></script>
-<script src="/js/sector_05_military.js"></script>
-<script src="/js/world.js"></script>
-<script src="/js/player.js"></script>
-<script src="/js/zombie.js"></script>
-<script src="/js/network.js"></script>
-<script src="/js/ui.js"></script>
-<script src="/js/inventory.js"></script>
-<script src="/js/map.js"></script>
-<script src="/js/game.js"></script>
+<!-- THREE via modules ES (instance unique) + GLTFLoader pour les modèles .glb -->
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+    "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+  }
+}
+</script>
+<script type="module">
+  import * as THREE from 'three';
+  import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+  // Exposer THREE en global pour les scripts classiques du jeu
+  window.THREE = THREE;
+  THREE.GLTFLoader = GLTFLoader;
+
+  // Charger les modules du jeu dans l'ordre, une fois THREE prêt
+  const modules = [
+    '/js/items.js', '/js/survival.js', '/js/craft.js', '/js/noise.js',
+    '/js/buildings.js', '/js/sector_01_forest.js', '/js/sector_02_town.js',
+    '/js/sector_03_maincity.js', '/js/sector_05_military.js', '/js/world.js',
+    '/js/player.js', '/js/zombie.js', '/js/network.js', '/js/ui.js',
+    '/js/inventory.js', '/js/map.js', '/js/game.js'
+  ];
+  (async () => {
+    for (const src of modules) {
+      await new Promise((resolve, reject) => {
+        const s = document.createElement('script');
+        s.src = src;
+        s.onload = resolve;
+        s.onerror = () => reject(new Error('Échec du chargement de ' + src));
+        document.body.appendChild(s);
+      });
+    }
+  })().catch(err => console.error(err));
+</script>
 
 </body>
 </html>

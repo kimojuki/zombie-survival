@@ -3,6 +3,10 @@
   'use strict';
 
   const RECIPES = [
+    // Transformation de base du bois brut
+    { result: 'res_planche', qty: 2, ingredients: { res_bois_brut: 1 } },
+    { result: 'tool_torche', qty: 1, ingredients: { res_bois_brut: 2 } },
+    // Armes artisanales
     { result: 'wpn_lance_artisanale', qty: 1, ingredients: { res_bois_brut: 2, res_corde: 1 } },
     { result: 'wpn_batte_cloutee',    qty: 1, ingredients: { res_planche: 1, res_clous: 10 } },
     { result: 'struct_mur_bois',       qty: 1, ingredients: { res_planche: 6, res_clous: 12 } },

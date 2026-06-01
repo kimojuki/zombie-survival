@@ -36,10 +36,9 @@
       remotePlayers.clear();
       for (const p of data.players) _addRemotePlayer(p);
       for (const item of (data.items || [])) ZS.Inventory.spawnWorldItem(item);
-      // Restore saved inventory (empty array = keep default pistol)
-      if (Array.isArray(data.inventory) && data.inventory.length > 0) {
-        ZS.Inventory.loadFromSave(data.inventory);
-      }
+      // Restore saved inventory (hotbar + sac + équipement). Tableau vide / absent
+      // = nouveau joueur → on garde les objets de test + sac par défaut.
+      if (data.inventory) ZS.Inventory.loadFromSave(data.inventory);
     });
 
     socket.on('player-join', (p) => {

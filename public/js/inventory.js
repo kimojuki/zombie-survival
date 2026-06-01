@@ -218,15 +218,39 @@
 
   // ── Sauvegarde ─────────────────────────────────────────────────────────────
 
-  function loadFromSave(slots) {
-    if (!Array.isArray(slots) || slots.length === 0) return;
-    for (let i = 0; i < Math.min(slots.length, HOTBAR_SIZE); i++) {
-      _hotbar[i] = slots[i] || null;
+  // Accepte l'ancien format (tableau = hotbar seule) ou le nouveau
+  // { hotbar, bag, equip }. Restaure intégralement les 3 zones.
+  function loadFromSave(data) {
+    if (!data) return;
+    const isArr = Array.isArray(data);
+    const hotbar = isArr ? data : data.hotbar;
+    const bag    = isArr ? null : data.bag;
+    const equip  = isArr ? null : data.equip;
+
+    if (Array.isArray(hotbar)) {
+      if (hotbar.length === 0 && !equip && !bag) return;   // rien à restaurer
+      for (let i = 0; i < HOTBAR_SIZE; i++) _hotbar[i] = hotbar[i] || null;
     }
-    if (_hotbar[0] && _hotbar[0].type === 'pistol' && _hotbar[0].ammo == null) {
-      _hotbar[0].ammo = 30;
+    if (equip && typeof equip === 'object') {
+      for (const k of ['Tête', 'Torso', 'Mains', 'Dos']) _equip[k] = equip[k] || null;
     }
+    // Restaure le sac en conservant les positions, ajusté à la capacité du sac équipé.
+    const cap  = _bagCapacity();
+    const next = Array(cap).fill(null);
+    const overflow = [];
+    if (Array.isArray(bag)) {
+      bag.forEach((s, i) => { if (!s) return; if (i < cap) next[i] = s; else overflow.push(s); });
+    }
+    _bag = next;
+    for (const it of overflow) {
+      let placed = false;
+      for (let i = 0; i < HOTBAR_SIZE && !placed; i++) if (!_hotbar[i]) { _hotbar[i] = it; placed = true; }
+    }
+
+    if (_hotbar[0] && _hotbar[0].type === 'pistol' && _hotbar[0].ammo == null) _hotbar[0].ammo = 30;
+
     _renderHotbar();
+    if (_panelOpen) _renderInvPanel();
     ZS.setHandItem?.(_hotbar[_active]?.type || null);
     ZS.UI?.setWeaponUI?.(_hotbar[_active]?.type || null);
   }
@@ -243,7 +267,7 @@
   }
 
   function _syncToServer() {
-    if (_socket) _socket.emit('inventory-sync', _hotbar);
+    if (_socket) _socket.emit('inventory-sync', { hotbar: _hotbar, bag: _bag, equip: _equip });
   }
 
   // ── Hotbar DOM ─────────────────────────────────────────────────────────────
@@ -300,6 +324,7 @@
     }
     ZS.setHandItem?.(_hotbar[_active]?.type || null);
     ZS.UI?.setWeaponUI?.(_hotbar[_active]?.type || null);
+    _syncToServer();
   }
 
   function _setActiveSlot(i) {

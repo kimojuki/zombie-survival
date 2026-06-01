@@ -112,9 +112,10 @@
 <script type="module">
   import * as THREE from 'three';
   import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
-  // Exposer THREE en global pour les scripts classiques du jeu
-  window.THREE = THREE;
-  THREE.GLTFLoader = GLTFLoader;
+  // Exposer THREE en global pour les scripts classiques du jeu.
+  // NB: l'objet `import * as THREE` est scellé (non extensible) — on en fait
+  // une copie mutable pour pouvoir y attacher GLTFLoader.
+  window.THREE = { ...THREE, GLTFLoader };
 
   // Charger les modules du jeu dans l'ordre, une fois THREE prêt
   const modules = [

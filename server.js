@@ -470,6 +470,21 @@ io.on('connection', async (socket) => {
     socket.emit('item-add', { type: item.type, qty: item.qty || 1 });
   });
 
+  socket.on('item-drop', (d) => {
+    if (!d || typeof d.type !== 'string' || d.type.length > 60) return;
+    const qty = Math.max(1, Math.min(999, Number(d.qty) || 1));
+    const ang = Math.random() * Math.PI * 2;
+    const id  = ++itemIdCounter;
+    const drop = {
+      id, type: d.type, qty,
+      x: p.x + Math.cos(ang) * 1.0,   // position autoritative du joueur (+léger décalage)
+      z: p.z + Math.sin(ang) * 1.0,
+      // pas de loot:true → l'objet jeté n'est pas effacé au respawn horaire
+    };
+    items.set(id, drop);
+    io.emit('item-spawn', drop);
+  });
+
   socket.on('inventory-sync', (slots) => {
     try { p.inventory = JSON.stringify(slots); p.dirty = true; } catch {}
   });

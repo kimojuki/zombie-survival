@@ -538,6 +538,23 @@
     _syncToServer();
   }
 
+  // Jette au sol l'objet sélectionné (hotbar, sac ou équipement) → redevient ramassable.
+  function _dropSelected() {
+    if (!_sel) return;
+    const item = _getSlot(_sel.zone, _sel.idx);
+    if (!item) { _sel = null; _renderInvPanel(); return; }
+    const zone = _sel.zone, idx = _sel.idx;
+    _setSlot(zone, idx, null);
+    _sel = null;
+    if (zone === 'equip' && idx === 'Dos') _resizeBag();   // sac retiré → réajuste
+    _socket.emit('item-drop', { type: item.type, qty: item.qty || 1 });
+    const def = _def(item.type);
+    ZS.UI?.showNotif?.('Jeté : ' + (def?.label || item.type));
+    _renderInvPanel();
+    _renderHotbar();
+    _syncToServer();
+  }
+
   // ── Panneau inventaire ─────────────────────────────────────────────────────
 
   function _buildInvPanel() {
@@ -566,14 +583,28 @@
     const title = document.createElement('span');
     title.style.cssText = 'font-size:15px;font-weight:bold';
     title.textContent = '🎒 INVENTAIRE';
+    const hdrBtns = document.createElement('div');
+    hdrBtns.style.cssText = 'display:flex;gap:6px;align-items:center';
+
+    const dropBtn = document.createElement('button');
+    dropBtn.id = 'inv-drop-btn';
+    dropBtn.textContent = '🗑 Jeter';
+    dropBtn.style.cssText = 'background:rgba(120,40,40,0.5);color:#ffd0d0;border:1px solid #a05050;'
+      + 'border-radius:6px;padding:5px 12px;cursor:pointer;font-size:13px;font-weight:700;line-height:1;'
+      + 'min-height:36px;opacity:0.4;';
+    dropBtn.addEventListener('click', _dropSelected);
+    dropBtn.addEventListener('touchstart', (e) => { e.preventDefault(); _dropSelected(); }, { passive: false });
+
     const closeBtn = document.createElement('button');
     closeBtn.textContent = '✕';
     closeBtn.style.cssText = 'background:rgba(80,50,10,0.5);color:#e8d090;border:1px solid #7a5a28;'
       + 'border-radius:6px;padding:5px 13px;cursor:pointer;font-size:16px;line-height:1;'
       + 'min-width:40px;min-height:36px;';
     closeBtn.addEventListener('click', togglePanel);
+    hdrBtns.appendChild(dropBtn);
+    hdrBtns.appendChild(closeBtn);
     hdr.appendChild(title);
-    hdr.appendChild(closeBtn);
+    hdr.appendChild(hdrBtns);
     p.appendChild(hdr);
 
     const hint = document.createElement('div');
@@ -622,11 +653,11 @@
 
     // Nom de l'item sélectionné, visible (le tooltip natif `title` ne s'affiche pas au toucher)
     const hint = document.getElementById('inv-hint');
+    const selItem = _sel ? _getSlot(_sel.zone, _sel.idx) : null;
+    const selDef  = selItem ? _def(selItem.type) : null;
     if (hint) {
-      const selItem = _sel ? _getSlot(_sel.zone, _sel.idx) : null;
-      const selDef  = selItem ? _def(selItem.type) : null;
       if (selDef) {
-        hint.textContent = '▸ ' + (selDef.label || selItem.type) + ' — touchez un emplacement pour déposer.';
+        hint.textContent = '▸ ' + (selDef.label || selItem.type) + ' — déposez sur un emplacement ou 🗑 Jeter.';
         hint.style.color = '#6cf';
         hint.style.fontStyle = 'normal';
       } else {
@@ -634,6 +665,12 @@
         hint.style.color = '#9a8a6a';
         hint.style.fontStyle = 'italic';
       }
+    }
+    // Bouton « Jeter » actif seulement si un objet est sélectionné
+    const dropBtn = document.getElementById('inv-drop-btn');
+    if (dropBtn) {
+      dropBtn.style.opacity       = selItem ? '1' : '0.4';
+      dropBtn.style.pointerEvents = selItem ? 'auto' : 'none';
     }
 
     // ÉQUIPEMENT

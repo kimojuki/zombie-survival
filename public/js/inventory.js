@@ -79,7 +79,7 @@
     if (_worldItems.has(d.id)) return;
     const def = _def(d.type);
     if (!def) return;
-    const mesh = _makePickupMesh(def);
+    const mesh = _makePickupMesh(def, d.type);
     const baseY = (ZS.getTerrainHeight ? ZS.getTerrainHeight(d.x, d.z) : 0) + 0.55;
     mesh.position.set(d.x, baseY, d.z);
     mesh.userData.baseY = baseY;
@@ -703,19 +703,31 @@
 
   function _def(type) { return ZS.ITEMS?.[type] || null; }
 
-  function _makePickupMesh(def) {
+  function _makePickupMesh(def, type) {
     const g = new THREE.Group();
-    const box = new THREE.Mesh(
-      new THREE.BoxGeometry(0.38, 0.38, 0.38),
+
+    // Petit halo lumineux au sol pour repérer l'objet à récolter
+    const ring = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.30, 0.30, 0.03, 16),
+      new THREE.MeshLambertMaterial({ color: def.color || 0xffffff, transparent: true, opacity: 0.35 })
+    );
+    ring.position.y = -0.28;
+    g.add(ring);
+
+    // Cube de remplacement instantané (le temps que le modèle 3D charge)
+    const placeholder = new THREE.Mesh(
+      new THREE.BoxGeometry(0.22, 0.22, 0.22),
       new THREE.MeshLambertMaterial({ color: def.color || 0xffffff })
     );
-    g.add(box);
-    const ring = new THREE.Mesh(
-      new THREE.CylinderGeometry(0.32, 0.32, 0.04, 12),
-      new THREE.MeshLambertMaterial({ color: 0xffffff, transparent: true, opacity: 0.25 })
-    );
-    ring.position.y = 0.3;
-    g.add(ring);
+    g.add(placeholder);
+
+    // Modèle 3D réel (GLB ou procédural) — même rendu que l'item en main
+    if (ZS.getItemModel) {
+      ZS.getItemModel(type).then((obj) => {
+        g.remove(placeholder);
+        g.add(obj);
+      }).catch(() => { /* on conserve le cube de remplacement */ });
+    }
     return g;
   }
 

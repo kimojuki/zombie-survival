@@ -334,8 +334,8 @@
       }
     }
 
-    // Frappe les zombies dans la portée
-    ZS.Network.sendShoot(camera.position.x, camera.position.z, dir.x, dir.z, def.degats_impact || 10, range, 1.2);
+    // Frappe les zombies dans la portée (rayon latéral large = coup de mêlée balayant)
+    ZS.Network.sendShoot(camera.position.x, camera.position.z, dir.x, dir.z, def.degats_impact || 10, range, 1.6);
     ZS.Inventory.wearActiveWeapon();
   }
 

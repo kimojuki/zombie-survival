@@ -73,32 +73,32 @@
     wpn_couteau: {
       label: 'Couteau', category: 'melee', maxStack: 1,
       icon: '🔪', color: 0xcccccc,
-      degats_impact: 15, portee_metre: 0.8, cadence_attaque: 0.4, durabilite_max: 100,
+      degats_impact: 15, portee_metre: 2.2, cadence_attaque: 0.4, durabilite_max: 100,
     },
     wpn_hache_combat: {
       label: 'Hache', category: 'melee', maxStack: 1,
       icon: '🪓', color: 0x885533,
-      degats_impact: 35, portee_metre: 1.3, cadence_attaque: 0.9, durabilite_max: 150,
+      degats_impact: 35, portee_metre: 3.0, cadence_attaque: 0.9, durabilite_max: 150,
     },
     wpn_barre_fer: {
       label: 'Barre de Fer', category: 'melee', maxStack: 1,
       icon: '⚙️', color: 0x888888,
-      degats_impact: 22, portee_metre: 1.4, cadence_attaque: 1.1, durabilite_max: 300,
+      degats_impact: 22, portee_metre: 2.8, cadence_attaque: 1.1, durabilite_max: 300,
     },
     wpn_machette: {
       label: 'Machette', category: 'melee', maxStack: 1,
       icon: '⚔️', color: 0xaaaaaa,
-      degats_impact: 28, portee_metre: 1.2, cadence_attaque: 0.6, durabilite_max: 120,
+      degats_impact: 28, portee_metre: 2.8, cadence_attaque: 0.6, durabilite_max: 120,
     },
     wpn_lance_artisanale: {
       label: 'Lance Artisanale', category: 'melee', maxStack: 1,
       icon: '🏹', color: 0x886633,
-      degats_impact: 18, portee_metre: 2.2, cadence_attaque: 0.8, durabilite_max: 40,
+      degats_impact: 18, portee_metre: 3.6, cadence_attaque: 0.8, durabilite_max: 40,
     },
     wpn_batte_cloutee: {
       label: 'Batte Cloutée', category: 'melee', maxStack: 1,
       icon: '🏏', color: 0x886633,
-      degats_impact: 30, portee_metre: 1.2, cadence_attaque: 0.8, durabilite_max: 70,
+      degats_impact: 30, portee_metre: 2.8, cadence_attaque: 0.8, durabilite_max: 70,
     },
 
     // ── ARMES À FEU ─────────────────────────────────────────────────────────

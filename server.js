@@ -508,16 +508,26 @@ io.on('connection', async (socket) => {
 });
 
 // ── Réinitialisation unique des inventaires ───────────────────────────────────
-// Vide l'inventaire de TOUS les joueurs une seule fois (à la prochaine connexion,
-// le client redonne le kit de départ : grand sac + bois + clous). Protégé par un
-// fichier marqueur pour ne jamais se ré-exécuter aux redémarrages suivants.
+// Écrit directement le kit de départ dans la base pour TOUS les joueurs : grand
+// sac équipé + bois brut + clous (déterministe, ne dépend pas du client). Protégé
+// par un fichier marqueur pour ne jamais se ré-exécuter aux redémarrages suivants.
+const STARTING_INVENTORY = JSON.stringify({
+  hotbar: [
+    { type: 'res_bois_brut', qty: 50 },
+    { type: 'res_clous',     qty: 100 },
+    null, null, null, null,
+  ],
+  bag: [],
+  equip: { 'Tête': null, 'Torso': null, 'Mains': null, 'Dos': { type: 'eq_grand_sac', qty: 1 } },
+});
+
 async function resetAllInventoriesOnce() {
-  const marker = path.join(__dirname, '.inventory_reset_done');
+  const marker = path.join(__dirname, '.inventory_reset_v2_done');
   if (fs.existsSync(marker)) return;
   try {
-    const [r] = await pool.execute("UPDATE players SET inventory = '[]'");
+    const [r] = await pool.execute('UPDATE players SET inventory = ?', [STARTING_INVENTORY]);
     fs.writeFileSync(marker, new Date().toISOString());
-    console.log(`🔄 Inventaires réinitialisés : ${r.affectedRows} joueur(s).`);
+    console.log(`🔄 Inventaires réinitialisés (sac + bois + clous) : ${r.affectedRows} joueur(s).`);
   } catch (e) {
     console.error('Reset inventaires échoué (réessai au prochain démarrage):', e.message);
   }

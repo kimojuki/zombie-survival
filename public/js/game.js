@@ -40,14 +40,20 @@
 
   // ── Three.js ──────────────────────────────────────────────────────────────
   const canvas   = document.getElementById('game-canvas');
-  const renderer = new THREE.WebGLRenderer({ canvas, antialias: false });
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+  const _isMobile = /Android|iPhone|iPad|iPod|Mobile|Silk/i.test(navigator.userAgent) || 'ontouchstart' in window;
+  const renderer = new THREE.WebGLRenderer({ canvas, antialias: false, powerPreference: 'high-performance' });
+  // Pixel ratio plafonné : énorme gain mobile (moins de fragments → moins de chauffe).
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio, _isMobile ? 1.25 : 1.75));
   renderer.setSize(window.innerWidth, window.innerHeight);
   renderer.shadowMap.enabled = true;
-  renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+  renderer.shadowMap.type = THREE.PCFShadowMap;     // moins cher que PCFSoft
+  renderer.shadowMap.autoUpdate = false;            // ombres mises à jour par intermittence
+  renderer.shadowMap.needsUpdate = true;
+  ZS._isMobile = _isMobile;
 
   const scene  = new THREE.Scene();
-  const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 200);
+  // Distance de rendu réduite (le brouillard masque la coupe) → moins de draw calls.
+  const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 175);
   camera.rotation.order = 'YXZ';
   scene.add(camera);
 
@@ -409,6 +415,28 @@
   state.onRespawn = respawn;
 
   // ── Game loop ─────────────────────────────────────────────────────────────
+  // ── Culling des lumières : seules les N PointLights les plus proches restent
+  // actives (en forward rendering chaque fragment éclairé calcule TOUTES les
+  // lumières → coût majeur sur mobile). Le compte reste constant = pas de recompile.
+  const MAX_ACTIVE_LIGHTS = _isMobile ? 5 : 8;
+  let _lightList = [], _lightRefresh = 0;
+  const _lp = new THREE.Vector3();
+  function _cullLights(dt) {
+    _lightRefresh -= dt;
+    if (_lightRefresh <= 0) {
+      _lightList = [];
+      scene.traverse((o) => { if (o.isPointLight) _lightList.push(o); });
+      _lightRefresh = 2;
+    }
+    const n = _lightList.length;
+    if (n <= MAX_ACTIVE_LIGHTS) { for (const l of _lightList) l.visible = true; return; }
+    const cx = camera.position;
+    for (const l of _lightList) { l.getWorldPosition(_lp); l.userData._d = _lp.distanceToSquared(cx); }
+    _lightList.sort((a, b) => a.userData._d - b.userData._d);
+    for (let i = 0; i < n; i++) _lightList[i].visible = i < MAX_ACTIVE_LIGHTS;
+  }
+
+  let _shadowTick = 0;
   function loop(timestamp) {
     requestAnimationFrame(loop);
     const dt = Math.min((timestamp - state.lastTime) / 1000, 0.05);
@@ -419,12 +447,18 @@
       _updateWaterEffect(state.player.x, state.player.z);
     }
     _tickSwing();
+    ZS.setShadowCenter(state.player.x, state.player.z);
     ZS.tickDayNight(dt);
     ZS.Zombies.tick(dt);
     ZS.Network.tick(dt);
     ZS.Inventory.tick(dt);
     ZS.Survival.tick(dt);
     ZS.Map.tick();
+    _cullLights(dt);
+
+    // Ombres recalculées seulement toutes les ~16 frames (le soleil bouge lentement).
+    if (++_shadowTick >= 16) { _shadowTick = 0; renderer.shadowMap.needsUpdate = true; }
+
     renderer.render(scene, camera);
   }
 

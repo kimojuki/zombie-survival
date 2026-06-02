@@ -40,7 +40,7 @@
   function buildWorld(scene) {
     _scene = scene;
     scene.background = new THREE.Color(0x5ab2d8);
-    scene.fog = new THREE.Fog(0x5ab2d8, 150, 450);
+    scene.fog = new THREE.Fog(0x5ab2d8, 95, 170);   // coupe alignée sur camera.far (175)
 
     _ambientLight = new THREE.AmbientLight(0xfff8e7, 0.65);
     scene.add(_ambientLight);
@@ -54,14 +54,17 @@
     _sunLight.shadow.mapSize.width  = 1024;
     _sunLight.shadow.mapSize.height = 1024;
     _sunLight.shadow.camera.near    = 1;
-    _sunLight.shadow.camera.far     = 500;
-    _sunLight.shadow.camera.left    = -200;
-    _sunLight.shadow.camera.right   = 200;
-    _sunLight.shadow.camera.top     = 200;
-    _sunLight.shadow.camera.bottom  = -200;
-    _sunLight.shadow.bias           = -0.0002;
-    _sunLight.shadow.normalBias     = 0.02;
+    _sunLight.shadow.camera.far     = 220;
+    // Frustum d'ombre serré qui SUIT le joueur (voir setShadowCenter) → passe d'ombre
+    // bien moins coûteuse (peu de casters) et ombres nettes partout sur la carte.
+    _sunLight.shadow.camera.left    = -58;
+    _sunLight.shadow.camera.right   = 58;
+    _sunLight.shadow.camera.top     = 58;
+    _sunLight.shadow.camera.bottom  = -58;
+    _sunLight.shadow.bias           = -0.0004;
+    _sunLight.shadow.normalBias     = 0.03;
     scene.add(_sunLight);
+    scene.add(_sunLight.target);   // nécessaire pour orienter l'ombre vers le joueur
 
     _moonLight = new THREE.DirectionalLight(0x6677bb, 0);
     scene.add(_moonLight);
@@ -81,13 +84,19 @@
 
   function setWorldTime(t) { _timeOfDay = t; }
 
+  // Centre du frustum d'ombre (suit le joueur) — mis à jour depuis la boucle de jeu.
+  let _shadowCX = 0, _shadowCZ = 0;
+  function setShadowCenter(x, z) { _shadowCX = x; _shadowCZ = z; }
+
   function tickDayNight(dt) {
     const angle = _timeOfDay * Math.PI * 2;
     const sunY  = Math.sin(angle - Math.PI * 0.5);
     const sunX  = Math.cos(angle - Math.PI * 0.5);
 
-    _sunLight.position.set(sunX * 200, sunY * 200, 60);
-    _moonLight.position.set(-sunX * 200, -sunY * 200, -60);
+    // Soleil/lune positionnés autour du joueur pour que l'ombre serrée le suive.
+    _sunLight.position.set(_shadowCX + sunX * 120, sunY * 120, _shadowCZ + 60);
+    if (_sunLight.target) _sunLight.target.position.set(_shadowCX, 0, _shadowCZ);
+    _moonLight.position.set(_shadowCX - sunX * 120, -sunY * 120, _shadowCZ - 60);
 
     const k = _interpKey(sunY, _KEYS);
     _sunLight.intensity     = k.sunI;
@@ -653,6 +662,7 @@
   ZS.buildWorld        = buildWorld;
   ZS.tickDayNight      = tickDayNight;
   ZS.setWorldTime      = setWorldTime;
+  ZS.setShadowCenter   = setShadowCenter;
   ZS.getColliders      = () => _colliders;
   ZS.chopTree          = chopTree;
   ZS.registerFireLight     = registerFireLight;

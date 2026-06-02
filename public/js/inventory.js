@@ -61,13 +61,20 @@
 
   function tick(dt) {
     const now = Date.now() * 0.001;
-    _worldItems.forEach(({ mesh }) => {
-      mesh.rotation.y += dt * 1.8;
-      mesh.position.y = mesh.userData.baseY + Math.sin(now * 2.5) * 0.1;
+    const px = _state.player.x, pz = _state.player.z;
+    // Culling distance : on masque (et on n'anime plus) les objets éloignés → moins de draw calls.
+    const VIS2 = 55 * 55;
+    _worldItems.forEach((it) => {
+      const dx = it.x - px, dz = it.z - pz;
+      const vis = dx * dx + dz * dz < VIS2;
+      if (it.mesh.visible !== vis) it.mesh.visible = vis;
+      if (vis) {
+        it.mesh.rotation.y += dt * 1.8;
+        it.mesh.position.y = it.mesh.userData.baseY + Math.sin(now * 2.5) * 0.1;
+      }
     });
     // Repère l'objet le plus proche dans la portée — PAS de ramassage automatique :
     // le joueur doit appuyer sur E / le bouton « Ramasser » (voir grabNearest).
-    const px = _state.player.x, pz = _state.player.z;
     let nearId = null, nearItem = null, nearDist = GRAB_RANGE;
     for (const [id, item] of _worldItems) {
       const d = Math.hypot(item.x - px, item.z - pz);

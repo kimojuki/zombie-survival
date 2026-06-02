@@ -38,6 +38,7 @@
 
   function _buildSpawn(scene, B) {
     const baseY = ZS.getTerrainHeight(0, 0);
+    ZS.registerLoot('maison', 2.5, 2, 5, 5);   // quelques objets près du feu de camp (départ)
 
     const platMat = new THREE.MeshLambertMaterial({ color: 0x8B7355 });
     const plat    = new THREE.Mesh(new THREE.CylinderGeometry(3, 3.5, 0.4, 16), platMat);
@@ -89,6 +90,7 @@
   function _buildCampsite(scene, B) {
     const cx = -20, cz = 33;
     const baseY = ZS.getTerrainHeight(cx, cz);
+    ZS.registerLoot('maison', cx, cz, 18, 14);   // ravitaillement de base au campement
 
     // Sol du campement
     B.slab(scene, cx, cz, baseY + 0.01, 40, 32, B.M.dirt);

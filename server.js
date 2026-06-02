@@ -95,14 +95,9 @@ let structureIdCounter = 0;
 const FOREST_SPAWN     = { x: 0, y: 1, z: -5, rotY: 0 };   // Start Forest
 const DEFAULT_SURVIVAL = { faim: 80, soif: 80, infection: 0, saignement: false };
 const STARTING_ITEMS   = {
-  hotbar: [
-    { type: 'res_bois_brut', qty: 50 },
-    { type: 'res_clous',     qty: 100 },
-    { type: 'res_ferraille', qty: 30 },
-    null, null, null,
-  ],
+  hotbar: [null, null, null, null, null, null],   // inventaire vide
   bag: [],
-  equip: { 'Tête': null, 'Torso': null, 'Mains': null, 'Dos': { type: 'eq_grand_sac', qty: 1 } },
+  equip: { 'Tête': null, 'Torso': null, 'Mains': null, 'Dos': null },  // aucun sac
 };
 const STARTING_SAVE = JSON.stringify({ ...STARTING_ITEMS, survival: DEFAULT_SURVIVAL });
 const DEATH_BAG_MS  = 30 * 60 * 1000; // butin de mort : 30 min puis disparition
@@ -638,7 +633,7 @@ io.on('connection', async (socket) => {
 // par défaut, spawn dans Start Forest, vie pleine. Protégé par un marqueur pour ne
 // s'exécuter qu'une fois au prochain démarrage.
 async function resetAllPlayersOnce() {
-  const marker = path.join(__dirname, '.inventory_reset_v3_done');
+  const marker = path.join(__dirname, '.inventory_reset_v4_done');
   if (fs.existsSync(marker)) return;
   try {
     const [r] = await pool.execute(
@@ -646,7 +641,7 @@ async function resetAllPlayersOnce() {
       [STARTING_SAVE, FOREST_SPAWN.x, FOREST_SPAWN.y, FOREST_SPAWN.z, FOREST_SPAWN.rotY]
     );
     fs.writeFileSync(marker, new Date().toISOString());
-    console.log(`🔄 Joueurs réinitialisés (kit + spawn forêt) : ${r.affectedRows} joueur(s).`);
+    console.log(`🔄 Joueurs réinitialisés (inventaire vide + spawn forêt) : ${r.affectedRows} joueur(s).`);
   } catch (e) {
     console.error('Reset joueurs échoué (réessai au prochain démarrage):', e.message);
   }

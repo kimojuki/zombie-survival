@@ -537,12 +537,6 @@
   }
   // ── Items de test — un exemplaire de chaque item ─────────────────────────
   function _addTestItems() {
-    // Stock de départ : uniquement du bois brut et des clous.
-    const testItems = [
-      ['res_bois_brut', 50],
-      ['res_clous', 100],
-      ['res_ferraille', 30],
-    ];
-    for (const [type, qty] of testItems) ZS.Inventory.addItem(type, qty);
+    // Inventaire de départ vide — les joueurs ne commencent avec rien.
   }
 }());

@@ -23,8 +23,7 @@
     _state  = state;
     _scene  = scene;
     _socket = socket;
-    // Équipe le grand sac par défaut → maximum de slots disponibles
-    _equip['Dos'] = { type: 'eq_grand_sac', qty: 1 };
+    // Inventaire vide par défaut (aucun sac équipé)
     _resizeBag();
     _buildHotbarDOM();
     _buildInvPanel();
@@ -523,7 +522,7 @@
 
   function clear() {
     _hotbar = Array(HOTBAR_SIZE).fill(null);
-    _equip  = { Tête: null, Torso: null, Mains: null, Dos: { type: 'eq_grand_sac', qty: 1 } };
+    _equip  = { Tête: null, Torso: null, Mains: null, Dos: null };
     _bag    = [];
     _resizeBag();
     _sel = null;

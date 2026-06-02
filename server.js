@@ -67,21 +67,25 @@ app.post('/api/auth/login', async (req, res) => {
 
 // ── Game state ───────────────────────────────────────────────────────────────
 
-const players = new Map();
-const zombies = new Map();
-const items   = new Map(); // world pickup items
-let zombieIdCounter = 0;
-let itemIdCounter   = 0;
+const players    = new Map();
+const zombies    = new Map();
+const items      = new Map(); // world pickup items
+const structures = new Map(); // structures construites par les joueurs (base)
+let zombieIdCounter    = 0;
+let itemIdCounter      = 0;
+let structureIdCounter = 0;
 
 // ── Collision géométrique (transmise une fois par le premier client) ──────────
 // Le client construit la géométrie : il est la source de vérité unique. On ne garde
 // que l'empreinte 2D et on ignore les murs d'étage (minY), les zombies restant au sol.
 // Les portes n'ont aucun collider → les zombies passent par les ouvertures comme les joueurs.
 let worldColliders = [];
+const structureColliders = []; // murs/portes construits par les joueurs
 const ZOMBIE_R = 0.5;
 
 function resolveZombieCollision(nx, nz) {
-  for (const c of worldColliders) {
+  for (const list of [worldColliders, structureColliders]) {
+  for (const c of list) {
     if (c.type === 'box') {
       const clampX = Math.max(c.cx - c.hw, Math.min(c.cx + c.hw, nx));
       const clampZ = Math.max(c.cz - c.hd, Math.min(c.cz + c.hd, nz));
@@ -113,6 +117,7 @@ function resolveZombieCollision(nx, nz) {
         nz = c.z + dz * scale;
       }
     }
+  }
   }
   return [nx, nz];
 }
@@ -385,6 +390,7 @@ io.on('connection', async (socket) => {
       .map(([sid, q]) => ({ id: sid, username: q.username, x: q.x, y: q.y, z: q.z, rotY: q.rotY })),
     zombies: Array.from(zombies.values()),
     items:   Array.from(items.values()),
+    structures: Array.from(structures.values()),
     worldTime: _worldTime,
     inventory: savedInventory
   });
@@ -485,6 +491,24 @@ io.on('connection', async (socket) => {
     };
     items.set(id, drop);
     io.emit('item-spawn', drop);
+  });
+
+  socket.on('place-structure', (d) => {
+    if (!d || typeof d.type !== 'string' || !d.type.startsWith('struct_')) return;
+    const x = Number(d.x), z = Number(d.z), rotY = Number(d.rotY) || 0;
+    if (!isFinite(x) || !isFinite(z)) return;
+    // Anti-triche léger : pose seulement à portée raisonnable du joueur
+    if (Math.hypot(x - p.x, z - p.z) > 8) return;
+    const colliders = Array.isArray(d.colliders)
+      ? d.colliders.filter(c => c && c.type === 'box' &&
+          isFinite(c.cx) && isFinite(c.cz) && isFinite(c.hw) && isFinite(c.hd)).slice(0, 4)
+      : [];
+    const id = ++structureIdCounter;
+    const st = { id, type: d.type, x, z, rotY, colliders, owner: p.id };
+    structures.set(id, st);
+    // Les zombies se cognent aussi dans les murs des joueurs
+    for (const c of colliders) structureColliders.push(c);
+    io.emit('structure-spawn', st);
   });
 
   socket.on('inventory-sync', (slots) => {

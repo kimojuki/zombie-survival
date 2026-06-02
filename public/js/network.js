@@ -36,6 +36,7 @@
       remotePlayers.clear();
       for (const p of data.players) _addRemotePlayer(p);
       for (const item of (data.items || [])) ZS.Inventory.spawnWorldItem(item);
+      for (const st of (data.structures || [])) ZS.Inventory.spawnStructure(st);
       // Restore saved inventory (hotbar + sac + équipement). Tableau vide / absent
       // = nouveau joueur → on garde les objets de test + sac par défaut.
       if (data.inventory) ZS.Inventory.loadFromSave(data.inventory);
@@ -73,6 +74,7 @@
     socket.on('zombie-hit',   (d)   => ZS.Zombies.hit(d.id, d.health));
     socket.on('zombie-die',   (id)  => ZS.Zombies.die(id));
 
+    socket.on('structure-spawn', (d) => ZS.Inventory.spawnStructure(d));
     socket.on('item-spawn',  (d)  => ZS.Inventory.spawnWorldItem(d));
     socket.on('item-remove', (id) => ZS.Inventory.removeWorldItem(id));
     socket.on('item-add',    (d)  => ZS.Inventory.receivePickup(d.type, d.qty));

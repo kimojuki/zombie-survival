@@ -75,6 +75,8 @@
     }
     _grabTargetId = nearId;
     _updateGrabUI(nearItem);
+
+    _updateBuildGhost();   // aperçu de construction si une structure est en main
   }
 
   // Y a-t-il au moins une place pour cet objet (pile non pleine ou slot libre) ?
@@ -126,6 +128,150 @@
       btn.style.display = 'flex';
     } else if (btn.style.display !== 'none') {
       btn.style.display = 'none';
+    }
+  }
+
+  // ── Construction (structures placables : murs, portes, plancher, escalier) ───
+  const STRUCT = {
+    struct_mur_bois:          { kind: 'wall',  w: 3.0, h: 2.6, t: 0.2 },
+    struct_porte_bois:        { kind: 'door',  w: 3.0, h: 2.6, t: 0.2, gap: 1.3 },
+    struct_grande_porte_bois: { kind: 'door',  w: 3.6, h: 2.8, t: 0.2, gap: 2.3 },
+    struct_plancher_bois:     { kind: 'floor', w: 3.0, h: 0.18, t: 3.0 },
+    struct_escalier_bois:     { kind: 'stair', w: 1.8, h: 2.6, t: 3.0 },
+  };
+  let _ghost = null, _ghostType = null;
+
+  function _isStructure(type) { return !!STRUCT[type]; }
+
+  const _WOOD  = new THREE.MeshLambertMaterial({ color: 0xb5894e });
+  const _WOOD2 = new THREE.MeshLambertMaterial({ color: 0x8a5a2e });
+
+  function _addBox(g, mat, w, h, d, x, y, z) {
+    const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat);
+    m.position.set(x, y, z);
+    m.castShadow = true; m.receiveShadow = true;
+    g.add(m);
+  }
+
+  // Mesh d'une structure : base à y=0, largeur le long de X, épaisseur le long de Z.
+  function _buildStructureMesh(type) {
+    const s = STRUCT[type];
+    const g = new THREE.Group();
+    if (s.kind === 'wall') {
+      _addBox(g, _WOOD, s.w, s.h, s.t, 0, s.h / 2, 0);
+      for (let i = -1; i <= 1; i++) _addBox(g, _WOOD2, 0.12, s.h - 0.1, s.t + 0.04, i * s.w * 0.3, s.h / 2, 0);
+      _addBox(g, _WOOD2, s.w, 0.16, s.t + 0.04, 0, s.h - 0.1, 0);
+    } else if (s.kind === 'door') {
+      const side = (s.w - s.gap) / 2;
+      for (const sgn of [-1, 1]) _addBox(g, _WOOD, side, s.h, s.t, sgn * (s.gap / 2 + side / 2), s.h / 2, 0);
+      _addBox(g, _WOOD, s.w, 0.4, s.t, 0, s.h - 0.2, 0);   // imposte au-dessus de l'ouverture
+    } else if (s.kind === 'floor') {
+      _addBox(g, _WOOD, s.w, s.h, s.t, 0, s.h / 2, 0);
+      for (let i = -1; i <= 1; i++) _addBox(g, _WOOD2, 0.1, s.h + 0.02, s.t, i * s.w * 0.3, s.h / 2, 0);
+    } else if (s.kind === 'stair') {
+      const STEPS = 6, sh = s.h / STEPS, sd = s.t / STEPS;
+      for (let i = 0; i < STEPS; i++) {
+        const zc = -s.t / 2 + sd * (i + 0.5);
+        _addBox(g, i % 2 ? _WOOD2 : _WOOD, s.w, sh * (i + 1), sd, 0, sh * (i + 1) / 2, zc);
+      }
+    }
+    return g;
+  }
+
+  // Colliders (boîtes AABB 2D) d'une structure placée, orientation snappée à 90°.
+  function _structureColliders(type, x, z, rotY) {
+    const s = STRUCT[type];
+    const alongX = Math.abs(Math.cos(rotY)) > 0.5;
+    const cols = [];
+    const box = (cx, cz, halfW, halfT) => cols.push(alongX
+      ? { type: 'box', cx, cz, hw: halfW, hd: halfT }
+      : { type: 'box', cx, cz, hw: halfT, hd: halfW });
+    if (s.kind === 'wall') {
+      box(x, z, s.w / 2, s.t / 2);
+    } else if (s.kind === 'door') {
+      const side = (s.w - s.gap) / 2, off = s.gap / 2 + side / 2;
+      const ox = alongX ? off : 0, oz = alongX ? 0 : off;
+      box(x - ox, z - oz, side / 2, s.t / 2);
+      box(x + ox, z + oz, side / 2, s.t / 2);
+    }
+    // floor/stair : pas de collider bloquant (praticables via registerUpperFloor / registerRamp)
+    return cols;
+  }
+
+  // Position/orientation de pose : devant le joueur, rotation snappée à 90°.
+  function _placementTransform() {
+    const p = _state.player, yaw = _state.camera.yaw;
+    const x = p.x - Math.sin(yaw) * 3.2;
+    const z = p.z - Math.cos(yaw) * 3.2;
+    const rotY = Math.round(yaw / (Math.PI / 2)) * (Math.PI / 2);
+    return { x, z, rotY };
+  }
+
+  function _updateBuildGhost() {
+    const item = _hotbar[_active];
+    const type = item ? item.type : null;
+    if (!type || !_isStructure(type)) { _removeGhost(); return; }
+    if (_ghostType !== type) {
+      _removeGhost();
+      _ghost = _buildStructureMesh(type);
+      _ghost.traverse((o) => {
+        if (!o.isMesh) return;
+        o.material = o.material.clone();
+        o.material.transparent = true;
+        o.material.opacity = 0.45;
+        o.castShadow = false;
+      });
+      _ghostType = type;
+      _scene.add(_ghost);
+    }
+    const t = _placementTransform();
+    const baseY = ZS.getTerrainHeight ? ZS.getTerrainHeight(t.x, t.z) : 0;
+    _ghost.position.set(t.x, baseY, t.z);
+    _ghost.rotation.y = t.rotY;
+  }
+
+  function _removeGhost() {
+    if (_ghost) { _scene.remove(_ghost); _ghost = null; }
+    _ghostType = null;
+  }
+
+  // Pose la structure active devant le joueur (consomme 1, sync serveur).
+  function _placeStructure() {
+    const item = _hotbar[_active];
+    if (!item || !_isStructure(item.type)) return;
+    const type = item.type;
+    const t = _placementTransform();
+    removeItem(type, 1);
+    _socket.emit('place-structure', {
+      type, x: t.x, z: t.z, rotY: t.rotY,
+      colliders: _structureColliders(type, t.x, t.z, t.rotY),
+    });
+    if (!_hotbar[_active] || !_isStructure(_hotbar[_active].type)) _removeGhost();
+  }
+
+  // Construit une structure reçue du serveur (mesh + collisions + sol praticable).
+  function spawnStructure(d) {
+    const s = STRUCT[d.type];
+    if (!s) return;
+    const rotY  = d.rotY || 0;
+    const baseY = ZS.getTerrainHeight ? ZS.getTerrainHeight(d.x, d.z) : 0;
+    const mesh  = _buildStructureMesh(d.type);
+    mesh.position.set(d.x, baseY, d.z);
+    mesh.rotation.y = rotY;
+    _scene.add(mesh);
+
+    const cols = (d.colliders && d.colliders.length) ? d.colliders : _structureColliders(d.type, d.x, d.z, rotY);
+    const world = ZS.getColliders && ZS.getColliders();
+    if (world) for (const c of cols) world.push(c);
+
+    if (s.kind === 'floor') {
+      ZS.registerUpperFloor?.(d.x, d.z, s.w / 2, s.t / 2, baseY + s.h);
+    } else if (s.kind === 'stair') {
+      const alongX = Math.abs(Math.cos(rotY)) > 0.5;
+      ZS.registerRamp?.(d.x, d.z,
+        alongX ? s.w / 2 : s.t / 2,
+        alongX ? s.t / 2 : s.w / 2,
+        baseY, baseY + s.h, alongX ? 'z' : 'x');
     }
   }
 
@@ -422,9 +568,13 @@
   function _updateUseBtn() {
     const item = _hotbar[_active];
     const def  = item ? _def(item.type) : null;
-    const show = def && ['food','medical','ammo','map','equipment'].includes(def.category);
+    const isStruct = def && def.category === 'structure';
+    const show = def && ['food','medical','ammo','map','equipment','structure'].includes(def.category);
     const btn  = document.getElementById('use-btn');
-    if (btn) btn.style.display = show ? 'flex' : 'none';
+    if (btn) {
+      btn.style.display = show ? 'flex' : 'none';
+      btn.textContent = isStruct ? '🔨 Placer' : 'Utiliser';
+    }
   }
 
   // ── Utilisation ────────────────────────────────────────────────────────────
@@ -449,6 +599,10 @@
     }
     if (def.category === 'equipment') {
       _equipFromHotbar(_active);
+      return;
+    }
+    if (def.category === 'structure') {
+      _placeStructure();
       return;
     }
   }
@@ -778,7 +932,7 @@
       const idx = parseInt(slotEl.dataset.slot);
       if (idx === _active) {
         const def = _hotbar[idx] ? _def(_hotbar[idx].type) : null;
-        if (def && ['food','medical','ammo','equipment'].includes(def.category)) _useActiveItem();
+        if (def && ['food','medical','ammo','equipment','structure'].includes(def.category)) _useActiveItem();
       } else {
         _setActiveSlot(idx);
       }
@@ -834,7 +988,7 @@
   window.ZS = window.ZS || {};
   ZS.Inventory = {
     init, tick,
-    spawnWorldItem, removeWorldItem, receivePickup,
+    spawnWorldItem, removeWorldItem, receivePickup, spawnStructure,
     countItem, addItem, removeItem, consumeOne,
     getActiveItem, getWeaponAmmo, decrementAmmo, reloadWeapon, wearActiveWeapon,
     getArmorValue, togglePanel, loadFromSave, clear,

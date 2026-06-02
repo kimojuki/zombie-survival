@@ -77,11 +77,30 @@
     _updateGrabUI(nearItem);
   }
 
+  // Y a-t-il au moins une place pour cet objet (pile non pleine ou slot libre) ?
+  function _canAddItem(type) {
+    const def = _def(type);
+    if (!def) return false;
+    for (const arr of [_hotbar, _bag]) {
+      for (let i = 0; i < arr.length; i++) {
+        const s = arr[i];
+        if (!s) return true;                                       // slot libre
+        if (s.type === type && s.qty < def.maxStack) return true;  // pile non pleine
+      }
+    }
+    return false;
+  }
+
   // Ramasse l'objet actuellement visé (le plus proche à portée).
   function grabNearest() {
     if (_grabTargetId == null) return false;
     const item = _worldItems.get(_grabTargetId);
     if (!item) { _grabTargetId = null; return false; }
+    // Inventaire plein → on refuse le ramassage (sinon l'objet serait perdu).
+    if (!_canAddItem(item.type)) {
+      ZS.UI?.showNotif?.('Inventaire plein !');
+      return false;
+    }
     // Optimiste : on retire le mesh ; le serveur confirme (item-remove + item-add).
     _scene.remove(item.mesh);
     _worldItems.delete(_grabTargetId);
@@ -97,7 +116,13 @@
     if (!btn) return;
     if (item) {
       const def = _def(item.type);
-      btn.textContent = '✋ ' + (def?.label || 'Ramasser') + '  [E]';
+      if (_canAddItem(item.type)) {
+        btn.textContent = '✋ ' + (def?.label || 'Ramasser') + '  [E]';
+        btn.classList.remove('full');
+      } else {
+        btn.textContent = '🎒 Inventaire plein';
+        btn.classList.add('full');
+      }
       btn.style.display = 'flex';
     } else if (btn.style.display !== 'none') {
       btn.style.display = 'none';

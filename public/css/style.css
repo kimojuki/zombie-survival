@@ -358,6 +358,9 @@ body {
   z-index: 62;
 }
 #grab-btn:active { transform: translateX(-50%) scale(0.94); }
+#grab-btn.full {
+  background: rgba(120,40,40,0.92); border-color: #d06a6a; color: #ffe0e0;
+}
 
 /* ── Pickup notification ─────────────────────────────────────── */
 #pickup-notif {

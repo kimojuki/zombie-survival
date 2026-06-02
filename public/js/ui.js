@@ -174,11 +174,16 @@
 
   // ── HUD updates ───────────────────────────────────────────────────────────
 
-  function setHealth(hp) {
-    document.getElementById('health-bar').style.width = Math.max(0, hp) + '%';
-    document.getElementById('health-text').textContent = Math.max(0, hp);
+  let _maxHp = 100;
+  function setHealth(hp, max) {
+    if (typeof max === 'number' && max > 0) _maxHp = max;
+    const h   = Math.max(0, hp);
+    const pct = Math.max(0, Math.min(100, (h / _maxHp) * 100));
     const bar = document.getElementById('health-bar');
-    bar.style.background = hp > 60 ? '#38a169' : hp > 30 ? '#e9a800' : '#e53e3e';
+    bar.style.width = pct + '%';
+    bar.style.background = pct > 60 ? '#38a169' : pct > 30 ? '#e9a800' : '#e53e3e';
+    document.getElementById('health-text').textContent =
+      Math.round(h) + (_maxHp > 100 ? '/' + _maxHp : '');
   }
 
   function setKills(k) {

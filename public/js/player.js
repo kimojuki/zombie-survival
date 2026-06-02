@@ -212,7 +212,7 @@
     inner.position.y = 0.075;
     fx.add(outer); fx.add(inner);
 
-    const light = new THREE.PointLight(0xff7a28, 3.2, 18, 2);
+    const light = new THREE.PointLight(0xffa540, 7.0, 34, 2);
     light.position.y = 0.06;
     fx.add(light);
 
@@ -220,8 +220,8 @@
     let t = Math.random() * 10;
     outer.onBeforeRender = () => {
       t += 0.08;
-      const f = 0.82 + Math.sin(t * 7.3) * 0.12 + Math.sin(t * 13.1) * 0.06;
-      light.intensity = 3.2 * f;
+      const f = 0.85 + Math.sin(t * 7.3) * 0.10 + Math.sin(t * 13.1) * 0.05;
+      light.intensity = 7.0 * f;
       const sy = 0.85 + Math.sin(t * 9.0) * 0.15;
       outer.scale.set(1, sy, 1);
       inner.scale.set(1, 1.85 - sy, 1);

@@ -97,16 +97,26 @@
     });
 
     socket.on('take-damage', (d) => {
-      const dmg = state.player.health - d.health;
-      state.player.health = d.health;
-      ZS.UI.setHealth(d.health);
-      if (d.health <= 0 && !state.player.dead) {
+      const maxHp = ZS.Inventory?.getMaxHealth?.() || 100;
+      let dmg;
+      if (typeof d.dmg === 'number') {
+        // Dégâts zombie (montant) → appliqués sur la vie client (armure incluse)
+        if (state.player.dead) return;
+        dmg = d.dmg;
+        state.player.health = Math.max(0, state.player.health - dmg);
+      } else {
+        // Valeur absolue (respawn / compat)
+        dmg = state.player.health - d.health;
+        state.player.health = d.health;
+      }
+      ZS.UI.setHealth(Math.floor(state.player.health), maxHp);
+      if (state.player.health <= 0 && !state.player.dead) {
         state.player.dead = true;
         sendDied();
         ZS.UI.showDeath(state.player.kills);
-      } else if (d.health > 0) {
+      } else if (state.player.health > 0 && dmg > 0) {
         ZS.UI.flashDamage();
-        if (dmg > 0) ZS.Survival.applyDamage(dmg);
+        ZS.Survival.applyDamage(dmg);
       }
     });
 

@@ -2,8 +2,8 @@
 (function () {
   'use strict';
 
-  const HUNGER_DECAY    = 0.28;  // /s → vide en ~6 min
-  const THIRST_DECAY    = 0.42;  // /s → vide en ~4 min
+  const HUNGER_DECAY    = 0.11;  // /s → vide en ~15 min
+  const THIRST_DECAY    = 0.16;  // /s → vide en ~10 min
   const BLEED_DMG       = 2.0;   // hp/s
   const STARVE_DMG      = 0.8;   // hp/s quand faim = 0
   const DEHYDRATE_DMG   = 1.2;   // hp/s quand soif = 0
@@ -51,6 +51,7 @@
   function _syncServer() {
     ZS.Network?.sendSurvival?.({
       faim: _sv.faim, soif: _sv.soif, infection: _sv.infection, saignement: _sv.saignement,
+      health: _state?.player?.health,
     });
   }
 
@@ -146,8 +147,9 @@
 
     if (def.category === 'medical') {
       const p = _state.player;
-      p.health = Math.min(100, p.health + (def.soin_sante || 0));
-      ZS.UI.setHealth(Math.floor(p.health));
+      const maxHp = ZS.Inventory?.getMaxHealth?.() || 100;
+      p.health = Math.min(maxHp, p.health + (def.soin_sante || 0));   // armure → peut dépasser 100
+      ZS.UI.setHealth(Math.floor(p.health), maxHp);
       if (def.stoppe_saignement) _sv.saignement = false;
       if (def.guerit_infection)  { _sv.infection = 0; ZS.UI.setInfection(0); }
       ZS.UI.showNotif('+' + def.soin_sante + ' HP');

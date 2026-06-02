@@ -308,6 +308,8 @@ setInterval(() => {
 
 const DETECT_RANGE   = 12;   // unités — portée de détection
 const AGGRO_MEMORY   = 5;    // secondes d'aggro après perte de vue
+const ZOMBIE_DMG       = 8;   // dégâts par coup (au lieu de 5 toutes les 100ms)
+const ZOMBIE_ATTACK_CD = 0.9; // secondes entre deux coups d'un même zombie
 const WANDER_SPEED   = 0.25; // fraction de vitesse en mode errance
 const WANDER_TURN_MIN = 2;   // secondes min avant changement de direction
 const WANDER_TURN_MAX = 5;   // secondes max avant changement de direction
@@ -328,6 +330,7 @@ function makeZombie() {
     wanderAngle,
     wanderTimer: WANDER_TURN_MIN + Math.random() * (WANDER_TURN_MAX - WANDER_TURN_MIN),
     aggroTimer: 0,
+    attackTimer: 0,
     speed: 1.8 + Math.random() * 1.4
   };
 }
@@ -369,9 +372,12 @@ setInterval(() => {
                                            z.z + Math.sin(ang) * z.speed * DT);
       z.x = chase[0];
       z.z = chase[1];
-      if (nearestDist < 1.5 && !nearestP.invincible) {
-        nearestP.health = Math.max(0, nearestP.health - 5);
-        io.to(nearestP.socketId).emit('take-damage', { health: nearestP.health });
+      // Attaque avec cadence : un coup toutes ZOMBIE_ATTACK_CD s, dégâts modérés.
+      z.attackTimer = Math.max(0, (z.attackTimer || 0) - DT);
+      if (nearestDist < 1.5 && !nearestP.invincible && z.attackTimer <= 0) {
+        z.attackTimer = ZOMBIE_ATTACK_CD;
+        nearestP.health = Math.max(0, nearestP.health - ZOMBIE_DMG);
+        io.to(nearestP.socketId).emit('take-damage', { dmg: ZOMBIE_DMG });
       }
     } else {
       // Wander slowly — change direction periodically, not every tick
@@ -592,6 +598,8 @@ io.on('connection', async (socket) => {
         infection:  Math.max(0, Math.min(100, Number(sv.infection) || 0)),
         saignement: !!sv.saignement,
       };
+      // Vie autoritaire côté client (armure → peut dépasser 100) ; on persiste.
+      if (typeof sv.health === 'number') p.health = Math.max(0, Math.min(999, sv.health));
       p.dirty = true;
     }
   });

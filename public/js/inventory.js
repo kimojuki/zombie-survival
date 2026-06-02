@@ -481,6 +481,24 @@
     }, 0);
   }
 
+  // Vie max = 100 + valeur d'armure équipée (le joueur peut dépasser 100).
+  function getMaxHealth() { return 100 + getArmorValue(); }
+
+  // Met à jour la vie max selon l'armure. gain=true (équipement en cours de jeu) →
+  // ajoute la vie bonus ; gain=false (chargement/restauration) → règle juste le plafond.
+  let _lastArmor = 0;
+  function _syncArmor(gain) {
+    const armor = getArmorValue();
+    const max   = 100 + armor;
+    const p = _state && _state.player;
+    if (p) {
+      if (gain) { const delta = armor - _lastArmor; if (delta > 0) p.health += delta; }
+      p.health = Math.max(0, Math.min(max, p.health));   // clamp au max courant
+      ZS.UI?.setHealth?.(Math.floor(p.health), max);
+    }
+    _lastArmor = armor;
+  }
+
   // ── Sauvegarde ─────────────────────────────────────────────────────────────
 
   // Accepte l'ancien format (tableau = hotbar seule) ou le nouveau
@@ -518,6 +536,7 @@
     if (_panelOpen) _renderInvPanel();
     ZS.setHandItem?.(_hotbar[_active]?.type || null);
     ZS.UI?.setWeaponUI?.(_hotbar[_active]?.type || null);
+    _syncArmor(false);   // règle la vie max selon l'armure restaurée (sans bonus)
   }
 
   function clear() {
@@ -681,6 +700,7 @@
     _equip[slotName] = { type: item.type, qty: 1 };
     _hotbar[idx] = prev;
     if (slotName === 'Dos') _resizeBag();
+    _syncArmor(true);
     _renderHotbar();
     if (_panelOpen) _renderInvPanel();
     ZS.UI.showNotif(def.label + ' équipé');
@@ -753,6 +773,7 @@
     const touchedDos = (from.zone === 'equip' && from.idx === 'Dos')
                     || (to.zone === 'equip' && to.idx === 'Dos');
     if (touchedDos) _resizeBag();
+    if (from.zone === 'equip' || to.zone === 'equip') _syncArmor(true);
     _syncToServer();
   }
 
@@ -1094,6 +1115,6 @@
     spawnWorldItem, removeWorldItem, receivePickup, spawnStructure, collectBag,
     countItem, addItem, removeItem, consumeOne,
     getActiveItem, getWeaponAmmo, decrementAmmo, reloadWeapon, wearActiveWeapon,
-    getArmorValue, togglePanel, loadFromSave, clear,
+    getArmorValue, getMaxHealth, togglePanel, loadFromSave, clear,
   };
 }());

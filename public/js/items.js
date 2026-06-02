@@ -187,6 +187,7 @@
       label: 'Hachette', category: 'tool', maxStack: 1,
       icon: '🪓', color: 0x664422,
       type_recolte: 'Bois', efficacite_recolte: 2.5, durabilite_max: 120,
+      degats_impact: 22, portee_metre: 2.8, cadence_attaque: 0.6,   // sert aussi d'arme
     },
     tool_pioche: {
       label: 'Pioche', category: 'tool', maxStack: 1,

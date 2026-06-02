@@ -33,6 +33,7 @@
     _bindHotbarTouch();
     _setupUseBtn();
     _setupGrabBtn();
+    _setupBuildCtl();
   }
 
   // ── Capacité du sac (dépend du sac équipé) ──────────────────────────────────
@@ -132,14 +133,17 @@
   }
 
   // ── Construction (structures placables : murs, portes, plancher, escalier) ───
+  // Grille commune (GX) + hauteur d'étage (LEVEL_H) pour aligner et empiler.
+  const GX = 3.0, LEVEL_H = 2.6;
   const STRUCT = {
-    struct_mur_bois:          { kind: 'wall',  w: 3.0, h: 2.6, t: 0.2 },
-    struct_porte_bois:        { kind: 'door',  w: 3.0, h: 2.6, t: 0.2, gap: 1.3 },
-    struct_grande_porte_bois: { kind: 'door',  w: 3.6, h: 2.8, t: 0.2, gap: 2.3 },
-    struct_plancher_bois:     { kind: 'floor', w: 3.0, h: 0.18, t: 3.0 },
-    struct_escalier_bois:     { kind: 'stair', w: 1.8, h: 2.6, t: 3.0 },
+    struct_mur_bois:          { kind: 'wall',  w: 3.0, h: LEVEL_H, t: 0.2 },
+    struct_porte_bois:        { kind: 'door',  w: 3.0, h: LEVEL_H, t: 0.2, gap: 1.3 },
+    struct_grande_porte_bois: { kind: 'door',  w: 3.0, h: LEVEL_H, t: 0.2, gap: 2.2 },
+    struct_plancher_bois:     { kind: 'floor', w: 3.0, h: 0.18,    t: 3.0 },
+    struct_escalier_bois:     { kind: 'stair', w: 1.8, h: LEVEL_H, t: 3.0 },
   };
   let _ghost = null, _ghostType = null;
+  let _buildLevel = 0;   // étage de construction courant (0 = sol)
 
   function _isStructure(type) { return !!STRUCT[type]; }
 
@@ -179,13 +183,19 @@
   }
 
   // Colliders (boîtes AABB 2D) d'une structure placée, orientation snappée à 90°.
-  function _structureColliders(type, x, z, rotY) {
+  // baseY/level : pour un étage > 0, on ajoute minY → le mur ne bloque que ce niveau.
+  function _structureColliders(type, x, z, rotY, baseY, level) {
     const s = STRUCT[type];
     const alongX = Math.abs(Math.cos(rotY)) > 0.5;
     const cols = [];
-    const box = (cx, cz, halfW, halfT) => cols.push(alongX
-      ? { type: 'box', cx, cz, hw: halfW, hd: halfT }
-      : { type: 'box', cx, cz, hw: halfT, hd: halfW });
+    const minY = level > 0 ? baseY - 0.6 : undefined;
+    const box = (cx, cz, halfW, halfT) => {
+      const c = alongX
+        ? { type: 'box', cx, cz, hw: halfW, hd: halfT }
+        : { type: 'box', cx, cz, hw: halfT, hd: halfW };
+      if (minY !== undefined) c.minY = minY;
+      cols.push(c);
+    };
     if (s.kind === 'wall') {
       box(x, z, s.w / 2, s.t / 2);
     } else if (s.kind === 'door') {
@@ -198,13 +208,27 @@
     return cols;
   }
 
-  // Position/orientation de pose : devant le joueur, rotation snappée à 90°.
+  // Position/orientation de pose : devant le joueur, alignée sur la grille + l'étage.
   function _placementTransform() {
     const p = _state.player, yaw = _state.camera.yaw;
-    const x = p.x - Math.sin(yaw) * 3.2;
-    const z = p.z - Math.cos(yaw) * 3.2;
+    let x = p.x - Math.sin(yaw) * 3.2;
+    let z = p.z - Math.cos(yaw) * 3.2;
     const rotY = Math.round(yaw / (Math.PI / 2)) * (Math.PI / 2);
-    return { x, z, rotY };
+    const s = _isStructure(_hotbar[_active]?.type) ? STRUCT[_hotbar[_active].type] : null;
+    const snap = (v) => Math.round(v / GX) * GX;
+    const edge = (v) => Math.round((v - GX / 2) / GX) * GX + GX / 2;
+    if (s) {
+      const alongX = Math.abs(Math.cos(rotY)) > 0.5;
+      if (s.kind === 'wall' || s.kind === 'door') {
+        // Les murs se posent sur les arêtes des cellules → ils encadrent les planchers
+        if (alongX) { x = snap(x); z = edge(z); }
+        else        { x = edge(x); z = snap(z); }
+      } else {
+        x = snap(x); z = snap(z);   // plancher / escalier : centre de cellule
+      }
+    }
+    const baseY = (ZS.getTerrainHeight ? ZS.getTerrainHeight(x, z) : 0) + _buildLevel * LEVEL_H;
+    return { x, z, rotY, baseY, level: _buildLevel };
   }
 
   function _updateBuildGhost() {
@@ -225,8 +249,7 @@
       _scene.add(_ghost);
     }
     const t = _placementTransform();
-    const baseY = ZS.getTerrainHeight ? ZS.getTerrainHeight(t.x, t.z) : 0;
-    _ghost.position.set(t.x, baseY, t.z);
+    _ghost.position.set(t.x, t.baseY, t.z);
     _ghost.rotation.y = t.rotY;
   }
 
@@ -243,8 +266,8 @@
     const t = _placementTransform();
     removeItem(type, 1);
     _socket.emit('place-structure', {
-      type, x: t.x, z: t.z, rotY: t.rotY,
-      colliders: _structureColliders(type, t.x, t.z, t.rotY),
+      type, x: t.x, y: t.baseY, z: t.z, rotY: t.rotY,
+      colliders: _structureColliders(type, t.x, t.z, t.rotY, t.baseY, t.level),
     });
     if (!_hotbar[_active] || !_isStructure(_hotbar[_active].type)) _removeGhost();
   }
@@ -254,13 +277,15 @@
     const s = STRUCT[d.type];
     if (!s) return;
     const rotY  = d.rotY || 0;
-    const baseY = ZS.getTerrainHeight ? ZS.getTerrainHeight(d.x, d.z) : 0;
+    const baseY = (typeof d.y === 'number')
+      ? d.y
+      : (ZS.getTerrainHeight ? ZS.getTerrainHeight(d.x, d.z) : 0);
     const mesh  = _buildStructureMesh(d.type);
     mesh.position.set(d.x, baseY, d.z);
     mesh.rotation.y = rotY;
     _scene.add(mesh);
 
-    const cols = (d.colliders && d.colliders.length) ? d.colliders : _structureColliders(d.type, d.x, d.z, rotY);
+    const cols = (d.colliders && d.colliders.length) ? d.colliders : _structureColliders(d.type, d.x, d.z, rotY, baseY, 0);
     const world = ZS.getColliders && ZS.getColliders();
     if (world) for (const c of cols) world.push(c);
 
@@ -575,6 +600,8 @@
       btn.style.display = show ? 'flex' : 'none';
       btn.textContent = isStruct ? '🔨 Placer' : 'Utiliser';
     }
+    const ctl = document.getElementById('build-ctl');
+    if (ctl) ctl.style.display = isStruct ? 'flex' : 'none';
   }
 
   // ── Utilisation ────────────────────────────────────────────────────────────
@@ -920,6 +947,8 @@
       if (digit >= 1 && digit <= 6) _setActiveSlot(digit - 1);
       if (e.code === 'KeyE') { if (!grabNearest()) _useActiveItem(); }
       if (e.code === 'KeyI') togglePanel();
+      if (e.code === 'PageUp'   && _isStructure(_hotbar[_active]?.type)) _changeLevel(1);
+      if (e.code === 'PageDown' && _isStructure(_hotbar[_active]?.type)) _changeLevel(-1);
       if (e.code === 'Escape' && _panelOpen) togglePanel();
     });
   }
@@ -951,6 +980,36 @@
     if (!btn) return;
     btn.addEventListener('click', grabNearest);
     btn.addEventListener('touchstart', (e) => { e.preventDefault(); grabNearest(); }, { passive: false });
+  }
+
+  // Contrôle d'étage de construction (▲ / ▼) — visible quand une structure est en main.
+  function _setupBuildCtl() {
+    const ctl = document.createElement('div');
+    ctl.id = 'build-ctl';
+    ctl.style.cssText = 'display:none;position:fixed;right:14px;bottom:300px;z-index:62;'
+      + 'flex-direction:column;align-items:center;gap:4px;';
+    const bs = 'width:46px;height:40px;border-radius:10px;background:rgba(212,184,96,0.92);'
+      + 'border:2px solid #f0d878;color:#1a1206;font-size:18px;font-weight:800;cursor:pointer;'
+      + 'pointer-events:auto;display:flex;align-items:center;justify-content:center;';
+    const up = document.createElement('button'); up.textContent = '▲'; up.style.cssText = bs;
+    const lvl = document.createElement('div');    lvl.id = 'build-lvl';
+    lvl.style.cssText = 'background:rgba(0,0,0,0.65);color:#f0d878;padding:3px 8px;'
+      + 'border-radius:6px;font-size:11px;font-weight:700;font-family:monospace;';
+    lvl.textContent = 'Niv 0';
+    const dn = document.createElement('button'); dn.textContent = '▼'; dn.style.cssText = bs;
+    const wire = (el, d) => {
+      el.addEventListener('click', () => _changeLevel(d));
+      el.addEventListener('touchstart', (e) => { e.preventDefault(); _changeLevel(d); }, { passive: false });
+    };
+    wire(up, 1); wire(dn, -1);
+    ctl.appendChild(up); ctl.appendChild(lvl); ctl.appendChild(dn);
+    document.body.appendChild(ctl);
+  }
+
+  function _changeLevel(d) {
+    _buildLevel = Math.max(0, Math.min(8, _buildLevel + d));
+    const lvl = document.getElementById('build-lvl');
+    if (lvl) lvl.textContent = 'Niv ' + _buildLevel;
   }
 
   // ── Helpers ────────────────────────────────────────────────────────────────

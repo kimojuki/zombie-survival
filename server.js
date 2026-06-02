@@ -496,6 +496,7 @@ io.on('connection', async (socket) => {
   socket.on('place-structure', (d) => {
     if (!d || typeof d.type !== 'string' || !d.type.startsWith('struct_')) return;
     const x = Number(d.x), z = Number(d.z), rotY = Number(d.rotY) || 0;
+    const y = Number(d.y);
     if (!isFinite(x) || !isFinite(z)) return;
     // Anti-triche léger : pose seulement à portée raisonnable du joueur
     if (Math.hypot(x - p.x, z - p.z) > 8) return;
@@ -504,10 +505,12 @@ io.on('connection', async (socket) => {
           isFinite(c.cx) && isFinite(c.cz) && isFinite(c.hw) && isFinite(c.hd)).slice(0, 4)
       : [];
     const id = ++structureIdCounter;
-    const st = { id, type: d.type, x, z, rotY, colliders, owner: p.id };
+    const st = { id, type: d.type, x, z, rotY, owner: p.id };
+    if (isFinite(y)) st.y = y;
+    st.colliders = colliders;
     structures.set(id, st);
-    // Les zombies se cognent aussi dans les murs des joueurs
-    for (const c of colliders) structureColliders.push(c);
+    // Les zombies (au sol) ne se cognent que dans les murs du rez-de-chaussée (sans minY)
+    for (const c of colliders) if (c.minY === undefined) structureColliders.push(c);
     io.emit('structure-spawn', st);
   });
 

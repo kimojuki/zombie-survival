@@ -16,8 +16,24 @@ const io = new Server(server, { cors: { origin: '*' } });
 
 const PORT = process.env.PORT || 3000;
 const JWT_SECRET = process.env.JWT_SECRET || 'dev_secret_CHANGE_ME';
-const WORLD_RADIUS = 130;
-const ZOMBIE_COUNT = 35;
+const WORLD_RADIUS = 290;   // borne d'errance (carte ~±300)
+const ZOMBIE_COUNT = 70;
+
+// Répartition des zombies par secteur (poids = densité relative).
+// Main City > Military > Small Town ; la forêt (zone de départ) reste éparse.
+const ZOMBIE_ZONES = [
+  { name: 'maincity',  cx: -20,  cz: -182, r: 70, weight: 34 },
+  { name: 'military',  cx: -200, cz: -172, r: 75, weight: 24 },
+  { name: 'smalltown', cx: -177, cz: 0,    r: 58, weight: 12 },
+  { name: 'forest',    cx: 0,    cz: 20,   r: 95, weight: 14 },
+];
+const ZOMBIE_ZONE_TOTAL = ZOMBIE_ZONES.reduce((s, z) => s + z.weight, 0);
+
+function pickZombieZone() {
+  let r = Math.random() * ZOMBIE_ZONE_TOTAL;
+  for (const z of ZOMBIE_ZONES) { if ((r -= z.weight) < 0) return z; }
+  return ZOMBIE_ZONES[0];
+}
 
 app.use(express.json());
 app.use(express.static('public'));
@@ -258,14 +274,15 @@ const WANDER_TURN_MAX = 5;   // secondes max avant changement de direction
 
 function makeZombie() {
   const id = ++zombieIdCounter;
-  const spawnAngle = Math.random() * Math.PI * 2;
-  const dist = 25 + Math.random() * (WORLD_RADIUS - 25);
+  const zone = pickZombieZone();
+  const ang  = Math.random() * Math.PI * 2;
+  const dist = Math.sqrt(Math.random()) * zone.r;   // réparti uniformément dans le disque
   const wanderAngle = Math.random() * Math.PI * 2;
   return {
     id,
-    x: Math.cos(spawnAngle) * dist,
+    x: zone.cx + Math.cos(ang) * dist,
     y: 0,
-    z: Math.sin(spawnAngle) * dist,
+    z: zone.cz + Math.sin(ang) * dist,
     health: 100,
     angle: wanderAngle,
     wanderAngle,

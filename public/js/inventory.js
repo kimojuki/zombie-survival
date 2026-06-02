@@ -292,11 +292,16 @@
     if (s.kind === 'floor') {
       ZS.registerUpperFloor?.(d.x, d.z, s.w / 2, s.t / 2, baseY + s.h);
     } else if (s.kind === 'stair') {
-      const alongX = Math.abs(Math.cos(rotY)) > 0.5;
+      // La marche monte le long du +Z local. Selon rotY, ce +Z pointe vers ±Z ou ±X
+      // dans le monde : on suit ce SENS pour que la rampe monte comme l'escalier visuel.
+      const alongZ = Math.abs(Math.cos(rotY)) > 0.5;
+      const sign   = alongZ ? Math.cos(rotY) : Math.sin(rotY);  // direction de montée
+      const lo = sign >= 0 ? baseY : baseY + s.h;
+      const hi = sign >= 0 ? baseY + s.h : baseY;
       ZS.registerRamp?.(d.x, d.z,
-        alongX ? s.w / 2 : s.t / 2,
-        alongX ? s.t / 2 : s.w / 2,
-        baseY, baseY + s.h, alongX ? 'z' : 'x');
+        alongZ ? s.w / 2 : s.t / 2,
+        alongZ ? s.t / 2 : s.w / 2,
+        lo, hi, alongZ ? 'z' : 'x');
     }
   }
 
@@ -955,9 +960,16 @@
 
   function _bindHotbarTouch() {
     const bar = document.getElementById('hotbar');
-    bar.addEventListener('click', (e) => {
+    // pointerdown : sélection immédiate (souris ET tactile), non bloquée par le
+    // flux d'événements du joystick → on peut sélectionner un slot en se déplaçant.
+    let _lastTap = 0;
+    bar.addEventListener('pointerdown', (e) => {
       const slotEl = e.target.closest('.hb-slot');
       if (!slotEl) return;
+      e.preventDefault();
+      const now = Date.now();
+      if (now - _lastTap < 60) return;   // anti-rebond (pointer + éventuel doublon)
+      _lastTap = now;
       const idx = parseInt(slotEl.dataset.slot);
       if (idx === _active) {
         const def = _hotbar[idx] ? _def(_hotbar[idx].type) : null;

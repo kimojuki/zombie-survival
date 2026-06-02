@@ -22,7 +22,22 @@
   function _setupJoystick() {
     const zone     = document.getElementById('left-zone');
     const MAX_DIST = 60;
-    let   originX  = null, originY = null, activeId = null;
+    let   originX  = 0, originY = 0, activeId = null;
+
+    // Joystick visible flottant (apparaît où l'on pose le doigt)
+    const base  = document.createElement('div'); base.id = 'joy-base';
+    const thumb = document.createElement('div'); thumb.id = 'joy-thumb';
+    base.appendChild(thumb);
+    base.style.display = 'none';
+    document.body.appendChild(base);
+
+    function _reset() {
+      activeId = null;
+      _state.input.moveX = 0;
+      _state.input.moveZ = 0;
+      base.style.display = 'none';
+      thumb.style.transform = 'translate(-50%, -50%)';
+    }
 
     zone.addEventListener('touchstart', (e) => {
       e.preventDefault();
@@ -31,6 +46,10 @@
       activeId = t.identifier;
       originX  = t.clientX;
       originY  = t.clientY;
+      base.style.left = originX + 'px';
+      base.style.top  = originY + 'px';
+      base.style.display = 'block';
+      thumb.style.transform = 'translate(-50%, -50%)';
     }, { passive: false });
 
     zone.addEventListener('touchmove', (e) => {
@@ -41,19 +60,19 @@
         const dy  = t.clientY - originY;
         const len = Math.hypot(dx, dy) || 1;
         const clamped = Math.min(len, MAX_DIST);
-        _state.input.moveX =  (dx / len) * (clamped / MAX_DIST);
-        _state.input.moveZ =  (dy / len) * (clamped / MAX_DIST);
+        const nx = dx / len, ny = dy / len;
+        _state.input.moveX = nx * (clamped / MAX_DIST);
+        _state.input.moveZ = ny * (clamped / MAX_DIST);
+        thumb.style.transform = `translate(calc(-50% + ${nx * clamped}px), calc(-50% + ${ny * clamped}px))`;
       }
     }, { passive: false });
 
+    // Réinitialise si le doigt suivi est relâché OU s'il ne reste aucun toucher
+    // (sécurité : évite l'état « bloqué » qui empêche de se déplacer ensuite).
     function _end(e) {
-      for (const t of e.changedTouches) {
-        if (t.identifier === activeId) {
-          activeId = null;
-          _state.input.moveX = 0;
-          _state.input.moveZ = 0;
-        }
-      }
+      let released = (e.touches && e.touches.length === 0);
+      for (const t of e.changedTouches) if (t.identifier === activeId) released = true;
+      if (released) _reset();
     }
     zone.addEventListener('touchend',    _end, { passive: false });
     zone.addEventListener('touchcancel', _end, { passive: false });

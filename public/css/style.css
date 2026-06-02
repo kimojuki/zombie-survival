@@ -268,6 +268,7 @@ body {
   position: fixed; bottom: 10px; left: 50%; transform: translateX(-50%);
   display: flex; gap: 6px;
   z-index: 60; pointer-events: auto;
+  touch-action: manipulation;
 }
 
 .hb-slot {
@@ -383,6 +384,24 @@ body {
   position: fixed; right: 0; top: 0;
   width: 55%; height: calc(100% - 90px);
   pointer-events: auto;
+}
+#left-zone, #right-zone { touch-action: none; }
+
+/* ── Joystick visible (déplacement) ──────────────────────────── */
+#joy-base {
+  position: fixed; width: 124px; height: 124px;
+  transform: translate(-50%, -50%);
+  border-radius: 50%;
+  background: rgba(255,255,255,0.10);
+  border: 2px solid rgba(255,255,255,0.35);
+  pointer-events: none; z-index: 55;
+}
+#joy-thumb {
+  position: absolute; left: 50%; top: 50%;
+  width: 58px; height: 58px; border-radius: 50%;
+  transform: translate(-50%, -50%);
+  background: rgba(240,216,120,0.55);
+  border: 2px solid rgba(255,255,255,0.7);
 }
 
 #shoot-btn {

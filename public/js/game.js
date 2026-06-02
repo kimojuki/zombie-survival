@@ -367,7 +367,8 @@
     const def  = item ? ZS.ITEMS[item.type] : null;
     if (def && def.category === 'firearm') { _fireGun(item, def); return; }
     if (def && def.category === 'melee')   { _meleeSwing(item, def); return; }
-    if (def && def.category === 'tool' && item.type === 'tool_hachette') { _meleeSwing(item, def); return; }
+    // Outils offensifs (hachette, marteau, pioche…) → frappent aussi les zombies
+    if (def && def.category === 'tool' && def.degats_impact) { _meleeSwing(item, def); return; }
     if (!def) _fistPunch();   // mains vides → coup de poing
   }
 

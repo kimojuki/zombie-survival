@@ -182,6 +182,7 @@
       label: 'Marteau', category: 'tool', maxStack: 1,
       icon: '🔨', color: 0x884422,
       type_recolte: 'Construction', efficacite_recolte: 1.0, durabilite_max: 200,
+      degats_impact: 18, portee_metre: 2.4, cadence_attaque: 0.7,   // sert aussi d'arme
     },
     tool_hachette: {
       label: 'Hachette', category: 'tool', maxStack: 1,
@@ -193,6 +194,7 @@
       label: 'Pioche', category: 'tool', maxStack: 1,
       icon: '⛏️', color: 0x888888,
       type_recolte: 'Pierre', efficacite_recolte: 3.0, durabilite_max: 150,
+      degats_impact: 25, portee_metre: 2.6, cadence_attaque: 0.9,   // sert aussi d'arme
     },
     tool_torche: {
       label: 'Torche', category: 'tool', maxStack: 1,

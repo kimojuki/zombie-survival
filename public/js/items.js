@@ -194,7 +194,7 @@
       type_recolte: 'Pierre', efficacite_recolte: 3.0, durabilite_max: 150,
     },
     tool_torche: {
-      label: 'Briquet', category: 'tool', maxStack: 1,
+      label: 'Torche', category: 'tool', maxStack: 1,
       icon: '🔥', color: 0xff6600,
       type_recolte: 'Allumage', durabilite_max: Infinity,
     },

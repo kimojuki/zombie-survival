@@ -168,7 +168,9 @@
     holder.rotation.set(p.rx, p.ry, p.rz);
 
     // 1) Modèle procédural normalisé immédiat (affichage instantané)
-    holder.add(_normalize(_buildModel(type), _fit(type), null));
+    const proc = _normalize(_buildModel(type), _fit(type), null);
+    holder.add(proc);
+    if (type === 'tool_torche') _addTorchFx(holder, proc);
 
     // 2) Si un .glb existe, on le charge et on remplace une fois prêt
     const spec = GLB[type];
@@ -176,9 +178,56 @@
       _loadGLB(spec.file).then((t) => {
         if (holder.userData.type !== type) return;             // l'item a changé entre-temps
         while (holder.children.length) holder.remove(holder.children[0]);
-        holder.add(_normalize(t.clone(true), _fit(type), spec.rot));
+        const m = _normalize(t.clone(true), _fit(type), spec.rot);
+        holder.add(m);
+        if (type === 'tool_torche') _addTorchFx(holder, m);
       }).catch(() => { /* on garde le fallback procédural */ });
     }
+  }
+
+  // ── Torche enflammée : flamme animée + lumière à la pointe ──────────────────
+  function _addTorchFx(holder, model) {
+    const old = holder.getObjectByName('torchFx');
+    if (old) holder.remove(old);
+
+    // Sommet du modèle (= bout de la torche), exprimé dans l'espace local du holder
+    holder.updateWorldMatrix(true, true);
+    const box = new THREE.Box3().setFromObject(model);
+    box.applyMatrix4(new THREE.Matrix4().copy(holder.matrixWorld).invert());
+    const cx   = isFinite(box.min.x) ? (box.min.x + box.max.x) / 2 : 0;
+    const cz   = isFinite(box.min.z) ? (box.min.z + box.max.z) / 2 : 0;
+    const topY = isFinite(box.max.y) ? box.max.y : 0.3;
+
+    const fx = new THREE.Group();
+    fx.name = 'torchFx';
+    fx.position.set(cx, topY + 0.02, cz);
+
+    const flameMat = (color, op) => new THREE.MeshBasicMaterial({
+      color, transparent: true, opacity: op,
+      blending: THREE.AdditiveBlending, depthWrite: false,
+    });
+    const outer = new THREE.Mesh(new THREE.ConeGeometry(0.06, 0.20, 8), flameMat(0xff5512, 0.7));
+    outer.position.y = 0.10;
+    const inner = new THREE.Mesh(new THREE.ConeGeometry(0.034, 0.13, 8), flameMat(0xffdd55, 0.95));
+    inner.position.y = 0.075;
+    fx.add(outer); fx.add(inner);
+
+    const light = new THREE.PointLight(0xff7a28, 3.2, 18, 2);
+    light.position.y = 0.06;
+    fx.add(light);
+
+    // Scintillement (exécuté à chaque rendu via le mesh extérieur)
+    let t = Math.random() * 10;
+    outer.onBeforeRender = () => {
+      t += 0.08;
+      const f = 0.82 + Math.sin(t * 7.3) * 0.12 + Math.sin(t * 13.1) * 0.06;
+      light.intensity = 3.2 * f;
+      const sy = 0.85 + Math.sin(t * 9.0) * 0.15;
+      outer.scale.set(1, sy, 1);
+      inner.scale.set(1, 1.85 - sy, 1);
+    };
+
+    holder.add(fx);
   }
 
   // Position en main selon catégorie (rapprochée/centrée pour bien voir l'objet)

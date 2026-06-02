@@ -317,6 +317,19 @@
     if ((item.ammo || 0) <= 0 && ZS.Inventory.countItem(def.type_munition_accepte) > 0) _startReload(def);
   }
 
+  // Coup de poing à mains nues (aucune arme en main)
+  const FIST = { degats_impact: 8, portee_metre: 1.6, cadence_attaque: 0.5 };
+  function _fistPunch() {
+    const n = _now();
+    if (n - _lastAttack < FIST.cadence_attaque) return;
+    _lastAttack = n;
+    _playSwing(FIST.cadence_attaque * 0.55, 'melee');
+    raycaster.setFromCamera(screenCenter, camera);
+    const dir = raycaster.ray.direction;
+    ZS.Network.sendShoot(camera.position.x, camera.position.z, dir.x, dir.z,
+                         FIST.degats_impact, FIST.portee_metre, 1.4);
+  }
+
   function _meleeSwing(item, def) {
     const n = _now();
     if (n - _lastAttack < (def.cadence_attaque || 0.5)) return;
@@ -346,10 +359,10 @@
     if (state.player.dead) return;
     const item = ZS.Inventory.getActiveItem();
     const def  = item ? ZS.ITEMS[item.type] : null;
-    if (!def) return;
-    if (def.category === 'firearm') { _fireGun(item, def); return; }
-    if (def.category === 'melee')   { _meleeSwing(item, def); return; }
-    if (def.category === 'tool' && item.type === 'tool_hachette') { _meleeSwing(item, def); return; }
+    if (def && def.category === 'firearm') { _fireGun(item, def); return; }
+    if (def && def.category === 'melee')   { _meleeSwing(item, def); return; }
+    if (def && def.category === 'tool' && item.type === 'tool_hachette') { _meleeSwing(item, def); return; }
+    if (!def) _fistPunch();   // mains vides → coup de poing
   }
 
   function _playSwing(dur, kind) { _swing = { start: _now(), dur, kind }; }

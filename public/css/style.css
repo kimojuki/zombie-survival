@@ -344,6 +344,21 @@ body {
 }
 #use-btn:active { transform: scale(0.92); }
 
+/* ── Grab button (ramassage manuel d'un objet au sol) ────────── */
+#grab-btn {
+  position: fixed; left: 50%; bottom: 92px; transform: translateX(-50%);
+  min-width: 168px; max-width: 80vw; height: 44px; padding: 0 16px;
+  border-radius: 12px; white-space: nowrap;
+  background: rgba(212,184,96,0.92); border: 2px solid #f0d878;
+  color: #1a1206; font-size: 0.92rem; font-weight: 800; letter-spacing: 0.3px;
+  display: none; align-items: center; justify-content: center;
+  cursor: pointer; pointer-events: auto;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.45);
+  transition: transform 0.1s;
+  z-index: 62;
+}
+#grab-btn:active { transform: translateX(-50%) scale(0.94); }
+
 /* ── Pickup notification ─────────────────────────────────────── */
 #pickup-notif {
   position: fixed; top: 60px; left: 50%; transform: translateX(-50%);

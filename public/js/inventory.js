@@ -3,6 +3,8 @@
   'use strict';
 
   const HOTBAR_SIZE = 6;
+  const GRAB_RANGE  = 2.2;   // distance max pour ramasser un objet au sol
+  let _grabTargetId = null;  // objet actuellement visé (à portée)
 
   let _hotbar = Array(HOTBAR_SIZE).fill(null);
   let _bag    = [];     // taille = slots_inventaire_bonus du sac équipé (0 sans sac)
@@ -30,6 +32,7 @@
     _bindKeys();
     _bindHotbarTouch();
     _setupUseBtn();
+    _setupGrabBtn();
   }
 
   // ── Capacité du sac (dépend du sac équipé) ──────────────────────────────────
@@ -62,14 +65,42 @@
       mesh.rotation.y += dt * 1.8;
       mesh.position.y = mesh.userData.baseY + Math.sin(now * 2.5) * 0.1;
     });
+    // Repère l'objet le plus proche dans la portée — PAS de ramassage automatique :
+    // le joueur doit appuyer sur E / le bouton « Ramasser » (voir grabNearest).
     const px = _state.player.x, pz = _state.player.z;
+    let nearId = null, nearItem = null, nearDist = GRAB_RANGE;
     for (const [id, item] of _worldItems) {
-      if (Math.hypot(item.x - px, item.z - pz) < 1.6) {
-        _scene.remove(item.mesh);
-        _worldItems.delete(id);
-        _socket.emit('item-pickup', { id });
-        break;
-      }
+      const d = Math.hypot(item.x - px, item.z - pz);
+      if (d < nearDist) { nearDist = d; nearId = id; nearItem = item; }
+    }
+    _grabTargetId = nearId;
+    _updateGrabUI(nearItem);
+  }
+
+  // Ramasse l'objet actuellement visé (le plus proche à portée).
+  function grabNearest() {
+    if (_grabTargetId == null) return false;
+    const item = _worldItems.get(_grabTargetId);
+    if (!item) { _grabTargetId = null; return false; }
+    // Optimiste : on retire le mesh ; le serveur confirme (item-remove + item-add).
+    _scene.remove(item.mesh);
+    _worldItems.delete(_grabTargetId);
+    _socket.emit('item-pickup', { id: _grabTargetId });
+    _grabTargetId = null;
+    _updateGrabUI(null);
+    return true;
+  }
+
+  // Affiche/masque le bouton de ramassage selon l'objet à portée.
+  function _updateGrabUI(item) {
+    const btn = document.getElementById('grab-btn');
+    if (!btn) return;
+    if (item) {
+      const def = _def(item.type);
+      btn.textContent = '✋ ' + (def?.label || 'Ramasser') + '  [E]';
+      btn.style.display = 'flex';
+    } else if (btn.style.display !== 'none') {
+      btn.style.display = 'none';
     }
   }
 
@@ -671,7 +702,7 @@
     document.addEventListener('keydown', (e) => {
       const digit = parseInt(e.key);
       if (digit >= 1 && digit <= 6) _setActiveSlot(digit - 1);
-      if (e.code === 'KeyE') _useActiveItem();
+      if (e.code === 'KeyE') { if (!grabNearest()) _useActiveItem(); }
       if (e.code === 'KeyI') togglePanel();
       if (e.code === 'Escape' && _panelOpen) togglePanel();
     });
@@ -697,6 +728,13 @@
     if (!btn) return;
     btn.addEventListener('click', _useActiveItem);
     btn.addEventListener('touchstart', (e) => { e.preventDefault(); _useActiveItem(); }, { passive: false });
+  }
+
+  function _setupGrabBtn() {
+    const btn = document.getElementById('grab-btn');
+    if (!btn) return;
+    btn.addEventListener('click', grabNearest);
+    btn.addEventListener('touchstart', (e) => { e.preventDefault(); grabNearest(); }, { passive: false });
   }
 
   // ── Helpers ────────────────────────────────────────────────────────────────

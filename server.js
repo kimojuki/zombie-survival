@@ -1,12 +1,14 @@
 'use strict';
 const express = require('express');
 const http = require('http');
+const fs = require('fs');
+const path = require('path');
 const { Server } = require('socket.io');
 const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
 require('dotenv').config({ override: true });
 
-const { getPlayer, createPlayer, savePlayerState } = require('./src/db');
+const { getPlayer, createPlayer, savePlayerState, pool } = require('./src/db');
 
 const app = express();
 const server = http.createServer(app);
@@ -505,4 +507,23 @@ io.on('connection', async (socket) => {
   });
 });
 
-server.listen(PORT, () => console.log(`🧟 Zombie Survival → http://localhost:${PORT}`));
+// ── Réinitialisation unique des inventaires ───────────────────────────────────
+// Vide l'inventaire de TOUS les joueurs une seule fois (à la prochaine connexion,
+// le client redonne le kit de départ : grand sac + bois + clous). Protégé par un
+// fichier marqueur pour ne jamais se ré-exécuter aux redémarrages suivants.
+async function resetAllInventoriesOnce() {
+  const marker = path.join(__dirname, '.inventory_reset_done');
+  if (fs.existsSync(marker)) return;
+  try {
+    const [r] = await pool.execute("UPDATE players SET inventory = '[]'");
+    fs.writeFileSync(marker, new Date().toISOString());
+    console.log(`🔄 Inventaires réinitialisés : ${r.affectedRows} joueur(s).`);
+  } catch (e) {
+    console.error('Reset inventaires échoué (réessai au prochain démarrage):', e.message);
+  }
+}
+
+server.listen(PORT, async () => {
+  console.log(`🧟 Zombie Survival → http://localhost:${PORT}`);
+  await resetAllInventoriesOnce();
+});

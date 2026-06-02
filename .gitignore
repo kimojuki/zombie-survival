@@ -1,5 +1,6 @@
 node_modules/
 .env
 *.log
+.inventory_reset_done
 
 graphify-out/

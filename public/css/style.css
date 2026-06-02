@@ -303,6 +303,33 @@ body {
   pointer-events: none;
 }
 
+/* Nom de l'item affiché au-dessus du slot sélectionné, quelques secondes */
+.hb-name {
+  position: absolute;
+  bottom: calc(100% + 7px);
+  left: 50%;
+  transform: translateX(-50%) translateY(5px);
+  white-space: nowrap;
+  background: rgba(0,0,0,0.85);
+  color: #fff;
+  font-size: 12px; font-weight: 700; letter-spacing: 0.3px;
+  padding: 3px 9px;
+  border-radius: 7px;
+  border: 1px solid rgba(255,255,255,0.3);
+  box-shadow: 0 2px 8px rgba(0,0,0,0.5);
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.2s ease, transform 0.2s ease;
+  z-index: 6;
+}
+.hb-name.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+/* petite flèche pointant vers le slot */
+.hb-name::after {
+  content: ''; position: absolute; top: 100%; left: 50%;
+  transform: translateX(-50%);
+  border: 5px solid transparent; border-top-color: rgba(0,0,0,0.85);
+}
+
 /* ── Use button ──────────────────────────────────────────────── */
 #use-btn {
   position: fixed; right: 20px; bottom: 172px;

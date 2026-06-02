@@ -294,8 +294,10 @@
       const el   = bar.children[i];
       const item = _hotbar[i];
       const hint = el.querySelector('.hb-key');
+      const name = el.querySelector('.hb-name');   // conserve le libellé en cours d'affichage
       el.replaceChildren();
       if (hint) el.appendChild(hint);
+      if (name) el.appendChild(name);
       if (item) {
         const def  = _def(item.type);
         const icon = document.createElement('span');
@@ -336,6 +338,28 @@
     _updateUseBtn();
     ZS.setHandItem?.(_hotbar[_active]?.type || null);
     ZS.UI?.setWeaponUI?.(_hotbar[_active]?.type || null);
+    _showActiveName();
+  }
+
+  // Affiche le nom de l'item sélectionné au-dessus de son slot, puis le masque.
+  let _nameTimer = null;
+  function _showActiveName() {
+    const bar = document.getElementById('hotbar');
+    if (!bar) return;
+    bar.querySelectorAll('.hb-name').forEach((n) => n.remove());
+    clearTimeout(_nameTimer);
+    const item = _hotbar[_active];
+    const def  = item ? _def(item.type) : null;
+    if (!def) return;
+    const label = document.createElement('span');
+    label.className   = 'hb-name';
+    label.textContent = def.label || item.type;
+    bar.children[_active].appendChild(label);
+    requestAnimationFrame(() => label.classList.add('show'));
+    _nameTimer = setTimeout(() => {
+      label.classList.remove('show');
+      setTimeout(() => label.remove(), 300);
+    }, 2200);
   }
 
   function _updateUseBtn() {
@@ -496,6 +520,7 @@
     p.appendChild(hdr);
 
     const hint = document.createElement('div');
+    hint.id = 'inv-hint';
     hint.style.cssText = 'font-size:10px;color:#9a8a6a;margin-bottom:8px;font-style:italic';
     hint.textContent = 'Touchez un objet puis un emplacement pour le déplacer.';
     p.appendChild(hint);
@@ -537,6 +562,22 @@
   function _renderInvPanel() {
     const equip = document.getElementById('inv-equip');
     if (!equip) return;
+
+    // Nom de l'item sélectionné, visible (le tooltip natif `title` ne s'affiche pas au toucher)
+    const hint = document.getElementById('inv-hint');
+    if (hint) {
+      const selItem = _sel ? _getSlot(_sel.zone, _sel.idx) : null;
+      const selDef  = selItem ? _def(selItem.type) : null;
+      if (selDef) {
+        hint.textContent = '▸ ' + (selDef.label || selItem.type) + ' — touchez un emplacement pour déposer.';
+        hint.style.color = '#6cf';
+        hint.style.fontStyle = 'normal';
+      } else {
+        hint.textContent = 'Touchez un objet puis un emplacement pour le déplacer.';
+        hint.style.color = '#9a8a6a';
+        hint.style.fontStyle = 'italic';
+      }
+    }
 
     // ÉQUIPEMENT
     equip.replaceChildren();

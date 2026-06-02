@@ -117,7 +117,7 @@
     if (item) {
       const def = _def(item.type);
       if (_canAddItem(item.type)) {
-        btn.textContent = '✋ ' + (def?.label || 'Ramasser') + '  [E]';
+        btn.textContent = '✋ ' + (def?.label || 'Ramasser');
         btn.classList.remove('full');
       } else {
         btn.textContent = '🎒 Inventaire plein';

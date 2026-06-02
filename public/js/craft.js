@@ -6,6 +6,8 @@
     // Transformation de base du bois brut
     { result: 'res_planche', qty: 2, ingredients: { res_bois_brut: 1 } },
     { result: 'tool_torche', qty: 1, ingredients: { res_bois_brut: 2 } },
+    // Soins artisanaux — le chiffon sert à fabriquer des bandages
+    { result: 'med_bandage', qty: 1, ingredients: { res_chiffon: 2 } },
     // Armes artisanales
     { result: 'wpn_lance_artisanale', qty: 1, ingredients: { res_bois_brut: 2, res_corde: 1 } },
     { result: 'wpn_batte_cloutee',    qty: 1, ingredients: { res_planche: 1, res_clous: 10 } },

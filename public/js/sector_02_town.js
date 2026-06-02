@@ -165,6 +165,7 @@
   function _buildMiniMarket(scene, B) {
     const cx = -152, cz = -10;
     const W = 15, D = 11, wallH = 3.6;
+    ZS.registerLoot('supermarche', cx, cz, W, D);
     const baseY = ZS.getTerrainHeight(cx, cz);
     const T = 0.24;
 
@@ -228,6 +229,7 @@
   function _buildPharmacy(scene, B) {
     const cx = -192, cz = -10;
     const W = 11, D = 9, wallH = 3.4;
+    ZS.registerLoot('hopital', cx, cz, W, D);
     const baseY = ZS.getTerrainHeight(cx, cz);
     const T = 0.22;
 
@@ -274,6 +276,7 @@
   function _buildPoliceStation(scene, B) {
     const cx = -138, cz = -36;
     const W = 14, D = 10, wallH = 3.6;
+    ZS.registerLoot('police', cx, cz, W, D);
     const baseY = ZS.getTerrainHeight(cx, cz);
     const T = 0.28;
 
@@ -337,6 +340,7 @@
   function _buildSuperMarche(scene, B) {
     const cx = -175, cz = 36;
     const W = 20, D = 14, wallH = 4.2;
+    ZS.registerLoot('supermarche', cx, cz, W, D);
     const baseY = ZS.getTerrainHeight(cx, cz);
     const T = 0.28;
 
@@ -389,6 +393,7 @@
   function _buildChapel(scene, B) {
     const cx = -224, cz = -34;
     const W = 9, D = 13, wallH = 5.0;
+    ZS.registerLoot('maison', cx, cz, W, D);
     const baseY = ZS.getTerrainHeight(cx, cz);
     const T = 0.32;
 
@@ -529,6 +534,7 @@
   function _buildGarage(scene, B, cx, cz) {
     const baseY = ZS.getTerrainHeight(cx, cz);
     const W = 7.0, D = 6.0, wallH = 3.2;
+    ZS.registerLoot('garage', cx, cz, W, D);
     B.slab(scene, cx, cz, baseY, W, D, B.M.concDark);
     B.slab(scene, cx, cz, baseY+wallH, W+0.3, D+0.3, B.M.concDark);
     B.wall(scene, cx,     cz-D/2, baseY, W, 0.25, wallH, B.M.concrete);

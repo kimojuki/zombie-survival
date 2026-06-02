@@ -653,6 +653,7 @@
   function _buildShed(scene, B, cx, cz) {
     const baseY = ZS.getTerrainHeight(cx, cz);
     const W = 3.4, D = 2.8, wallH = 2.4;
+    ZS.registerLoot('chantier', cx, cz, W, D);
     const T = 0.14;
 
     B.slab(scene, cx, cz, baseY, W, D, B.M.wood2);

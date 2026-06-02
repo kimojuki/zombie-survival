@@ -75,7 +75,7 @@
 
     socket.on('item-spawn',  (d)  => ZS.Inventory.spawnWorldItem(d));
     socket.on('item-remove', (id) => ZS.Inventory.removeWorldItem(id));
-    socket.on('item-add',    (d)  => ZS.Inventory.receivePickup(d.type));
+    socket.on('item-add',    (d)  => ZS.Inventory.receivePickup(d.type, d.qty));
 
     socket.on('take-damage', (d) => {
       const dmg = state.player.health - d.health;

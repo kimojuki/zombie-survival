@@ -96,10 +96,11 @@
 
   // ── Server pickup callback ─────────────────────────────────────────────────
 
-  function receivePickup(type) {
-    const added = addItem(type, 1);
+  function receivePickup(type, qty) {
+    const n = Math.max(1, qty || 1);
+    const added = addItem(type, n);
     const def = _def(type);
-    if (def) ZS.UI.showNotif(added ? ('+1 ' + def.label) : 'Inventaire plein !');
+    if (def) ZS.UI.showNotif(added ? ('+' + n + ' ' + def.label) : 'Inventaire plein !');
   }
 
   // ── Inventory API (utilisé par Craft + Survival) ───────────────────────────

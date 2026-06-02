@@ -97,6 +97,9 @@
   // Transmet la géométrie de collision au serveur (physique des zombies côté serveur)
   socket.emit('world-colliders', ZS.getColliders());
 
+  // Transmet l'empreinte des bâtiments lootables → le serveur génère le loot (items.md)
+  socket.emit('loot-buildings', ZS.Buildings.getLootBuildings());
+
   // ── UI ────────────────────────────────────────────────────────────────────
   try { ZS.UI.init(state); } catch (e) { console.error('UI init:', e); }
   ZS.UI.setHealth(state.player.health);

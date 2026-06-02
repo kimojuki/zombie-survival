@@ -256,6 +256,7 @@
       [-146,-138, 'W'], [-146,-163, 'W'],
     ]) {
       const y=ZS.getTerrainHeight(cx,cz);
+      ZS.registerLoot('militaire', cx, cz, W, D);
       B.slab(scene,cx,cz,y,W+0.5,D+0.5,B.M.concDark);
       B.wall(scene,cx,cz-D/2,y,W,0.22,wH,_mMilGreen);
       B.wall(scene,cx,cz+D/2,y,W,0.22,wH,_mMilGreen);
@@ -275,6 +276,7 @@
 
   function _buildMessHall(scene, B) {
     const cx=-220, cz=-150, W=18, D=11, wH=3.5;
+    ZS.registerLoot('supermarche', cx, cz, W, D);
     const y=ZS.getTerrainHeight(cx,cz);
     B.slab(scene,cx,cz,y,W+1,D+1,B.M.concDark);
     B.wall(scene,cx,cz-D/2,y,W,0.25,wH,_mConcrete);
@@ -302,6 +304,7 @@
 
   function _buildMedical(scene, B) {
     const cx=-182, cz=-150, W=12, D=9, wH=3.5;
+    ZS.registerLoot('hopital', cx, cz, W, D);
     const y=ZS.getTerrainHeight(cx,cz);
     B.slab(scene,cx,cz,y,W+0.5,D+0.5,B.M.concDark);
     for(const[wx,wz,wl,wd,nc] of [
@@ -327,6 +330,7 @@
 
   function _buildHangar(scene, B) {
     const cx=-200, cz=-193, W=24, D=15, wH=6.5;
+    ZS.registerLoot('garage', cx, cz, W, D);
     const y=ZS.getTerrainHeight(cx,cz);
     B.slab(scene,cx,cz,y,W+1,D+1,B.M.concDark);
     B.wall(scene,cx,cz-D/2,y,W,0.28,wH,_mMetal);
@@ -348,6 +352,7 @@
 
   function _buildMotorPool(scene, B) {
     const cx=-253, cz=-193, W=20, D=13, wH=4.5;
+    ZS.registerLoot('garage', cx, cz, W, D);
     const y=ZS.getTerrainHeight(cx,cz);
     B.slab(scene,cx,cz,y,W+0.5,D+0.5,B.M.concDark);
     B.wall(scene,cx,cz-D/2,y,W,0.22,wH,_mMilGreen);
@@ -373,6 +378,7 @@
 
   function _buildArmory(scene, B) {
     const cx=-147, cz=-193, W=14, D=10, wH=4.0;
+    ZS.registerLoot('militaire', cx, cz, W, D);
     const y=ZS.getTerrainHeight(cx,cz);
     B.slab(scene,cx,cz,y,W+0.5,D+0.5,B.M.concDark);
     // Murs épais (armurerie renforcée)
@@ -451,6 +457,7 @@
 
   function _buildCommandCenter(scene, B) {
     const cx=-200, cz=-228, W=18, D=12, wH=4.5;
+    ZS.registerLoot('militaire', cx, cz, W, D);
     const y=ZS.getTerrainHeight(cx,cz);
     B.slab(scene,cx,cz,y,W+1,D+1,B.M.concDark);
     B.wall(scene,cx,cz-D/2,y,W,0.30,wH,_mConcrete);
@@ -483,6 +490,7 @@
 
   function _buildBriefingRoom(scene, B) {
     const cx=-240, cz=-226, W=12, D=9, wH=3.5;
+    ZS.registerLoot('militaire', cx, cz, W, D);
     const y=ZS.getTerrainHeight(cx,cz);
     B.slab(scene,cx,cz,y,W+0.5,D+0.5,B.M.concDark);
     B.wall(scene,cx,cz-D/2,y,W,0.25,wH,_mMilGreen);
@@ -530,6 +538,7 @@
 
   function _buildBunker(scene, B) {
     const cx=-200, cz=-237, W=10, D=7, wH=2.5;
+    ZS.registerLoot('militaire', cx, cz, W, D);
     const y=ZS.getTerrainHeight(cx,cz);
     const bkM=new THREE.MeshLambertMaterial({color:0x6a6860});
     B.slab(scene,cx,cz,y-0.3,W+4,D+4,B.M.dirt);

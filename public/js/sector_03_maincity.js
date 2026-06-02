@@ -83,6 +83,7 @@
 
   function _buildHospital(scene, B) {
     const cx=-55, cz=-244, W=16, D=9, wH=14.0, flH=2.8, floors=5;
+    ZS.registerLoot('hopital', cx, cz, W, D);
     const y=ZS.getTerrainHeight(cx,cz);
     const hM=new THREE.MeshLambertMaterial({color:0x9aa8b0});
     B.slab(scene,cx,cz,y,W+0.8,D+0.8,mConc);
@@ -136,6 +137,7 @@
 
   function _buildSupermarket(scene,B){
     const cx=14,cz=-244,W=22,D=10,wH=5.0;
+    ZS.registerLoot('supermarche', cx, cz, W, D);
     const y=ZS.getTerrainHeight(cx,cz);
     const sM=new THREE.MeshLambertMaterial({color:0x6a7880});
     B.slab(scene,cx,cz,y,W+0.8,D+0.8,mConc);
@@ -165,6 +167,7 @@
 
   function _buildPoliceStation(scene,B){
     const cx=-55,cz=-128,W=15,D=11,wH=6.5,flH=3.25,floors=2;
+    ZS.registerLoot('police', cx, cz, W, D);
     const y=ZS.getTerrainHeight(cx,cz);
     const pM=new THREE.MeshLambertMaterial({color:0x6a6a78});
     B.slab(scene,cx,cz,y,W+0.8,D+0.8,mConc);
@@ -407,6 +410,7 @@
   }
 
   function _tower(scene,B,cx,cz,W,D,floors,col){
+    ZS.registerLoot('maison', cx, cz, W, D);
     const flH=2.8, wH=floors*flH;
     const y=ZS.getTerrainHeight(cx,cz);
     const tM=new THREE.MeshLambertMaterial({color:col});

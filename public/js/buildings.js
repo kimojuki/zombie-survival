@@ -5,6 +5,14 @@
   const _colliders = [];
   const _sectors   = [];
 
+  // ── Registre de loot ────────────────────────────────────────────────────────
+  // Chaque bâtiment "lootable" déclare son empreinte + sa catégorie. Le serveur
+  // s'en sert pour générer les objets au sol (voir worlDesign/items/items.md).
+  const _lootBuildings = [];
+  function registerLoot(category, cx, cz, w, d) {
+    _lootBuildings.push({ category, cx, cz, w: w || 8, d: d || 7 });
+  }
+
   // ── Materials ─────────────────────────────────────────────────────────────────
   const M = {
     brick:    new THREE.MeshLambertMaterial({ color: 0xb55a3a }),
@@ -159,6 +167,7 @@
   // ── Reusable building templates ───────────────────────────────────────────────
 
   function _house(scene, cx, cz, W, D, wallH, wallMat, roofMat, doorDir) {
+    registerLoot('maison', cx, cz, W, D);
     const baseY = ZS.getTerrainHeight(cx, cz);
     const T     = 0.22;
     const doorW = 2.0;
@@ -208,6 +217,7 @@
   }
 
   function _buildImmeuble2F(scene, cx, cz) {
+    registerLoot('maison', cx, cz, 9, 6.5);
     const W = 9, D = 6.5;
     const floorH = 2.9;
     const T = 0.28;
@@ -265,6 +275,7 @@
   }
 
   function _buildFarmhouse2F(scene, cx, cz) {
+    registerLoot('maison', cx, cz, 7.5, 6.0);
     const W = 7.5, D = 6.0;
     const floorH = 3.0;
     const T = 0.22;
@@ -314,6 +325,7 @@
   }
 
   function _buildBarn(scene, cx, cz) {
+    registerLoot('chantier', cx, cz, 10, 6.5);
     const W = 10, D = 6.5, wallH = 4.2;
     const baseY = ZS.getTerrainHeight(cx, cz);
     const T = 0.28, doorW = 2.6;
@@ -347,6 +359,7 @@
   }
 
   function _buildGasStation(scene, cx, cz) {
+    registerLoot('garage', cx, cz, 8, 6);
     const W = 8, D = 6, wallH = 3.3;
     const baseY = ZS.getTerrainHeight(cx, cz);
     const T = 0.22, doorW = 2.0;
@@ -444,5 +457,6 @@
     car:          _car,
     addCollider:  (c) => _colliders.push(c),
   };
-  ZS.Buildings = { buildAll, registerSector };
+  ZS.registerLoot = registerLoot;
+  ZS.Buildings = { buildAll, registerSector, getLootBuildings: () => _lootBuildings };
 }());

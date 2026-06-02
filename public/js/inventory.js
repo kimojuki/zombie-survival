@@ -94,13 +94,32 @@
     return false;
   }
 
+  // Caisse de butin de mort
+  function _makeBagMesh() {
+    const g = new THREE.Group();
+    g.add(new THREE.Mesh(new THREE.BoxGeometry(0.7, 0.5, 0.5),
+      new THREE.MeshLambertMaterial({ color: 0x7a5a2a })));
+    const strap = new THREE.Mesh(new THREE.BoxGeometry(0.74, 0.13, 0.54),
+      new THREE.MeshLambertMaterial({ color: 0x33240f }));
+    strap.position.y = 0.06; g.add(strap);
+    return g;
+  }
+
+  // Récupère tout le contenu d'un butin de mort.
+  function collectBag(list) {
+    if (!Array.isArray(list)) return;
+    for (const it of list) if (it && it.type) addItem(it.type, it.qty || 1);
+    ZS.UI?.showNotif?.('Butin récupéré');
+  }
+
   // Ramasse l'objet actuellement visé (le plus proche à portée).
   function grabNearest() {
     if (_grabTargetId == null) return false;
     const item = _worldItems.get(_grabTargetId);
     if (!item) { _grabTargetId = null; return false; }
     // Inventaire plein → on refuse le ramassage (sinon l'objet serait perdu).
-    if (!_canAddItem(item.type)) {
+    // (Le butin de mort est toujours ramassable : récupération au mieux.)
+    if (!item.bag && !_canAddItem(item.type)) {
       ZS.UI?.showNotif?.('Inventaire plein !');
       return false;
     }
@@ -118,13 +137,18 @@
     const btn = document.getElementById('grab-btn');
     if (!btn) return;
     if (item) {
-      const def = _def(item.type);
-      if (_canAddItem(item.type)) {
-        btn.textContent = '✋ ' + (def?.label || 'Ramasser');
+      if (item.bag) {
+        btn.textContent = '🎒 Récupérer le butin';
         btn.classList.remove('full');
       } else {
-        btn.textContent = '🎒 Inventaire plein';
-        btn.classList.add('full');
+        const def = _def(item.type);
+        if (_canAddItem(item.type)) {
+          btn.textContent = '✋ ' + (def?.label || 'Ramasser');
+          btn.classList.remove('full');
+        } else {
+          btn.textContent = '🎒 Inventaire plein';
+          btn.classList.add('full');
+        }
       }
       btn.style.display = 'flex';
     } else if (btn.style.display !== 'none') {
@@ -309,6 +333,15 @@
 
   function spawnWorldItem(d) {
     if (_worldItems.has(d.id)) return;
+    if (d.bag) {                                  // butin de mort (caisse)
+      const mesh  = _makeBagMesh();
+      const baseY = (ZS.getTerrainHeight ? ZS.getTerrainHeight(d.x, d.z) : 0) + 0.45;
+      mesh.position.set(d.x, baseY, d.z);
+      mesh.userData.baseY = baseY;
+      _scene.add(mesh);
+      _worldItems.set(d.id, { mesh, type: 'death_bag', x: d.x, z: d.z, bag: true });
+      return;
+    }
     const def = _def(d.type);
     if (!def) return;
     const mesh = _makePickupMesh(def, d.type);
@@ -1059,7 +1092,7 @@
   window.ZS = window.ZS || {};
   ZS.Inventory = {
     init, tick,
-    spawnWorldItem, removeWorldItem, receivePickup, spawnStructure,
+    spawnWorldItem, removeWorldItem, receivePickup, spawnStructure, collectBag,
     countItem, addItem, removeItem, consumeOne,
     getActiveItem, getWeaponAmmo, decrementAmmo, reloadWeapon, wearActiveWeapon,
     getArmorValue, togglePanel, loadFromSave, clear,

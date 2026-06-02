@@ -21,6 +21,7 @@
   };
 
   let _state = null;
+  let _syncTimer = 0;
 
   function init(state) {
     _state = state;
@@ -30,10 +31,27 @@
         _sv.faim       = Math.max(0, Math.min(100, s.faim       ?? 80));
         _sv.soif       = Math.max(0, Math.min(100, s.soif       ?? 80));
         _sv.saignement = !!s.saignement;
-        _sv.infection  = !!s.infection;
+        _sv.infection  = Math.max(0, Math.min(100, Number(s.infection) || 0));
       }
     } catch {}
     _flush();
+  }
+
+  // Restaure l'état de survie sauvegardé côté serveur (prioritaire sur localStorage).
+  function loadFromSave(sv) {
+    if (!sv || typeof sv !== 'object') return;
+    _sv.faim       = Math.max(0, Math.min(100, Number(sv.faim) || 0));
+    _sv.soif       = Math.max(0, Math.min(100, Number(sv.soif) || 0));
+    _sv.infection  = Math.max(0, Math.min(100, Number(sv.infection) || 0));
+    _sv.saignement = !!sv.saignement;
+    _flush();
+    _save();
+  }
+
+  function _syncServer() {
+    ZS.Network?.sendSurvival?.({
+      faim: _sv.faim, soif: _sv.soif, infection: _sv.infection, saignement: _sv.saignement,
+    });
   }
 
   function tick(dt) {
@@ -52,6 +70,7 @@
         _state.player.health = 0;
         _state.player.dead   = true;
         ZS.UI.setHealth(0);
+        ZS.Network?.sendDied?.();
         ZS.UI.showDeath(_state.player.kills);
       }
     }
@@ -68,6 +87,7 @@
       ZS.UI.setHealth(Math.floor(p.health));
       if (p.health <= 0 && !p.dead) {
         p.dead = true;
+        ZS.Network?.sendDied?.();
         ZS.UI.showDeath(p.kills);
       }
     }
@@ -80,6 +100,10 @@
 
     ZS.UI.setHunger(Math.floor(_sv.faim));
     ZS.UI.setThirst(Math.floor(_sv.soif));
+
+    // Synchro serveur de l'état de survie (toutes les ~3 s)
+    _syncTimer += dt;
+    if (_syncTimer >= 3) { _syncTimer = 0; _syncServer(); }
   }
 
   // Déclenche l'utilisation d'un item (food ou medical). Retourne true si démarré.
@@ -180,5 +204,5 @@
   }
 
   window.ZS = window.ZS || {};
-  ZS.Survival = { init, tick, useItem, applyDamage, reset, get };
+  ZS.Survival = { init, tick, useItem, applyDamage, reset, get, loadFromSave };
 }());

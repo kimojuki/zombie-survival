@@ -3,5 +3,6 @@ node_modules/
 *.log
 .inventory_reset_done
 .inventory_reset_v2_done
+.inventory_reset_v3_done
 
 graphify-out/

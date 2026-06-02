@@ -50,7 +50,7 @@ app.post('/api/auth/register', async (req, res) => {
   try {
     if (await getPlayer(username)) return res.status(409).json({ error: 'Nom déjà utilisé' });
     const hash = await bcrypt.hash(password, 12);
-    const id = await createPlayer(username, hash);
+    const id = await createPlayer(username, hash, STARTING_SAVE, FOREST_SPAWN);
     const token = jwt.sign({ id, username }, JWT_SECRET, { expiresIn: '7d' });
     res.json({ token, username });
   } catch (err) {
@@ -85,11 +85,44 @@ app.post('/api/auth/login', async (req, res) => {
 
 const players    = new Map();
 const zombies    = new Map();
-const items      = new Map(); // world pickup items
+const items      = new Map(); // world pickup items (+ butins de mort : bag:true)
 const structures = new Map(); // structures construites par les joueurs (base)
 let zombieIdCounter    = 0;
 let itemIdCounter      = 0;
 let structureIdCounter = 0;
+
+// ── Spawn / kit / survie ──────────────────────────────────────────────────────
+const FOREST_SPAWN     = { x: 0, y: 1, z: -5, rotY: 0 };   // Start Forest
+const DEFAULT_SURVIVAL = { faim: 80, soif: 80, infection: 0, saignement: false };
+const STARTING_ITEMS   = {
+  hotbar: [
+    { type: 'res_bois_brut', qty: 50 },
+    { type: 'res_clous',     qty: 100 },
+    { type: 'res_ferraille', qty: 30 },
+    null, null, null,
+  ],
+  bag: [],
+  equip: { 'Tête': null, 'Torso': null, 'Mains': null, 'Dos': { type: 'eq_grand_sac', qty: 1 } },
+};
+const STARTING_SAVE = JSON.stringify({ ...STARTING_ITEMS, survival: DEFAULT_SURVIVAL });
+const DEATH_BAG_MS  = 30 * 60 * 1000; // butin de mort : 30 min puis disparition
+
+// Sauvegarde combinée (objets + survie) écrite dans la colonne JSON `inventory`.
+function saveBlob(p) {
+  const base = Array.isArray(p.inv) ? { hotbar: p.inv } : (p.inv || {});
+  return JSON.stringify({ ...base, survival: p.survival || DEFAULT_SURVIVAL });
+}
+
+// Aplati l'inventaire d'un joueur en liste d'objets pour le butin de mort.
+function flattenInv(inv) {
+  const out = [];
+  if (!inv || typeof inv !== 'object') return out;
+  const push = (s) => { if (s && s.type) out.push({ type: s.type, qty: s.qty || 1 }); };
+  (Array.isArray(inv) ? inv : (inv.hotbar || [])).forEach(push);
+  (inv.bag || []).forEach(push);
+  if (inv.equip) for (const k of Object.keys(inv.equip)) push(inv.equip[k]);
+  return out;
+}
 
 // ── Collision géométrique (transmise une fois par le premier client) ──────────
 // Le client construit la géométrie : il est la source de vérité unique. On ne garde
@@ -263,8 +296,20 @@ function generateLoot() {
   console.log(`🎒 Loot généré : ${[...items.values()].filter((i) => i.loot).length} objets dans ${lootBuildings.length} bâtiments`);
 }
 
-// Régénération automatique toutes les heures.
-setInterval(() => { if (lootBuildings.length) generateLoot(); }, LOOT_RESPAWN_MS);
+// Loot généré UNE seule fois (monde partagé et stable) — pas de régénération
+// automatique : on ne crée pas de nouveaux items à chaque connexion/heure.
+// (Respawn horaire désactivé volontairement.)
+
+// Expiration des butins de mort : disparaissent après 30 min s'ils ne sont pas ramassés.
+setInterval(() => {
+  const now = Date.now();
+  for (const [id, it] of items) {
+    if (it.bag && it.expiresAt && now > it.expiresAt) {
+      items.delete(id);
+      io.emit('item-remove', id);
+    }
+  }
+}, 60 * 1000);
 
 const DETECT_RANGE   = 12;   // unités — portée de détection
 const AGGRO_MEMORY   = 5;    // secondes d'aggro après perte de vue
@@ -356,7 +401,7 @@ setInterval(() => {
 setInterval(() => {
   players.forEach((p) => {
     if (p.dirty && p.id) {
-      savePlayerState(p.id, p.x, p.y, p.z, p.rotY, p.health, p.kills, p.inventory || '[]').catch(() => {});
+      savePlayerState(p.id, p.x, p.y, p.z, p.rotY, p.health, p.kills, saveBlob(p)).catch(() => {});
       p.dirty = false;
     }
   });
@@ -378,26 +423,30 @@ io.on('connection', async (socket) => {
   let saved = null;
   try { saved = await getPlayer(socket.user.username); } catch {}
 
+  // Décompose la sauvegarde (objets + survie) ; position restaurée depuis la DB.
+  let _save = {};
+  try { _save = typeof saved?.inventory === 'string' ? JSON.parse(saved.inventory) : (saved?.inventory || {}); } catch {}
+  const _survival = (_save && _save.survival) ? _save.survival : { ...DEFAULT_SURVIVAL };
+  if (_save && !Array.isArray(_save)) delete _save.survival;
+
   const p = {
     socketId: socket.id,
     id: socket.user.id,
     username: socket.user.username,
-    x:    -170,  // TEST — spawn Small Town S02
-    y:    1,
-    z:    0,
-    rotY: 0,
+    x:    (saved && saved.pos_x != null) ? saved.pos_x : FOREST_SPAWN.x,
+    y:    (saved && saved.pos_y != null) ? saved.pos_y : FOREST_SPAWN.y,
+    z:    (saved && saved.pos_z != null) ? saved.pos_z : FOREST_SPAWN.z,
+    rotY: (saved && saved.rot_y != null) ? saved.rot_y : FOREST_SPAWN.rotY,
     health: saved?.health ?? 100,
     kills:  saved?.kills  ?? 0,
-    inventory: saved?.inventory || '[]',
+    inv: _save,            // { hotbar, bag, equip }
+    survival: _survival,   // { faim, soif, infection, saignement }
     dirty: false,
     invincible: true
   };
   setTimeout(() => { if (players.has(socket.id)) p.invincible = false; }, 5000);
   players.set(socket.id, p);
   console.log(`+ ${p.username} (${players.size} en ligne)`);
-
-  let savedInventory = [];
-  try { savedInventory = JSON.parse(p.inventory || '[]'); } catch {}
 
   socket.emit('game-init', {
     selfId: socket.id,
@@ -409,7 +458,8 @@ io.on('connection', async (socket) => {
     items:   Array.from(items.values()),
     structures: Array.from(structures.values()),
     worldTime: _worldTime,
-    inventory: savedInventory
+    inventory: p.inv,
+    survival:  p.survival
   });
   socket.broadcast.emit('player-join', { id: socket.id, username: p.username, x: p.x, y: p.y, z: p.z, rotY: p.rotY });
 
@@ -492,7 +542,11 @@ io.on('connection', async (socket) => {
     if (Math.hypot(item.x - p.x, item.z - p.z) > 3.0) return;
     items.delete(d.id);
     io.emit('item-remove', item.id);       // use authoritative id, not client-supplied
-    socket.emit('item-add', { type: item.type, qty: item.qty || 1 });
+    if (item.bag) {
+      socket.emit('bag-collect', { items: item.items || [] });  // butin : rend tout
+    } else {
+      socket.emit('item-add', { type: item.type, qty: item.qty || 1 });
+    }
   });
 
   socket.on('item-drop', (d) => {
@@ -532,52 +586,73 @@ io.on('connection', async (socket) => {
   });
 
   socket.on('inventory-sync', (slots) => {
-    try { p.inventory = JSON.stringify(slots); p.dirty = true; } catch {}
+    if (slots && typeof slots === 'object') { p.inv = slots; p.dirty = true; }
+  });
+
+  socket.on('survival-sync', (sv) => {
+    if (sv && typeof sv === 'object') {
+      p.survival = {
+        faim:       Math.max(0, Math.min(100, Number(sv.faim) || 0)),
+        soif:       Math.max(0, Math.min(100, Number(sv.soif) || 0)),
+        infection:  Math.max(0, Math.min(100, Number(sv.infection) || 0)),
+        saignement: !!sv.saignement,
+      };
+      p.dirty = true;
+    }
+  });
+
+  // Mort : le butin du joueur tombe au sol dans une caisse récupérable 30 min.
+  socket.on('player-died', () => {
+    const loot = flattenInv(p.inv);
+    if (loot.length) {
+      const id  = ++itemIdCounter;
+      const bag = { id, type: 'death_bag', bag: true, x: p.x, z: p.z,
+                    items: loot, expiresAt: Date.now() + DEATH_BAG_MS, owner: p.username };
+      items.set(id, bag);
+      io.emit('item-spawn', bag);
+    }
   });
 
   socket.on('respawn', () => {
     p.health = 100;
     p.invincible = true;
-    p.inventory = '[]'; // client will send inventory-sync with cleared state
+    p.inv = JSON.parse(JSON.stringify(STARTING_ITEMS));   // kit de départ (comme 1re connexion)
+    p.survival = { ...DEFAULT_SURVIVAL };
+    p.x = FOREST_SPAWN.x; p.y = FOREST_SPAWN.y; p.z = FOREST_SPAWN.z; p.rotY = FOREST_SPAWN.rotY;
+    p.dirty = true;
     setTimeout(() => { if (players.has(socket.id)) p.invincible = false; }, 3000);
     socket.emit('take-damage', { health: 100 });
+    socket.emit('respawn-at', { spawn: FOREST_SPAWN, inventory: STARTING_ITEMS, survival: DEFAULT_SURVIVAL });
   });
 
   socket.on('disconnect', () => {
     players.delete(socket.id);
     console.log(`- ${p.username} (${players.size} en ligne)`);
     io.emit('player-leave', socket.id);
-    if (p.id) savePlayerState(p.id, p.x, p.y, p.z, p.rotY, p.health, p.kills, p.inventory || '[]').catch(() => {});
+    if (p.id) savePlayerState(p.id, p.x, p.y, p.z, p.rotY, p.health, p.kills, saveBlob(p)).catch(() => {});
   });
 });
 
-// ── Réinitialisation unique des inventaires ───────────────────────────────────
-// Écrit directement le kit de départ dans la base pour TOUS les joueurs : grand
-// sac équipé + bois brut + clous (déterministe, ne dépend pas du client). Protégé
-// par un fichier marqueur pour ne jamais se ré-exécuter aux redémarrages suivants.
-const STARTING_INVENTORY = JSON.stringify({
-  hotbar: [
-    { type: 'res_bois_brut', qty: 50 },
-    { type: 'res_clous',     qty: 100 },
-    null, null, null, null,
-  ],
-  bag: [],
-  equip: { 'Tête': null, 'Torso': null, 'Mains': null, 'Dos': { type: 'eq_grand_sac', qty: 1 } },
-});
-
-async function resetAllInventoriesOnce() {
-  const marker = path.join(__dirname, '.inventory_reset_v2_done');
+// ── Réinitialisation unique (lancement) ───────────────────────────────────────
+// Remet TOUS les joueurs à l'état « première connexion » : kit de départ + survie
+// par défaut, spawn dans Start Forest, vie pleine. Protégé par un marqueur pour ne
+// s'exécuter qu'une fois au prochain démarrage.
+async function resetAllPlayersOnce() {
+  const marker = path.join(__dirname, '.inventory_reset_v3_done');
   if (fs.existsSync(marker)) return;
   try {
-    const [r] = await pool.execute('UPDATE players SET inventory = ?', [STARTING_INVENTORY]);
+    const [r] = await pool.execute(
+      'UPDATE players SET inventory = ?, pos_x = ?, pos_y = ?, pos_z = ?, rot_y = ?, health = 100',
+      [STARTING_SAVE, FOREST_SPAWN.x, FOREST_SPAWN.y, FOREST_SPAWN.z, FOREST_SPAWN.rotY]
+    );
     fs.writeFileSync(marker, new Date().toISOString());
-    console.log(`🔄 Inventaires réinitialisés (sac + bois + clous) : ${r.affectedRows} joueur(s).`);
+    console.log(`🔄 Joueurs réinitialisés (kit + spawn forêt) : ${r.affectedRows} joueur(s).`);
   } catch (e) {
-    console.error('Reset inventaires échoué (réessai au prochain démarrage):', e.message);
+    console.error('Reset joueurs échoué (réessai au prochain démarrage):', e.message);
   }
 }
 
 server.listen(PORT, async () => {
   console.log(`🧟 Zombie Survival → http://localhost:${PORT}`);
-  await resetAllInventoriesOnce();
+  await resetAllPlayersOnce();
 });

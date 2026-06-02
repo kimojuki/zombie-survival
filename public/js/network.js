@@ -40,6 +40,7 @@
       // Restore saved inventory (hotbar + sac + équipement). Tableau vide / absent
       // = nouveau joueur → on garde les objets de test + sac par défaut.
       if (data.inventory) ZS.Inventory.loadFromSave(data.inventory);
+      if (data.survival)  ZS.Survival.loadFromSave(data.survival);
     });
 
     socket.on('player-join', (p) => {
@@ -78,6 +79,22 @@
     socket.on('item-spawn',  (d)  => ZS.Inventory.spawnWorldItem(d));
     socket.on('item-remove', (id) => ZS.Inventory.removeWorldItem(id));
     socket.on('item-add',    (d)  => ZS.Inventory.receivePickup(d.type, d.qty));
+    socket.on('bag-collect', (d)  => ZS.Inventory.collectBag(d.items));
+
+    // Respawn autoritaire : position (Start Forest) + kit + survie remis à neuf.
+    socket.on('respawn-at', (d) => {
+      if (d.spawn) {
+        state.player.x = d.spawn.x;
+        state.player.z = d.spawn.z;
+        state.player.y = (ZS.getTerrainHeight ? ZS.getTerrainHeight(d.spawn.x, d.spawn.z) : 1) + 1.7;
+        state.player.velocityY = 0;
+        state.player.onGround  = true;
+        state.camera.yaw = d.spawn.rotY || 0;
+      }
+      // loadFromSave remplace entièrement hotbar/sac/équipement → kit de départ.
+      if (d.inventory) ZS.Inventory.loadFromSave(d.inventory);
+      if (d.survival)  ZS.Survival.loadFromSave(d.survival);
+    });
 
     socket.on('take-damage', (d) => {
       const dmg = state.player.health - d.health;
@@ -85,6 +102,7 @@
       ZS.UI.setHealth(d.health);
       if (d.health <= 0 && !state.player.dead) {
         state.player.dead = true;
+        sendDied();
         ZS.UI.showDeath(state.player.kills);
       } else if (d.health > 0) {
         ZS.UI.flashDamage();
@@ -155,8 +173,18 @@
     _socket.emit('shoot', { ox, oz, dx, dz, dmg, range, radius });
   }
 
+  let _diedSent = false;
+  function sendDied() {
+    if (_diedSent || !_socket) return;
+    _diedSent = true;
+    _socket.emit('player-died');
+  }
   function sendRespawn() {
-    _socket.emit('respawn');
+    _diedSent = false;
+    if (_socket) _socket.emit('respawn');
+  }
+  function sendSurvival(sv) {
+    if (_socket) _socket.emit('survival-sync', sv);
   }
 
   function _addRemotePlayer(p) {
@@ -206,5 +234,5 @@
   }
 
   window.ZS = window.ZS || {};
-  ZS.Network = { init, tick, sendMove, sendShoot, sendRespawn };
+  ZS.Network = { init, tick, sendMove, sendShoot, sendRespawn, sendDied, sendSurvival };
 }());

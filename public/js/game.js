@@ -387,16 +387,10 @@
     state.player.dead      = false;
     state.player.velocityY = 0;
     state.player.onGround  = true;
-    ZS.Survival.reset();
-
-    const angle = Math.random() * Math.PI * 2;
-    const dist  = 10 + Math.random() * 25;
-    state.player.x = Math.cos(angle) * dist;
-    state.player.z = Math.sin(angle) * dist;
-
     ZS.UI.setHealth(100);
     ZS.UI.hideDeath();
-    ZS.Inventory.clear(); // efface l'inventaire à la mort
+    // Le serveur fait autorité : il renvoie `respawn-at` avec la position (Start
+    // Forest), le kit de départ et la survie remis à neuf (cf. network.js).
     ZS.Network.sendRespawn();
   }
   state.onRespawn = respawn;

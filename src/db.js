@@ -21,10 +21,13 @@ async function getPlayer(username) {
   return rows[0] || null;
 }
 
-async function createPlayer(username, passwordHash) {
+// inventory / spawn : valeurs de départ (kit + Start Forest) fournies par le serveur.
+async function createPlayer(username, passwordHash, inventory, spawn) {
+  const sp = spawn || { x: 0, y: 1, z: -5, rotY: 0 };
+  const inv = inventory || JSON.stringify([]);
   const [result] = await pool.execute(
-    'INSERT INTO players (username, password_hash, inventory, pos_x, pos_y, pos_z, rot_y, health, kills) VALUES (?, ?, ?, 0, 0, 0, 0, 100, 0)',
-    [username, passwordHash, JSON.stringify([])]
+    'INSERT INTO players (username, password_hash, inventory, pos_x, pos_y, pos_z, rot_y, health, kills) VALUES (?, ?, ?, ?, ?, ?, ?, 100, 0)',
+    [username, passwordHash, inv, sp.x, sp.y, sp.z, sp.rotY]
   );
   return result.insertId;
 }

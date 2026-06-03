@@ -43,7 +43,9 @@
   }
 
   // Joue un AudioBuffer avec volume, panoramique et légère variation de hauteur.
-  function _playBuffer(buf, vol, pan, rate) {
+  // `maxDur` (s) : ne joue qu'un extrait (un seul coup) avec un fondu de fin —
+  // les enregistrements de tir durent plusieurs secondes (plusieurs coups).
+  function _playBuffer(buf, vol, pan, rate, maxDur) {
     const src = ctx.createBufferSource();
     src.buffer = buf;
     if (rate) src.playbackRate.value = rate;
@@ -51,7 +53,16 @@
     g.gain.value = vol;
     src.connect(g);
     g.connect(_panNode(pan));
-    src.start();
+    const t = ctx.currentTime;
+    if (maxDur && maxDur > 0) {
+      const rel = Math.min(0.05, maxDur * 0.3);   // fondu de fin
+      g.gain.setValueAtTime(vol, t + maxDur - rel);
+      g.gain.exponentialRampToValueAtTime(0.0001, t + maxDur);
+      src.start(t);
+      src.stop(t + maxDur + 0.02);
+    } else {
+      src.start(t);
+    }
   }
 
   // ── Initialisation / reprise du contexte (au 1er geste) ─────────────────────
@@ -210,7 +221,13 @@
               : type === 'wpn_fusil_chasse' ? 'gun_rifle'
               : 'gun_pistol';
     const buf = _buffers[key];
-    if (buf) { _playBuffer(buf, v * 0.9, pan, 0.97 + Math.random() * 0.06); return; }
+    if (buf) {
+      // Un seul coup : on coupe l'extrait (les enregistrements contiennent
+      // plusieurs tirs/une longue traîne).
+      const dur = key === 'gun_shotgun' ? 0.7 : key === 'gun_rifle' ? 0.55 : 0.4;
+      _playBuffer(buf, v * 0.9, pan, 0.97 + Math.random() * 0.06, dur);
+      return;
+    }
     _synthGunshot(type, v, pan);
   }
 

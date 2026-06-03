@@ -84,8 +84,12 @@
   // FPS arms attached to camera
   const fpsArms = ZS.createFPSArms();
   camera.add(fpsArms);
-  // Expose globally pour que l'inventaire puisse changer l'item en main
-  ZS.setHandItem = (type) => ZS.updateHandItem(fpsArms, type);
+  // Expose globally pour que l'inventaire puisse changer l'item en main.
+  // On diffuse aussi l'item équipé pour que les autres joueurs le voient.
+  ZS.setHandItem = (type) => {
+    ZS.updateHandItem(fpsArms, type);
+    ZS.Network.sendEquip(type || null);
+  };
 
   // Raycaster for shooting
   const raycaster = new THREE.Raycaster();
@@ -372,7 +376,10 @@
     if (!def) _fistPunch();   // mains vides → coup de poing
   }
 
-  function _playSwing(dur, kind) { _swing = { start: _now(), dur, kind }; }
+  function _playSwing(dur, kind) {
+    _swing = { start: _now(), dur, kind };
+    ZS.Network.sendAttack(kind);   // les autres joueurs voient le geste d'attaque
+  }
   function _tickSwing() {
     if (!_swing) return;
     const e = (_now() - _swing.start) / _swing.dur;

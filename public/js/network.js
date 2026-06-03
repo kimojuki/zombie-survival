@@ -15,6 +15,7 @@
       // Clear stale meshes on every (re)connect to prevent ghost players
       remotePlayers.forEach(({ mesh }) => _scene.remove(mesh));
       remotePlayers.clear();
+      _lastEquip = undefined;   // force re-broadcast de notre item en main
       document.getElementById('connecting-screen').style.display = 'none';
     });
 
@@ -65,6 +66,21 @@
     socket.on('player-leave', (id) => {
       const rp = remotePlayers.get(id);
       if (rp) { _scene.remove(rp.mesh); remotePlayers.delete(id); }
+    });
+
+    // Un autre joueur change/retire son item en main
+    socket.on('player-equip', (d) => {
+      const rp = remotePlayers.get(d.id);
+      if (!rp) return;
+      rp.equipped = d.type || null;
+      ZS.setRemoteHandItem(rp.mesh, rp.equipped);
+    });
+
+    // Un autre joueur attaque (tir ou mêlée) → on rejoue le geste du bras
+    socket.on('player-attack', (d) => {
+      const rp = remotePlayers.get(d.id);
+      if (!rp) return;
+      rp.attack = { t: 0, dur: d.kind === 'recoil' ? 0.12 : 0.32, kind: d.kind };
     });
 
     socket.on('zombie-tick',  (d) => {
@@ -168,6 +184,19 @@
         }
       }
       rp.moveSpeed *= 0.85;
+
+      // Geste d'attaque — surcharge le bras droit (porte l'item) le temps de l'anim
+      if (rp.attack) {
+        rp.attack.t += dt;
+        const e = rp.attack.t / rp.attack.dur;
+        if (e >= 1) {
+          rp.attack = null;
+        } else {
+          const s = Math.sin(e * Math.PI);
+          // recoil (arme à feu) : léger ; mêlée : grand coup vers l'avant
+          limbs.rArm.rotation.x = rp.attack.kind === 'recoil' ? -0.25 - s * 0.35 : -s * 1.7;
+        }
+      }
     });
   }
 
@@ -181,6 +210,20 @@
 
   function sendShoot(ox, oz, dx, dz, dmg, range, radius) {
     _socket.emit('shoot', { ox, oz, dx, dz, dmg, range, radius });
+  }
+
+  // Item en main — diffusé aux autres joueurs (dédupliqué : envoi au changement).
+  let _lastEquip = undefined;
+  function sendEquip(type) {
+    type = type || null;
+    if (type === _lastEquip) return;
+    _lastEquip = type;
+    if (_socket) _socket.emit('equip', { type });
+  }
+
+  // Geste d'attaque — diffusé pour rejouer l'animation chez les autres.
+  function sendAttack(kind) {
+    if (_socket) _socket.emit('attack', { kind: kind === 'recoil' ? 'recoil' : 'melee' });
   }
 
   let _diedSent = false;
@@ -219,8 +262,13 @@
       targetZ:    p.z,
       targetRotY: p.rotY || 0,
       moveSpeed:  0,
-      animTime:   0
+      animTime:   0,
+      equipped:   p.equipped || null,
+      attack:     null
     });
+
+    // Item déjà tenu en main par ce joueur (rejoint déjà équipé)
+    if (p.equipped) ZS.setRemoteHandItem(mesh, p.equipped);
   }
 
   function _makeNameTag(username) {
@@ -244,5 +292,5 @@
   }
 
   window.ZS = window.ZS || {};
-  ZS.Network = { init, tick, sendMove, sendShoot, sendRespawn, sendDied, sendSurvival };
+  ZS.Network = { init, tick, sendMove, sendShoot, sendRespawn, sendDied, sendSurvival, sendEquip, sendAttack };
 }());

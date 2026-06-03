@@ -442,6 +442,7 @@ io.on('connection', async (socket) => {
     kills:  saved?.kills  ?? 0,
     inv: _save,            // { hotbar, bag, equip }
     survival: _survival,   // { faim, soif, infection, saignement }
+    equipped: null,        // type de l'item tenu en main (visible des autres joueurs)
     dirty: false,
     invincible: true
   };
@@ -454,7 +455,7 @@ io.on('connection', async (socket) => {
     spawn: { x: p.x, y: p.y, z: p.z, rotY: p.rotY },
     players: [...players.entries()]
       .filter(([sid]) => sid !== socket.id)
-      .map(([sid, q]) => ({ id: sid, username: q.username, x: q.x, y: q.y, z: q.z, rotY: q.rotY })),
+      .map(([sid, q]) => ({ id: sid, username: q.username, x: q.x, y: q.y, z: q.z, rotY: q.rotY, equipped: q.equipped })),
     zombies: Array.from(zombies.values()),
     items:   Array.from(items.values()),
     structures: Array.from(structures.values()),
@@ -462,7 +463,7 @@ io.on('connection', async (socket) => {
     inventory: p.inv,
     survival:  p.survival
   });
-  socket.broadcast.emit('player-join', { id: socket.id, username: p.username, x: p.x, y: p.y, z: p.z, rotY: p.rotY });
+  socket.broadcast.emit('player-join', { id: socket.id, username: p.username, x: p.x, y: p.y, z: p.z, rotY: p.rotY, equipped: p.equipped });
 
   // Le premier client transmet la géométrie de collision (murs, arbres, etc.).
   socket.on('world-colliders', (cols) => {
@@ -483,6 +484,20 @@ io.on('connection', async (socket) => {
   socket.on('move', (d) => {
     p.x = d.x; p.y = d.y; p.z = d.z; p.rotY = d.rotY; p.dirty = true;
     socket.broadcast.emit('player-move', { id: socket.id, x: d.x, y: d.y, z: d.z, rotY: d.rotY });
+  });
+
+  // Item tenu en main → visible des autres joueurs (arme, torche, outil…).
+  socket.on('equip', (d) => {
+    const type = (d && typeof d.type === 'string' && d.type.length <= 60) ? d.type : null;
+    if (type === p.equipped) return;
+    p.equipped = type;
+    socket.broadcast.emit('player-equip', { id: socket.id, type });
+  });
+
+  // Geste d'attaque (tir / mêlée) → animation rejouée chez les autres joueurs.
+  socket.on('attack', (d) => {
+    const kind = (d && d.kind === 'recoil') ? 'recoil' : 'melee';
+    socket.broadcast.emit('player-attack', { id: socket.id, kind });
   });
 
   socket.on('shoot', (d) => {

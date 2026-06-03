@@ -185,6 +185,41 @@
     }
   }
 
+  // ── Item en main d'un joueur DISTANT (vue 3e personne) ─────────────────────
+  // Attache le modèle de l'item à la main droite (rArm) du modèle distant, avec
+  // la torche enflammée + sa lumière. Réutilise le même pipeline que la vue FPS.
+  function setRemoteHandItem(playerMesh, type) {
+    const limbs = playerMesh.userData.limbs;
+    if (!limbs || !limbs.rArm) return;
+    let holder = limbs.rArm.getObjectByName('handHolder');
+    if (!holder) {
+      holder = new THREE.Group();
+      holder.name = 'handHolder';
+      holder.position.set(0, -0.72, -0.12);   // dans la paume, légèrement en avant
+      limbs.rArm.add(holder);
+    }
+    while (holder.children.length) holder.remove(holder.children[0]);
+    holder.userData.type = type || null;
+    if (!type) return;
+
+    // 1) Modèle procédural immédiat
+    const proc = _normalize(_buildModel(type), _fit(type), null);
+    holder.add(proc);
+    if (type === 'tool_torche') _addTorchFx(holder, proc);
+
+    // 2) Remplacement par le .glb une fois chargé
+    const spec = GLB[type];
+    if (spec && _loader) {
+      _loadGLB(spec.file).then((t) => {
+        if (holder.userData.type !== type) return;
+        while (holder.children.length) holder.remove(holder.children[0]);
+        const mm = _normalize(t.clone(true), _fit(type), spec.rot);
+        holder.add(mm);
+        if (type === 'tool_torche') _addTorchFx(holder, mm);
+      }).catch(() => {});
+    }
+  }
+
   // ── Torche enflammée : flamme animée + lumière à la pointe ──────────────────
   function _addTorchFx(holder, model) {
     const old = holder.getObjectByName('torchFx');
@@ -613,5 +648,6 @@
   ZS.createZombieModel = createZombieModel;
   ZS.createFPSArms     = createFPSArms;
   ZS.updateHandItem    = updateHandItem;
+  ZS.setRemoteHandItem = setRemoteHandItem;
   ZS.getItemModel      = getItemModel;
 }());

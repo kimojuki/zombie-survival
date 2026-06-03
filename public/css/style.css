@@ -221,20 +221,40 @@ body {
   pointer-events: none;
 }
 
-#logout-btn {
+#menu-btn {
   position: fixed; top: 12px; right: 12px;
   width: 38px; height: 38px; border-radius: 10px;
   background: rgba(0,0,0,0.65); border: 1px solid rgba(255,255,255,0.15);
-  color: #fff; padding: 7px;
+  color: #fff; font-size: 20px; line-height: 1;
   display: flex; align-items: center; justify-content: center;
   cursor: pointer; pointer-events: auto;
   backdrop-filter: blur(4px);
   transition: background 0.15s, border-color 0.15s;
-  z-index: 50;
+  z-index: 220;
 }
-#logout-btn svg { width: 100%; height: 100%; }
-#logout-btn:hover  { background: rgba(229,62,62,0.5); border-color: var(--red); }
-#logout-btn:active { background: var(--red); border-color: var(--red); }
+#menu-btn:hover  { background: rgba(255,255,255,0.15); }
+#menu-btn:active { background: rgba(255,255,255,0.25); }
+
+#menu-panel {
+  position: fixed; top: 58px; right: 12px;
+  display: flex; flex-direction: column; gap: 4px;
+  background: rgba(15,15,18,0.92); border: 1px solid rgba(255,255,255,0.15);
+  border-radius: 10px; padding: 6px;
+  backdrop-filter: blur(6px);
+  box-shadow: 0 8px 24px rgba(0,0,0,0.5);
+  z-index: 220; min-width: 180px;
+}
+#menu-panel .menu-item {
+  display: flex; align-items: center; gap: 8px;
+  width: 100%; padding: 10px 12px; border-radius: 8px;
+  background: transparent; border: none; color: #fff;
+  font-size: 14px; text-align: left; cursor: pointer;
+  pointer-events: auto; transition: background 0.15s;
+}
+#menu-panel .menu-item svg { width: 18px; height: 18px; flex-shrink: 0; }
+#menu-panel .menu-item:hover { background: rgba(255,255,255,0.12); }
+#menu-panel .menu-item.danger:hover  { background: rgba(229,62,62,0.45); }
+#menu-panel .menu-item.danger:active { background: var(--red); }
 
 #crosshair {
   position: absolute; top: 50%; left: 50%;

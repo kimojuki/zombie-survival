@@ -18,7 +18,6 @@
     const resume = () => _ensure();
     ['pointerdown', 'touchstart', 'keydown', 'click'].forEach((ev) =>
       document.addEventListener(ev, resume, { passive: true }));
-    _makeButton();
   }
 
   function _ensure() {
@@ -285,28 +284,10 @@
     _muted = m;
     if (master) master.gain.value = m ? 0 : 0.9;
     if (_musicEl) _musicEl.muted = m;   // couvre le cas non routé dans Web Audio
-    const btn = document.getElementById('audio-btn');
-    if (btn) btn.textContent = m ? '🔇' : '🔊';
+    const item = document.getElementById('menu-audio');
+    if (item) item.textContent = m ? '🔇 Son : coupé' : '🔊 Son : activé';
   }
   function toggleMute() { setMuted(!_muted); }
-
-  function _makeButton() {
-    if (document.getElementById('audio-btn')) return;
-    const btn = document.createElement('button');
-    btn.id = 'audio-btn';
-    btn.title = 'Son';
-    btn.textContent = '🔊';
-    Object.assign(btn.style, {
-      position: 'fixed', top: '10px', right: '10px',
-      width: '42px', height: '42px', borderRadius: '10px',
-      background: 'rgba(0,0,0,0.55)', border: '1px solid rgba(255,255,255,0.3)',
-      color: '#fff', fontSize: '20px', lineHeight: '1',
-      display: 'flex', alignItems: 'center', justifyContent: 'center',
-      zIndex: '210', cursor: 'pointer', backdropFilter: 'blur(4px)',
-    });
-    btn.addEventListener('click', (e) => { e.stopPropagation(); _ensure(); toggleMute(); });
-    document.body.appendChild(btn);
-  }
 
   window.ZS = window.ZS || {};
   ZS.Audio = { init, gunshot, melee, zombieGroan, setMuted, toggleMute };

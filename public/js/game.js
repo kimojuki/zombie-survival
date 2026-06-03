@@ -124,7 +124,36 @@
   ZS.Map.init(state, scene);
   ZS.Craft.init();
   ZS.Audio.init();
+  _initMenu();
   _addTestItems();
+
+  // ── Menu (☰) : audio on/off + déconnexion ───────────────────────────────────
+  function _initMenu() {
+    const btn   = document.getElementById('menu-btn');
+    const panel = document.getElementById('menu-panel');
+    const audio = document.getElementById('menu-audio');
+    const out   = document.getElementById('menu-logout');
+    if (!btn || !panel) return;
+
+    const setOpen = (open) => { panel.style.display = open ? 'flex' : 'none'; };
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      setOpen(panel.style.display === 'none');
+    });
+    // Clic en dehors du menu → fermeture
+    document.addEventListener('click', (e) => {
+      if (panel.style.display !== 'none' &&
+          !panel.contains(e.target) && e.target !== btn) setOpen(false);
+    });
+    if (audio) audio.addEventListener('click', () => {
+      // Pas de stopPropagation : laisse audio.js démarrer le contexte sur ce geste.
+      ZS.Audio.toggleMute();   // met aussi à jour le libellé du bouton
+    });
+    if (out) out.addEventListener('click', (e) => {
+      e.stopPropagation();
+      ZS.logout();
+    });
+  }
 
   // ── Viewport sizing — adapte le rendu à la vraie zone visible ───────────────
   const _isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) ||

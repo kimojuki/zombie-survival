@@ -13,6 +13,47 @@
   let _musicEl = null;   // élément <audio> de la musique de fond
   let _noise = null;     // buffer de bruit blanc réutilisable
 
+  // Échantillons réels (CC0, opengameart.org) chargés en AudioBuffer.
+  // Tirs : Free Firearm recordings. Zombies : « 80 CC0 creature SFX ».
+  const _buffers = {};
+  const SFX_FILES = {
+    gun_pistol:  '/audio/sfx/gun_pistol.wav',
+    gun_shotgun: '/audio/sfx/gun_shotgun.wav',
+    gun_rifle:   '/audio/sfx/gun_rifle.wav',
+    zombie_1: '/audio/sfx/zombie_1.ogg',
+    zombie_2: '/audio/sfx/zombie_2.ogg',
+    zombie_3: '/audio/sfx/zombie_3.ogg',
+    zombie_4: '/audio/sfx/zombie_4.ogg',
+    zombie_5: '/audio/sfx/zombie_5.ogg',
+    zombie_6: '/audio/sfx/zombie_6.ogg',
+  };
+  const ZOMBIE_COUNT = 6;
+  let _buffersLoaded = false;
+
+  function _loadBuffers() {
+    if (_buffersLoaded) return;
+    _buffersLoaded = true;
+    for (const key in SFX_FILES) {
+      fetch(SFX_FILES[key])
+        .then((r) => r.arrayBuffer())
+        .then((ab) => new Promise((res, rej) => ctx.decodeAudioData(ab, res, rej)))
+        .then((buf) => { _buffers[key] = buf; })
+        .catch(() => { /* échantillon indispo → on garde la synthèse en secours */ });
+    }
+  }
+
+  // Joue un AudioBuffer avec volume, panoramique et légère variation de hauteur.
+  function _playBuffer(buf, vol, pan, rate) {
+    const src = ctx.createBufferSource();
+    src.buffer = buf;
+    if (rate) src.playbackRate.value = rate;
+    const g = ctx.createGain();
+    g.gain.value = vol;
+    src.connect(g);
+    g.connect(_panNode(pan));
+    src.start();
+  }
+
   // ── Initialisation / reprise du contexte (au 1er geste) ─────────────────────
   function init() {
     const resume = () => _ensure();
@@ -45,6 +86,7 @@
       for (let i = 0; i < len; i++) data[i] = Math.random() * 2 - 1;
     }
     if (ctx.state === 'suspended') ctx.resume();
+    _loadBuffers();
     if (!_musicStarted) { _musicStarted = true; _startMusic(); }
     else if (_musicEl && _musicEl.paused) { _musicEl.play().catch(() => {}); }
     return ctx;
@@ -159,8 +201,32 @@
     }, 13000);
   }
 
-  // ── Tir d'arme à feu : claquement (bruit filtré) + thump grave ──────────────
+  // ── Tir d'arme à feu : échantillon réel (secours = synthèse) ────────────────
   function gunshot(type, vol, pan) {
+    if (!ctx || _muted) return;
+    const v = (vol == null ? 1 : vol);
+    if (v <= 0.01) return;
+    const key = type === 'wpn_fusil_pompe'  ? 'gun_shotgun'
+              : type === 'wpn_fusil_chasse' ? 'gun_rifle'
+              : 'gun_pistol';
+    const buf = _buffers[key];
+    if (buf) { _playBuffer(buf, v * 0.9, pan, 0.97 + Math.random() * 0.06); return; }
+    _synthGunshot(type, v, pan);
+  }
+
+  // ── Grognement de zombie : échantillon réel (secours = synthèse) ────────────
+  function zombieGroan(vol, pan) {
+    if (!ctx || _muted) return;
+    const v = (vol == null ? 1 : vol);
+    if (v <= 0.02) return;
+    const buf = _buffers['zombie_' + (1 + Math.floor(Math.random() * ZOMBIE_COUNT))];
+    // Hauteur abaissée + variée → rendu plus « zombie »
+    if (buf) { _playBuffer(buf, v * 0.95, pan, 0.78 + Math.random() * 0.26); return; }
+    _synthGroan(v, pan);
+  }
+
+  // ── Tir synthétisé (secours) : claquement (bruit filtré) + thump grave ──────
+  function _synthGunshot(type, vol, pan) {
     if (!ctx || _muted) return;
     const v = (vol == null ? 1 : vol);
     if (v <= 0.01) return;
@@ -223,8 +289,8 @@
     o.start(t); o.stop(t + 0.16);
   }
 
-  // ── Grognement de zombie : growl grave + raclement ──────────────────────────
-  function zombieGroan(vol, pan) {
+  // ── Grognement synthétisé (secours) : growl grave + raclement ───────────────
+  function _synthGroan(vol, pan) {
     if (!ctx || _muted) return;
     const v = (vol == null ? 1 : vol);
     if (v <= 0.02) return;

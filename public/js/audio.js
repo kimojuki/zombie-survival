@@ -10,6 +10,7 @@
   let sfxBus = null;     // bus effets
   let _muted = false;
   let _musicStarted = false;
+  let _musicEl = null;   // élément <audio> de la musique de fond
   let _noise = null;     // buffer de bruit blanc réutilisable
 
   // ── Initialisation / reprise du contexte (au 1er geste) ─────────────────────
@@ -31,7 +32,7 @@
       master.connect(ctx.destination);
 
       musicBus = ctx.createGain();
-      musicBus.gain.value = 0.0;            // fondu d'entrée
+      musicBus.gain.value = 0.5;            // niveau musique (sous le master)
       musicBus.connect(master);
 
       sfxBus = ctx.createGain();
@@ -46,6 +47,7 @@
     }
     if (ctx.state === 'suspended') ctx.resume();
     if (!_musicStarted) { _musicStarted = true; _startMusic(); }
+    else if (_musicEl && _musicEl.paused) { _musicEl.play().catch(() => {}); }
     return ctx;
   }
 
@@ -57,8 +59,35 @@
     return s;
   }
 
-  // ── Musique d'ambiance : nappe sombre évolutive (drone + accords mineurs) ────
+  // ── Musique d'ambiance : piste réelle (CC0) en boucle, secours = drone synth ─
+  // « Dark Cavern Ambient » par Brandon Morris — CC0 (opengameart.org).
   function _startMusic() {
+    const el = new Audio('/audio/ambient.ogg');
+    el.loop = true;
+    el.preload = 'auto';
+    _musicEl = el;
+
+    let routed = false;
+    try {
+      // Routage dans le graphe Web Audio → le master (donc le mute) s'applique.
+      const node = ctx.createMediaElementSource(el);
+      const g = ctx.createGain();
+      g.gain.setValueAtTime(0.0001, ctx.currentTime);
+      g.gain.linearRampToValueAtTime(1.0, ctx.currentTime + 4);  // fondu d'entrée
+      node.connect(g); g.connect(musicBus);
+      routed = true;
+    } catch (_) { /* MediaElementSource indispo → volume direct */ }
+    if (!routed) el.volume = _muted ? 0 : 0.4;
+
+    // Si le fichier est introuvable/illisible, on bascule sur le drone synthétisé.
+    el.addEventListener('error', () => { _musicEl = null; _startSynthMusic(); });
+
+    const pp = el.play();
+    if (pp && pp.catch) pp.catch(() => {}); // re-tenté au prochain geste via _ensure
+  }
+
+  // Drone synthétisé — secours si le fichier audio ne charge pas.
+  function _startSynthMusic() {
     const now = ctx.currentTime;
 
     // Filtre passe-bas commun avec LFO lent sur la coupure → mouvement organique
@@ -255,6 +284,7 @@
   function setMuted(m) {
     _muted = m;
     if (master) master.gain.value = m ? 0 : 0.9;
+    if (_musicEl) _musicEl.muted = m;   // couvre le cas non routé dans Web Audio
     const btn = document.getElementById('audio-btn');
     if (btn) btn.textContent = m ? '🔇' : '🔊';
   }

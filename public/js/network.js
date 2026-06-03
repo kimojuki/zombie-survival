@@ -193,8 +193,9 @@
           rp.attack = null;
         } else {
           const s = Math.sin(e * Math.PI);
-          // recoil (arme à feu) : léger ; mêlée : grand coup vers l'avant
-          limbs.rArm.rotation.x = rp.attack.kind === 'recoil' ? -0.25 - s * 0.35 : -s * 1.7;
+          // rotation.x positif = la main va vers l'avant (le perso fait face à -z).
+          // recoil (arme à feu) : léger sursaut ; mêlée : grand coup vers l'avant
+          limbs.rArm.rotation.x = rp.attack.kind === 'recoil' ? 0.25 + s * 0.35 : s * 1.7;
         }
       }
     });

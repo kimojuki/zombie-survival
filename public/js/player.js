@@ -265,6 +265,54 @@
     holder.add(fx);
   }
 
+  // ── Muzzle flash : éclair + lumière au bout du canon lors d'un tir ──────────
+  // `holder` = groupe contenant l'arme (itemHolder en FPS, handHolder distant).
+  // L'arme pointe vers -z, donc le canon est à la face avant (min z) de la boîte.
+  function muzzleFlash(holder) {
+    if (!holder) return;
+    holder.updateWorldMatrix(true, true);
+    const box = new THREE.Box3().setFromObject(holder);
+    let cx = 0, cy = 0, frontZ = -0.30;
+    if (isFinite(box.min.z)) {
+      box.applyMatrix4(new THREE.Matrix4().copy(holder.matrixWorld).invert());
+      cx = (box.min.x + box.max.x) / 2;
+      cy = (box.min.y + box.max.y) / 2;
+      frontZ = box.min.z;   // bout du canon (avant = -z)
+    }
+
+    const flashMat = (color, op) => new THREE.MeshBasicMaterial({
+      color, transparent: true, opacity: op,
+      blending: THREE.AdditiveBlending, depthWrite: false,
+    });
+
+    const fx = new THREE.Group();
+    fx.position.set(cx, cy, frontZ - 0.04);
+    fx.rotation.z = Math.random() * Math.PI;        // variation d'orientation
+    fx.scale.setScalar(0.85 + Math.random() * 0.5); // variation de taille
+
+    const cone = new THREE.Mesh(new THREE.ConeGeometry(0.06, 0.22, 8), flashMat(0xffc060, 0.95));
+    cone.rotation.x = -Math.PI / 2;                 // apex vers l'avant (-z)
+    cone.position.z = -0.10;
+    const core = new THREE.Mesh(new THREE.SphereGeometry(0.05, 8, 6), flashMat(0xffffcc, 1));
+    fx.add(cone); fx.add(core);
+
+    const light = new THREE.PointLight(0xffcc66, 9, 16, 2);
+    fx.add(light);
+    holder.add(fx);
+
+    // Fondu rapide (~70 ms) puis retrait. setTimeout = filet de sécurité si le
+    // flash sort du champ (onBeforeRender ne s'exécute plus).
+    const start = performance.now();
+    const DUR = 70;
+    core.onBeforeRender = () => {
+      const k = Math.max(0, 1 - (performance.now() - start) / DUR);
+      cone.material.opacity = 0.95 * k;
+      core.material.opacity = k;
+      light.intensity = 9 * k;
+    };
+    setTimeout(() => { try { holder.remove(fx); } catch (_) {} }, 140);
+  }
+
   // Position en main selon catégorie (rapprochée/centrée pour bien voir l'objet)
   function _pos(cat, type) {
     if (type === 'wpn_barre_fer' || type === 'wpn_lance_artisanale')
@@ -649,5 +697,6 @@
   ZS.createFPSArms     = createFPSArms;
   ZS.updateHandItem    = updateHandItem;
   ZS.setRemoteHandItem = setRemoteHandItem;
+  ZS.muzzleFlash       = muzzleFlash;
   ZS.getItemModel      = getItemModel;
 }());

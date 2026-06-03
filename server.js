@@ -546,6 +546,14 @@ io.on('connection', async (socket) => {
           io.emit('zombie-spawn', nz);
         }, 4000);
       } else {
+        // Recul (mêlée) : on repousse le zombie en arrière le long du coup, en
+        // respectant les collisions (murs/objets). Diffusé au prochain zombie-tick.
+        const kb = Math.max(0, Math.min(3, Number(d.kb) || 0));
+        if (kb > 0) {
+          const pushed = resolveZombieCollision(hit.x + nx * kb, hit.z + nz * kb);
+          hit.x = pushed[0];
+          hit.z = pushed[1];
+        }
         io.emit('zombie-hit', { id: hit.id, health: hit.health });
       }
     }

@@ -85,6 +85,17 @@
     });
   }
 
+  // Distance au zombie vivant le plus proche d'un point (Infinity si aucun).
+  function nearestDist(x, z) {
+    let best = Infinity;
+    zombieMeshes.forEach((e) => {
+      if (e.dying) return;
+      const d = Math.hypot(e.group.position.x - x, e.group.position.z - z);
+      if (d < best) best = d;
+    });
+    return best;
+  }
+
   // ── Private ──────────────────────────────────────────────────────────────
 
   function _add(z) {
@@ -170,6 +181,40 @@
     fill.material.color.set(ratio > 0.5 ? 0x22cc44 : ratio > 0.25 ? 0xffaa00 : 0xcc2222);
   }
 
+  // ── Grognements ambiants : un zombie proche grogne par intermittence ────────
+  const GROAN_RANGE = 30;
+  const _gFwd = new THREE.Vector3(), _gRight = new THREE.Vector3(),
+        _gTo = new THREE.Vector3(), _gUp = new THREE.Vector3(0, 1, 0);
+
+  function _scheduleGroan() {
+    setTimeout(() => {
+      _maybeGroan();
+      _scheduleGroan();
+    }, 2200 + Math.random() * 4000);
+  }
+
+  function _maybeGroan() {
+    const cam = ZS._camera;
+    if (!cam || !ZS.Audio || zombieMeshes.size === 0) return;
+    // Zombie vivant le plus proche
+    let best = Infinity, bx = 0, bz = 0;
+    zombieMeshes.forEach((e) => {
+      if (e.dying) return;
+      const dx = e.group.position.x - cam.position.x;
+      const dz = e.group.position.z - cam.position.z;
+      const d = Math.hypot(dx, dz);
+      if (d < best) { best = d; bx = e.group.position.x; bz = e.group.position.z; }
+    });
+    if (best > GROAN_RANGE) return;
+    const vol = (1 - best / GROAN_RANGE) ** 1.5;
+    cam.getWorldDirection(_gFwd); _gFwd.y = 0; _gFwd.normalize();
+    _gRight.crossVectors(_gFwd, _gUp).normalize();
+    _gTo.set(bx - cam.position.x, 0, bz - cam.position.z).normalize();
+    ZS.Audio.zombieGroan(vol, Math.max(-1, Math.min(1, _gTo.dot(_gRight))));
+  }
+
+  _scheduleGroan();
+
   window.ZS = window.ZS || {};
-  ZS.Zombies = { init, syncAll, spawn, hit, die, tick };
+  ZS.Zombies = { init, syncAll, spawn, hit, die, tick, nearestDist };
 }());

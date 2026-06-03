@@ -81,6 +81,17 @@
       const rp = remotePlayers.get(d.id);
       if (!rp) return;
       rp.attack = { t: 0, dur: d.kind === 'recoil' ? 0.12 : 0.32, kind: d.kind };
+      // Tir → éclair + lumière au bout de l'arme tenue par ce joueur
+      if (d.kind === 'recoil') {
+        const holder = rp.mesh.userData.limbs?.rArm?.getObjectByName('handHolder');
+        if (holder) ZS.muzzleFlash(holder);
+      }
+      // Son spatialisé (volume selon distance, panoramique gauche/droite)
+      const sp = _spatial(rp.mesh.position);
+      if (sp) {
+        if (d.kind === 'recoil') ZS.Audio.gunshot(rp.equipped, sp.vol, sp.pan);
+        else if (sp.vol > 0.05)  ZS.Audio.melee(sp.vol * 0.8, sp.pan);
+      }
     });
 
     socket.on('zombie-tick',  (d) => {
@@ -209,8 +220,8 @@
     _socket.emit('move', { x, y, z, rotY });
   }
 
-  function sendShoot(ox, oz, dx, dz, dmg, range, radius) {
-    _socket.emit('shoot', { ox, oz, dx, dz, dmg, range, radius });
+  function sendShoot(ox, oz, dx, dz, dmg, range, radius, kb) {
+    _socket.emit('shoot', { ox, oz, dx, dz, dmg, range, radius, kb: kb || 0 });
   }
 
   // Item en main — diffusé aux autres joueurs (dédupliqué : envoi au changement).
@@ -239,6 +250,23 @@
   }
   function sendSurvival(sv) {
     if (_socket) _socket.emit('survival-sync', sv);
+  }
+
+  // Volume (0–1) selon la distance à la caméra + panoramique stéréo (-1 G … +1 D)
+  const AUDIO_RANGE = 60;
+  const _sFwd = new THREE.Vector3(), _sRight = new THREE.Vector3(),
+        _sTo = new THREE.Vector3(), _sUp = new THREE.Vector3(0, 1, 0);
+  function _spatial(pos) {
+    const cam = ZS._camera;
+    if (!cam) return null;
+    const dx = pos.x - cam.position.x, dz = pos.z - cam.position.z;
+    const dist = Math.hypot(dx, dz);
+    if (dist > AUDIO_RANGE) return { vol: 0, pan: 0 };
+    const vol = (1 - dist / AUDIO_RANGE) ** 2;
+    cam.getWorldDirection(_sFwd); _sFwd.y = 0; _sFwd.normalize();
+    _sRight.crossVectors(_sFwd, _sUp).normalize();
+    _sTo.set(dx, 0, dz).normalize();
+    return { vol, pan: Math.max(-1, Math.min(1, _sTo.dot(_sRight))) };
   }
 
   function _addRemotePlayer(p) {

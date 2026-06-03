@@ -56,6 +56,7 @@
   const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 175);
   camera.rotation.order = 'YXZ';
   scene.add(camera);
+  ZS._camera = camera;   // référence pour l'audio spatial (panoramique/distance)
 
   // Le resize global est géré par _resizeToViewport plus bas (visualViewport).
 
@@ -122,6 +123,7 @@
   ZS.Inventory.init(state, scene, socket);
   ZS.Map.init(state, scene);
   ZS.Craft.init();
+  ZS.Audio.init();
   _addTestItems();
 
   // ── Viewport sizing — adapte le rendu à la vraie zone visible ───────────────
@@ -277,14 +279,7 @@
 
   function _muzzleFlash() {
     const holder = fpsArms.getObjectByName('itemHolder');
-    if (!holder) return;
-    holder.traverse((c) => {
-      if (c.isMesh && c.material && c.material.color) {
-        const orig = c.material.color.getHex();
-        c.material.color.set(0xffee88);
-        setTimeout(() => { try { c.material.color.setHex(orig); } catch (_) {} }, 55);
-      }
-    });
+    ZS.muzzleFlash(holder);
   }
 
   function _sendShot(baseDir, disp, dmg, range, radius) {
@@ -315,6 +310,7 @@
     _lastAttack = n;
     ZS.Inventory.decrementAmmo();
     _muzzleFlash();
+    ZS.Audio.gunshot(item.type);
     _playSwing(0.12, 'recoil');
     raycaster.setFromCamera(screenCenter, camera);
     const dir = raycaster.ray.direction.clone();
@@ -336,8 +332,10 @@
     _playSwing(FIST.cadence_attaque * 0.55, 'melee');
     raycaster.setFromCamera(screenCenter, camera);
     const dir = raycaster.ray.direction;
+    const hitDist = ZS.Zombies.nearestDist(camera.position.x, camera.position.z);
+    ZS.Audio.melee(hitDist < FIST.portee_metre + 0.8 ? 0.9 : 0.4);
     ZS.Network.sendShoot(camera.position.x, camera.position.z, dir.x, dir.z,
-                         FIST.degats_impact, FIST.portee_metre, 1.4);
+                         FIST.degats_impact, FIST.portee_metre, 1.4, 0.5);
   }
 
   function _meleeSwing(item, def) {
@@ -350,6 +348,10 @@
     const dir = raycaster.ray.direction;
     const range = def.portee_metre || 1.2;
 
+    // Bruit de coup — plus marqué si un zombie est à portée (impact), sinon léger.
+    const hitDist = ZS.Zombies.nearestDist(camera.position.x, camera.position.z);
+    ZS.Audio.melee(hitDist < range + 0.8 ? 1.0 : 0.45);
+
     // Hache : tenter d'abattre un arbre devant soi
     if ((item.type === 'wpn_hache_combat' || item.type === 'tool_hachette') && ZS.chopTree) {
       const dmg  = item.type === 'tool_hachette' ? 2 : 1;
@@ -361,7 +363,8 @@
     }
 
     // Frappe les zombies dans la portée (rayon latéral large = coup de mêlée balayant)
-    ZS.Network.sendShoot(camera.position.x, camera.position.z, dir.x, dir.z, def.degats_impact || 10, range, 1.6);
+    // + recul : un coup au corps à corps repousse le zombie en arrière.
+    ZS.Network.sendShoot(camera.position.x, camera.position.z, dir.x, dir.z, def.degats_impact || 10, range, 1.6, def.recul_metre || 1.2);
     ZS.Inventory.wearActiveWeapon();
   }
 

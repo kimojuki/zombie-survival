@@ -280,37 +280,49 @@
       frontZ = box.min.z;   // bout du canon (avant = -z)
     }
 
+    // Blending NORMAL + depthTest désactivé : bien visible de jour comme de nuit,
+    // et toujours dessiné par-dessus l'arme (jamais masqué).
     const flashMat = (color, op) => new THREE.MeshBasicMaterial({
       color, transparent: true, opacity: op,
-      blending: THREE.AdditiveBlending, depthWrite: false,
+      depthTest: false, depthWrite: false, side: THREE.DoubleSide,
     });
 
     const fx = new THREE.Group();
-    fx.position.set(cx, cy, frontZ - 0.04);
+    fx.position.set(cx, cy, frontZ - 0.05);
     fx.rotation.z = Math.random() * Math.PI;        // variation d'orientation
-    fx.scale.setScalar(0.85 + Math.random() * 0.5); // variation de taille
+    fx.scale.setScalar(0.9 + Math.random() * 0.5);  // variation de taille
+    fx.renderOrder = 999;
 
-    const cone = new THREE.Mesh(new THREE.ConeGeometry(0.06, 0.22, 8), flashMat(0xffc060, 0.95));
-    cone.rotation.x = -Math.PI / 2;                 // apex vers l'avant (-z)
-    cone.position.z = -0.10;
-    const core = new THREE.Mesh(new THREE.SphereGeometry(0.05, 8, 6), flashMat(0xffffcc, 1));
-    fx.add(cone); fx.add(core);
+    // Boule de feu centrale, étirée vers l'avant
+    const core = new THREE.Mesh(new THREE.SphereGeometry(0.085, 10, 8), flashMat(0xfff2b0, 1));
+    core.scale.z = 1.6;
+    // Cône de flamme vers l'avant (-z)
+    const cone = new THREE.Mesh(new THREE.ConeGeometry(0.10, 0.32, 10), flashMat(0xffb030, 0.95));
+    cone.rotation.x = -Math.PI / 2;
+    cone.position.z = -0.17;
+    // Étoile d'éclat (deux plans croisés)
+    const star1 = new THREE.Mesh(new THREE.PlaneGeometry(0.46, 0.11), flashMat(0xffd070, 0.9));
+    const star2 = star1.clone(); star2.rotation.z = Math.PI / 2;
+    fx.add(core, cone, star1, star2);
+    fx.children.forEach((c) => { c.renderOrder = 999; });
 
-    const light = new THREE.PointLight(0xffcc66, 9, 16, 2);
+    const light = new THREE.PointLight(0xffcc66, 12, 18, 2);
     fx.add(light);
     holder.add(fx);
 
-    // Fondu rapide (~70 ms) puis retrait. setTimeout = filet de sécurité si le
-    // flash sort du champ (onBeforeRender ne s'exécute plus).
+    // Éclat bref qui grossit légèrement en s'estompant (~90 ms).
     const start = performance.now();
-    const DUR = 70;
+    const DUR = 90;
+    const base = fx.scale.x;
     core.onBeforeRender = () => {
       const k = Math.max(0, 1 - (performance.now() - start) / DUR);
-      cone.material.opacity = 0.95 * k;
-      core.material.opacity = k;
-      light.intensity = 9 * k;
+      fx.scale.setScalar(base * (1 + (1 - k) * 0.5));
+      core.material.opacity  = k;
+      cone.material.opacity  = 0.95 * k;
+      star1.material.opacity = star2.material.opacity = 0.9 * k;
+      light.intensity = 12 * k;
     };
-    setTimeout(() => { try { holder.remove(fx); } catch (_) {} }, 140);
+    setTimeout(() => { try { holder.remove(fx); } catch (_) {} }, 160);
   }
 
   // Position en main selon catégorie (rapprochée/centrée pour bien voir l'objet)

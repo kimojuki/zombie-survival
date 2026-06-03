@@ -284,8 +284,11 @@
   // ── Input: desktop pointer lock ───────────────────────────────────────────
   let pointerLocked = false;
   document.addEventListener('click', (e) => {
-    if (e.target.closest('#death-screen, #shoot-btn')) return;
-    if (!pointerLocked) canvas.requestPointerLock();
+    if (pointerLocked) return;
+    // On ne verrouille (et n'entre en mode tir) qu'en cliquant la zone de jeu,
+    // jamais en cliquant un bouton/panneau d'UI.
+    if (e.target !== canvas && e.target !== document.body) return;
+    canvas.requestPointerLock();
   });
   document.addEventListener('pointerlockchange', () => {
     pointerLocked = !!document.pointerLockElement;
@@ -434,7 +437,9 @@
   };
   state.onJump   = () => { state.jumpPressed = true; };
   document.addEventListener('mousedown', (e) => {
-    if (e.button === 0 && pointerLocked) attack();
+    // Tir uniquement en mode jeu (pointeur verrouillé sur le canvas) : un clic sur
+    // un bouton/panneau d'UI ne tire pas. En pointer lock, la cible est le canvas.
+    if (e.button === 0 && pointerLocked && e.target === canvas) attack();
   });
   document.addEventListener('keydown', (e) => {
     if (e.code === 'KeyR' && state.onReload) state.onReload();

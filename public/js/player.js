@@ -69,6 +69,16 @@
     return a;
   }
 
+  // Bras droit avec MAIN EN HAUT (tient un objet à une main) : main (peau) en
+  // haut qui saisit l'objet, avant-bras (manche) qui descend hors de l'écran.
+  // L'origine du groupe = la main. Le bras monte donc « du bas vers le haut ».
+  function _fpsArmUp() {
+    const a = new THREE.Group();
+    addBox(a, m(SKIN),  0.115, 0.18, 0.115, 0,  0.02, 0);   // main (en haut)
+    addBox(a, m(SHIRT), 0.11,  0.60, 0.11,  0, -0.36, 0);   // avant-bras (descend)
+    return a;
+  }
+
   function createFPSArms() {
     const g = new THREE.Group();
 
@@ -103,16 +113,28 @@
     return null;   // mêlée, outils, objets → bras gauche caché (une seule main)
   }
 
-  // Pose du bras droit (tient l'arme/objet). Pour les armes à feu, le bras est
-  // ALIGNÉ vers l'arme (presque horizontal, pointe vers l'avant) au lieu de
-  // pendre vers le bas ; pour les autres objets, pose par défaut.
-  // Pose par défaut = celle d'origine (avant modifications) : la main tient
-  // correctement les objets normaux (nourriture, mêlée, outils…).
-  const _R_ARM_DEFAULT = { pos: [0.22, -0.27, -0.36], rot: [0.65, 0.0, 0.0] };
-  function _rightArmPose(cat, type) {
-    if (cat === 'firearm')
-      return { pos: [0.20, -0.24, -0.46], rot: [1.32, 0.0, 0.0] };
-    return _R_ARM_DEFAULT;
+  // (Re)construit et positionne le bras droit selon l'objet tenu :
+  //  • arme à feu  → bras aligné vers l'arme (main en bas, presque horizontal) ;
+  //  • objet à une main → MAIN EN HAUT posée sur l'objet, avant-bras qui descend
+  //    hors de l'écran (le bras monte du bas vers le haut) ;
+  //  • main vide → bras au repos (pose d'origine).
+  // `p` = position de l'item en main (itemHolder), pour poser la main dessus.
+  function _buildRightArm(rArm, cat, type, p) {
+    while (rArm.children.length) rArm.remove(rArm.children[0]);
+    if (cat === 'firearm') {
+      rArm.add(_fpsArm());
+      rArm.position.set(0.20, -0.24, -0.46);
+      rArm.rotation.set(1.32, 0, 0);
+    } else if (type && p) {
+      // Main posée sur l'objet ; l'avant-bras part vers le bas-droite, hors écran.
+      rArm.add(_fpsArmUp());
+      rArm.position.set(p.x + 0.02, p.y - 0.02, p.z + 0.02);
+      rArm.rotation.set(0.12, 0.0, 0.26);
+    } else {
+      rArm.add(_fpsArm());
+      rArm.position.set(0.22, -0.27, -0.36);
+      rArm.rotation.set(0.65, 0, 0);
+    }
   }
 
   // ── Modèles .glb (libres de droits, Quaternius CC0) ─────────────────────────
@@ -212,6 +234,7 @@
     holder.userData.type = type || null;
 
     const cat = type ? (ZS.ITEMS?.[type]?.category || '') : '';
+    const p   = type ? _pos(cat, type) : null;
 
     // Bras gauche : visible (et posé) uniquement pour les armes à deux mains.
     const lArm = fpsGroup.getObjectByName('lArm');
@@ -221,18 +244,13 @@
       if (pose) { lArm.position.set(...pose.pos); lArm.rotation.set(...pose.rot); }
     }
 
-    // Bras droit : aligné vers l'arme pour les armes à feu, sinon pose par défaut.
+    // Bras droit : reconstruit selon l'objet (aligné vers l'arme pour les armes
+    // à feu, main en haut sur l'objet pour les items à une main).
     const rArm = fpsGroup.getObjectByName('rArm');
-    if (rArm) {
-      const rp = _rightArmPose(cat, type);
-      rArm.position.set(...rp.pos);
-      rArm.rotation.set(...rp.rot);
-    }
+    if (rArm) _buildRightArm(rArm, cat, type, p);
 
     if (!type) return;
 
-    const def = ZS.ITEMS?.[type];
-    const p   = _pos(def?.category || '', type);
     holder.position.set(p.x, p.y, p.z);
     holder.rotation.set(p.rx, p.ry, p.rz);
 

@@ -51,18 +51,47 @@
 
   // ── Bras FPS ──────────────────────────────────────────────────────────────
 
-  function createFPSArms() {
-    const g = new THREE.Group();
+  function _fpsArm() {
     const arm = new THREE.Group();
     addBox(arm, m(SHIRT), 0.20, 0.55, 0.20, 0,  0.00, 0);
     addBox(arm, m(SKIN),  0.18, 0.22, 0.18, 0, -0.38, 0);
-    arm.rotation.x = 0.65;
-    arm.position.set(0.22, -0.27, -0.36);
-    g.add(arm);
+    return arm;
+  }
+
+  function createFPSArms() {
+    const g = new THREE.Group();
+
+    // Bras droit : tient la crosse / poignée (toujours visible).
+    const rArm = _fpsArm();
+    rArm.name = 'rArm';
+    rArm.rotation.x = 0.65;
+    rArm.position.set(0.22, -0.27, -0.36);
+    g.add(rArm);
+
+    // Bras gauche : vient soutenir l'arme à l'avant (deux mains). Visible
+    // seulement pour les armes/outils qui se tiennent à deux mains.
+    const lArm = _fpsArm();
+    lArm.name = 'lArm';
+    lArm.visible = false;
+    g.add(lArm);
+
     const holder = new THREE.Group();
     holder.name = 'itemHolder';
     g.add(holder);
     return g;
+  }
+
+  // Pose du bras gauche selon le type d'arme tenue (ou null = caché).
+  // Long = arme longue (fusil, barre, lance…) : main bien en avant sur le fût.
+  // Court = pistolet : seconde main qui épaule, proche de la poignée.
+  function _leftArmPose(cat, type) {
+    if (type === 'wpn_pistolet' || type === 'pistol')
+      return { pos: [0.05, -0.32, -0.58], rot: [0.88, -0.58, 0.10] };
+    if (cat === 'firearm')
+      return { pos: [-0.14, -0.14, -0.55], rot: [1.18, -0.52, 0.05] };
+    if (cat === 'melee' || cat === 'tool')
+      return { pos: [-0.12, -0.12, -0.50], rot: [1.10, -0.48, 0.05] };
+    return null;   // objets tenus à une main → bras gauche caché
   }
 
   // ── Modèles .glb (libres de droits, Quaternius CC0) ─────────────────────────
@@ -96,12 +125,12 @@
   // Taille cible (plus grande dimension, en m) de l'item en main — volontairement
   // généreuse pour que l'objet équipé soit bien visible.
   function _fit(type) {
-    if (type === 'wpn_pistolet' || type === 'pistol') return 0.42;
-    if (type === 'wpn_fusil_chasse')                  return 0.82;
-    if (type === 'wpn_barre_fer' || type === 'wpn_lance_artisanale') return 0.80;
+    if (type === 'wpn_pistolet' || type === 'pistol') return 0.52;
+    if (type === 'wpn_fusil_chasse')                  return 1.20;
+    if (type === 'wpn_barre_fer' || type === 'wpn_lance_artisanale') return 1.15;
     const cat = ZS.ITEMS?.[type]?.category || '';
     const byCat = {
-      firearm: 0.72, melee: 0.62, tool: 0.60,
+      firearm: 1.00, melee: 0.92, tool: 0.86,
       food: 0.32, medical: 0.32, ammo: 0.32, resource: 0.34,
       equipment: 0.44, structure: 0.46,
     };
@@ -160,6 +189,15 @@
     if (!holder) return;
     while (holder.children.length) holder.remove(holder.children[0]);
     holder.userData.type = type || null;
+
+    // Bras gauche : visible (et posé) uniquement pour les armes à deux mains.
+    const lArm = fpsGroup.getObjectByName('lArm');
+    const pose = type ? _leftArmPose(ZS.ITEMS?.[type]?.category || '', type) : null;
+    if (lArm) {
+      lArm.visible = !!pose;
+      if (pose) { lArm.position.set(...pose.pos); lArm.rotation.set(...pose.rot); }
+    }
+
     if (!type) return;
 
     const def = ZS.ITEMS?.[type];
@@ -328,11 +366,11 @@
   // Position en main selon catégorie (rapprochée/centrée pour bien voir l'objet)
   function _pos(cat, type) {
     if (type === 'wpn_barre_fer' || type === 'wpn_lance_artisanale')
-      return { x: 0.10, y: -0.16, z: -0.60, rx: 0.15, ry: 0, rz: 0 };
+      return { x: 0.10, y: -0.16, z: -0.78, rx: 0.15, ry: 0, rz: 0 };
     const T = {
-      firearm:  { x: 0.15, y: -0.18, z: -0.55, rx: 0,    ry: 0.10, rz: 0    },
-      melee:    { x: 0.17, y: -0.14, z: -0.50, rx: 0.20, ry: 0.08, rz: 0.05 },
-      tool:     { x: 0.17, y: -0.14, z: -0.50, rx: 0.20, ry: 0.08, rz: 0.05 },
+      firearm:  { x: 0.15, y: -0.18, z: -0.72, rx: 0,    ry: 0.10, rz: 0    },
+      melee:    { x: 0.17, y: -0.14, z: -0.66, rx: 0.20, ry: 0.08, rz: 0.05 },
+      tool:     { x: 0.17, y: -0.14, z: -0.64, rx: 0.20, ry: 0.08, rz: 0.05 },
       food:     { x: 0.15, y: -0.18, z: -0.46, rx: 0,    ry: 0.20, rz: 0    },
       medical:  { x: 0.15, y: -0.18, z: -0.46, rx: 0,    ry: 0.20, rz: 0    },
       ammo:     { x: 0.15, y: -0.20, z: -0.46, rx: 0,    ry: 0.20, rz: 0    },

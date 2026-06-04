@@ -75,8 +75,8 @@
     // Bras droit : tient la crosse / poignée (toujours visible).
     const rArm = _fpsArm();
     rArm.name = 'rArm';
-    rArm.rotation.x = 0.60;
-    rArm.position.set(0.19, -0.24, -0.42);
+    rArm.rotation.x = 0.65;
+    rArm.position.set(0.22, -0.27, -0.36);
     g.add(rArm);
 
     // Bras gauche : soutient l'arme à l'avant (deux mains). Visible seulement
@@ -106,7 +106,9 @@
   // Pose du bras droit (tient l'arme/objet). Pour les armes à feu, le bras est
   // ALIGNÉ vers l'arme (presque horizontal, pointe vers l'avant) au lieu de
   // pendre vers le bas ; pour les autres objets, pose par défaut.
-  const _R_ARM_DEFAULT = { pos: [0.19, -0.24, -0.42], rot: [0.60, 0.0, 0.0] };
+  // Pose par défaut = celle d'origine (avant modifications) : la main tient
+  // correctement les objets normaux (nourriture, mêlée, outils…).
+  const _R_ARM_DEFAULT = { pos: [0.22, -0.27, -0.36], rot: [0.65, 0.0, 0.0] };
   function _rightArmPose(cat, type) {
     if (cat === 'firearm')
       return { pos: [0.20, -0.24, -0.46], rot: [1.32, 0.0, 0.0] };

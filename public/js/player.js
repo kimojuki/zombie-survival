@@ -291,12 +291,17 @@
     // Drapeau « arme à feu tenue à deux mains » lu par l'animation distante
     // (network.js) pour rapprocher le bras gauche de l'arme. Seules les armes
     // à feu sont à deux mains.
-    playerMesh.userData.twoHandedFirearm = !!type && ZS.ITEMS?.[type]?.category === 'firearm';
+    const isFirearm = !!type && ZS.ITEMS?.[type]?.category === 'firearm';
+    playerMesh.userData.twoHandedFirearm = isFirearm;
 
     if (!type) return;
 
+    // Vu de loin (3e personne), on grossit un peu les armes à feu pour qu'elles
+    // soient bien visibles tenues par les autres joueurs.
+    const fit = _fit(type) * (isFirearm ? 1.35 : 1);
+
     // 1) Modèle procédural immédiat
-    const proc = _normalize(_buildModel(type), _fit(type), null);
+    const proc = _normalize(_buildModel(type), fit, null);
     holder.add(proc);
     if (type === 'tool_torche') _addTorchFx(holder, proc);
 
@@ -306,7 +311,7 @@
       _loadGLB(spec.file).then((t) => {
         if (holder.userData.type !== type) return;
         while (holder.children.length) holder.remove(holder.children[0]);
-        const mm = _normalize(t.clone(true), _fit(type), spec.rot);
+        const mm = _normalize(t.clone(true), fit, spec.rot);
         holder.add(mm);
         if (type === 'tool_torche') _addTorchFx(holder, mm);
       }).catch(() => {});

@@ -13,6 +13,21 @@
     _lootBuildings.push({ category, cx, cz, w: w || 8, d: d || 7 });
   }
 
+  // ── Textures routes (tileset worlDesign/secteur/routes.png) ────────────────────
+  // Tuiles extraites de l'atlas et répétées le long du ruban (voir _ribbon → UV).
+  const _texLoader = new THREE.TextureLoader();
+  function _roadTexture(url) {
+    const t = _texLoader.load(url);
+    t.wrapS = t.wrapT = THREE.RepeatWrapping;
+    t.magFilter = THREE.NearestFilter;            // pixel-art net de près
+    t.minFilter = THREE.LinearMipmapLinearFilter; // anti-scintillement au loin
+    t.anisotropy = 8;                             // routes vues en angle rasant
+    t.colorSpace = THREE.SRGBColorSpace;
+    return t;
+  }
+  const _texAsphalt = _roadTexture('/img/road_asphalt.png');
+  const _texDirt    = _roadTexture('/img/road_dirt.png');
+
   // ── Materials ─────────────────────────────────────────────────────────────────
   const M = {
     brick:    new THREE.MeshLambertMaterial({ color: 0xb55a3a }),
@@ -29,9 +44,9 @@
     window:   new THREE.MeshLambertMaterial({ color: 0x5a8aaa, transparent: true, opacity: 0.55 }),
     metal:    new THREE.MeshLambertMaterial({ color: 0x778899 }),
     rust:     new THREE.MeshLambertMaterial({ color: 0x8a5a30 }),
-    road:     new THREE.MeshLambertMaterial({ color: 0x35302a, polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -4 }),
+    road:     new THREE.MeshLambertMaterial({ map: _texAsphalt, polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -4 }),
     roadLine: new THREE.MeshLambertMaterial({ color: 0xeecc22, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -6 }),
-    roadDirt: new THREE.MeshLambertMaterial({ color: 0x7a6648, polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -4 }),
+    roadDirt: new THREE.MeshLambertMaterial({ map: _texDirt, polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -4 }),
     path:     new THREE.MeshLambertMaterial({ color: 0x5e4a34, polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -3 }),
     stairs:   new THREE.MeshLambertMaterial({ color: 0x6b4f30 }),
   };
@@ -99,8 +114,12 @@
   function _ribbon(scene, pts, width, mat, withLine) {
     const STEP = 0.7;
     const pos  = [];
+    const uv   = [];
     const idx  = [];
     let prevL  = -1;
+    let acc    = 0;            // distance cumulée le long du tracé (pour le tiling de la texture)
+    // La tuile couvre toute la largeur de la route (U 0→1) et se répète tous les
+    // ~`width` mètres en longueur → marquages aux bords + proportions conservées.
 
     for (let si = 0; si < pts.length - 1; si++) {
       const [x0, z0] = pts[si];
@@ -110,6 +129,7 @@
       if (sLen < 0.01) continue;
       const nx = -sdz / sLen, nz = sdx / sLen;
       const hw = width / 2;
+      const segStart = acc;
       const steps = Math.max(1, Math.ceil(sLen / STEP));
 
       for (let i = (si === 0 ? 0 : 1); i <= steps; i++) {
@@ -117,17 +137,21 @@
         const x  = x0 + sdx * t;
         const z  = z0 + sdz * t;
         const y  = ZS.getTerrainHeight(x, z) + 0.55;
+        const v  = (segStart + sLen * t) / width;
         const li = pos.length / 3;
         pos.push(x - nx * hw, y, z - nz * hw);
         pos.push(x + nx * hw, y, z + nz * hw);
+        uv.push(0, v, 1, v);
         if (prevL >= 0) idx.push(prevL, li, prevL + 1, prevL + 1, li, li + 1);
         prevL = li;
       }
+      acc += sLen;
     }
 
     if (pos.length < 6) return;
     const geo = new THREE.BufferGeometry();
     geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+    geo.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));
     geo.setIndex(idx);
     geo.computeVertexNormals();
     scene.add(new THREE.Mesh(geo, mat));

@@ -97,10 +97,20 @@
   // de l'arme et l'avant-bras descend hors de l'écran (pas d'extrémité coupée).
   function _leftArmPose(cat, type) {
     if (type === 'wpn_pistolet' || type === 'pistol')
-      return { pos: [0.13, -0.22, -0.66], rot: [0.18, 0.0, -0.30] };
+      return { pos: [0.12, -0.22, -0.62], rot: [0.18, 0.0, -0.30] };
     if (cat === 'firearm')
-      return { pos: [0.15, -0.18, -0.92], rot: [0.28, 0.0, -0.48] };
+      return { pos: [0.13, -0.20, -0.80], rot: [0.28, 0.0, -0.48] };  // rentré vers le joueur
     return null;   // mêlée, outils, objets → bras gauche caché (une seule main)
+  }
+
+  // Pose du bras droit (tient l'arme/objet). Pour les armes à feu, le bras est
+  // ALIGNÉ vers l'arme (presque horizontal, pointe vers l'avant) au lieu de
+  // pendre vers le bas ; pour les autres objets, pose par défaut.
+  const _R_ARM_DEFAULT = { pos: [0.19, -0.24, -0.42], rot: [0.60, 0.0, 0.0] };
+  function _rightArmPose(cat, type) {
+    if (cat === 'firearm')
+      return { pos: [0.20, -0.24, -0.46], rot: [1.32, 0.0, 0.0] };
+    return _R_ARM_DEFAULT;
   }
 
   // ── Modèles .glb (libres de droits, Quaternius CC0) ─────────────────────────
@@ -199,12 +209,22 @@
     while (holder.children.length) holder.remove(holder.children[0]);
     holder.userData.type = type || null;
 
+    const cat = type ? (ZS.ITEMS?.[type]?.category || '') : '';
+
     // Bras gauche : visible (et posé) uniquement pour les armes à deux mains.
     const lArm = fpsGroup.getObjectByName('lArm');
-    const pose = type ? _leftArmPose(ZS.ITEMS?.[type]?.category || '', type) : null;
+    const pose = type ? _leftArmPose(cat, type) : null;
     if (lArm) {
       lArm.visible = !!pose;
       if (pose) { lArm.position.set(...pose.pos); lArm.rotation.set(...pose.rot); }
+    }
+
+    // Bras droit : aligné vers l'arme pour les armes à feu, sinon pose par défaut.
+    const rArm = fpsGroup.getObjectByName('rArm');
+    if (rArm) {
+      const rp = _rightArmPose(cat, type);
+      rArm.position.set(...rp.pos);
+      rArm.rotation.set(...rp.rot);
     }
 
     if (!type) return;

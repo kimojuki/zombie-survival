@@ -7,5 +7,6 @@ node_modules/
 .inventory_reset_v4_done
 database/*.sqlite
 database/*.sqlite-*
+notes-local/
 
 graphify-out/

@@ -69,13 +69,18 @@
   });
   document.body.appendChild(_waterOverlay);
   let _inWater = false;
+  let _waterDepth = 0;
 
-  function _updateWaterEffect(px, pz) {
+  function _updateWaterEffect(px, pz, py) {
     const waterY = ZS.getWaterSurface(px, pz);
-    const nowIn  = waterY !== null;
+    const feetY = (py || 0) - 1.7;
+    const nowIn  = waterY !== null && waterY > feetY - 0.05;
+    _waterDepth = nowIn ? Math.max(0, waterY - feetY) : 0;
     if (nowIn === _inWater) return;
     _inWater = nowIn;
     _waterOverlay.style.opacity = nowIn ? '1' : '0';
+    state.player.inWater = nowIn;
+    ZS.Survival?.setWaterContact?.(nowIn);
   }
 
   // ── Build world ───────────────────────────────────────────────────────────
@@ -107,6 +112,7 @@
 
   // Transmet la géométrie de collision au serveur (physique des zombies côté serveur)
   socket.emit('world-colliders', ZS.getColliders());
+  socket.emit('world-water-zones', ZS.getWaterZones());
 
   // Transmet l'empreinte des bâtiments lootables → le serveur génère le loot (items.md)
   socket.emit('loot-buildings', ZS.Buildings.getLootBuildings());
@@ -489,7 +495,7 @@
 
     if (!state.player.dead) {
       updateMovement(dt);
-      _updateWaterEffect(state.player.x, state.player.z);
+      _updateWaterEffect(state.player.x, state.player.z, state.player.y);
     }
     _tickSwing();
     ZS.setShadowCenter(state.player.x, state.player.z);
@@ -519,7 +525,7 @@
   const JUMP_V    = 8;
 
   function updateMovement(dt) {
-    const SPEED = 5;
+    const SPEED = _inWater ? 2.8 : 5;
     const keys  = state.keys;
 
     let mx = state.input.moveX;
@@ -594,7 +600,7 @@
 
     // Jump
     if (p.onGround && (keys['Space'] || state.jumpPressed)) {
-      p.velocityY    = JUMP_V;
+      p.velocityY    = _inWater ? JUMP_V * 0.55 : JUMP_V;
       p.onGround     = false;
       state.jumpPressed = false;
     }

@@ -19,9 +19,9 @@
   function _roadTexture(url) {
     const t = _texLoader.load(url);
     t.wrapS = t.wrapT = THREE.RepeatWrapping;
-    t.magFilter = THREE.NearestFilter;            // pixel-art net de près
-    t.minFilter = THREE.LinearMipmapLinearFilter; // anti-scintillement au loin
-    t.anisotropy = 8;                             // routes vues en angle rasant
+    t.magFilter = THREE.LinearFilter;
+    t.minFilter = THREE.LinearMipmapLinearFilter;
+    t.anisotropy = 16;
     t.colorSpace = THREE.SRGBColorSpace;
     return t;
   }
@@ -45,6 +45,9 @@
     metal:    new THREE.MeshLambertMaterial({ color: 0x778899 }),
     rust:     new THREE.MeshLambertMaterial({ color: 0x8a5a30 }),
     road:     new THREE.MeshLambertMaterial({ map: _texAsphalt, polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -4 }),
+    roadBroken:new THREE.MeshLambertMaterial({ map: _texAsphalt, polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -4 }),
+    roadShoulder: new THREE.MeshLambertMaterial({ color: 0x5a4a36, polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -3 }),
+    roadEdge: new THREE.MeshLambertMaterial({ color: 0xe3ddd0, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -6 }),
     roadLine: new THREE.MeshLambertMaterial({ color: 0xeecc22, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -6 }),
     roadDirt: new THREE.MeshLambertMaterial({ map: _texDirt, polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -4 }),
     path:     new THREE.MeshLambertMaterial({ color: 0x5e4a34, polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -3 }),
@@ -113,59 +116,20 @@
   // Ruban de route/chemin collé au terrain.
   // LIFT : très léger décollement du sol (le polygonOffset des matériaux évite le
   // z-fighting) — la route reste praticable, on marche dessus.
-  const _RIBBON_LIFT = 0.06;
+  const _RIBBON_LIFT = 0.07;
   function _ribbon(scene, pts, width, mat, withLine) {
-    const STEP = 0.7;
-    const pos  = [];
-    const uv   = [];
-    const idx  = [];
-    let prevL  = -1;
-    let acc    = 0;            // distance cumulée le long du tracé (pour le tiling de la texture)
-    // La tuile couvre toute la largeur de la route (U 0→1) et se répète tous les
-    // ~`width` mètres en longueur → marquages aux bords + proportions conservées.
+    const isRoadSurface = mat === M.road || mat === M.roadBroken;
 
-    for (let si = 0; si < pts.length - 1; si++) {
-      const [x0, z0] = pts[si];
-      const [x1, z1] = pts[si + 1];
-      const sdx = x1 - x0, sdz = z1 - z0;
-      const sLen = Math.hypot(sdx, sdz);
-      if (sLen < 0.01) continue;
-      const nx = -sdz / sLen, nz = sdx / sLen;
-      const hw = width / 2;
-      const segStart = acc;
-      const steps = Math.max(1, Math.ceil(sLen / STEP));
+    function _buildRibbonMesh(surfaceWidth, surfaceMat, yOffset, tileScale, crossSegments) {
+      const stepSize = surfaceMat.map ? 0.25 : 0.7;
+      const pos = [];
+      const uv = [];
+      const idx = [];
+      let prevRow = -1;
+      let acc = 0;
+      const tileLen = Math.max((tileScale || surfaceWidth * 0.65), 3.2);
+      const cols = Math.max(1, crossSegments || 1);
 
-      for (let i = (si === 0 ? 0 : 1); i <= steps; i++) {
-        const t  = i / steps;
-        const x  = x0 + sdx * t;
-        const z  = z0 + sdz * t;
-        const y  = ZS.getTerrainHeight(x, z) + _RIBBON_LIFT;
-        const v  = (segStart + sLen * t) / width;
-        const li = pos.length / 3;
-        pos.push(x - nx * hw, y, z - nz * hw);
-        pos.push(x + nx * hw, y, z + nz * hw);
-        uv.push(0, v, 1, v);
-        // Ordre des sommets choisi pour que les normales pointent vers le HAUT
-        // (route visible et bien éclairée vue de dessus).
-        if (prevL >= 0) idx.push(prevL, prevL + 1, li, prevL + 1, li + 1, li);
-        prevL = li;
-      }
-      acc += sLen;
-    }
-
-    if (pos.length < 6) return;
-    const geo = new THREE.BufferGeometry();
-    geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
-    geo.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));
-    geo.setIndex(idx);
-    geo.computeVertexNormals();
-    scene.add(new THREE.Mesh(geo, mat));
-
-    // L'overlay de ligne jaune n'est dessiné que pour les rubans NON texturés :
-    // les textures de route (M.road) portent déjà leur axe central + bords blancs.
-    if (withLine && !mat.map) {
-      const lPos = [], lIdx = [];
-      let lprev = -1, dashToggle = 0;
       for (let si = 0; si < pts.length - 1; si++) {
         const [x0, z0] = pts[si];
         const [x1, z1] = pts[si + 1];
@@ -173,16 +137,88 @@
         const sLen = Math.hypot(sdx, sdz);
         if (sLen < 0.01) continue;
         const nx = -sdz / sLen, nz = sdx / sLen;
-        const lW = 0.14;
-        const steps = Math.max(1, Math.ceil(sLen / STEP));
+        const hw = surfaceWidth / 2;
+        const segStart = acc;
+        const steps = Math.max(1, Math.ceil(sLen / stepSize));
+
         for (let i = (si === 0 ? 0 : 1); i <= steps; i++) {
           const t = i / steps;
-          const x = x0 + sdx * t, z = z0 + sdz * t;
+          const x = x0 + sdx * t;
+          const z = z0 + sdz * t;
+          const v = (segStart + sLen * t) / tileLen;
+          const rowStart = pos.length / 3;
+          for (let c = 0; c <= cols; c++) {
+            const u = c / cols;
+            const off = -hw + surfaceWidth * u;
+            const px = x + nx * off;
+            const pz = z + nz * off;
+            const py = ZS.getTerrainHeight(px, pz) + yOffset;
+            pos.push(px, py, pz);
+            uv.push(u, v);
+          }
+          if (prevRow >= 0) {
+            for (let c = 0; c < cols; c++) {
+              const a = prevRow + c;
+              const b = prevRow + c + 1;
+              const d = rowStart + c;
+              const e = rowStart + c + 1;
+              idx.push(a, b, d, b, e, d);
+            }
+          }
+          prevRow = rowStart;
+        }
+        acc += sLen;
+      }
+
+      if (pos.length < 6) return false;
+      const geo = new THREE.BufferGeometry();
+      geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+      geo.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));
+      geo.setIndex(idx);
+      geo.computeVertexNormals();
+      scene.add(new THREE.Mesh(geo, surfaceMat));
+      return true;
+    }
+
+    if (isRoadSurface) {
+      const shoulderWidth = width + (mat === M.road ? 0.75 : 1.15);
+      _buildRibbonMesh(shoulderWidth, M.roadShoulder, _RIBBON_LIFT - 0.015, shoulderWidth * 0.85, 4);
+    }
+
+    const surfaceCols = mat.map ? 16 : 2;
+    if (!_buildRibbonMesh(width, mat, _RIBBON_LIFT, width * 0.65, surfaceCols)) return;
+
+    function _overlayStrip(stripWidth, offset, material, dashOn, dashOff) {
+      const lPos = [], lIdx = [];
+      let lprev = -1;
+      let dashAcc = 0;
+      for (let si = 0; si < pts.length - 1; si++) {
+        const [x0, z0] = pts[si];
+        const [x1, z1] = pts[si + 1];
+        const sdx = x1 - x0, sdz = z1 - z0;
+        const sLen = Math.hypot(sdx, sdz);
+        if (sLen < 0.01) continue;
+        const nx = -sdz / sLen, nz = sdx / sLen;
+        const steps = Math.max(1, Math.ceil(sLen / 0.25));
+        for (let i = (si === 0 ? 0 : 1); i <= steps; i++) {
+          const t = i / steps;
+          const x = x0 + sdx * t + nx * offset;
+          const z = z0 + sdz * t + nz * offset;
           const y = ZS.getTerrainHeight(x, z) + _RIBBON_LIFT + 0.02;
           const li = lPos.length / 3;
-          lPos.push(x - nx * lW, y, z - nz * lW, x + nx * lW, y, z + nz * lW);
-          if (lprev >= 0 && dashToggle % 4 < 2) lIdx.push(lprev, lprev + 1, li, lprev + 1, li + 1, li);
-          lprev = li; dashToggle++;
+          lPos.push(x - nx * stripWidth, y, z - nz * stripWidth, x + nx * stripWidth, y, z + nz * stripWidth);
+          if (lprev >= 0) {
+            const segPiece = sLen / steps;
+            const cycle = dashOn > 0 ? dashOn + dashOff : 0;
+            let draw = true;
+            if (cycle > 0) {
+              const mid = (dashAcc + segPiece * 0.5) % cycle;
+              draw = mid < dashOn;
+            }
+            if (draw) lIdx.push(lprev, lprev + 1, li, lprev + 1, li + 1, li);
+            dashAcc += segPiece;
+          }
+          lprev = li;
         }
       }
       if (lPos.length >= 6 && lIdx.length > 0) {
@@ -190,8 +226,19 @@
         lGeo.setAttribute('position', new THREE.Float32BufferAttribute(lPos, 3));
         lGeo.setIndex(lIdx);
         lGeo.computeVertexNormals();
-        scene.add(new THREE.Mesh(lGeo, M.roadLine));
+        scene.add(new THREE.Mesh(lGeo, material));
       }
+    }
+
+    if (mat === M.road) {
+      const edgeOffset = Math.max(0.22, width * 0.5 - 0.18);
+      _overlayStrip(0.05, -edgeOffset, M.roadEdge, 0, 0);
+      _overlayStrip(0.05,  edgeOffset, M.roadEdge, 0, 0);
+      if (withLine && width >= 5.0) _overlayStrip(0.12, 0, M.roadLine, 2.2, 2.8);
+    } else if (mat === M.roadBroken) {
+      if (withLine && width >= 4.5) _overlayStrip(0.10, 0, M.roadLine, 1.8, 3.6);
+    } else if (withLine && !mat.map) {
+      _overlayStrip(0.14, 0, M.roadLine, 1.4, 1.4);
     }
   }
 

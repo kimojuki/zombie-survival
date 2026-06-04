@@ -45,13 +45,23 @@ These are intentionally ignored by Git for local development.
 - The SQLite setup is a local development convenience, not a deployment decision.
 - If upstream should remain MySQL-only, the SQLite support may later need to be discussed before PR.
 - The current local environment is now sufficient to test the game manually in a browser.
+- A local-only personal notes workspace is now used under `notes-local/` and must never be included in PR work.
+
+### Completed (visual & gameplay pass — 2026-06-04)
+
+- **Roads:** seamless asphalt/dirt textures; lane markings and edge lines drawn as code overlays (not baked in bitmap); ribbon mesh follows terrain with cross-segment subdivision; shoulder strips; `registerFlatPath()` in `noise.js` to flatten terrain under roads.
+- **Terrain & vegetation:** `terrain_atlas.png` and `tree_atlas.png` added; grass/dirt UV mapping on terrain mesh; Minecraft-style vertical grass tufts; tree bark/leaf atlases on trunks and foliage.
+- **River & water gameplay:** river mesh follows terrain width; animated water surface; player water contact (overlay, movement slow, reduced jump); survival thirst recovery in water; water zones synced to server → zombie slow factor in river.
+- **Sector tweaks:** forest road paths adjusted; small-town main road uses `roadBroken` material; main-city highway guardrails rebuilt per segment with skip zones at intersections.
+- **Housekeeping:** `notes-local/` added to `.gitignore`; `CLAUDE.md` updated to reflect actual project state.
 
 ### Next Suggested Steps
 
-- Test the full browser flow:
-  - register
-  - login
-  - load into world
-  - verify movement, HUD, zombies, inventory, and respawn
+- Manual browser test pass: roads, river, water movement, zombie slow in water, terrain visuals on mobile.
 - Clean up text encoding issues visible in the French UI strings.
-- Split local setup work from gameplay/product work when preparing future PRs.
+- When ready: open a PR separating local-only SQLite setup from gameplay/visual changes if upstream prefers MySQL-only.
+- Remaining world sectors still undocumented in code: farm, industrial, coast, lake, wasteland, mountain.
+
+### In Progress
+
+_(none — update this section when starting new work)_

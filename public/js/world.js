@@ -4,11 +4,37 @@
 
   let _scene, _ambientLight, _sunLight, _moonLight, _hemiLight;
   const _fireLights = [];
+  const _waterSurfaces = [];
   const _waterMats  = []; // matériaux de surface d'eau → animés chaque frame
   const _colliders  = [];
   const _clouds     = [];
   let   _cloudMat   = null;
   let   _timeOfDay  = 0.3;
+  const _terrainTex = new THREE.TextureLoader().load('/img/terrain_atlas.png');
+  _terrainTex.wrapS = _terrainTex.wrapT = THREE.RepeatWrapping;
+  _terrainTex.magFilter = THREE.NearestFilter;
+  _terrainTex.minFilter = THREE.NearestMipmapNearestFilter;
+  _terrainTex.colorSpace = THREE.SRGBColorSpace;
+  const _treeAtlas = new THREE.TextureLoader().load('/img/tree_atlas.png');
+  _treeAtlas.wrapS = _treeAtlas.wrapT = THREE.RepeatWrapping;
+  _treeAtlas.magFilter = THREE.NearestFilter;
+  _treeAtlas.minFilter = THREE.NearestMipmapLinearFilter;
+  _treeAtlas.colorSpace = THREE.SRGBColorSpace;
+
+  function _atlasSlice(texture, offsetX, repeatX) {
+    const t = texture.clone();
+    t.needsUpdate = true;
+    t.wrapS = t.wrapT = THREE.RepeatWrapping;
+    t.magFilter = THREE.NearestFilter;
+    t.minFilter = THREE.NearestMipmapLinearFilter;
+    t.colorSpace = THREE.SRGBColorSpace;
+    t.repeat.set(repeatX, 1);
+    t.offset.set(offsetX, 0);
+    return t;
+  }
+
+  const _barkTex = _atlasSlice(_treeAtlas, 0.0, 0.5);
+  const _leafTex = _atlasSlice(_treeAtlas, 0.5, 0.5);
 
   // ── Keyframes ciel jour/nuit ──────────────────────────────────────────────────
   const _KEYS = [
@@ -122,6 +148,24 @@
       const dBr = 0.35 + k.ambI * 0.65; // plus brillant de jour
       for (const m of _waterMats) m.emissiveIntensity = rip * dBr;
     }
+    if (_waterSurfaces.length > 0) {
+      const wt = Date.now() * 0.001;
+      for (const ws of _waterSurfaces) {
+        const pos = ws.mesh.geometry.attributes.position;
+        const base = ws.base;
+        for (let i = 0; i < pos.count; i++) {
+          const bx = base[i * 3];
+          const by = base[i * 3 + 1];
+          const bz = base[i * 3 + 2];
+          const wave =
+            Math.sin(wt * ws.speed + bx * 0.09 + bz * 0.05) * ws.amp +
+            Math.sin(wt * (ws.speed * 1.7) + bx * 0.16 - bz * 0.12) * (ws.amp * 0.45);
+          pos.setY(i, by + wave);
+        }
+        pos.needsUpdate = true;
+        ws.mesh.geometry.computeVertexNormals();
+      }
+    }
 
     // Nuages
     if (_clouds.length > 0 && _cloudMat) {
@@ -221,23 +265,77 @@
     return _cT.getHex();
   }
 
+  function _terrainTint(x, z, h, slope, useDirt) {
+    if (useDirt) {
+      _cT.setHex(h > 13 ? 0x817760 : 0x7c5e38);
+      if (slope > 0.6) {
+        _cD.setHex(0x4b3724); _cT.lerp(_cD, Math.min(0.34, slope * 0.28));
+      } else if (_tvn(x * 0.18, z * 0.18) < 0.28) {
+        _cD.setHex(0x9f7c4b); _cT.lerp(_cD, 0.16);
+      }
+      return _cT.getHex();
+    }
+
+    _cT.setHex(_terrainColor(x, z, h));
+    if (_tvn(x * 0.25, z * 0.25) > 0.7) {
+      _cD.setHex(0x70953f); _cT.lerp(_cD, 0.18);
+    } else if (_tvn(x * 0.22 + 13, z * 0.22 - 7) < 0.2) {
+      _cD.setHex(0x2d602c); _cT.lerp(_cD, 0.22);
+    }
+    return _cT.getHex();
+  }
+
   function buildTerrain(scene) {
-    const SIZE = 600, SEG = 110;
-    const geo  = new THREE.PlaneGeometry(SIZE, SIZE, SEG, SEG);
+    const SIZE = 600, SEG = 132;
+    const geo  = new THREE.PlaneGeometry(SIZE, SIZE, SEG, SEG).toNonIndexed();
     geo.rotateX(-Math.PI / 2);
     const pos = geo.attributes.position;
+    const uvs  = new Float32Array(pos.count * 2);
     const cols = new Float32Array(pos.count * 3);
     const col  = new THREE.Color();
     for (let i = 0; i < pos.count; i++) {
       const vx = pos.getX(i), vz = pos.getZ(i);
       const h  = ZS.getTerrainHeight(vx, vz);
       pos.setY(i, h);
-      col.setHex(_terrainColor(vx, vz, h));
-      cols[i*3] = col.r; cols[i*3+1] = col.g; cols[i*3+2] = col.b;
     }
+
+    const a = new THREE.Vector3(), b = new THREE.Vector3(), c = new THREE.Vector3();
+    const ab = new THREE.Vector3(), ac = new THREE.Vector3(), nrm = new THREE.Vector3();
+    const tileScale = 6.0;
+    const frac = v => v - Math.floor(v);
+
+    for (let i = 0; i < pos.count; i += 3) {
+      a.set(pos.getX(i), pos.getY(i), pos.getZ(i));
+      b.set(pos.getX(i + 1), pos.getY(i + 1), pos.getZ(i + 1));
+      c.set(pos.getX(i + 2), pos.getY(i + 2), pos.getZ(i + 2));
+      ab.subVectors(b, a);
+      ac.subVectors(c, a);
+      nrm.crossVectors(ab, ac).normalize();
+
+      const slope = 1 - Math.max(0, nrm.y);
+      const avgH = (a.y + b.y + c.y) / 3;
+      const useDirt = slope > 0.22 || avgH > 13.5;
+      const uBase = useDirt ? 0.52 : 0.02;
+      const uSpan = 0.46;
+
+      for (let k = 0; k < 3; k++) {
+        const idx = i + k;
+        const vx = pos.getX(idx), vy = pos.getY(idx), vz = pos.getZ(idx);
+        uvs[idx * 2] = uBase + frac((vx + 300) / tileScale) * uSpan;
+        uvs[idx * 2 + 1] = frac((vz + 300) / tileScale);
+        col.setHex(_terrainTint(vx, vz, vy, slope, useDirt));
+        cols[idx * 3] = col.r; cols[idx * 3 + 1] = col.g; cols[idx * 3 + 2] = col.b;
+      }
+    }
+
+    geo.setAttribute('uv', new THREE.BufferAttribute(uvs, 2));
     geo.setAttribute('color', new THREE.BufferAttribute(cols, 3));
     geo.computeVertexNormals();
-    const mesh = new THREE.Mesh(geo, new THREE.MeshLambertMaterial({ vertexColors: true }));
+    const mesh = new THREE.Mesh(geo, new THREE.MeshLambertMaterial({
+      map: _terrainTex,
+      vertexColors: true,
+      flatShading: true,
+    }));
     mesh.receiveShadow = true;
     scene.add(mesh);
   }
@@ -311,7 +409,7 @@
 
   function spawnGrassTufts(scene, count) {
     const bladeGeo = new THREE.PlaneGeometry(1, 1);
-    const mats = [0x3a7830, 0x4a8838, 0x6a8428, 0x527040]
+    const mats = [0x4f8b36, 0x5f9a3f, 0x719f42, 0x456f2f, 0x82aa4b]
       .map(c => new THREE.MeshLambertMaterial({ color: c, side: THREE.DoubleSide }));
     const perMat = mats.map(() => []);
 
@@ -319,15 +417,18 @@
       const x = (_rng() - 0.5) * 540, z = (_rng() - 0.5) * 540;
       if (x > -262 && x < -100 && z > -55 && z < 58) continue;
       const by = ZS.getTerrainHeight(x, z);
-      if (by > 8) continue;
+      if (by > 10) continue;
       const mi = Math.floor(_rng() * mats.length);
-      const bw = 0.06 + _rng() * 0.05, h = 0.20 + _rng() * 0.18;
-      const blades = 2 + Math.floor(_rng() * 2);
+      const bw = 0.018 + _rng() * 0.02;
+      const h = 0.34 + _rng() * 0.34;
+      const blades = 5 + Math.floor(_rng() * 5);
       for (let q = 0; q < blades; q++) {
-        const ay   = q * Math.PI / 2 + _rng() * 0.5;
-        const tilt = (_rng() - 0.5) * 0.18;
-        const ox   = (_rng() - 0.5) * 0.12, oz = (_rng() - 0.5) * 0.12;
-        perMat[mi].push({ x: x + ox, y: by + h * 0.5, z: z + oz, bw, h, ay, tilt });
+        const ay   = _rng() * Math.PI * 2;
+        const tilt = (_rng() - 0.5) * 0.05;
+        const ox   = (_rng() - 0.5) * 0.22, oz = (_rng() - 0.5) * 0.22;
+        const hh   = h * (0.72 + _rng() * 0.5);
+        const ww   = bw * (0.85 + _rng() * 0.55);
+        perMat[mi].push({ x: x + ox, y: by + hh * 0.5, z: z + oz, bw: ww, h: hh, ay, tilt });
       }
     }
 
@@ -442,8 +543,7 @@
     const g = new THREE.Group();
     const trunkH   = 3.2 + _rng() * 2.8; // plus grand : 3.2 – 6m
     const trunkR   = 0.12 + _rng() * 0.08;
-    const barkCol  = [0x6a3a10, 0x7a4218, 0x5a3010, 0x8a5020];
-    const trunkMat = new THREE.MeshLambertMaterial({ color: barkCol[Math.floor(_rng() * barkCol.length)] });
+    const trunkMat = new THREE.MeshLambertMaterial({ map: _barkTex, color: 0xd8c6a8 });
 
     const trunk = new THREE.Mesh(new THREE.CylinderGeometry(trunkR * 0.65, trunkR * 1.4, trunkH, 7), trunkMat);
     trunk.position.y = trunkH / 2;
@@ -462,15 +562,15 @@
     }
 
     // Feuillage : 4 – 6 sphères (moins de draw calls par arbre)
-    const leafCols = [0x1e7a3c, 0x2d9e52, 0x256a38, 0x358a44, 0x1a6830, 0x2a8040];
-    const lm1  = new THREE.MeshLambertMaterial({ color: leafCols[Math.floor(_rng() * leafCols.length)] });
-    const lm2  = new THREE.MeshLambertMaterial({ color: leafCols[Math.floor(_rng() * leafCols.length)] });
+    const leafCols = [0x6d9850, 0x4f7e3f, 0x7ea857, 0x3f6c35];
+    const lm1  = new THREE.MeshLambertMaterial({ map: _leafTex, color: leafCols[Math.floor(_rng() * leafCols.length)] });
+    const lm2  = new THREE.MeshLambertMaterial({ map: _leafTex, color: leafCols[Math.floor(_rng() * leafCols.length)] });
     const leafN = 4 + Math.floor(_rng() * 3);
     for (let i = 0; i < leafN; i++) {
       const r    = 0.9 + _rng() * 1.2;
       const ang  = (i / leafN) * Math.PI * 2 + _rng() * 0.8;
       const dist = 0.3 + _rng() * 1.2;
-      const leaf = new THREE.Mesh(new THREE.SphereGeometry(r, 6, 5), i % 2 === 0 ? lm1 : lm2);
+      const leaf = new THREE.Mesh(new THREE.DodecahedronGeometry(r, 0), i % 2 === 0 ? lm1 : lm2);
       leaf.position.set(Math.cos(ang) * dist, trunkH * 0.62 + _rng() * 1.8, Math.sin(ang) * dist);
       leaf.scale.y = 0.72 + _rng() * 0.3;
       g.add(leaf);
@@ -481,12 +581,12 @@
   function makePineTree() {
     const g = new THREE.Group();
     const h        = 5.5 + _rng() * 4.5; // 5.5 – 10m
-    const trunkMat = new THREE.MeshLambertMaterial({ color: 0x4a2008 });
+    const trunkMat = new THREE.MeshLambertMaterial({ map: _barkTex, color: 0xc7b191 });
     const trunk    = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.24, h, 9), trunkMat);
     trunk.position.y = h / 2; trunk.castShadow = true; g.add(trunk);
 
-    const pCols = [0x184828, 0x1a5228, 0x153a22, 0x20502c];
-    const pMat  = new THREE.MeshLambertMaterial({ color: pCols[Math.floor(_rng() * pCols.length)] });
+    const pCols = [0x355f30, 0x456f38, 0x50773c, 0x284d2a];
+    const pMat  = new THREE.MeshLambertMaterial({ map: _leafTex, color: pCols[Math.floor(_rng() * pCols.length)] });
     const layers = 4 + Math.floor(_rng() * 3);
     for (let i = 0; i < layers; i++) {
       const t   = i / (layers - 1);
@@ -507,7 +607,7 @@
   function makeBirchTree() {
     const g = new THREE.Group();
     const h        = 5.0 + _rng() * 3.0; // 5 – 8m
-    const trunkMat = new THREE.MeshLambertMaterial({ color: 0xd0c8b8 });
+    const trunkMat = new THREE.MeshLambertMaterial({ map: _barkTex, color: 0xe6e0d0 });
     const markMat  = new THREE.MeshLambertMaterial({ color: 0x302820 });
     const trunk    = new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.14, h, 9), trunkMat);
     trunk.position.y = h / 2; trunk.castShadow = true; g.add(trunk);
@@ -520,12 +620,12 @@
     }
     // Feuilles légères (or-vert)
     const lCols = [0x8aba30, 0x9acc28, 0x7aa828, 0xb8a828, 0x70a830];
-    const lMat  = new THREE.MeshLambertMaterial({ color: lCols[Math.floor(_rng() * lCols.length)] });
+    const lMat  = new THREE.MeshLambertMaterial({ map: _leafTex, color: lCols[Math.floor(_rng() * lCols.length)] });
     for (let i = 0; i < 6 + Math.floor(_rng() * 4); i++) {
       const r    = 0.55 + _rng() * 0.7;
       const ang  = _rng() * Math.PI * 2;
       const dist = 0.3 + _rng() * 0.9;
-      const leaf = new THREE.Mesh(new THREE.SphereGeometry(r, 7, 5), lMat);
+      const leaf = new THREE.Mesh(new THREE.DodecahedronGeometry(r, 0), lMat);
       leaf.position.set(Math.cos(ang) * dist, h * 0.68 + _rng() * h * 0.28, Math.sin(ang) * dist);
       leaf.scale.set(1.3, 0.60 + _rng() * 0.25, 1.1);
       leaf.castShadow = true;
@@ -645,6 +745,15 @@
 
   function registerFireLight(light, mesh) { _fireLights.push({ light, mesh }); }
   function registerWaterMaterial(mat)     { _waterMats.push(mat); }
+  function registerWaterSurface(mesh, amp, speed) {
+    const arr = mesh.geometry.attributes.position.array;
+    _waterSurfaces.push({
+      mesh,
+      base: new Float32Array(arr),
+      amp: amp || 0.08,
+      speed: speed || 1.2,
+    });
+  }
 
   // ── Zones d'eau (rivière) ────────────────────────────────────────────────────
   const _waterZones = []; // { x, z, r, y }
@@ -657,6 +766,7 @@
     }
     return null;
   }
+  function getWaterZones() { return _waterZones.slice(); }
 
   window.ZS = window.ZS || {};
   ZS.buildWorld        = buildWorld;
@@ -667,8 +777,10 @@
   ZS.chopTree          = chopTree;
   ZS.registerFireLight     = registerFireLight;
   ZS.registerWaterMaterial = registerWaterMaterial;
+  ZS.registerWaterSurface  = registerWaterSurface;
   ZS.registerWaterZone     = registerWaterZone;
   ZS.getWaterSurface       = getWaterSurface;
+  ZS.getWaterZones         = getWaterZones;
   ZS.spawnTreesAt      = spawnTreesAt;
   ZS.spawnDeadTreesAt  = spawnDeadTreesAt;
   ZS.makeTree          = makeTree;

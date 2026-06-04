@@ -342,24 +342,27 @@
     const { M, ribbon } = B;
 
     ribbon(scene, [
-      [ 18, -135], [ 12, -100], [  8,  -65], [  4,  -30],
-      [  0,    0], [ -4,   30], [ -8,   60], [-12,   90], [-16,  130]
+      [ 18, -135], [ 12, -100], [ 10,  -72], [  8,  -48], [  6,  -28], [  4,  -10]
     ], 4.5, M.roadDirt, false);
 
     ribbon(scene, [
-      [  4, -30], [-10, -42], [-28, -56], [-52, -67]
+      [  6, -28], [-10, -42], [-28, -56], [-52, -67]
     ], 3.0, M.path, false);
 
     ribbon(scene, [
-      [  8, -65], [ 32, -76], [ 56, -88], [ 80, -98]
+      [ 10, -72], [ 32, -78], [ 56, -88], [ 80, -98]
     ], 3.5, M.roadDirt, false);
 
     ribbon(scene, [
-      [  0,   0], [ -8,  12], [-14,  22], [-20,  28]
+      [  4, -10], [  1,  -2], [ -6,  10], [-14,  22], [-20,  28]
     ], 2.8, M.path, false);
 
     ribbon(scene, [
-      [ -4,  30], [-22,  34], [-46,  37], [-72,  40]
+      [-20,  28], [-34,  33], [-50,  37], [-72,  40]
+    ], 2.5, M.path, false);
+
+    ribbon(scene, [
+      [ -20,  28], [ -16,  46], [ -13,  72], [ -12,  98], [ -16, 130]
     ], 2.5, M.path, false);
   }
 
@@ -380,9 +383,9 @@
       [ -96,    0], [-100,   75], [-105,  150], [ -98,  210]
     ];
     const WATER_Y_OFFSET = 0.65; // légèrement plus haut pour rester visible
-    const width = 10, STEP = 1.5;
+    const width = 10, STEP = 1.0, CROSS_SEGS = 6;
     const pos = [], idx = [];
-    let prevL = -1;
+    let prevRow = null;
 
     for (let si = 0; si < pts.length - 1; si++) {
       const [x0, z0] = pts[si], [x1, z1] = pts[si + 1];
@@ -390,19 +393,36 @@
       const sLen = Math.hypot(sdx, sdz);
       if (sLen < 0.01) continue;
       const nx = -sdz / sLen, nz = sdx / sLen;
-      const hw = width / 2;
       const steps = Math.max(1, Math.ceil(sLen / STEP));
       for (let i = (si === 0 ? 0 : 1); i <= steps; i++) {
-        const t  = i / steps;
-        const x  = x0 + sdx * t, z = z0 + sdz * t;
-        const y  = ZS.getTerrainHeight(x, z) + WATER_Y_OFFSET;
-        const li = pos.length / 3;
-        pos.push(x - nx * hw, y, z - nz * hw, x + nx * hw, y, z + nz * hw);
-        if (prevL >= 0) idx.push(prevL, li, prevL + 1, prevL + 1, li, li + 1);
-        prevL = li;
+        const t = i / steps;
+        const x = x0 + sdx * t, z = z0 + sdz * t;
+        const centerY = ZS.getTerrainHeight(x, z) + 0.04;
+        const row = [];
+        for (let ci = 0; ci <= CROSS_SEGS; ci++) {
+          const u = ci / CROSS_SEGS;
+          const off = (u - 0.5) * width;
+          const vx = x + nx * off;
+          const vz = z + nz * off;
+          const terrainY = ZS.getTerrainHeight(vx, vz);
+          const edgeBias = Math.abs(u - 0.5) * 2;
+          const vy = Math.min(terrainY + 0.03, centerY + edgeBias * 0.035);
+          row.push(pos.length / 3);
+          pos.push(vx, vy, vz);
+        }
+        if (prevRow) {
+          for (let ci = 0; ci < CROSS_SEGS; ci++) {
+            const a = prevRow[ci];
+            const b = prevRow[ci + 1];
+            const c = row[ci];
+            const d = row[ci + 1];
+            idx.push(a, c, b, b, c, d);
+          }
+        }
+        prevRow = row;
       }
     }
-    if (pos.length >= 6 && idx.length > 0) {
+    if (pos.length >= 9 && idx.length > 0) {
       const geo = new THREE.BufferGeometry();
       geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
       geo.setIndex(idx);
@@ -410,6 +430,7 @@
       const mesh = new THREE.Mesh(geo, riverMat);
       mesh.renderOrder = 2; // force le rendu après les objets opaques
       scene.add(mesh);
+      ZS.registerWaterSurface(mesh, 0.06, 1.0);
     }
 
     // Enregistre les zones d'eau pour la détection joueur
@@ -421,7 +442,7 @@
       for (let i = 0; i <= steps; i++) {
         const t = i / steps;
         const wx = x0 + sdx * t, wz = z0 + sdz * t;
-        ZS.registerWaterZone(wx, wz, 7, ZS.getTerrainHeight(wx, wz) + WATER_Y_OFFSET);
+        ZS.registerWaterZone(wx, wz, 6.5, ZS.getTerrainHeight(wx, wz) + 0.04);
       }
     }
 

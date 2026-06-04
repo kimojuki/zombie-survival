@@ -35,6 +35,13 @@ function pickZombieZone() {
   return ZOMBIE_ZONES[0];
 }
 
+function getWaterSlowFactor(x, z) {
+  for (const wz of worldWaterZones) {
+    if (Math.hypot(x - wz.x, z - wz.z) < wz.r) return 0.55;
+  }
+  return 1;
+}
+
 app.use(express.json());
 app.use(express.static('public'));
 
@@ -90,6 +97,7 @@ const structures = new Map(); // structures construites par les joueurs (base)
 let zombieIdCounter    = 0;
 let itemIdCounter      = 0;
 let structureIdCounter = 0;
+let worldWaterZones    = [];
 
 // ── Spawn / kit / survie ──────────────────────────────────────────────────────
 const FOREST_SPAWN     = { x: 0, y: 1, z: -5, rotY: 0 };   // Start Forest
@@ -368,8 +376,9 @@ setInterval(() => {
       const ang = Math.atan2(nearestP.z - z.z, nearestP.x - z.x);
       z.angle = ang;
       // Déplacement + collision murs/objets (glisse le long, entre par les portes)
-      const chase = resolveZombieCollision(z.x + Math.cos(ang) * z.speed * DT,
-                                           z.z + Math.sin(ang) * z.speed * DT);
+      const waterMul = getWaterSlowFactor(z.x, z.z);
+      const chase = resolveZombieCollision(z.x + Math.cos(ang) * z.speed * waterMul * DT,
+                                           z.z + Math.sin(ang) * z.speed * waterMul * DT);
       z.x = chase[0];
       z.z = chase[1];
       // Attaque avec cadence : un coup toutes ZOMBIE_ATTACK_CD s, dégâts modérés.
@@ -387,8 +396,9 @@ setInterval(() => {
         z.wanderTimer = WANDER_TURN_MIN + Math.random() * (WANDER_TURN_MAX - WANDER_TURN_MIN);
       }
       z.angle = z.wanderAngle;
-      const wx = Math.max(-WORLD_RADIUS, Math.min(WORLD_RADIUS, z.x + Math.cos(z.wanderAngle) * z.speed * WANDER_SPEED * DT));
-      const wz = Math.max(-WORLD_RADIUS, Math.min(WORLD_RADIUS, z.z + Math.sin(z.wanderAngle) * z.speed * WANDER_SPEED * DT));
+      const waterMul = getWaterSlowFactor(z.x, z.z);
+      const wx = Math.max(-WORLD_RADIUS, Math.min(WORLD_RADIUS, z.x + Math.cos(z.wanderAngle) * z.speed * WANDER_SPEED * waterMul * DT));
+      const wz = Math.max(-WORLD_RADIUS, Math.min(WORLD_RADIUS, z.z + Math.sin(z.wanderAngle) * z.speed * WANDER_SPEED * waterMul * DT));
       const wander = resolveZombieCollision(wx, wz);
       z.x = wander[0];
       z.z = wander[1];
@@ -470,6 +480,17 @@ io.on('connection', async (socket) => {
     if (worldColliders.length === 0 && Array.isArray(cols)) {
       // On exclut les murs d'étage / parapets (minY) : ils ne concernent pas le sol.
       worldColliders = cols.filter(c => c && c.minY === undefined);
+    }
+  });
+
+  socket.on('world-water-zones', (zones) => {
+    if (worldWaterZones.length === 0 && Array.isArray(zones)) {
+      worldWaterZones = zones.filter(z =>
+        z &&
+        Number.isFinite(z.x) &&
+        Number.isFinite(z.z) &&
+        Number.isFinite(z.r)
+      );
     }
   });
 

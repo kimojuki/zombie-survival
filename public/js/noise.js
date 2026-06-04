@@ -52,6 +52,39 @@
     _flatZones.push({ cx, cz, hw, hd, flatY: _rawHeight(cx, cz), blend: blend || 4 });
   }
 
+  // Aplatit le terrain le long d'un tracé. On approxime la route par une suite de
+  // petites zones plates qui se chevauchent, ce qui évite que l'herbe ressorte
+  // au-dessus du ruban routier sur les bosses du terrain.
+  function registerFlatPath(points, width, blend, step) {
+    if (!Array.isArray(points) || points.length < 2) return;
+    const sampleStep = step || Math.max(1.2, Math.min(4.0, (width || 4) * 0.45));
+    const half = (width || 4) * 0.5;
+    const pad = Math.max(1.2, half * 0.55);
+    const zoneBlend = blend || Math.max(2.5, half * 0.6);
+
+    for (let i = 0; i < points.length - 1; i++) {
+      const [x0, z0] = points[i];
+      const [x1, z1] = points[i + 1];
+      const dx = x1 - x0, dz = z1 - z0;
+      const len = Math.hypot(dx, dz);
+      if (len < 0.01) continue;
+      const steps = Math.max(1, Math.ceil(len / sampleStep));
+      for (let s = 0; s <= steps; s++) {
+        const t = s / steps;
+        const x = x0 + dx * t;
+        const z = z0 + dz * t;
+        _flatZones.push({
+          cx: x,
+          cz: z,
+          hw: half + pad,
+          hd: half + pad,
+          flatY: _rawHeight(x, z),
+          blend: zoneBlend
+        });
+      }
+    }
+  }
+
   // hole (optionnel) = { cx, cz, hw, hd } : trémie d'escalier — le joueur passe au travers
   function registerUpperFloor(cx, cz, hw, hd, y, hole) {
     _upperFloors.push({ cx, cz, hw, hd, y, hole: hole || null });
@@ -118,6 +151,7 @@
   ZS.getTerrainHeight        = getTerrainHeight;
   ZS.getEffectiveFloorHeight = getEffectiveFloorHeight;
   ZS.registerFlatZone        = registerFlatZone;
+  ZS.registerFlatPath        = registerFlatPath;
   ZS.registerUpperFloor      = registerUpperFloor;
   ZS.registerRamp            = registerRamp;
 }());

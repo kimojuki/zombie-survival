@@ -22,6 +22,7 @@
 
   let _state = null;
   let _syncTimer = 0;
+  let _inWater = false;
 
   function init(state) {
     _state = state;
@@ -62,6 +63,7 @@
     _sv.faim = Math.max(0, _sv.faim - HUNGER_DECAY * dt);
     _sv.soif = Math.max(0, _sv.soif - THIRST_DECAY * dt);
     _sv.endurance = Math.min(100, _sv.endurance + 8 * dt);
+    if (_inWater) _sv.soif = Math.min(100, _sv.soif + 1.8 * dt);
 
     // Progression de l'infection
     if (_sv.infection > 0) {
@@ -188,6 +190,7 @@
   }
 
   function get() { return { ..._sv }; }
+  function setWaterContact(v) { _inWater = !!v; }
 
   function _flush() {
     ZS.UI.setHunger(Math.floor(_sv.faim));
@@ -206,5 +209,5 @@
   }
 
   window.ZS = window.ZS || {};
-  ZS.Survival = { init, tick, useItem, applyDamage, reset, get, loadFromSave };
+  ZS.Survival = { init, tick, useItem, applyDamage, reset, get, loadFromSave, setWaterContact };
 }());

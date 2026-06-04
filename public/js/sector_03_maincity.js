@@ -72,27 +72,47 @@
     // Glissières : poteaux + lisse horizontale de part et d'autre de la chaussée.
     const railMat = M.metal;
     const hw = W / 2 + 0.5;
+    const postStep = 3.0;
+    const skipZones = [
+      { x: 0, z: 0, r: 16 },
+      { x: -20, z: -135, r: 15 },
+    ];
+    function inSkipZone(x, z) {
+      return skipZones.some(zone => Math.hypot(x - zone.x, z - zone.z) < zone.r);
+    }
     for (let si = 0; si < pts.length - 1; si++) {
       const [x0, z0] = pts[si], [x1, z1] = pts[si + 1];
       const dx = x1 - x0, dz = z1 - z0, len = Math.hypot(dx, dz);
       if (len < 0.01) continue;
       const nx = -dz / len, nz = dx / len;
-      const steps = Math.max(1, Math.round(len / 4));
-      const ang = Math.atan2(dx, dz);
+      const steps = Math.max(1, Math.ceil(len / postStep));
       for (const s of [-1, 1]) {
+        const posts = [];
         for (let i = 0; i <= steps; i++) {
           const t = i / steps;
           const x = x0 + dx * t + nx * hw * s;
           const z = z0 + dz * t + nz * hw * s;
+          if (inSkipZone(x, z)) {
+            posts.push(null);
+            continue;
+          }
           const y = ZS.getTerrainHeight(x, z);
           B.box(scene, x, z, y + 0.55, 0.14, 0.8, 0.14, railMat);   // poteau
+          posts.push({ x, y, z });
         }
         // Lisse continue, orientée le long du tronçon
-        const mx = (x0 + x1) / 2 + nx * hw * s;
-        const mz = (z0 + z1) / 2 + nz * hw * s;
-        const my = ZS.getTerrainHeight(mx, mz);
-        const beam = B.mesh(scene, new THREE.BoxGeometry(0.1, 0.16, len), railMat, mx, my + 0.78, mz);
-        beam.rotation.y = ang;
+        for (let i = 0; i < posts.length - 1; i++) {
+          const a = posts[i], b = posts[i + 1];
+          if (!a || !b) continue;
+          const segDx = b.x - a.x, segDz = b.z - a.z;
+          const segLen = Math.hypot(segDx, segDz);
+          if (segLen < 0.1) continue;
+          const mx = (a.x + b.x) / 2;
+          const mz = (a.z + b.z) / 2;
+          const my = (a.y + b.y) / 2;
+          const beam = B.mesh(scene, new THREE.BoxGeometry(0.1, 0.16, segLen), railMat, mx, my + 0.78, mz);
+          beam.rotation.y = Math.atan2(segDx, segDz);
+        }
       }
     }
   }

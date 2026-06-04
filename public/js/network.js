@@ -175,7 +175,27 @@
       if (!limbs) return;
 
       const speed = rp.moveSpeed || 0;
-      if (speed > 0.3) {
+      const twoH  = mesh.userData.twoHandedFirearm;
+      if (twoH) {
+        // Tenue d'arme à feu à deux mains : les deux bras viennent vers l'avant,
+        // le bras gauche soutient l'arme (portée par le bras droit). Les jambes
+        // continuent de marcher normalement.
+        limbs.rArm.rotation.set(1.30, 0.10, 0);
+        limbs.lArm.rotation.set(1.25, 0.55, 0.10);
+        if (speed > 0.3) {
+          rp.animTime += dt * Math.max(4, speed * 1.2);
+          const swing = Math.sin(rp.animTime) * 0.65;
+          limbs.lLeg.rotation.x =  swing;
+          limbs.rLeg.rotation.x = -swing;
+        } else {
+          limbs.lLeg.rotation.x *= 0.8;
+          limbs.rLeg.rotation.x *= 0.8;
+          if (Math.abs(limbs.lLeg.rotation.x) < 0.001) {
+            limbs.lLeg.rotation.x = limbs.rLeg.rotation.x = 0;
+            rp.animTime = 0;
+          }
+        }
+      } else if (speed > 0.3) {
         rp.animTime += dt * Math.max(4, speed * 1.2);
         const swing = Math.sin(rp.animTime) * 0.65;
         limbs.lArm.rotation.x = -swing;
@@ -205,8 +225,14 @@
         } else {
           const s = Math.sin(e * Math.PI);
           // rotation.x positif = la main va vers l'avant (le perso fait face à -z).
-          // recoil (arme à feu) : léger sursaut ; mêlée : grand coup vers l'avant
-          limbs.rArm.rotation.x = rp.attack.kind === 'recoil' ? 0.25 + s * 0.35 : s * 1.7;
+          // recoil (arme à feu) : léger sursaut autour de la pose de tir à deux
+          // mains ; mêlée : grand coup vers l'avant.
+          if (rp.attack.kind === 'recoil') {
+            const base = mesh.userData.twoHandedFirearm ? 1.30 : 0.25;
+            limbs.rArm.rotation.x = base - s * 0.30;   // léger recul vers l'arrière
+          } else {
+            limbs.rArm.rotation.x = s * 1.7;
+          }
         }
       }
     });

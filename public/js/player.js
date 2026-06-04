@@ -53,8 +53,8 @@
 
   function _fpsArm() {
     const arm = new THREE.Group();
-    addBox(arm, m(SHIRT), 0.20, 0.55, 0.20, 0,  0.00, 0);
-    addBox(arm, m(SKIN),  0.18, 0.22, 0.18, 0, -0.38, 0);
+    addBox(arm, m(SHIRT), 0.13, 0.60, 0.13, 0,  0.00, 0);   // bras plus mince
+    addBox(arm, m(SKIN),  0.12, 0.20, 0.12, 0, -0.38, 0);   // main
     return arm;
   }
 
@@ -82,16 +82,15 @@
   }
 
   // Pose du bras gauche selon le type d'arme tenue (ou null = caché).
-  // Long = arme longue (fusil, barre, lance…) : main bien en avant sur le fût.
-  // Court = pistolet : seconde main qui épaule, proche de la poignée.
+  // SEULES les armes à feu se tiennent à deux mains (pas la mêlée ni les outils).
+  // Le bras est placé bien en avant (z négatif) pour qu'aucune partie ne soit
+  // coupée par le plan rapproché de la caméra ("clipping").
   function _leftArmPose(cat, type) {
     if (type === 'wpn_pistolet' || type === 'pistol')
-      return { pos: [0.05, -0.32, -0.58], rot: [0.88, -0.58, 0.10] };
+      return { pos: [0.04, -0.22, -0.60], rot: [0.85, -0.55, 0.0] };
     if (cat === 'firearm')
-      return { pos: [-0.14, -0.14, -0.55], rot: [1.18, -0.52, 0.05] };
-    if (cat === 'melee' || cat === 'tool')
-      return { pos: [-0.12, -0.12, -0.50], rot: [1.10, -0.48, 0.05] };
-    return null;   // objets tenus à une main → bras gauche caché
+      return { pos: [-0.16, -0.18, -0.72], rot: [1.15, -0.45, 0.0] };
+    return null;   // mêlée, outils, objets → bras gauche caché (une seule main)
   }
 
   // ── Modèles .glb (libres de droits, Quaternius CC0) ─────────────────────────
@@ -238,6 +237,12 @@
     }
     while (holder.children.length) holder.remove(holder.children[0]);
     holder.userData.type = type || null;
+
+    // Drapeau « arme à feu tenue à deux mains » lu par l'animation distante
+    // (network.js) pour rapprocher le bras gauche de l'arme. Seules les armes
+    // à feu sont à deux mains.
+    playerMesh.userData.twoHandedFirearm = !!type && ZS.ITEMS?.[type]?.category === 'firearm';
+
     if (!type) return;
 
     // 1) Modèle procédural immédiat

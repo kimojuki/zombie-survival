@@ -5,5 +5,7 @@ node_modules/
 .inventory_reset_v2_done
 .inventory_reset_v3_done
 .inventory_reset_v4_done
+database/*.sqlite
+database/*.sqlite-*
 
 graphify-out/

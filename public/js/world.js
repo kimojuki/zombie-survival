@@ -36,6 +36,8 @@
   const _barkTex = _atlasSlice(_treeAtlas, 0.0, 0.5);
   const _leafTex = _atlasSlice(_treeAtlas, 0.5, 0.5);
 
+  function _inRiver(x, z) { return ZS.isInRiverChannel?.(x, z, 0.8) ?? false; }
+
   // ── Keyframes ciel jour/nuit ──────────────────────────────────────────────────
   const _KEYS = [
     { t: -1.00, sky: 0x060810, amb: 0x090f1e, ambI: 0.15, sunI: 0.00 },
@@ -361,6 +363,7 @@
     for (let i = 0; i < count; i++) {
       const x = (_rng() - 0.5) * 540, z = (_rng() - 0.5) * 540;
       if (x > -262 && x < -100 && z > -55 && z < 58) continue;
+      if (_inRiver(x, z)) continue;
       const by = ZS.getTerrainHeight(x, z);
       if (by > 9) continue;
       const h    = 0.16 + _rng() * 0.14;
@@ -416,6 +419,7 @@
     for (let i = 0; i < count; i++) {
       const x = (_rng() - 0.5) * 540, z = (_rng() - 0.5) * 540;
       if (x > -262 && x < -100 && z > -55 && z < 58) continue;
+      if (_inRiver(x, z)) continue;
       const by = ZS.getTerrainHeight(x, z);
       if (by > 10) continue;
       const mi = Math.floor(_rng() * mats.length);
@@ -529,6 +533,7 @@
     for (let i = 0; i < count; i++) {
       const x = (_rng() - 0.5) * 560, z = (_rng() - 0.5) * 560;
       if (Math.hypot(x, z) < 4) continue;
+      if (_inRiver(x, z)) continue;
       const col = { x, z, r: 0.55 };
       _colliders.push(col);
       const r = _rng();
@@ -665,6 +670,7 @@
       const a = _rng() * Math.PI * 2, r = _rng() * radius;
       const x = cx + Math.cos(a) * r, z = cz + Math.sin(a) * r;
       if (skipNear && skipNear.some(s => Math.hypot(x - s[0], z - s[1]) < s[2])) continue;
+      if (_inRiver(x, z)) continue;
       const col = { x, z, r: 0.55 };
       _colliders.push(col);
       const tree = _rng() < (pineRatio || 0.28) ? makePineTree() : makeTree();
@@ -682,6 +688,7 @@
 
     for (let i = 0; i < count; i++) {
       const x  = (_rng()-0.5)*560, z = (_rng()-0.5)*560;
+      if (_inRiver(x, z)) continue;
       const s  = 0.3 + _rng() * 0.85;
       const by = ZS.getTerrainHeight(x, z);
       _colliders.push({ x, z, r: s + 0.25, topY: by + s * 1.4 });
@@ -718,6 +725,7 @@
     for (let i = 0; i < count; i++) {
       const x = (_rng()-0.5)*540, z = (_rng()-0.5)*540;
       if (Math.hypot(x, z) < 5) continue;
+      if (_inRiver(x, z)) continue;
       const r  = 0.28 + _rng() * 0.55;
       const mi = Math.floor(_rng() * mats.length);
       const sx = 1.0 + _rng()*0.5, sy = 0.55 + _rng()*0.4, sz = 1.0 + _rng()*0.4;

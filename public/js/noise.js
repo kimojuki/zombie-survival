@@ -43,6 +43,8 @@
 
   // { cx, cz, hw, hd, flatY, blend }
   const _flatZones   = [];
+  // { cx, cz, hw, hd, depth, blend } — creuse un lit le long du cours d'eau
+  const _riverChannels = [];
   // { cx, cz, hw, hd, y }  — walkable upper floor
   const _upperFloors = [];
   // { cx, cz, hw, hd, y0, y1, axis }  — staircase ramp
@@ -55,6 +57,45 @@
   // Aplatit le terrain le long d'un tracé. On approxime la route par une suite de
   // petites zones plates qui se chevauchent, ce qui évite que l'herbe ressorte
   // au-dessus du ruban routier sur les bosses du terrain.
+  function registerRiverChannel(points, width, depth, blend, step) {
+    if (!Array.isArray(points) || points.length < 2) return;
+    const sampleStep = step || 2.0;
+    const half = (width || 12) * 0.5;
+    const pad = Math.max(1.0, half * 0.35);
+    const zoneBlend = blend || Math.max(3.5, half * 0.55);
+    const dep = depth || 0.55;
+
+    for (let i = 0; i < points.length - 1; i++) {
+      const [x0, z0] = points[i];
+      const [x1, z1] = points[i + 1];
+      const dx = x1 - x0, dz = z1 - z0;
+      const len = Math.hypot(dx, dz);
+      if (len < 0.01) continue;
+      const steps = Math.max(1, Math.ceil(len / sampleStep));
+      for (let s = 0; s <= steps; s++) {
+        const t = s / steps;
+        _riverChannels.push({
+          cx: x0 + dx * t,
+          cz: z0 + dz * t,
+          hw: half + pad,
+          hd: half + pad,
+          depth: dep,
+          blend: zoneBlend,
+        });
+      }
+    }
+  }
+
+  function isInRiverChannel(x, z, margin) {
+    const pad = margin || 0;
+    for (const ch of _riverChannels) {
+      const dx = Math.max(0, Math.abs(x - ch.cx) - ch.hw - pad);
+      const dz = Math.max(0, Math.abs(z - ch.cz) - ch.hd - pad);
+      if (Math.hypot(dx, dz) < (ch.blend || 4)) return true;
+    }
+    return false;
+  }
+
   function registerFlatPath(points, width, blend, step) {
     if (!Array.isArray(points) || points.length < 2) return;
     const sampleStep = step || Math.max(1.2, Math.min(4.0, (width || 4) * 0.45));
@@ -118,6 +159,19 @@
       }
     }
 
+    for (const ch of _riverChannels) {
+      const dx = Math.max(0, Math.abs(x - ch.cx) - ch.hw);
+      const dz = Math.max(0, Math.abs(z - ch.cz) - ch.hd);
+      const dist = Math.sqrt(dx * dx + dz * dz);
+      if (dist <= 0) {
+        blended -= ch.depth;
+      } else if (dist < ch.blend) {
+        const w = 1 - dist / ch.blend;
+        const sw = w * w * (3 - 2 * w);
+        blended -= ch.depth * sw;
+      }
+    }
+
     return blended;
   }
 
@@ -152,6 +206,8 @@
   ZS.getEffectiveFloorHeight = getEffectiveFloorHeight;
   ZS.registerFlatZone        = registerFlatZone;
   ZS.registerFlatPath        = registerFlatPath;
+  ZS.registerRiverChannel    = registerRiverChannel;
+  ZS.isInRiverChannel        = isInRiverChannel;
   ZS.registerUpperFloor      = registerUpperFloor;
   ZS.registerRamp            = registerRamp;
 }());

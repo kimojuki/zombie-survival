@@ -9,12 +9,16 @@
   ZS.registerFlatZone(-60, -70, 13, 11, 4);   // Cabane forestière nord
   ZS.registerFlatZone(-80,  42, 13, 11, 4);   // Cabane forestière sud
   ZS.registerFlatZone( 82,-100, 18, 11, 5);   // Station essence
-  // Lit de rivière — aplatit le terrain le long du cours d'eau
-  ZS.registerFlatZone(-116, -258, 7, 7, 5);
-  ZS.registerFlatZone(-109, -125, 7, 7, 5);
-  ZS.registerFlatZone( -97,    0, 7, 7, 5);
-  ZS.registerFlatZone(-101,   78, 7, 7, 5);
-  ZS.registerFlatZone( -99,  208, 7, 7, 5);
+
+  const RIVER_PTS = [
+    [-118, -270], [-112, -210], [-106, -150], [-100, -85],
+    [ -96,    0], [-100,   75], [-105,  150], [ -98,  210]
+  ];
+  const RIVER_WIDTH = 14;
+  const RIVER_WATER_WIDTH = 11;
+  const RIVER_DEPTH = 0.55;
+  const RIVER_WATER_RISE = 0.48; // surface au-dessus du lit creusé
+  ZS.registerRiverChannel(RIVER_PTS, RIVER_WIDTH, RIVER_DEPTH, 7, 2.0);
 
   // ── Build ─────────────────────────────────────────────────────────────────────
 
@@ -371,19 +375,17 @@
   function _buildRiver(scene) {
     const riverMat = new THREE.MeshLambertMaterial({
       color: 0x1a5e8e, emissive: 0x0a3a6a, emissiveIntensity: 0.14,
-      transparent: true, opacity: 0.82,
-      side: THREE.DoubleSide,   // visible de dessus ET dessous
-      polygonOffset: true, polygonOffsetFactor: -4, polygonOffsetUnits: -8,
+      transparent: true, opacity: 0.88,
+      side: THREE.FrontSide,
+      polygonOffset: true, polygonOffsetFactor: -6, polygonOffsetUnits: -12,
       depthWrite: false,
     });
     ZS.registerWaterMaterial(riverMat);
 
-    const pts = [
-      [-118, -270], [-112, -210], [-106, -150], [-100, -85],
-      [ -96,    0], [-100,   75], [-105,  150], [ -98,  210]
-    ];
-    const WATER_Y_OFFSET = 0.65; // légèrement plus haut pour rester visible
-    const width = 10, STEP = 1.0, CROSS_SEGS = 6;
+    const pts = RIVER_PTS;
+    const width = RIVER_WATER_WIDTH;
+    const STEP = 1.2;
+    const CROSS_SEGS = 8;
     const pos = [], idx = [];
     let prevRow = null;
 
@@ -397,18 +399,22 @@
       for (let i = (si === 0 ? 0 : 1); i <= steps; i++) {
         const t = i / steps;
         const x = x0 + sdx * t, z = z0 + sdz * t;
-        const centerY = ZS.getTerrainHeight(x, z) + 0.04;
-        const row = [];
+        let minBed = Infinity;
+        const crossPts = [];
         for (let ci = 0; ci <= CROSS_SEGS; ci++) {
           const u = ci / CROSS_SEGS;
           const off = (u - 0.5) * width;
           const vx = x + nx * off;
           const vz = z + nz * off;
-          const terrainY = ZS.getTerrainHeight(vx, vz);
-          const edgeBias = Math.abs(u - 0.5) * 2;
-          const vy = Math.min(terrainY + 0.03, centerY + edgeBias * 0.035);
+          const bedY = ZS.getTerrainHeight(vx, vz);
+          minBed = Math.min(minBed, bedY);
+          crossPts.push({ vx, vz });
+        }
+        const waterY = minBed + RIVER_WATER_RISE;
+        const row = [];
+        for (const p of crossPts) {
           row.push(pos.length / 3);
-          pos.push(vx, vy, vz);
+          pos.push(p.vx, waterY, p.vz);
         }
         if (prevRow) {
           for (let ci = 0; ci < CROSS_SEGS; ci++) {
@@ -428,21 +434,21 @@
       geo.setIndex(idx);
       geo.computeVertexNormals();
       const mesh = new THREE.Mesh(geo, riverMat);
-      mesh.renderOrder = 2; // force le rendu après les objets opaques
+      mesh.renderOrder = 5;
       scene.add(mesh);
-      ZS.registerWaterSurface(mesh, 0.06, 1.0);
+      ZS.registerWaterSurface(mesh, 0.04, 1.0);
     }
 
-    // Enregistre les zones d'eau pour la détection joueur
     for (let si = 0; si < pts.length - 1; si++) {
       const [x0, z0] = pts[si], [x1, z1] = pts[si + 1];
       const sdx = x1 - x0, sdz = z1 - z0;
       const sLen = Math.hypot(sdx, sdz);
-      const steps = Math.max(1, Math.floor(sLen / 10));
+      const steps = Math.max(1, Math.floor(sLen / 8));
       for (let i = 0; i <= steps; i++) {
         const t = i / steps;
         const wx = x0 + sdx * t, wz = z0 + sdz * t;
-        ZS.registerWaterZone(wx, wz, 6.5, ZS.getTerrainHeight(wx, wz) + 0.04);
+        const waterY = ZS.getTerrainHeight(wx, wz) + RIVER_WATER_RISE;
+        ZS.registerWaterZone(wx, wz, RIVER_WATER_WIDTH * 0.52, waterY);
       }
     }
 
@@ -456,10 +462,7 @@
       .map(c => new THREE.MeshLambertMaterial({ color: c }));
     const mudMat = new THREE.MeshLambertMaterial({ color: 0x4a3828 });
 
-    const bankPts = [
-      [-118, -270], [-112, -210], [-106, -150], [-100, -85],
-      [ -96,    0], [-100,   75], [-105,  150], [ -98,  210]
-    ];
+    const bankPts = RIVER_PTS;
     let seed = 0x1A2B3C4D;
     function rr() { seed ^= seed << 13; seed ^= seed >>> 17; seed ^= seed << 5; return (seed >>> 0) / 0xffffffff; }
 

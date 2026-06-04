@@ -54,6 +54,7 @@ These are intentionally ignored by Git for local development.
 - **River & water gameplay:** river mesh follows terrain width; animated water surface; player water contact (overlay, movement slow, reduced jump); survival thirst recovery in water; water zones synced to server → zombie slow factor in river.
 - **Sector tweaks:** forest road paths adjusted; small-town main road uses `roadBroken` material; main-city highway guardrails rebuilt per segment with skip zones at intersections.
 - **Housekeeping:** `notes-local/` added to `.gitignore`; `CLAUDE.md` updated to reflect actual project state.
+- **River z-fighting fix:** `registerRiverChannel()` carves a 14 m bed along the full course; water surface is flat and ~0.48 m above the bed (not glued to terrain); grass/trees excluded from the channel.
 
 ### Next Suggested Steps
 
@@ -61,7 +62,3 @@ These are intentionally ignored by Git for local development.
 - Clean up text encoding issues visible in the French UI strings.
 - When ready: open a PR separating local-only SQLite setup from gameplay/visual changes if upstream prefers MySQL-only.
 - Remaining world sectors still undocumented in code: farm, industrial, coast, lake, wasteland, mountain.
-
-### In Progress
-
-_(none — update this section when starting new work)_

@@ -16,8 +16,8 @@
   ];
   const RIVER_WIDTH = 14;
   const RIVER_WATER_WIDTH = 11;
-  const RIVER_DEPTH = 0.55;
-  const RIVER_WATER_RISE = 0.48; // surface au-dessus du lit creusé
+  const RIVER_DEPTH = 0.42;
+  const RIVER_WATER_RISE = 0.36; // surface au-dessus du lit creusé
   ZS.registerRiverChannel(RIVER_PTS, RIVER_WIDTH, RIVER_DEPTH, 7, 2.0);
 
   // ── Build ─────────────────────────────────────────────────────────────────────
@@ -376,9 +376,13 @@
     const riverMat = new THREE.MeshLambertMaterial({
       color: 0x1a5e8e, emissive: 0x0a3a6a, emissiveIntensity: 0.14,
       transparent: true, opacity: 0.88,
-      side: THREE.FrontSide,
+      side: THREE.DoubleSide,
       polygonOffset: true, polygonOffsetFactor: -6, polygonOffsetUnits: -12,
       depthWrite: false,
+    });
+    const bedMat = new THREE.MeshLambertMaterial({
+      color: 0x3a4a38, emissive: 0x0a1208, emissiveIntensity: 0.04,
+      polygonOffset: true, polygonOffsetFactor: 1, polygonOffsetUnits: 2,
     });
     ZS.registerWaterMaterial(riverMat);
 
@@ -387,7 +391,9 @@
     const STEP = 1.2;
     const CROSS_SEGS = 8;
     const pos = [], idx = [];
+    const bedPos = [], bedIdx = [];
     let prevRow = null;
+    let prevBedRow = null;
 
     for (let si = 0; si < pts.length - 1; si++) {
       const [x0, z0] = pts[si], [x1, z1] = pts[si + 1];
@@ -408,25 +414,37 @@
           const vz = z + nz * off;
           const bedY = ZS.getTerrainHeight(vx, vz);
           minBed = Math.min(minBed, bedY);
-          crossPts.push({ vx, vz });
+          crossPts.push({ vx, vz, bedY });
         }
         const waterY = minBed + RIVER_WATER_RISE;
         const row = [];
+        const bedRow = [];
         for (const p of crossPts) {
           row.push(pos.length / 3);
           pos.push(p.vx, waterY, p.vz);
+          bedRow.push(bedPos.length / 3);
+          bedPos.push(p.vx, p.bedY + 0.02, p.vz);
         }
         if (prevRow) {
           for (let ci = 0; ci < CROSS_SEGS; ci++) {
-            const a = prevRow[ci];
-            const b = prevRow[ci + 1];
-            const c = row[ci];
-            const d = row[ci + 1];
+            const a = prevRow[ci], b = prevRow[ci + 1];
+            const c = row[ci], d = row[ci + 1];
             idx.push(a, c, b, b, c, d);
+            const ba = prevBedRow[ci], bb = prevBedRow[ci + 1];
+            const bc = bedRow[ci], bd = bedRow[ci + 1];
+            bedIdx.push(ba, bc, bb, bb, bc, bd);
           }
         }
         prevRow = row;
+        prevBedRow = bedRow;
       }
+    }
+    if (bedPos.length >= 9 && bedIdx.length > 0) {
+      const bedGeo = new THREE.BufferGeometry();
+      bedGeo.setAttribute('position', new THREE.Float32BufferAttribute(bedPos, 3));
+      bedGeo.setIndex(bedIdx);
+      bedGeo.computeVertexNormals();
+      scene.add(new THREE.Mesh(bedGeo, bedMat));
     }
     if (pos.length >= 9 && idx.length > 0) {
       const geo = new THREE.BufferGeometry();

@@ -598,32 +598,73 @@
     p.x = newX;
     p.z = newZ;
 
-    // Jump
-    if (p.onGround && (keys['Space'] || state.jumpPressed)) {
-      p.velocityY    = _inWater ? JUMP_V * 0.55 : JUMP_V;
-      p.onGround     = false;
+    const waterY   = ZS.getWaterSurface(p.x, p.z);
+    const inRiver  = waterY !== null;
+    const groundY  = ZS.getEffectiveFloorHeight(p.x, p.z, p.y) + 1.7;
+    const feetY    = p.y - 1.7;
+    const swimEyeY = inRiver ? waterY - 0.10 : null;
+    const minEyeY  = inRiver ? waterY - 0.40 : null;
+    const submerged = inRiver && feetY < waterY - 0.06;
+
+    // Saut / nage vers la surface
+    const jumpReq = keys['Space'] || state.jumpPressed;
+    if (jumpReq) {
+      if (inRiver && (submerged || p.y < waterY + 0.2)) {
+        p.velocityY = Math.max(p.velocityY, 5.8);
+        p.onGround = false;
+      } else if (p.onGround) {
+        p.velocityY = JUMP_V;
+        p.onGround = false;
+      }
+      state.jumpPressed = false;
+    } else {
       state.jumpPressed = false;
     }
-    state.jumpPressed = false;
 
-    // Vertical physics — uses multi-floor height (stairs, 2nd floor)
-    const groundY = ZS.getEffectiveFloorHeight(p.x, p.z, p.y) + 1.7;
-    if (!p.onGround) {
-      p.velocityY -= GRAVITY * dt;
-      p.y         += p.velocityY * dt;
-      if (p.y <= groundY) {
-        p.y         = groundY;
+    // Physique verticale
+    if (inRiver && (submerged || p.y < waterY + 0.18)) {
+      // Dans la colonne d'eau — flottabilité, pas de chute sous la surface
+      p.onGround = false;
+      p.velocityY -= GRAVITY * 0.12 * dt;
+      p.velocityY += (swimEyeY - p.y) * 3.5 * dt;
+      p.y += p.velocityY * dt;
+
+      if (p.y < minEyeY) {
+        p.y = minEyeY;
+        p.velocityY = Math.max(p.velocityY, 3.0);
+      }
+      if (p.y > waterY + 0.12) {
+        p.y = waterY + 0.12;
         p.velocityY = 0;
-        p.onGround  = true;
+      }
+      // Wade : le fond est assez haut pour marcher
+      if (groundY >= waterY - 0.18 && p.y <= groundY + 0.08 && p.velocityY <= 0) {
+        p.y = groundY;
+        p.velocityY = 0;
+        p.onGround = true;
+      }
+    } else if (!p.onGround) {
+      p.velocityY -= GRAVITY * dt;
+      p.y += p.velocityY * dt;
+      if (p.y <= groundY) {
+        p.y = groundY;
+        p.velocityY = 0;
+        p.onGround = true;
       }
     } else {
       if (groundY < p.y - 0.4) {
-        // Floor dropped away (stepped off ledge/2nd floor) — start falling
-        p.onGround  = false;
+        p.onGround = false;
         p.velocityY = 0;
       } else {
         p.y = groundY;
       }
+    }
+
+    // Filet de sécurité — impossible de rester sous le plan d'eau
+    if (inRiver && p.y < minEyeY) {
+      p.y = minEyeY;
+      p.velocityY = Math.max(p.velocityY, 3.5);
+      p.onGround = false;
     }
 
     camera.position.set(p.x, p.y, p.z);

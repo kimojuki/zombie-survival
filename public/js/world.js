@@ -769,10 +769,16 @@
   function registerWaterZone(x, z, r, y) { _waterZones.push({ x, z, r, y }); }
 
   function getWaterSurface(px, pz) {
+    let bestY = null, bestDist = Infinity;
     for (const wz of _waterZones) {
-      if (Math.hypot(px - wz.x, pz - wz.z) < wz.r) return wz.y;
+      const d = Math.hypot(px - wz.x, pz - wz.z);
+      if (d < wz.r && d < bestDist) { bestDist = d; bestY = wz.y; }
     }
-    return null;
+    return bestY;
+  }
+
+  function isInWaterZone(px, pz) {
+    return _waterZones.some(wz => Math.hypot(px - wz.x, pz - wz.z) < wz.r);
   }
   function getWaterZones() { return _waterZones.slice(); }
 
@@ -788,6 +794,7 @@
   ZS.registerWaterSurface  = registerWaterSurface;
   ZS.registerWaterZone     = registerWaterZone;
   ZS.getWaterSurface       = getWaterSurface;
+  ZS.isInWaterZone         = isInWaterZone;
   ZS.getWaterZones         = getWaterZones;
   ZS.spawnTreesAt      = spawnTreesAt;
   ZS.spawnDeadTreesAt  = spawnDeadTreesAt;

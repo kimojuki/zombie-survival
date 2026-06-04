@@ -51,11 +51,22 @@
 
   // ── Bras FPS ──────────────────────────────────────────────────────────────
 
+  // Bras droit : épaule en haut, main en bas (tient la crosse / l'objet).
   function _fpsArm() {
     const arm = new THREE.Group();
-    addBox(arm, m(SHIRT), 0.13, 0.60, 0.13, 0,  0.00, 0);   // bras plus mince
-    addBox(arm, m(SKIN),  0.12, 0.20, 0.12, 0, -0.38, 0);   // main
+    addBox(arm, m(SHIRT), 0.11, 0.52, 0.11, 0,  0.00, 0);   // bras mince
+    addBox(arm, m(SKIN),  0.11, 0.16, 0.11, 0, -0.32, 0);   // main
     return arm;
+  }
+
+  // Bras gauche (soutien) : MAIN EN HAUT (posée sur le fût), avant-bras qui
+  // descend vers le bas de l'écran et en sort — ainsi aucune extrémité coupée
+  // n'est visible. L'origine du groupe = la main.
+  function _fpsForearm() {
+    const a = new THREE.Group();
+    addBox(a, m(SKIN),  0.11, 0.16, 0.11, 0,  0.02, 0);   // main (en haut)
+    addBox(a, m(SHIRT), 0.11, 0.58, 0.11, 0, -0.34, 0);   // avant-bras (descend)
+    return a;
   }
 
   function createFPSArms() {
@@ -64,13 +75,13 @@
     // Bras droit : tient la crosse / poignée (toujours visible).
     const rArm = _fpsArm();
     rArm.name = 'rArm';
-    rArm.rotation.x = 0.65;
-    rArm.position.set(0.22, -0.27, -0.36);
+    rArm.rotation.x = 0.60;
+    rArm.position.set(0.19, -0.24, -0.42);
     g.add(rArm);
 
-    // Bras gauche : vient soutenir l'arme à l'avant (deux mains). Visible
-    // seulement pour les armes/outils qui se tiennent à deux mains.
-    const lArm = _fpsArm();
+    // Bras gauche : soutient l'arme à l'avant (deux mains). Visible seulement
+    // pour les armes à feu.
+    const lArm = _fpsForearm();
     lArm.name = 'lArm';
     lArm.visible = false;
     g.add(lArm);
@@ -81,15 +92,14 @@
     return g;
   }
 
-  // Pose du bras gauche selon le type d'arme tenue (ou null = caché).
-  // SEULES les armes à feu se tiennent à deux mains (pas la mêlée ni les outils).
-  // Le bras est placé bien en avant (z négatif) pour qu'aucune partie ne soit
-  // coupée par le plan rapproché de la caméra ("clipping").
+  // Pose du bras gauche (main sur le fût) selon le type d'arme, ou null = caché.
+  // SEULES les armes à feu se tiennent à deux mains. La main est posée au niveau
+  // de l'arme et l'avant-bras descend hors de l'écran (pas d'extrémité coupée).
   function _leftArmPose(cat, type) {
     if (type === 'wpn_pistolet' || type === 'pistol')
-      return { pos: [0.04, -0.22, -0.60], rot: [0.85, -0.55, 0.0] };
+      return { pos: [0.11, -0.24, -0.70], rot: [0.0, 0.0, 0.22] };
     if (cat === 'firearm')
-      return { pos: [-0.16, -0.18, -0.72], rot: [1.15, -0.45, 0.0] };
+      return { pos: [0.10, -0.20, -0.98], rot: [-0.18, 0.0, 0.16] };
     return null;   // mêlée, outils, objets → bras gauche caché (une seule main)
   }
 

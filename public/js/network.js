@@ -177,11 +177,14 @@
       const speed = rp.moveSpeed || 0;
       const twoH  = mesh.userData.twoHandedFirearm;
       if (twoH) {
-        // Tenue d'arme à feu à deux mains : les deux bras viennent vers l'avant,
-        // le bras gauche soutient l'arme (portée par le bras droit). Les jambes
-        // continuent de marcher normalement.
-        limbs.rArm.rotation.set(1.30, 0.10, 0);
-        limbs.lArm.rotation.set(1.25, 0.55, 0.10);
+        // Tenue d'arme à feu à deux mains : le bras droit lève l'arme à hauteur
+        // de poitrine, le bras gauche CROISE vers l'avant pour la soutenir (sur
+        // le fût). On contre-pivote le porte-arme pour garder l'arme horizontale
+        // malgré le bras levé. Les jambes continuent de marcher normalement.
+        limbs.rArm.rotation.set(0.95, 0.08, 0);
+        limbs.lArm.rotation.set(1.05, -0.62, 0);
+        const hh = limbs.rArm.getObjectByName('handHolder');
+        if (hh) hh.rotation.x = -0.95;
         if (speed > 0.3) {
           rp.animTime += dt * Math.max(4, speed * 1.2);
           const swing = Math.sin(rp.animTime) * 0.65;
@@ -196,6 +199,8 @@
           }
         }
       } else if (speed > 0.3) {
+        const hh = limbs.rArm.getObjectByName('handHolder');
+        if (hh) hh.rotation.x = 0;   // annule le contre-pivot des armes à feu
         rp.animTime += dt * Math.max(4, speed * 1.2);
         const swing = Math.sin(rp.animTime) * 0.65;
         limbs.lArm.rotation.x = -swing;
@@ -204,6 +209,8 @@
         limbs.rLeg.rotation.x = -swing;
       } else {
         // Return limbs to neutral
+        const hh = limbs.rArm.getObjectByName('handHolder');
+        if (hh) hh.rotation.x = 0;   // annule le contre-pivot des armes à feu
         limbs.lArm.rotation.x *= 0.8;
         limbs.rArm.rotation.x *= 0.8;
         limbs.lLeg.rotation.x *= 0.8;
@@ -228,7 +235,7 @@
           // recoil (arme à feu) : léger sursaut autour de la pose de tir à deux
           // mains ; mêlée : grand coup vers l'avant.
           if (rp.attack.kind === 'recoil') {
-            const base = mesh.userData.twoHandedFirearm ? 1.30 : 0.25;
+            const base = mesh.userData.twoHandedFirearm ? 0.95 : 0.25;
             limbs.rArm.rotation.x = base - s * 0.30;   // léger recul vers l'arrière
           } else {
             limbs.rArm.rotation.x = s * 1.7;

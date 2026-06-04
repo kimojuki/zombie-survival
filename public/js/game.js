@@ -601,7 +601,6 @@
     const waterY   = ZS.getWaterSurface(p.x, p.z);
     const inRiver  = waterY !== null;
     const groundY  = ZS.getEffectiveFloorHeight(p.x, p.z, p.y) + 1.7;
-    const feetY    = p.y - 1.7;
     const swimEyeY = inRiver ? waterY - 0.10 : null;
     const minEyeY  = inRiver ? waterY - 0.40 : null;
     const submerged = inRiver && feetY < waterY - 0.06;

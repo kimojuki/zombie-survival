@@ -700,6 +700,9 @@ async function resetAllPlayersOnce() {
 }
 
 server.listen(PORT, async () => {
-  console.log(`🧟 Zombie Survival → http://localhost:${PORT}`);
+  console.log(`🧟 Zombie Survival → http://localhost:${PORT} (db: ${require('./src/db').DB_CLIENT})`);
   await resetAllPlayersOnce();
+}).on('error', (err) => {
+  console.error('Serveur impossible à démarrer:', err.message);
+  process.exit(1);
 });

@@ -2,10 +2,11 @@
 const fs = require('fs');
 const path = require('path');
 const mysql = require('mysql2/promise');
-const Database = require('better-sqlite3');
 require('dotenv').config({ override: true });
 
-const DB_CLIENT = (process.env.DB_CLIENT || 'sqlite').toLowerCase();
+// Prod Infomaniak = MySQL. SQLite uniquement si DB_CLIENT=sqlite (dev local).
+// better-sqlite3 est chargé à la demande pour ne pas crasher la prod si le binaire natif manque.
+const DB_CLIENT = (process.env.DB_CLIENT || 'mysql').toLowerCase();
 
 function createMySqlPool() {
   return mysql.createPool({
@@ -21,6 +22,14 @@ function createMySqlPool() {
 }
 
 function createSqlitePool() {
+  let Database;
+  try {
+    Database = require('better-sqlite3');
+  } catch (e) {
+    console.error('better-sqlite3 indisponible (module natif). Utilisez DB_CLIENT=mysql en production.');
+    throw e;
+  }
+
   const dbDir = path.join(__dirname, '..', 'database');
   const dbPath = process.env.SQLITE_PATH || path.join(dbDir, 'local-dev.sqlite');
   fs.mkdirSync(dbDir, { recursive: true });

@@ -110,7 +110,10 @@
     }
   }
 
-  // Ruban de route/chemin collé au terrain
+  // Ruban de route/chemin collé au terrain.
+  // LIFT : très léger décollement du sol (le polygonOffset des matériaux évite le
+  // z-fighting) — la route reste praticable, on marche dessus.
+  const _RIBBON_LIFT = 0.06;
   function _ribbon(scene, pts, width, mat, withLine) {
     const STEP = 0.7;
     const pos  = [];
@@ -136,13 +139,15 @@
         const t  = i / steps;
         const x  = x0 + sdx * t;
         const z  = z0 + sdz * t;
-        const y  = ZS.getTerrainHeight(x, z) + 0.55;
+        const y  = ZS.getTerrainHeight(x, z) + _RIBBON_LIFT;
         const v  = (segStart + sLen * t) / width;
         const li = pos.length / 3;
         pos.push(x - nx * hw, y, z - nz * hw);
         pos.push(x + nx * hw, y, z + nz * hw);
         uv.push(0, v, 1, v);
-        if (prevL >= 0) idx.push(prevL, li, prevL + 1, prevL + 1, li, li + 1);
+        // Ordre des sommets choisi pour que les normales pointent vers le HAUT
+        // (route visible et bien éclairée vue de dessus).
+        if (prevL >= 0) idx.push(prevL, prevL + 1, li, prevL + 1, li + 1, li);
         prevL = li;
       }
       acc += sLen;
@@ -173,10 +178,10 @@
         for (let i = (si === 0 ? 0 : 1); i <= steps; i++) {
           const t = i / steps;
           const x = x0 + sdx * t, z = z0 + sdz * t;
-          const y = ZS.getTerrainHeight(x, z) + 0.60;
+          const y = ZS.getTerrainHeight(x, z) + _RIBBON_LIFT + 0.02;
           const li = lPos.length / 3;
           lPos.push(x - nx * lW, y, z - nz * lW, x + nx * lW, y, z + nz * lW);
-          if (lprev >= 0 && dashToggle % 4 < 2) lIdx.push(lprev, li, lprev + 1, lprev + 1, li, li + 1);
+          if (lprev >= 0 && dashToggle % 4 < 2) lIdx.push(lprev, lprev + 1, li, lprev + 1, li + 1, li);
           lprev = li; dashToggle++;
         }
       }

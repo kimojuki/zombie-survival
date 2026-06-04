@@ -156,7 +156,9 @@
     geo.computeVertexNormals();
     scene.add(new THREE.Mesh(geo, mat));
 
-    if (withLine) {
+    // L'overlay de ligne jaune n'est dessiné que pour les rubans NON texturés :
+    // les textures de route (M.road) portent déjà leur axe central + bords blancs.
+    if (withLine && !mat.map) {
       const lPos = [], lIdx = [];
       let lprev = -1, dashToggle = 0;
       for (let si = 0; si < pts.length - 1; si++) {

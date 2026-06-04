@@ -43,7 +43,7 @@
   function _buildAllRoads(scene, B) {
     const M = B.M;
     const ty = ZS.getTerrainHeight(CX, CZ);
-    B.ribbon(scene, [[0,-5],[-4,-42],[-10,-82],[-16,-112],[-20,-120]], 5.5, M.roadDirt, false);
+    _buildHighway(scene, B);   // autoroute small town ↔ main city
     B.ribbon(scene, [[-85,-185],[-50,-185],[-20,-185],[10,-185],[42,-185]], 7.0, M.road, false);
     B.ribbon(scene, [[-85,-240],[-50,-240],[-20,-240],[10,-240],[42,-240]], 5.5, M.road, false);
     B.ribbon(scene, [[-85,-135],[-50,-135],[-20,-135],[10,-135],[42,-135]], 5.5, M.road, false);
@@ -58,6 +58,43 @@
       for (let k=-3;k<=3;k++) B.box(scene,zx,zz+k*1.3,ty+0.09,5.5,0.01,0.48,zebM);
     const gM = new THREE.MeshLambertMaterial({ color: 0x3a5a28, polygonOffset: true, polygonOffsetFactor:-1, polygonOffsetUnits:-3 });
     B.slab(scene,CX,-240,ty+0.04,2.5,20,gM); B.slab(scene,CX,-135,ty+0.04,2.5,16,gM);
+  }
+
+  // ── Autoroute reliant la petite ville (S02, route principale ~Z0) à la main city ──
+  // Large chaussée asphaltée (texture tileset : axe jaune + bords blancs) bordée de
+  // glissières de sécurité métalliques.
+  function _buildHighway(scene, B) {
+    const M = B.M;
+    const pts = [[2,-2],[-2,-22],[-7,-48],[-12,-75],[-16,-100],[-19,-118],[-20,-122]];
+    const W = 12;
+    B.ribbon(scene, pts, W, M.road, true);
+
+    // Glissières : poteaux + lisse horizontale de part et d'autre de la chaussée.
+    const railMat = M.metal;
+    const hw = W / 2 + 0.5;
+    for (let si = 0; si < pts.length - 1; si++) {
+      const [x0, z0] = pts[si], [x1, z1] = pts[si + 1];
+      const dx = x1 - x0, dz = z1 - z0, len = Math.hypot(dx, dz);
+      if (len < 0.01) continue;
+      const nx = -dz / len, nz = dx / len;
+      const steps = Math.max(1, Math.round(len / 4));
+      const ang = Math.atan2(dx, dz);
+      for (const s of [-1, 1]) {
+        for (let i = 0; i <= steps; i++) {
+          const t = i / steps;
+          const x = x0 + dx * t + nx * hw * s;
+          const z = z0 + dz * t + nz * hw * s;
+          const y = ZS.getTerrainHeight(x, z);
+          B.box(scene, x, z, y + 0.55, 0.14, 0.8, 0.14, railMat);   // poteau
+        }
+        // Lisse continue, orientée le long du tronçon
+        const mx = (x0 + x1) / 2 + nx * hw * s;
+        const mz = (z0 + z1) / 2 + nz * hw * s;
+        const my = ZS.getTerrainHeight(mx, mz);
+        const beam = B.mesh(scene, new THREE.BoxGeometry(0.1, 0.16, len), railMat, mx, my + 0.78, mz);
+        beam.rotation.y = ang;
+      }
+    }
   }
 
   // ─── Helper : planchers intérieurs + escalier intérieur ──────────────────────

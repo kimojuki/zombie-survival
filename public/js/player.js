@@ -59,13 +59,13 @@
     return arm;
   }
 
-  // Bras gauche (soutien) : MAIN EN HAUT (posée sur le fût), avant-bras qui
-  // descend vers le bas de l'écran et en sort — ainsi aucune extrémité coupée
-  // n'est visible. L'origine du groupe = la main.
+  // Bras gauche (soutien, style Unturned) : avant-bras NU (peau), MAIN EN HAUT
+  // posée sur le fût, l'avant-bras descend en diagonale vers le bas de l'écran
+  // et en sort — aucune extrémité coupée n'est visible. L'origine = la main.
   function _fpsForearm() {
     const a = new THREE.Group();
-    addBox(a, m(SKIN),  0.11, 0.16, 0.11, 0,  0.02, 0);   // main (en haut)
-    addBox(a, m(SHIRT), 0.11, 0.58, 0.11, 0, -0.34, 0);   // avant-bras (descend)
+    addBox(a, m(SKIN), 0.115, 0.18, 0.115, 0,  0.02, 0);   // main (en haut)
+    addBox(a, m(SKIN), 0.105, 0.62, 0.105, 0, -0.36, 0);   // avant-bras nu (descend)
     return a;
   }
 
@@ -97,9 +97,9 @@
   // de l'arme et l'avant-bras descend hors de l'écran (pas d'extrémité coupée).
   function _leftArmPose(cat, type) {
     if (type === 'wpn_pistolet' || type === 'pistol')
-      return { pos: [0.11, -0.24, -0.70], rot: [0.0, 0.0, 0.22] };
+      return { pos: [0.13, -0.22, -0.66], rot: [0.18, 0.0, -0.30] };
     if (cat === 'firearm')
-      return { pos: [0.10, -0.20, -0.98], rot: [-0.18, 0.0, 0.16] };
+      return { pos: [0.15, -0.18, -0.92], rot: [0.28, 0.0, -0.48] };
     return null;   // mêlée, outils, objets → bras gauche caché (une seule main)
   }
 
@@ -383,7 +383,7 @@
     if (type === 'wpn_barre_fer' || type === 'wpn_lance_artisanale')
       return { x: 0.10, y: -0.16, z: -0.78, rx: 0.15, ry: 0, rz: 0 };
     const T = {
-      firearm:  { x: 0.15, y: -0.18, z: -0.72, rx: 0,    ry: 0.10, rz: 0    },
+      firearm:  { x: 0.21, y: -0.22, z: -0.70, rx: 0.02, ry: 0.16, rz: 0.04 },
       melee:    { x: 0.17, y: -0.14, z: -0.66, rx: 0.20, ry: 0.08, rz: 0.05 },
       tool:     { x: 0.17, y: -0.14, z: -0.64, rx: 0.20, ry: 0.08, rz: 0.05 },
       food:     { x: 0.15, y: -0.18, z: -0.46, rx: 0,    ry: 0.20, rz: 0    },

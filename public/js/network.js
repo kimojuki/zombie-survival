@@ -177,14 +177,16 @@
       const speed = rp.moveSpeed || 0;
       const twoH  = mesh.userData.twoHandedFirearm;
       if (twoH) {
-        // Tenue d'arme à feu à deux mains : le bras droit lève l'arme à hauteur
-        // de poitrine, le bras gauche CROISE vers l'avant pour la soutenir (sur
-        // le fût). On contre-pivote le porte-arme pour garder l'arme horizontale
-        // malgré le bras levé. Les jambes continuent de marcher normalement.
-        limbs.rArm.rotation.set(0.95, 0.08, 0);
-        limbs.lArm.rotation.set(1.05, -0.62, 0);
+        // Tenue d'arme à feu à deux mains, position de visée : le bras droit
+        // ramène l'arme AU CENTRE de la poitrine (roulis vers l'intérieur) et le
+        // bras gauche croise pour venir COLLER l'autre main sur l'arme — les deux
+        // mains sont donc réunies sur l'arme. Le porte-arme est contre-pivoté
+        // (quaternion inverse du bras) pour que l'arme pointe toujours droit
+        // devant (là où le joueur regarde). Les jambes marchent normalement.
+        limbs.rArm.rotation.set(0.90, 0.0, -0.50);
+        limbs.lArm.rotation.set(1.04, 0.0,  0.73);
         const hh = limbs.rArm.getObjectByName('handHolder');
-        if (hh) hh.rotation.x = -0.95;
+        if (hh) hh.quaternion.copy(limbs.rArm.quaternion).invert();
         if (speed > 0.3) {
           rp.animTime += dt * Math.max(4, speed * 1.2);
           const swing = Math.sin(rp.animTime) * 0.65;
@@ -200,7 +202,7 @@
         }
       } else if (speed > 0.3) {
         const hh = limbs.rArm.getObjectByName('handHolder');
-        if (hh) hh.rotation.x = 0;   // annule le contre-pivot des armes à feu
+        if (hh) hh.rotation.set(0, 0, 0);   // annule le contre-pivot des armes à feu
         rp.animTime += dt * Math.max(4, speed * 1.2);
         const swing = Math.sin(rp.animTime) * 0.65;
         limbs.lArm.rotation.x = -swing;
@@ -210,7 +212,7 @@
       } else {
         // Return limbs to neutral
         const hh = limbs.rArm.getObjectByName('handHolder');
-        if (hh) hh.rotation.x = 0;   // annule le contre-pivot des armes à feu
+        if (hh) hh.rotation.set(0, 0, 0);   // annule le contre-pivot des armes à feu
         limbs.lArm.rotation.x *= 0.8;
         limbs.rArm.rotation.x *= 0.8;
         limbs.lLeg.rotation.x *= 0.8;
@@ -235,8 +237,8 @@
           // recoil (arme à feu) : léger sursaut autour de la pose de tir à deux
           // mains ; mêlée : grand coup vers l'avant.
           if (rp.attack.kind === 'recoil') {
-            const base = mesh.userData.twoHandedFirearm ? 0.95 : 0.25;
-            limbs.rArm.rotation.x = base - s * 0.30;   // léger recul vers l'arrière
+            const base = mesh.userData.twoHandedFirearm ? 0.90 : 0.25;
+            limbs.rArm.rotation.x = base + s * 0.22;   // léger sursaut de recul
           } else {
             limbs.rArm.rotation.x = s * 1.7;
           }

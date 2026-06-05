@@ -49,49 +49,246 @@
     parent.add(g); return g;
   }
 
-  // ── Bras FPS ──────────────────────────────────────────────────────────────
+  // ── GRIPS — poses + animations par objet (source de vérité FPS + 3e personne) ─
 
-  // Bras droit : épaule en haut, main en bas (tient la crosse / l'objet).
-  function _fpsArm() {
-    const arm = new THREE.Group();
-    addBox(arm, m(SHIRT), 0.11, 0.52, 0.11, 0,  0.00, 0);   // bras mince
-    addBox(arm, m(SKIN),  0.11, 0.16, 0.11, 0, -0.32, 0);   // main
-    return arm;
+  const _ANIM_BASE = {
+    recoil: { kickZ: 0.05, pitchX: 0.12, rArmX: 0.06, lArmZ: 0.03, dur: 0.12 },
+    melee:  { swingX: 0.95, swingZ: 0.30, swingY: 0.0, dur: 0.32 },
+    reload: { dropY: 0.14, tiltX: 0.38, magPull: 0.12, raiseY: 0.08 },
+    idle:   { breatheY: 0.003, swayZ: 0.002, freq: 1.8 },
+    walk:   { bobY: 0.010, bobZ: 0.005, freq: 9.5 },
+    punch:  { swingX: 0.80, swingZ: 0.18, dur: 0.28 },
+  };
+
+  const _REMOTE_AIM = {
+    rArmRot: [0.85, 0, -0.62],
+    handHolder: [0, -0.72, -0.12],
+    lArmMode: 'aimAtHand',
+  };
+
+  function _mergeAnim(base, over) {
+    if (!over) return base;
+    const out = {};
+    for (const k of Object.keys(base)) {
+      out[k] = (over[k] && typeof over[k] === 'object' && !Array.isArray(over[k]))
+        ? { ...base[k], ...over[k] } : (over[k] ?? base[k]);
+    }
+    return out;
   }
 
-  // Bras gauche (soutien, style Unturned) : avant-bras NU (peau), MAIN EN HAUT
-  // posée sur le fût, l'avant-bras descend en diagonale vers le bas de l'écran
-  // et en sort — aucune extrémité coupée n'est visible. L'origine = la main.
-  function _fpsForearm() {
-    const a = new THREE.Group();
-    addBox(a, m(SKIN), 0.115, 0.18, 0.115, 0,  0.02, 0);   // main (en haut)
-    addBox(a, m(SKIN), 0.105, 0.62, 0.105, 0, -0.36, 0);   // avant-bras nu (descend)
-    return a;
+  function _grip(partial) {
+    return {
+      twoHanded: !!partial.twoHanded,
+      item: partial.item || null,
+      rArm: partial.rArm,
+      lArm: partial.lArm ?? null,
+      anim: _mergeAnim(_ANIM_BASE, partial.anim),
+      remote: partial.remote || null,
+      glbOffset: partial.glbOffset || null,
+    };
   }
 
-  // Bras droit avec MAIN EN HAUT (tient un objet à une main) : main (peau) en
-  // haut qui saisit l'objet, avant-bras (manche) qui descend hors de l'écran.
-  // L'origine du groupe = la main. Le bras monte donc « du bas vers le haut ».
-  function _fpsArmUp() {
-    const a = new THREE.Group();
-    addBox(a, m(SKIN),  0.115, 0.18, 0.115, 0,  0.02, 0);   // main (en haut)
-    addBox(a, m(SHIRT), 0.11,  0.60, 0.11,  0, -0.36, 0);   // avant-bras (descend)
-    return a;
+  const GRIP_EMPTY = _grip({
+    twoHanded: false,
+    rArm: { pos: [0.22, -0.27, -0.36], rot: [0.65, 0, 0], style: 'grip' },
+    lArm: null,
+  });
+
+  const GRIP_CATEGORIES = {
+    firearm: _grip({
+      twoHanded: true,
+      item: { x: 0.21, y: -0.22, z: -0.70, rx: 0.02, ry: 0.16, rz: 0.04 },
+      rArm: { pos: [0.20, -0.24, -0.46], rot: [1.32, 0, 0], style: 'grip' },
+      lArm: { pos: [0.13, -0.20, -0.80], rot: [0.28, 0, -0.48] },
+      remote: _REMOTE_AIM,
+      anim: { recoil: { kickZ: 0.06, pitchX: 0.14, rArmX: 0.08, dur: 0.12 } },
+    }),
+    melee: _grip({
+      item: { x: 0.17, y: -0.14, z: -0.66, rx: 0.20, ry: 0.08, rz: 0.05 },
+      rArm: { handOn: [0.02, -0.02, 0.02], rot: [0.12, 0, 0.26], style: 'hold' },
+      anim: { melee: { swingX: 0.90, swingZ: 0.28, swingY: 0.0, dur: 0.32 } },
+    }),
+    tool: _grip({
+      item: { x: 0.17, y: -0.14, z: -0.64, rx: 0.20, ry: 0.08, rz: 0.05 },
+      rArm: { handOn: [0.02, -0.02, 0.02], rot: [0.12, 0, 0.26], style: 'hold' },
+      anim: { melee: { swingX: 0.85, swingZ: 0.35, swingY: 0.0, dur: 0.36 } },
+    }),
+    food: _grip({
+      item: { x: 0.15, y: -0.18, z: -0.46, rx: 0, ry: 0.20, rz: 0 },
+      rArm: { handOn: [0.02, -0.01, 0.02], rot: [0.08, 0, 0.18], style: 'hold' },
+    }),
+    medical: _grip({
+      item: { x: 0.15, y: -0.18, z: -0.46, rx: 0, ry: 0.20, rz: 0 },
+      rArm: { handOn: [0.02, -0.01, 0.02], rot: [0.08, 0, 0.18], style: 'hold' },
+    }),
+    ammo: _grip({
+      item: { x: 0.15, y: -0.20, z: -0.46, rx: 0, ry: 0.20, rz: 0 },
+      rArm: { handOn: [0.02, -0.01, 0.02], rot: [0.10, 0, 0.20], style: 'hold' },
+    }),
+    resource: _grip({
+      item: { x: 0.15, y: -0.20, z: -0.46, rx: 0, ry: 0.20, rz: 0 },
+      rArm: { handOn: [0.02, -0.01, 0.02], rot: [0.10, 0, 0.20], style: 'hold' },
+    }),
+    equipment: _grip({
+      item: { x: 0.14, y: -0.18, z: -0.52, rx: 0, ry: 0.20, rz: 0 },
+      rArm: { handOn: [0.02, -0.02, 0.03], rot: [0.10, 0, 0.22], style: 'hold' },
+    }),
+    structure: _grip({
+      item: { x: 0.15, y: -0.18, z: -0.50, rx: 0, ry: 0.18, rz: 0 },
+      rArm: { handOn: [0.02, -0.02, 0.02], rot: [0.12, 0, 0.24], style: 'hold' },
+    }),
+  };
+
+  const GRIP_TYPES = {
+    wpn_pistolet: _grip({
+      twoHanded: true,
+      item: { x: 0.20, y: -0.20, z: -0.58, rx: 0.02, ry: 0.14, rz: 0.03 },
+      rArm: { pos: [0.19, -0.22, -0.42], rot: [1.28, 0, 0.02], style: 'grip' },
+      lArm: { pos: [0.12, -0.22, -0.62], rot: [0.18, 0, -0.30] },
+      remote: _REMOTE_AIM,
+      anim: { recoil: { kickZ: 0.035, pitchX: 0.08, rArmX: 0.05, dur: 0.10 } },
+    }),
+    pistol: _grip({
+      twoHanded: true,
+      item: { x: 0.20, y: -0.20, z: -0.58, rx: 0.02, ry: 0.14, rz: 0.03 },
+      rArm: { pos: [0.19, -0.22, -0.42], rot: [1.28, 0, 0.02], style: 'grip' },
+      lArm: { pos: [0.12, -0.22, -0.62], rot: [0.18, 0, -0.30] },
+      remote: _REMOTE_AIM,
+      anim: { recoil: { kickZ: 0.035, pitchX: 0.08, rArmX: 0.05, dur: 0.10 } },
+    }),
+    wpn_fusil_pompe: _grip({
+      twoHanded: true,
+      item: { x: 0.22, y: -0.22, z: -0.78, rx: 0.02, ry: 0.16, rz: 0.04 },
+      lArm: { pos: [0.14, -0.19, -0.86], rot: [0.30, 0, -0.50] },
+      remote: _REMOTE_AIM,
+      anim: { recoil: { kickZ: 0.09, pitchX: 0.20, rArmX: 0.12, dur: 0.14 } },
+    }),
+    wpn_fusil_chasse: _grip({
+      twoHanded: true,
+      item: { x: 0.21, y: -0.21, z: -0.88, rx: 0.01, ry: 0.15, rz: 0.03 },
+      lArm: { pos: [0.13, -0.18, -0.92], rot: [0.32, 0, -0.52] },
+      remote: _REMOTE_AIM,
+      anim: { recoil: { kickZ: 0.11, pitchX: 0.24, rArmX: 0.14, dur: 0.16 } },
+    }),
+    wpn_barre_fer: _grip({
+      twoHanded: true,
+      item: { x: 0.10, y: -0.16, z: -0.78, rx: 0.15, ry: 0, rz: 0 },
+      rArm: { pos: [0.18, -0.22, -0.48], rot: [1.15, 0, 0.08], style: 'grip' },
+      lArm: { pos: [0.10, -0.18, -0.72], rot: [0.22, 0, -0.38] },
+      remote: { rArmRot: [0.75, 0, -0.45], handHolder: [0, -0.72, -0.12], lArmMode: 'aimAtHand' },
+      anim: { melee: { swingX: 0.65, swingZ: 0.12, swingY: 0.25, dur: 0.38 } },
+    }),
+    wpn_lance_artisanale: _grip({
+      twoHanded: true,
+      item: { x: 0.08, y: -0.14, z: -0.82, rx: 0.12, ry: 0, rz: 0 },
+      rArm: { pos: [0.17, -0.20, -0.50], rot: [1.10, 0, 0.06], style: 'grip' },
+      lArm: { pos: [0.08, -0.16, -0.76], rot: [0.20, 0, -0.32] },
+      remote: { rArmRot: [0.72, 0, -0.40], handHolder: [0, -0.72, -0.14], lArmMode: 'aimAtHand' },
+      anim: { melee: { swingX: 0.55, swingZ: 0.05, swingY: 0.0, dur: 0.34 } },
+    }),
+    wpn_couteau: _grip({
+      anim: { melee: { swingX: 0.75, swingZ: 0.15, swingY: 0.35, dur: 0.26 } },
+    }),
+    wpn_hache_combat: _grip({
+      anim: { melee: { swingX: 0.70, swingZ: 0.55, swingY: 0.0, dur: 0.42 } },
+    }),
+    wpn_machette: _grip({
+      anim: { melee: { swingX: 0.80, swingZ: 0.22, swingY: 0.28, dur: 0.30 } },
+    }),
+    wpn_batte_cloutee: _grip({
+      item: { x: 0.16, y: -0.12, z: -0.70, rx: 0.25, ry: 0.06, rz: 0.04 },
+      anim: { melee: { swingX: 1.05, swingZ: 0.40, swingY: 0.0, dur: 0.40 } },
+    }),
+    tool_torche: _grip({
+      item: { x: 0.16, y: -0.10, z: -0.58, rx: 0.35, ry: 0.10, rz: 0.05 },
+      rArm: { handOn: [0.02, -0.03, 0.02], rot: [0.18, 0, 0.12], style: 'hold' },
+    }),
+    tool_marteau: _grip({
+      anim: { melee: { swingX: 0.88, swingZ: 0.48, swingY: 0.0, dur: 0.38 } },
+    }),
+    tool_hachette: _grip({
+      anim: { melee: { swingX: 0.82, swingZ: 0.42, swingY: 0.0, dur: 0.34 } },
+    }),
+    tool_pioche: _grip({
+      anim: { melee: { swingX: 0.90, swingZ: 0.50, swingY: 0.0, dur: 0.40 } },
+    }),
+  };
+
+  function _resolveRArmPose(grip) {
+    const ra = grip.rArm;
+    if (ra.style === 'hold' && grip.item && ra.handOn) {
+      return {
+        pos: [grip.item.x + ra.handOn[0], grip.item.y + ra.handOn[1], grip.item.z + ra.handOn[2]],
+        rot: ra.rot || [0.12, 0, 0.26],
+        style: 'hold',
+      };
+    }
+    return { pos: ra.pos, rot: ra.rot, style: ra.style || 'grip' };
+  }
+
+  function getGrip(type) {
+    if (!type) return GRIP_EMPTY;
+    const cat = ZS.ITEMS?.[type]?.category || '';
+    const base = GRIP_CATEGORIES[cat] || GRIP_EMPTY;
+    const over = GRIP_TYPES[type];
+    if (!over) return base;
+    const g = _grip({
+      twoHanded: over.twoHanded ?? base.twoHanded,
+      item: over.item ? { ...(base.item || {}), ...over.item } : base.item,
+      rArm: over.rArm ? { ...base.rArm, ...over.rArm } : base.rArm,
+      lArm: over.lArm !== undefined ? over.lArm : base.lArm,
+      remote: over.remote || base.remote,
+      glbOffset: over.glbOffset || base.glbOffset,
+    });
+    g.anim = _mergeAnim(base.anim, over.anim);
+    return g;
+  }
+
+  // ── Rig FPS modulaire (épaule → avant-bras → main) ────────────────────────
+
+  function _buildArmMesh(style) {
+    const g = new THREE.Group();
+    if (style === 'hold') {
+      addBox(g, m(SKIN),  0.115, 0.18, 0.115, 0,  0.02, 0);
+      addBox(g, m(SHIRT), 0.105, 0.28, 0.105, 0, -0.18, 0);
+      addBox(g, m(SHIRT), 0.100, 0.34, 0.100, 0, -0.48, 0);
+    } else {
+      addBox(g, m(SHIRT), 0.105, 0.28, 0.105, 0, -0.02, 0);
+      addBox(g, m(SHIRT), 0.100, 0.30, 0.100, 0, -0.30, 0);
+      addBox(g, m(SKIN),  0.105, 0.18, 0.105, 0, -0.52, 0);
+    }
+    return g;
+  }
+
+  function _buildLeftArmMesh() {
+    const g = new THREE.Group();
+    addBox(g, m(SKIN), 0.115, 0.18, 0.115, 0,  0.02, 0);
+    addBox(g, m(SKIN), 0.105, 0.30, 0.105, 0, -0.20, 0);
+    addBox(g, m(SKIN), 0.100, 0.34, 0.100, 0, -0.48, 0);
+    return g;
+  }
+
+  function _setRightArmMesh(rArm, style) {
+    if (rArm.userData.meshStyle === style && rArm.children.length) return;
+    while (rArm.children.length) rArm.remove(rArm.children[0]);
+    rArm.add(_buildArmMesh(style));
+    rArm.userData.meshStyle = style;
   }
 
   function createFPSArms() {
     const g = new THREE.Group();
+    g.userData.gripType = null;
+    g.userData.basePose = null;
+    g.userData.anim = null;
+    g.userData.idleTime = 0;
+    g.userData.walkPhase = 0;
 
-    // Bras droit : tient la crosse / poignée (toujours visible).
-    const rArm = _fpsArm();
+    const rArm = new THREE.Group();
     rArm.name = 'rArm';
-    rArm.rotation.x = 0.65;
-    rArm.position.set(0.22, -0.27, -0.36);
+    _setRightArmMesh(rArm, 'grip');
     g.add(rArm);
 
-    // Bras gauche : soutient l'arme à l'avant (deux mains). Visible seulement
-    // pour les armes à feu.
-    const lArm = _fpsForearm();
+    const lArm = _buildLeftArmMesh();
     lArm.name = 'lArm';
     lArm.visible = false;
     g.add(lArm);
@@ -99,42 +296,152 @@
     const holder = new THREE.Group();
     holder.name = 'itemHolder';
     g.add(holder);
+
+    _applyGripPose(g, GRIP_EMPTY);
     return g;
   }
 
-  // Pose du bras gauche (main sur le fût) selon le type d'arme, ou null = caché.
-  // SEULES les armes à feu se tiennent à deux mains. La main est posée au niveau
-  // de l'arme et l'avant-bras descend hors de l'écran (pas d'extrémité coupée).
-  function _leftArmPose(cat, type) {
-    if (type === 'wpn_pistolet' || type === 'pistol')
-      return { pos: [0.12, -0.22, -0.62], rot: [0.18, 0.0, -0.30] };
-    if (cat === 'firearm')
-      return { pos: [0.13, -0.20, -0.80], rot: [0.28, 0.0, -0.48] };  // rentré vers le joueur
-    return null;   // mêlée, outils, objets → bras gauche caché (une seule main)
+  function _applyGripPose(fpsGroup, grip, offsets) {
+    offsets = offsets || {};
+    const holder = fpsGroup.getObjectByName('itemHolder');
+    const rArm   = fpsGroup.getObjectByName('rArm');
+    const lArm   = fpsGroup.getObjectByName('lArm');
+    if (!holder || !rArm || !lArm) return;
+
+    const io = offsets.item || {};
+    const ro = offsets.rArm || {};
+    const lo = offsets.lArm || {};
+
+    if (grip.item) {
+      holder.visible = true;
+      holder.position.set(
+        grip.item.x + (io.x || 0), grip.item.y + (io.y || 0), grip.item.z + (io.z || 0));
+      holder.rotation.set(
+        grip.item.rx + (io.rx || 0), grip.item.ry + (io.ry || 0), grip.item.rz + (io.rz || 0));
+    } else {
+      holder.visible = false;
+    }
+
+    const rp = _resolveRArmPose(grip);
+    _setRightArmMesh(rArm, rp.style);
+    rArm.position.set(rp.pos[0] + (ro.x || 0), rp.pos[1] + (ro.y || 0), rp.pos[2] + (ro.z || 0));
+    rArm.rotation.set(rp.rot[0] + (ro.rx || 0), rp.rot[1] + (ro.ry || 0), rp.rot[2] + (ro.rz || 0));
+
+    if (grip.twoHanded && grip.lArm) {
+      lArm.visible = true;
+      lArm.position.set(
+        grip.lArm.pos[0] + (lo.x || 0), grip.lArm.pos[1] + (lo.y || 0), grip.lArm.pos[2] + (lo.z || 0));
+      lArm.rotation.set(
+        grip.lArm.rot[0] + (lo.rx || 0), grip.lArm.rot[1] + (lo.ry || 0), grip.lArm.rot[2] + (lo.rz || 0));
+    } else {
+      lArm.visible = false;
+    }
   }
 
-  // (Re)construit et positionne le bras droit selon l'objet tenu :
-  //  • arme à feu  → bras aligné vers l'arme (main en bas, presque horizontal) ;
-  //  • objet à une main → MAIN EN HAUT posée sur l'objet, avant-bras qui descend
-  //    hors de l'écran (le bras monte du bas vers le haut) ;
-  //  • main vide → bras au repos (pose d'origine).
-  // `p` = position de l'item en main (itemHolder), pour poser la main dessus.
-  function _buildRightArm(rArm, cat, type, p) {
-    while (rArm.children.length) rArm.remove(rArm.children[0]);
-    if (cat === 'firearm') {
-      rArm.add(_fpsArm());
-      rArm.position.set(0.20, -0.24, -0.46);
-      rArm.rotation.set(1.32, 0, 0);
-    } else if (type && p) {
-      // Main posée sur l'objet ; l'avant-bras part vers le bas-droite, hors écran.
-      rArm.add(_fpsArmUp());
-      rArm.position.set(p.x + 0.02, p.y - 0.02, p.z + 0.02);
-      rArm.rotation.set(0.12, 0.0, 0.26);
-    } else {
-      rArm.add(_fpsArm());
-      rArm.position.set(0.22, -0.27, -0.36);
-      rArm.rotation.set(0.65, 0, 0);
+  function _saveBasePose(fpsGroup, grip, type) {
+    const rp = _resolveRArmPose(grip);
+    fpsGroup.userData.gripType = type || null;
+    fpsGroup.userData.basePose = {
+      grip,
+      item: grip.item ? {
+        pos: [grip.item.x, grip.item.y, grip.item.z],
+        rot: [grip.item.rx, grip.item.ry, grip.item.rz],
+      } : null,
+      rArm: { pos: [...rp.pos], rot: [...rp.rot], style: rp.style },
+      lArm: (grip.twoHanded && grip.lArm)
+        ? { pos: [...grip.lArm.pos], rot: [...grip.lArm.rot], visible: true } : null,
+    };
+    _applyGripPose(fpsGroup, grip);
+  }
+
+  // ── Animations FPS ────────────────────────────────────────────────────────
+
+  function triggerArmAnim(fpsGroup, kind, type, opts) {
+    opts = opts || {};
+    const grip = getGrip(type || fpsGroup.userData.gripType);
+    const animDef = grip.anim[kind] || _ANIM_BASE[kind] || _ANIM_BASE.melee;
+    let dur = opts.dur ?? animDef.dur ?? 0.32;
+    if (kind === 'reload' && opts.dur) dur = opts.dur;
+    fpsGroup.userData.anim = { kind, start: performance.now() / 1000, dur, type: type || fpsGroup.userData.gripType };
+  }
+
+  function isArmAnimActive(fpsGroup) {
+    return !!fpsGroup.userData.anim;
+  }
+
+  function tickArmAnim(fpsGroup, dt) {
+    const anim = fpsGroup.userData.anim;
+    const base = fpsGroup.userData.basePose;
+    if (!anim || !base) return false;
+    const now = performance.now() / 1000;
+    const e = (now - anim.start) / anim.dur;
+    if (e >= 1) {
+      fpsGroup.userData.anim = null;
+      _applyGripPose(fpsGroup, base.grip);
+      return false;
     }
+    const grip = getGrip(anim.type || fpsGroup.userData.gripType);
+    const s = Math.sin(e * Math.PI);
+    const io = {}, ro = {}, lo = {};
+
+    if (anim.kind === 'recoil') {
+      const a = grip.anim.recoil;
+      io.z = s * (a.kickZ || 0.05);
+      io.rx = -s * (a.pitchX || 0.12);
+      ro.rx = s * (a.rArmX || 0.06);
+      if (grip.twoHanded) lo.rz = s * (a.lArmZ || 0.03);
+    } else if (anim.kind === 'melee' || anim.kind === 'punch') {
+      const a = anim.kind === 'punch' ? grip.anim.punch : grip.anim.melee;
+      io.rx = -s * (a.swingX || 0.9);
+      io.rz =  s * (a.swingZ || 0.3);
+      io.ry =  s * (a.swingY || 0);
+      ro.rx = -s * (a.swingX || 0.9) * 0.45;
+      ro.rz =  s * (a.swingZ || 0.3) * 0.5;
+    } else if (anim.kind === 'reload') {
+      const a = grip.anim.reload;
+      const phase = e < 0.35 ? e / 0.35 : (e < 0.70 ? 1 : (1 - e) / 0.30);
+      const magPhase = e >= 0.35 && e < 0.70 ? Math.sin((e - 0.35) / 0.35 * Math.PI) : 0;
+      io.y  = -phase * (a.dropY || 0.14);
+      io.rx =  phase * (a.tiltX || 0.38);
+      if (grip.twoHanded) {
+        lo.y  = magPhase * (a.magPull || 0.12);
+        lo.rx = magPhase * 0.25;
+      }
+      if (e >= 0.70) io.y += ((e - 0.70) / 0.30) * (a.raiseY || 0.08);
+    }
+
+    _applyGripPose(fpsGroup, base.grip, { item: io, rArm: ro, lArm: lo });
+    return true;
+  }
+
+  function tickFPSArms(fpsGroup, dt, opts) {
+    opts = opts || {};
+    if (fpsGroup.userData.anim) return;
+    const base = fpsGroup.userData.basePose;
+    if (!base) return;
+
+    fpsGroup.userData.idleTime += dt;
+    const grip = base.grip;
+    const idle = grip.anim.idle;
+    const walk = grip.anim.walk;
+    const t = fpsGroup.userData.idleTime;
+
+    const breathe = Math.sin(t * (idle.freq || 1.8) * Math.PI * 2) * (idle.breatheY || 0.003);
+    const sway    = Math.sin(t * (idle.freq || 1.8) * 0.7 * Math.PI * 2) * (idle.swayZ || 0.002);
+
+    let bobY = 0, bobZ = 0;
+    if (opts.moving && opts.speed > 0.5) {
+      fpsGroup.userData.walkPhase += dt * (walk.freq || 9.5);
+      const w = Math.sin(fpsGroup.userData.walkPhase);
+      bobY = w * (walk.bobY || 0.01) * Math.min(1, opts.speed / 5);
+      bobZ = Math.abs(w) * (walk.bobZ || 0.005) * Math.min(1, opts.speed / 5);
+    }
+
+    _applyGripPose(fpsGroup, base.grip, {
+      item: { y: breathe - bobY, z: sway + bobZ },
+      rArm: { y: breathe * 0.5 - bobY * 0.6 },
+      lArm: grip.twoHanded ? { y: breathe * 0.4 - bobY * 0.5 } : {},
+    });
   }
 
   // ── Modèles .glb (libres de droits, Quaternius CC0) ─────────────────────────
@@ -233,26 +540,18 @@
     while (holder.children.length) holder.remove(holder.children[0]);
     holder.userData.type = type || null;
 
-    const cat = type ? (ZS.ITEMS?.[type]?.category || '') : '';
-    const p   = type ? _pos(cat, type) : null;
-
-    // Bras gauche : visible (et posé) uniquement pour les armes à deux mains.
-    const lArm = fpsGroup.getObjectByName('lArm');
-    const pose = type ? _leftArmPose(cat, type) : null;
-    if (lArm) {
-      lArm.visible = !!pose;
-      if (pose) { lArm.position.set(...pose.pos); lArm.rotation.set(...pose.rot); }
-    }
-
-    // Bras droit : reconstruit selon l'objet (aligné vers l'arme pour les armes
-    // à feu, main en haut sur l'objet pour les items à une main).
-    const rArm = fpsGroup.getObjectByName('rArm');
-    if (rArm) _buildRightArm(rArm, cat, type, p);
+    const grip = getGrip(type);
+    fpsGroup.userData.anim = null;
+    _saveBasePose(fpsGroup, grip, type);
 
     if (!type) return;
 
-    holder.position.set(p.x, p.y, p.z);
-    holder.rotation.set(p.rx, p.ry, p.rz);
+    const goff = grip.glbOffset;
+    if (goff) {
+      holder.position.x += goff.x || 0;
+      holder.position.y += goff.y || 0;
+      holder.position.z += goff.z || 0;
+    }
 
     // 1) Modèle procédural normalisé immédiat (affichage instantané)
     const proc = _normalize(_buildModel(type), _fit(type), null);
@@ -263,7 +562,7 @@
     const spec = GLB[type];
     if (spec && _loader) {
       _loadGLB(spec.file).then((t) => {
-        if (holder.userData.type !== type) return;             // l'item a changé entre-temps
+        if (holder.userData.type !== type) return;
         while (holder.children.length) holder.remove(holder.children[0]);
         const m = _normalize(t.clone(true), _fit(type), spec.rot);
         holder.add(m);
@@ -288,16 +587,17 @@
     while (holder.children.length) holder.remove(holder.children[0]);
     holder.userData.type = type || null;
 
-    // Drapeau « arme à feu tenue à deux mains » lu par l'animation distante
-    // (network.js) pour rapprocher le bras gauche de l'arme. Seules les armes
-    // à feu sont à deux mains.
-    const isFirearm = !!type && ZS.ITEMS?.[type]?.category === 'firearm';
-    playerMesh.userData.twoHandedFirearm = isFirearm;
+    const grip = getGrip(type);
+    playerMesh.userData.grip = grip;
+    playerMesh.userData.twoHandedFirearm = grip.twoHanded && !!type &&
+      (ZS.ITEMS?.[type]?.category === 'firearm');
 
     if (!type) return;
 
-    // Vu de loin (3e personne), on grossit un peu les armes à feu pour qu'elles
-    // soient bien visibles tenues par les autres joueurs.
+    const remote = grip.remote || _REMOTE_AIM;
+    if (remote.handHolder) holder.position.set(...remote.handHolder);
+
+    const isFirearm = ZS.ITEMS?.[type]?.category === 'firearm';
     const fit = _fit(type) * (isFirearm ? 1.35 : 1);
 
     // 1) Modèle procédural immédiat
@@ -421,23 +721,6 @@
       light.intensity = 12 * k;
     };
     setTimeout(() => { try { holder.remove(fx); } catch (_) {} }, 160);
-  }
-
-  // Position en main selon catégorie (rapprochée/centrée pour bien voir l'objet)
-  function _pos(cat, type) {
-    if (type === 'wpn_barre_fer' || type === 'wpn_lance_artisanale')
-      return { x: 0.10, y: -0.16, z: -0.78, rx: 0.15, ry: 0, rz: 0 };
-    const T = {
-      firearm:  { x: 0.21, y: -0.22, z: -0.70, rx: 0.02, ry: 0.16, rz: 0.04 },
-      melee:    { x: 0.17, y: -0.14, z: -0.66, rx: 0.20, ry: 0.08, rz: 0.05 },
-      tool:     { x: 0.17, y: -0.14, z: -0.64, rx: 0.20, ry: 0.08, rz: 0.05 },
-      food:     { x: 0.15, y: -0.18, z: -0.46, rx: 0,    ry: 0.20, rz: 0    },
-      medical:  { x: 0.15, y: -0.18, z: -0.46, rx: 0,    ry: 0.20, rz: 0    },
-      ammo:     { x: 0.15, y: -0.20, z: -0.46, rx: 0,    ry: 0.20, rz: 0    },
-      resource: { x: 0.15, y: -0.20, z: -0.46, rx: 0,    ry: 0.20, rz: 0    },
-      equipment:{ x: 0.14, y: -0.18, z: -0.52, rx: 0,    ry: 0.20, rz: 0    },
-    };
-    return T[cat] || { x: 0.15, y: -0.18, z: -0.46, rx: 0, ry: 0.20, rz: 0 };
   }
 
   // ── Constructeur principal ────────────────────────────────────────────────
@@ -809,4 +1092,9 @@
   ZS.setRemoteHandItem = setRemoteHandItem;
   ZS.muzzleFlash       = muzzleFlash;
   ZS.getItemModel      = getItemModel;
+  ZS.getGrip           = getGrip;
+  ZS.triggerArmAnim    = triggerArmAnim;
+  ZS.tickArmAnim       = tickArmAnim;
+  ZS.tickFPSArms       = tickFPSArms;
+  ZS.isArmAnimActive   = isArmAnimActive;
 }());

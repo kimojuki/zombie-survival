@@ -96,6 +96,25 @@ Sur PC, les zones tactiles `#left-zone` / `#right-zone` sont désactivées (`bod
 
 ---
 
+## Bras FPS et items en main (`player.js`)
+
+Source de vérité : table **GRIPS** (`GRIP_CATEGORIES` + overrides `GRIP_TYPES`).
+
+| API | Rôle |
+|-----|------|
+| `getGrip(type)` | Pose item + bras + params d’animation |
+| `updateHandItem(fpsGroup, type)` | Applique le grip et charge le modèle (procédural + GLB) |
+| `tickFPSArms(fpsGroup, dt, { moving, speed })` | Idle (respiration) + bob marche |
+| `triggerArmAnim(fpsGroup, kind, type, opts?)` | `recoil` \| `melee` \| `punch` \| `reload` |
+| `tickArmAnim(fpsGroup, dt)` | Joue l’anim en cours (offsets sur item/bras, pas rotation du groupe racine) |
+| `setRemoteHandItem(mesh, type)` | Item en main 3e personne + `userData.grip` pour `network.js` |
+
+**Boucle** (`game.js`) : après `updateMovement`, appeler `tickFPSArms` puis `tickArmAnim`.
+
+**Multijoueur** : `network.js` utilise `grip.remote` (pose visée deux mains) et `grip.anim` pour les gestes d’attaque distants.
+
+---
+
 ## Secteurs monde
 
 | ID | Fichier | Zone approximative |

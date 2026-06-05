@@ -124,7 +124,13 @@
     socket.on('player-attack', (d) => {
       const rp = remotePlayers.get(d.id);
       if (!rp) return;
-      rp.attack = { t: 0, dur: d.kind === 'recoil' ? 0.12 : 0.32, kind: d.kind };
+      const grip = ZS.getGrip(rp.equipped);
+      const animDef = d.kind === 'recoil' ? grip.anim.recoil : grip.anim.melee;
+      rp.attack = {
+        t: 0,
+        dur: animDef?.dur || (d.kind === 'recoil' ? 0.12 : 0.32),
+        kind: d.kind,
+      };
       // Tir → éclair + lumière au bout de l'arme tenue par ce joueur
       if (d.kind === 'recoil') {
         const holder = rp.mesh.userData.limbs?.rArm?.getObjectByName('handHolder');
@@ -252,25 +258,22 @@
       if (!limbs) return;
 
       const speed = rp.moveSpeed || 0;
-      const twoH  = mesh.userData.twoHandedFirearm;
+      const grip  = mesh.userData.grip || ZS.getGrip(rp.equipped);
+      const rem   = grip.remote;
+      const twoH  = grip.twoHanded && rem;
       if (twoH) {
-        // Tenue d'arme à feu à deux mains, position de visée :
-        //  1) le bras droit ramène l'arme AU CENTRE de la poitrine (roulis vers
-        //     l'intérieur) — elle devient ainsi atteignable par la main gauche ;
-        //  2) le porte-arme est contre-pivoté (quaternion inverse du bras) pour
-        //     que l'arme pointe toujours droit devant (là où le joueur regarde) ;
-        //  3) le bras gauche est orienté DYNAMIQUEMENT vers la main droite (=
-        //     l'arme), donc les deux mains se rejoignent toujours sur l'arme.
-        limbs.rArm.rotation.set(0.85, 0.0, -0.62);
+        // Tenue à deux mains (armes à feu, barre, lance…) — params depuis GRIPS
+        limbs.rArm.rotation.set(rem.rArmRot[0], rem.rArmRot[1], rem.rArmRot[2]);
         const hh = limbs.rArm.getObjectByName('handHolder');
         if (hh) hh.quaternion.copy(limbs.rArm.quaternion).invert();
-        // Position de la main droite (= centre de l'arme) dans le repère du modèle
-        const rHand = new THREE.Vector3(0, -0.72, -0.12)
+        const hOff = rem.handHolder || [0, -0.72, -0.12];
+        const rHand = new THREE.Vector3(hOff[0], hOff[1], hOff[2])
           .applyQuaternion(limbs.rArm.quaternion)
           .add(limbs.rArm.position);
-        // Oriente le bras gauche pour que sa main (axe -Y) pointe vers l'arme
-        const dir = rHand.sub(limbs.lArm.position).normalize();
-        limbs.lArm.quaternion.setFromUnitVectors(_DOWN, dir);
+        if (rem.lArmMode === 'aimAtHand') {
+          const dir = rHand.sub(limbs.lArm.position).normalize();
+          limbs.lArm.quaternion.setFromUnitVectors(_DOWN, dir);
+        }
         if (speed > 0.3) {
           rp.animTime += dt * Math.max(4, speed * 1.2);
           const swing = Math.sin(rp.animTime) * 0.65;
@@ -286,8 +289,8 @@
         }
       } else if (speed > 0.3) {
         const hh = limbs.rArm.getObjectByName('handHolder');
-        if (hh) hh.rotation.set(0, 0, 0);   // annule le contre-pivot des armes à feu
-        // annule le roulis de la pose à deux mains
+        if (hh) { hh.rotation.set(0, 0, 0); hh.quaternion.set(0, 0, 0, 1); }
+        limbs.lArm.quaternion.set(0, 0, 0, 1);
         limbs.lArm.rotation.y = limbs.lArm.rotation.z = 0;
         limbs.rArm.rotation.y = limbs.rArm.rotation.z = 0;
         rp.animTime += dt * Math.max(4, speed * 1.2);
@@ -299,8 +302,9 @@
       } else {
         // Return limbs to neutral
         const hh = limbs.rArm.getObjectByName('handHolder');
-        if (hh) hh.rotation.set(0, 0, 0);   // annule le contre-pivot des armes à feu
-        limbs.lArm.rotation.y = limbs.lArm.rotation.z = 0;   // annule le roulis
+        if (hh) { hh.rotation.set(0, 0, 0); hh.quaternion.set(0, 0, 0, 1); }
+        limbs.lArm.quaternion.set(0, 0, 0, 1);
+        limbs.lArm.rotation.y = limbs.lArm.rotation.z = 0;
         limbs.rArm.rotation.y = limbs.rArm.rotation.z = 0;
         limbs.lArm.rotation.x *= 0.8;
         limbs.rArm.rotation.x *= 0.8;
@@ -322,14 +326,14 @@
           rp.attack = null;
         } else {
           const s = Math.sin(e * Math.PI);
-          // rotation.x positif = la main va vers l'avant (le perso fait face à -z).
-          // recoil (arme à feu) : léger sursaut autour de la pose de tir à deux
-          // mains ; mêlée : grand coup vers l'avant.
+          const atkGrip = mesh.userData.grip || ZS.getGrip(rp.equipped);
           if (rp.attack.kind === 'recoil') {
-            const base = mesh.userData.twoHandedFirearm ? 0.85 : 0.25;
-            limbs.rArm.rotation.x = base + s * 0.22;   // léger sursaut de recul
+            const base = atkGrip.remote?.rArmRot?.[0] ?? (atkGrip.twoHanded ? 0.85 : 0.25);
+            const a = atkGrip.anim.recoil;
+            limbs.rArm.rotation.x = base + s * ((a.rArmX || 0.08) * 2.5);
           } else {
-            limbs.rArm.rotation.x = s * 1.7;
+            const a = atkGrip.anim.melee;
+            limbs.rArm.rotation.x = s * ((a.swingX || 0.95) * 1.75);
           }
         }
       }

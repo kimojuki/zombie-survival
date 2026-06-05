@@ -424,7 +424,6 @@
   };
   let _lastAttack  = 0;     // s — dernière attaque
   let _reloadUntil = 0;     // s — fin du rechargement en cours
-  let _swing = null;        // animation arme : { start, dur, kind }
   const _now = () => performance.now() / 1000;
 
   function _muzzleFlash() {
@@ -440,11 +439,14 @@
 
   function _startReload(def) {
     if (_now() < _reloadUntil) return;
+    if (ZS.isArmAnimActive?.(fpsArms)) return;
     if (ZS.Inventory.getWeaponAmmo() >= (def.capacite_chargeur || 12)) return;
     if (ZS.Inventory.countItem(def.type_munition_accepte) <= 0) { ZS.UI.showNotif('Pas de munitions'); return; }
     const t = def.temps_rechargement || 2;
     _reloadUntil = _now() + t;
     ZS.UI.showNotif('Rechargement…');
+    const item = ZS.Inventory.getActiveItem();
+    if (item) ZS.triggerArmAnim(fpsArms, 'reload', item.type, { dur: t });
     setTimeout(() => ZS.Inventory.reloadWeapon(), t * 1000);
   }
 
@@ -461,7 +463,7 @@
     ZS.Inventory.decrementAmmo();
     _muzzleFlash();
     ZS.Audio.gunshot(item.type);
-    _playSwing(0.12, 'recoil');
+    _playSwing('recoil', item.type);
     raycaster.setFromCamera(screenCenter, camera);
     const dir = raycaster.ray.direction.clone();
     const disp = def.dispersion_balle || 0.05;
@@ -479,7 +481,7 @@
     const n = _now();
     if (n - _lastAttack < FIST.cadence_attaque) return;
     _lastAttack = n;
-    _playSwing(FIST.cadence_attaque * 0.55, 'melee');
+    _playSwing('punch', null);
     raycaster.setFromCamera(screenCenter, camera);
     const dir = raycaster.ray.direction;
     const hitDist = ZS.Zombies.nearestDist(camera.position.x, camera.position.z);
@@ -492,7 +494,7 @@
     const n = _now();
     if (n - _lastAttack < (def.cadence_attaque || 0.5)) return;
     _lastAttack = n;
-    _playSwing((def.cadence_attaque || 0.5) * 0.55, 'melee');
+    _playSwing('melee', item.type);
 
     raycaster.setFromCamera(screenCenter, camera);
     const dir = raycaster.ray.direction;
@@ -529,22 +531,9 @@
     if (!def) _fistPunch();   // mains vides → coup de poing
   }
 
-  function _playSwing(dur, kind) {
-    _swing = { start: _now(), dur, kind };
-    ZS.Network.sendAttack(kind);   // les autres joueurs voient le geste d'attaque
-  }
-  function _tickSwing() {
-    if (!_swing) return;
-    const e = (_now() - _swing.start) / _swing.dur;
-    if (e >= 1) { fpsArms.position.z = 0; fpsArms.rotation.set(0, 0, 0); _swing = null; return; }
-    const s = Math.sin(e * Math.PI);
-    if (_swing.kind === 'recoil') {
-      fpsArms.position.z = s * 0.05;
-      fpsArms.rotation.x = -s * 0.12;
-    } else {
-      fpsArms.rotation.x = -s * 0.95;
-      fpsArms.rotation.z = s * 0.30;
-    }
+  function _playSwing(kind, type) {
+    ZS.triggerArmAnim(fpsArms, kind, type);
+    ZS.Network.sendAttack(kind === 'punch' ? 'melee' : kind);
   }
 
   state.onShoot  = attack;
@@ -604,7 +593,11 @@
       updateMovement(dt);
       _updateWaterEffect(state.player.x, state.player.z, state.player.y);
     }
-    _tickSwing();
+    ZS.tickFPSArms(fpsArms, dt, {
+      moving: !!state.player.isMoving,
+      speed: state.player.moveSpeed || 0,
+    });
+    ZS.tickArmAnim(fpsArms, dt);
     ZS.setShadowCenter(state.player.x, state.player.z);
     ZS.tickDayNight(dt);
     const camX = camera.position.x, camZ = camera.position.z;
@@ -655,6 +648,8 @@
 
     const len = Math.hypot(mx, mz);
     if (len > 1) { mx /= len; mz /= len; }
+    state.player.isMoving = len > 0.01;
+    state.player.moveSpeed = len * SPEED;
 
     camera.getWorldDirection(_fwd);
     _fwd.y = 0;

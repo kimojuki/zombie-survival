@@ -197,6 +197,15 @@ These are intentionally ignored by Git for local development.
 - **Cron** : doc chemin Infomaniak complet + `ZOMBIE_APP_DIR`.
 - **Ne pas** `git config` sur le serveur — stratégie pull intégrée au script.
 
+### Completed — Refactor bras FPS + animations (2026-06-06)
+
+- **`public/js/player.js`** : table **GRIPS** (`GRIP_CATEGORIES` + `GRIP_TYPES`) — poses item/bras par catégorie et overrides par type ; `getGrip(type)` source de vérité FPS + 3e personne.
+- **Rig modulaire** : épaule → avant-bras → main (`grip` / `hold`), bras gauche deux mains.
+- **Moteur d’anim** : `triggerArmAnim`, `tickArmAnim`, `tickFPSArms` (idle, marche, recul, mêlée, coup de poing, rechargement).
+- **`public/js/game.js`** : remplace `_tickSwing` (rotation globale) ; reload visuel branché sur `temps_rechargement`.
+- **`public/js/network.js`** : poses distantes et attaques lues depuis `getGrip` / `userData.grip`.
+- **Cache bust** : `20260606o`
+
 ### Completed — Bouton chat mobile à droite (2026-06-06)
 
 - **`#chat-btn`** : haut droite, sous le menu ☰ (`top: 56px`, `right: 12px`) — retiré de la colonne gauche.

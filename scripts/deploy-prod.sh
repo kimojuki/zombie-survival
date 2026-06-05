@@ -77,4 +77,15 @@ fi
 pm2 restart "$PM2_NAME" 2>&1 | tee -a "$LOG_FILE"
 NEW=$(git rev-parse --short HEAD)
 log "pm2 restart $PM2_NAME OK — commit $NEW"
+
+# Vérification rapide (optionnelle)
+if command -v curl >/dev/null 2>&1; then
+  HEALTH=$(curl -sf "http://127.0.0.1:${PORT:-3000}/api/health" 2>/dev/null || true)
+  if echo "$HEALTH" | grep -q '"chat":true'; then
+    log "health OK (chat actif, commit dans health)"
+  else
+    log "WARN: health sans chat:true — vérifier PORT/.env ou attendre le boot ($HEALTH)"
+  fi
+fi
+
 log "=== deploy done ==="

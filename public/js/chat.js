@@ -119,7 +119,7 @@
       return;
     }
     if (!_serverChat) {
-      _addLine('Chat indisponible sur ce serveur — redémarrage requis (pm2 restart zombie)', 'chat-system');
+      _addLine('Chat indisponible — sur le serveur : git pull && pm2 restart zombie', 'chat-system');
       return;
     }
 
@@ -133,7 +133,10 @@
     let answered = false;
     const timer = setTimeout(() => {
       if (answered) return;
-      _addLine('Chat indisponible — redémarrez le serveur Node (pm2 restart zombie)', 'chat-system');
+      _addLine(
+        'Serveur pas à jour — le Node tourne encore sans le chat. SSH : git pull && bash scripts/deploy-prod.sh',
+        'chat-system'
+      );
     }, SEND_ACK_MS);
 
     _socket.emit('chat', msg, (res) => {
@@ -222,9 +225,11 @@
     fetch('/api/health', { cache: 'no-store' })
       .then((r) => r.json())
       .then((h) => {
-        if (h && h.chat === false) {
+        if (h?.chat === false) {
           _serverChat = false;
-          _addLine('Chat indisponible — redémarrez le serveur Node', 'chat-system');
+          _addLine('Chat désactivé sur ce serveur', 'chat-system');
+        } else if (h?.chat !== true) {
+          _addLine('Serveur Node pas redémarré — chat bloqué côté serveur', 'chat-system');
         }
       })
       .catch(() => {});

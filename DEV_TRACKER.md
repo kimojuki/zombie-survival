@@ -179,6 +179,13 @@ These are intentionally ignored by Git for local development.
 - **`scripts/webhook-deploy.js`** : webhook GitHub instantané (optionnel)
 - **Doc** : [docs/DEPLOY.md](docs/DEPLOY.md)
 
+### Completed — Deploy auto robuste (reset hard) (2026-06-06)
+
+- **`deploy-prod.sh`** : `git reset --hard origin/master` au lieu de `git pull` (plus de conflits locaux).
+- **`scripts/fix-prod-once.sh`** : réparation unique pour le collègue (merge abort / deploy-prod.sh modifié).
+- **Cron** : doc chemin Infomaniak complet + `ZOMBIE_APP_DIR`.
+- **Ne pas** `git config` sur le serveur — stratégie pull intégrée au script.
+
 ### Completed — Bouton chat mobile à droite (2026-06-06)
 
 - **`#chat-btn`** : haut droite, sous le menu ☰ (`top: 56px`, `right: 12px`) — retiré de la colonne gauche.

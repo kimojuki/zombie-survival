@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# Déploiement prod Infomaniak — git pull + pm2 restart
+# Déploiement prod Infomaniak — fetch + reset hard origin/master + pm2 restart
+# Le serveur prod ne doit PAS garder de modifs locales sur les fichiers suivis.
 # Usage : ./scripts/deploy-prod.sh
 # Variables optionnelles : ZOMBIE_APP_DIR, ZOMBIE_PM2_NAME, ZOMBIE_DEPLOY_BRANCH
 
@@ -23,10 +24,18 @@ for _node_bin in "$HOME"/.nvm/versions/node/*/bin; do
 done
 export PATH
 
+export GIT_TERMINAL_PROMPT=0
+
 mkdir -p "$LOG_DIR"
 
 log() {
   echo "[$(date -Iseconds)] $*" | tee -a "$LOG_FILE"
+}
+
+_is_dirty() {
+  ! git diff --quiet 2>/dev/null || return 0
+  ! git diff --cached --quiet 2>/dev/null || return 0
+  return 1
 }
 
 if [ ! -d "$APP_DIR/.git" ]; then
@@ -50,17 +59,33 @@ fi
 
 LOCAL=$(git rev-parse HEAD)
 REMOTE=$(git rev-parse "origin/$BRANCH")
-log "local=$LOCAL remote=$REMOTE"
+DIRTY=false
+if _is_dirty; then DIRTY=true; fi
 
-if [ "$LOCAL" = "$REMOTE" ]; then
+log "local=$LOCAL remote=$REMOTE dirty=$DIRTY"
+
+if [ "$LOCAL" = "$REMOTE" ] && [ "$DIRTY" = false ]; then
   log "already up to date ($LOCAL)"
   exit 0
 fi
 
-log "pull $LOCAL -> $REMOTE"
-git pull origin "$BRANCH" 2>&1 | tee -a "$LOG_FILE"
+if [ "$DIRTY" = true ]; then
+  log "WARN: modifications locales sur le serveur — écrasées (reset --hard)"
+  git status -s 2>&1 | tee -a "$LOG_FILE" || true
+fi
 
-if git diff "$LOCAL" "$REMOTE" --name-only 2>/dev/null | grep -qE '^(package\.json|package-lock\.json)$'; then
+if [ "$LOCAL" != "$REMOTE" ]; then
+  log "sync $LOCAL -> $REMOTE"
+else
+  log "reset dirty tree at $LOCAL"
+fi
+
+PREV="$LOCAL"
+git reset --hard "origin/$BRANCH" 2>&1 | tee -a "$LOG_FILE"
+# Ne jamais supprimer .env ni database/ (untracked, hors Git)
+git clean -fd --exclude=.env --exclude=database 2>/dev/null || true
+
+if git diff "$PREV" "$REMOTE" --name-only 2>/dev/null | grep -qE '^(package\.json|package-lock\.json)$'; then
   log "npm install (dépendances modifiées)"
   if [ -f package-lock.json ]; then
     npm ci --omit=dev 2>&1 | tee -a "$LOG_FILE"
@@ -78,13 +103,18 @@ pm2 restart "$PM2_NAME" 2>&1 | tee -a "$LOG_FILE"
 NEW=$(git rev-parse --short HEAD)
 log "pm2 restart $PM2_NAME OK — commit $NEW"
 
-# Vérification rapide (optionnelle)
 if command -v curl >/dev/null 2>&1; then
-  HEALTH=$(curl -sf "http://127.0.0.1:${PORT:-3000}/api/health" 2>/dev/null || true)
+  _health_port=3000
+  if [ -f .env ]; then
+    _p=$(grep -E '^PORT=' .env 2>/dev/null | tail -1 | cut -d= -f2- | tr -d '\r" '"'" || true)
+    [ -n "$_p" ] && _health_port="$_p"
+  fi
+  sleep 2
+  HEALTH=$(curl -sf "http://127.0.0.1:${_health_port}/api/health" 2>/dev/null || true)
   if echo "$HEALTH" | grep -q '"chat":true'; then
-    log "health OK (chat actif, commit dans health)"
+    log "health OK ($HEALTH)"
   else
-    log "WARN: health sans chat:true — vérifier PORT/.env ou attendre le boot ($HEALTH)"
+    log "WARN: health sans chat:true ($HEALTH)"
   fi
 fi
 

@@ -3,11 +3,15 @@
 URL preview actuelle : `https://3k51myccypp.preview.infomaniak.website`  
 Chemin serveur : `~/sites/jeu.zombieOfficel.ch/zombie-survival`
 
-Commande manuelle habituelle :
+Commande manuelle habituelle (normalement **inutile** si le cron tourne) :
 
 ```bash
-cd ~/sites/jeu.zombieOfficel.ch/zombie-survival && git pull && pm2 restart zombie
+bash ~/sites/jeu.zombieOfficel.ch/zombie-survival/scripts/deploy-prod.sh
 ```
+
+> Sur Infomaniak le chemin réel est souvent  
+> `/home/clients/XXXX/sites/jeu.zombieOfficel.ch/zombie-survival`  
+> (voir `dir=` dans `~/logs/zombie-deploy.log`).
 
 ---
 
@@ -15,63 +19,59 @@ cd ~/sites/jeu.zombieOfficel.ch/zombie-survival && git pull && pm2 restart zombi
 
 Vérifie Git toutes les 2 minutes et redémarre **seulement** s'il y a un nouveau commit sur `master`.
 
-> **Important :** le cron est une config **une seule fois en SSH** sur le serveur Infomaniak.  
-> Un `git push` depuis votre PC **ne configure pas** le cron automatiquement.  
-> Les scripts `scripts/deploy-prod.sh` doivent **exister sur le serveur** (après au moins un `git pull` manuel).
+Le script **`deploy-prod.sh`** fait `git fetch` + **`git reset --hard origin/master`** (pas de `git pull` merge).  
+Les modifs locales accidentelles sur le serveur (ex. édition manuelle de `deploy-prod.sh`) sont **écrasées** — c'est voulu en prod.
 
-### 1. Premier déploiement manuel (obligatoire une fois)
+> **Important :** le cron est une config **une seule fois en SSH** sur le serveur Infomaniak.
+
+### 1. Réparation unique (si erreur « would be overwritten by merge »)
+
+```bash
+cd /home/clients/VOTRE_ID/sites/jeu.zombieOfficel.ch/zombie-survival
+bash scripts/fix-prod-once.sh
+```
+
+Ou à la main :
+
+```bash
+git fetch origin master
+git reset --hard origin/master
+chmod +x scripts/*.sh
+bash scripts/deploy-prod.sh
+```
+
+### 2. Premier déploiement (si repo jamais synchronisé)
 
 ```bash
 ssh votre-user@infomaniak
-cd ~/sites/jeu.zombieOfficel.ch/zombie-survival
-git pull origin master
-chmod +x scripts/deploy-prod.sh scripts/git-watch-deploy.sh
-mkdir -p ~/logs
-bash scripts/deploy-prod.sh
-pm2 restart zombie
+cd ~/sites/jeu.zombieOfficel.ch/zombie-survival   # adapter le chemin
+bash scripts/fix-prod-once.sh
 ```
 
 Vérifier : `curl -s https://3k51myccypp.preview.infomaniak.website/api/health`  
-→ doit contenir `"chat": true` et `"commit": "36b2a1e"` (ou plus récent).
+→ `"chat": true` et `"commit": "…"`.
 
-### 2. Rendre les scripts exécutables (si pas déjà fait)
-
-```bash
-cd ~/sites/jeu.zombieOfficel.ch/zombie-survival
-chmod +x scripts/deploy-prod.sh scripts/git-watch-deploy.sh
-mkdir -p ~/logs
-```
-
-### 3. Tester le script à la main
-
-```bash
-bash scripts/deploy-prod.sh
-tail -20 ~/logs/zombie-deploy.log
-```
-
-### 4. Crontab
+### 3. Crontab (auto-deploy — plus de commandes manuelles)
 
 ```bash
 crontab -e
 ```
 
-Ajouter (adapter le chemin `$HOME` si besoin) :
+**Infomaniak** — utiliser le chemin **complet** (copier depuis `deploy-prod.log`) :
 
 ```cron
-*/2 * * * * /bin/bash $HOME/sites/jeu.zombieOfficel.ch/zombie-survival/scripts/git-watch-deploy.sh >> $HOME/logs/zombie-deploy-cron.log 2>&1
+*/2 * * * * ZOMBIE_APP_DIR=/home/clients/VOTRE_ID/sites/jeu.zombieOfficel.ch/zombie-survival /bin/bash /home/clients/VOTRE_ID/sites/jeu.zombieOfficel.ch/zombie-survival/scripts/git-watch-deploy.sh >> $HOME/logs/zombie-deploy-cron.log 2>&1
 ```
 
-**Workflow dev :** `git push origin master` → sous 2 min max, le serveur pull + `pm2 restart zombie`.
+**Workflow dev :** `git push origin master` → sous 2 min, le serveur sync + `pm2 restart zombie` **sans intervention**.
 
-### 5. Vérifier que le cron tourne
+### 4. Vérifier que le cron tourne
 
 ```bash
 crontab -l
 tail -30 ~/logs/zombie-deploy-cron.log
 tail -30 ~/logs/zombie-deploy.log
 ```
-
-Si `zombie-deploy-cron.log` n'existe pas ou est vide → le cron n'est **pas** installé ou le chemin est faux.
 
 ---
 
@@ -135,6 +135,7 @@ Le webhook n'agit que sur la branche `master` (ou `ZOMBIE_DEPLOY_BRANCH`).
 | `/api/health` sans `"chat"` ni `"commit"` | Vieux `server.js` encore en mémoire | SSH → `bash scripts/deploy-prod.sh` |
 | Pas de fichier `~/logs/zombie-deploy-cron.log` | Cron **jamais** configuré | `crontab -e` (voir Option A) |
 | Log cron : `pm2: command not found` | PATH cron trop court | Script mis à jour charge nvm ; refaire `git pull` + retester |
+| Log : `would be overwritten by merge` | Fichiers modifiés à la main sur le serveur | `bash scripts/fix-prod-once.sh` (reset hard) |
 | Log : `git fetch failed` | Repo privé sans credentials SSH | Configurer deploy key GitHub sur le serveur |
 | Log : `already up to date` mais health ancien | mauvaise branche / mauvais dossier | `git remote -v` + `git log -1` en SSH |
 
@@ -161,11 +162,19 @@ bash ~/sites/jeu.zombieOfficel.ch/zombie-survival/scripts/deploy-prod.sh
 Si `git pull` échoue (conflits locaux sur le serveur) :
 
 ```bash
+bash scripts/fix-prod-once.sh
+```
+
+Équivalent manuel :
+
+```bash
 cd ~/sites/jeu.zombieOfficel.ch/zombie-survival
-git status
-git reset --hard origin/master   # ⚠️ écrase les modifs locales serveur
+git fetch origin master
+git reset --hard origin/master
 bash scripts/deploy-prod.sh
 ```
+
+> **Ne pas** éditer les fichiers du repo directement sur le serveur prod — le cron écrase tout via `reset --hard`.
 
 ### Chat multijoueur inactif
 

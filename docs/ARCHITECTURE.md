@@ -84,7 +84,7 @@ Le premier client connecté envoie au serveur :
 | Plateforme | Ouvrir la saisie | Envoyer | Fermer |
 |------------|------------------|---------|--------|
 | **PC** | **Entrée** ou **T** | **Entrée** | **Échap** |
-| **Mobile** | bouton **💬** (colonne gauche, avec 🎒/🗺️) | **➤** ou Entrée clavier | re-clic **💬** ou **Échap** |
+| **Mobile** | bouton **💬** (haut droite, sous ☰) | **➤** ou Entrée clavier | re-clic **💬** ou **Échap** |
 
 Après envoi sur PC, le **pointer lock** reprend automatiquement.
 

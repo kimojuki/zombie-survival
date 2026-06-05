@@ -179,6 +179,11 @@ These are intentionally ignored by Git for local development.
 - **`scripts/webhook-deploy.js`** : webhook GitHub instantané (optionnel)
 - **Doc** : [docs/DEPLOY.md](docs/DEPLOY.md)
 
+### Completed — Bouton chat mobile à droite (2026-06-06)
+
+- **`#chat-btn`** : haut droite, sous le menu ☰ (`top: 56px`, `right: 12px`) — retiré de la colonne gauche.
+- **Cache bust** : `20260606l`
+
 ### Completed — Fix auto-deploy + health commit (2026-06-06)
 
 - **`/api/health`** : champ `commit` (hash git) pour vérifier la version prod.

@@ -21,23 +21,40 @@ npm run dev        # nodemon
 
 Copy `.env.example` → `.env` for local development.
 
+## Documentation (update on every feature)
+
+| Doc | When to update |
+|-----|----------------|
+| `DEV_TRACKER.md` | **Always** — every work session |
+| `README.md` | Setup, onboarding changes |
+| `docs/ARCHITECTURE.md` | Client/server flow changes |
+| `docs/RCON.md` | Admin commands, flags, API |
+| `docs/ROAD_NETWORK.md` | Roads, terrain corridors, spawn paths |
+| `.env.example` | New environment variables |
+
 ## Key files
 
 | File | Role |
 |------|------|
-| `server.js` | Auth, zombie AI, loot, multiplayer sync |
+| `server.js` | Auth, zombie AI, loot, multiplayer sync, RCON hooks |
+| `src/rcon.js` | Admin command registry |
 | `public/js/game.js` | Main loop, movement, shooting |
 | `public/js/world.js` | Terrain, day/night, vegetation, water |
-| `public/js/buildings.js` | Roads, building utils, sector registry |
+| `public/js/road_network.js` | **Road graph** — single source of truth (flatten + mesh + queries) |
+| `public/js/buildings.js` | Building utils, sector registry → RoadNetwork |
 | `public/js/sector_*.js` | World sectors (forest, town, maincity, military) |
+| `public/js/rcon.js` | In-game admin console UI |
+| `public/js/network.js` | Socket.io client sync |
 | `src/db.js` | Dual SQLite/MySQL data layer |
 | `DEV_TRACKER.md` | **Keep updated** with every local work session |
 
 ## Conventions
 
-- Sectors register via `ZS.Buildings.registerSector({ build })`
-- Loot buildings register via `registerLoot(category, cx, cz, w, d)`
-- First connected client sends colliders, water zones, and loot buildings to the server
+- Roads: sectors declare `roads: []` in `registerSector` — **no** direct `ribbon()` calls
+- Build order: `resolve → flatten → terrain → buildAll → buildMeshes` (see `world.js`)
+- Loot buildings: `registerLoot(category, cx, cz, w, d)`
+- First connected client sends colliders, water zones, loot buildings to server
+- Increment `CACHE_BUST` in `game.html` after client JS changes
 - Do not commit `.env`, `database/*.sqlite`, or `notes-local/`
 
 ## MCP

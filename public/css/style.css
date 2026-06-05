@@ -255,6 +255,9 @@ body {
 #menu-panel .menu-item:hover { background: rgba(255,255,255,0.12); }
 #menu-panel .menu-item.danger:hover  { background: rgba(229,62,62,0.45); }
 #menu-panel .menu-item.danger:active { background: var(--red); }
+#menu-panel .menu-console-item.menu-console-hidden { display: none !important; }
+#menu-panel .menu-console-item { color: #8fd4a8; }
+#menu-panel .menu-console-item:hover { background: rgba(80, 200, 140, 0.18); }
 
 #crosshair {
   position: absolute; top: 50%; left: 50%;
@@ -281,6 +284,150 @@ body {
   padding: 0.4rem 1.2rem; border-radius: 20px;
   font-size: 0.9rem; color: var(--red);
   opacity: 0; transition: opacity 0.5s; pointer-events: none;
+}
+
+/* ── Console RCON admin ─────────────────────────────────────── */
+#rcon-panel {
+  display: none;
+  position: fixed;
+  left: 12px;
+  right: 12px;
+  bottom: 12px;
+  height: min(42vh, 320px);
+  z-index: 500;
+  flex-direction: column;
+  background: rgba(8, 12, 18, 0.94);
+  border: 1px solid rgba(80, 200, 140, 0.35);
+  border-radius: 8px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.55);
+  font-family: 'Consolas', 'Courier New', monospace;
+  font-size: 13px;
+  pointer-events: auto;
+}
+.rcon-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px;
+  border-bottom: 1px solid rgba(80, 200, 140, 0.2);
+  flex-shrink: 0;
+}
+.rcon-title { color: #6fcf97; font-weight: bold; flex: 1; }
+.rcon-hint { color: rgba(255,255,255,0.35); font-size: 11px; }
+#rcon-close {
+  background: transparent;
+  border: none;
+  color: #aaa;
+  font-size: 16px;
+  cursor: pointer;
+  padding: 4px 8px;
+}
+#rcon-close:hover { color: #fff; }
+.rcon-log {
+  flex: 1;
+  overflow-y: auto;
+  padding: 8px 12px;
+  color: #c8e6d0;
+  line-height: 1.45;
+}
+.rcon-line.rcon-cmd { color: #88ccff; }
+.rcon-line.rcon-ok { color: #a8f0b8; }
+.rcon-line.rcon-err { color: #ff8888; }
+.rcon-line.rcon-warn { color: #ffcc66; }
+.rcon-line.rcon-dim { color: rgba(200,220,210,0.45); }
+.rcon-input-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border-top: 1px solid rgba(80, 200, 140, 0.2);
+  flex-shrink: 0;
+}
+.rcon-prompt { color: #6fcf97; font-weight: bold; }
+#rcon-input {
+  flex: 1;
+  background: rgba(0,0,0,0.35);
+  border: 1px solid rgba(80, 200, 140, 0.25);
+  border-radius: 4px;
+  color: #e8fff0;
+  padding: 8px 10px;
+  font-family: inherit;
+  font-size: 13px;
+  outline: none;
+}
+#rcon-input:focus { border-color: rgba(80, 200, 140, 0.6); }
+#rcon-input:disabled { opacity: 0.5; }
+.rcon-send-btn {
+  flex-shrink: 0;
+  min-width: 44px;
+  min-height: 44px;
+  border: 1px solid rgba(80, 200, 140, 0.35);
+  border-radius: 8px;
+  background: rgba(80, 200, 140, 0.15);
+  color: #a8f0b8;
+  font-size: 18px;
+  cursor: pointer;
+  pointer-events: auto;
+}
+.rcon-send-btn:active { background: rgba(80, 200, 140, 0.35); }
+
+/* Mobile : console plein écran, clavier tactile */
+@media (pointer: coarse), (max-width: 900px) {
+  #rcon-panel.rcon-mobile {
+    left: 0;
+    right: 0;
+    top: 0;
+    bottom: 0;
+    height: auto;
+    border-radius: 0;
+    border: none;
+    font-size: 14px;
+  }
+  #rcon-panel.rcon-mobile .rcon-hint { display: none; }
+  #rcon-panel.rcon-mobile #rcon-input {
+    font-size: 16px;
+    padding: 12px 10px;
+    min-height: 44px;
+  }
+  #rcon-panel.rcon-mobile .rcon-log {
+    padding: 10px 12px;
+    -webkit-overflow-scrolling: touch;
+  }
+  #rcon-panel.rcon-mobile .rcon-header {
+    padding-top: max(10px, env(safe-area-inset-top));
+  }
+  #rcon-panel.rcon-mobile .rcon-input-row {
+    padding-bottom: max(10px, env(safe-area-inset-bottom));
+  }
+}
+
+/* Bloque joystick / boutons jeu quand console ouverte */
+body.rcon-open #left-zone,
+body.rcon-open #right-zone,
+body.rcon-open #jump-btn,
+body.rcon-open #shoot-btn,
+body.rcon-open #reload-btn {
+  pointer-events: none !important;
+  opacity: 0.25;
+}
+
+#server-announce {
+  position: fixed;
+  top: 72px;
+  left: 50%;
+  transform: translateX(-50%);
+  max-width: 90vw;
+  padding: 10px 20px;
+  background: rgba(20, 40, 30, 0.92);
+  border: 1px solid rgba(100, 200, 140, 0.5);
+  border-radius: 8px;
+  color: #d4ffd8;
+  font-size: 14px;
+  z-index: 450;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.3s;
+  text-align: center;
 }
 
 /* ── Hotbar ──────────────────────────────────────────────────── */
@@ -480,7 +627,19 @@ body {
 
 #connecting-screen {
   position: fixed; inset: 0;
-  background: #000; display: flex;
+  background: rgba(0, 0, 0, 0.92); display: flex;
   align-items: center; justify-content: center;
-  font-size: 1.2rem; color: #aaa; z-index: 200;
+  font-size: 1.2rem; color: #ccc; z-index: 200;
 }
+.connecting-inner {
+  display: flex; flex-direction: column; align-items: center; gap: 0.75rem;
+  max-width: 22rem; padding: 1.5rem; text-align: center;
+}
+.connecting-inner p { margin: 0; font-weight: 600; color: #eee; }
+.connecting-inner small { color: #888; font-size: 0.85rem; line-height: 1.4; }
+.connecting-spinner {
+  width: 2.25rem; height: 2.25rem;
+  border: 3px solid #333; border-top-color: #e85;
+  border-radius: 50%; animation: connecting-spin 0.85s linear infinite;
+}
+@keyframes connecting-spin { to { transform: rotate(360deg); } }

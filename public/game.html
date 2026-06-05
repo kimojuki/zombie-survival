@@ -19,7 +19,13 @@
   </div>
 </div>
 
-<div id="connecting-screen">Connexion au serveur...</div>
+<div id="connecting-screen">
+  <div class="connecting-inner">
+    <div class="connecting-spinner" aria-hidden="true"></div>
+    <p id="connecting-msg">Connexion au serveur…</p>
+    <small id="connecting-detail"></small>
+  </div>
+</div>
 
 <canvas id="game-canvas"></canvas>
 
@@ -61,6 +67,12 @@
 <button id="menu-btn" title="Menu">☰</button>
 <div id="menu-panel" style="display:none">
   <button id="menu-audio" class="menu-item">🔊 Son : activé</button>
+  <button id="menu-console" class="menu-item menu-console-item menu-console-hidden" type="button">
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/>
+    </svg>
+    Console dev
+  </button>
   <button id="menu-logout" class="menu-item danger">
     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
       <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>
@@ -126,25 +138,69 @@
   // une copie mutable pour pouvoir y attacher GLTFLoader.
   window.THREE = { ...THREE, GLTFLoader };
 
-  // Charger les modules du jeu dans l'ordre, une fois THREE prêt
+  function setConnectingMsg(msg, detail) {
+    const m = document.getElementById('connecting-msg');
+    const d = document.getElementById('connecting-detail');
+    if (m) m.textContent = msg || '';
+    if (d) d.textContent = detail || '';
+    document.getElementById('connecting-screen').style.display = 'flex';
+  }
+
+  async function waitForServer() {
+    let attempt = 0;
+    const maxAttempts = 120;
+    while (attempt < maxAttempts) {
+      attempt++;
+      try {
+        const r = await fetch('/api/health', { cache: 'no-store' });
+        if (r.status === 404) {
+          setConnectingMsg('Chargement du jeu…', 'Serveur sans endpoint health — chargement direct');
+          return;
+        }
+        const data = await r.json().catch(() => ({}));
+        if (data.ready) {
+          setConnectingMsg('Chargement du jeu…', '');
+          return;
+        }
+        setConnectingMsg(
+          'Serveur en cours de démarrage…',
+          `Patientez (${attempt}/${maxAttempts})…`
+        );
+      } catch {
+        setConnectingMsg(
+          'Serveur indisponible…',
+          `Vérifiez que Node.js tourne sur le port 3000 (${attempt}/${maxAttempts})`
+        );
+      }
+      await new Promise((resolve) => setTimeout(resolve, 1000));
+    }
+    setConnectingMsg('Chargement du jeu…', 'Délai dépassé — tentative de connexion quand même');
+  }
+
+  const CACHE_BUST = '20260606c';
+  // Attendre le serveur, puis charger les scripts du jeu
   const modules = [
     '/js/items.js', '/js/survival.js', '/js/craft.js', '/js/noise.js',
-    '/js/buildings.js', '/js/sector_01_forest.js', '/js/sector_02_town.js',
+    '/js/road_network.js', '/js/buildings.js', '/js/vehicles.js', '/js/campfire.js', '/js/spawn_clearing.js', '/js/sector_01_forest.js', '/js/sector_02_town.js',
     '/js/sector_03_maincity.js', '/js/sector_05_military.js', '/js/world.js',
-    '/js/player.js', '/js/icons.js', '/js/audio.js', '/js/zombie.js', '/js/network.js', '/js/ui.js',
+    '/js/player.js', '/js/icons.js', '/js/audio.js', '/js/zombie.js', '/js/rcon.js', '/js/network.js', '/js/ui.js',
     '/js/inventory.js', '/js/map.js', '/js/game.js'
   ];
   (async () => {
+    await waitForServer();
     for (const src of modules) {
       await new Promise((resolve, reject) => {
         const s = document.createElement('script');
-        s.src = src;
+        s.src = src + (src.includes('?') ? '&' : '?') + 'v=' + CACHE_BUST;
         s.onload = resolve;
         s.onerror = () => reject(new Error('Échec du chargement de ' + src));
         document.body.appendChild(s);
       });
     }
-  })().catch(err => console.error(err));
+  })().catch(err => {
+    console.error(err);
+    setConnectingMsg('Erreur de chargement', err.message || String(err));
+  });
 </script>
 
 </body>

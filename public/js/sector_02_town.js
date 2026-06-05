@@ -3,8 +3,25 @@
 (function () {
   'use strict';
 
-  // ── Flat zone étendue ─────────────────────────────────────────────────────────
-  ZS.registerFlatZone(-177, 0, 78, 50, 12);
+  // Route principale — traverse la map (est → ouest), le sentier spawn arrive sur une ouverture
+  const TOWN_MAIN_PTS = [
+    [88, -26], [68, -23], [48, -20], [28, -18.5], [14, -18],
+    [-8, -18], [-34, -12], [-64, -8], [-78, -9], [-92, -9],
+    [-104, -9], [-118, -8], [-155, 0], [-180, 1], [-210, 0], [-250, 1], [-295, 0],
+  ];
+  const TOWN_ROADS = [
+    {
+      id: 'town_main',
+      pts: TOWN_MAIN_PTS,
+      width: 6.2,
+      type: 'asphalt',
+      line: true,
+      broken: true,
+      barriers: true,
+      smooth: true,
+      taperEnd: 14,
+    },
+  ];
   // ── Build ─────────────────────────────────────────────────────────────────────
 
   function build(scene) {
@@ -21,7 +38,6 @@
     _buildApartment(scene, B);
     _buildParking(scene, B);
     _buildStreetLights(scene, B);
-    _buildAbandonedVehicles(scene, B);
     _buildBusStops(scene, B);
     _buildSignage(scene, B);
     _buildMarketStalls(scene, B);
@@ -32,31 +48,6 @@
   // ── Routes ────────────────────────────────────────────────────────────────────
 
   function _buildAllRoads(scene, B) {
-    const { M, ribbon } = B;
-
-    // Route principale E-O (connexion S01 → S02, continue vers ouest)
-    ribbon(scene, [
-      [14,-18],[-8,-18],[-34,-12],[-64,-8],[-96,-4],
-      [-128,1],[-155,0],[-180,1],[-210,0],[-250,1],[-295,0]
-    ], 6.2, M.roadBroken, true);
-
-    // Rue résidentielle nord
-    ribbon(scene, [[-118,-16],[-145,-16],[-170,-16],[-198,-16],[-228,-16],[-252,-16]], 4.0, M.road, false);
-    // Rue résidentielle sud
-    ribbon(scene, [[-118,16],[-145,16],[-170,16],[-198,16],[-228,16],[-252,16]], 4.0, M.road, false);
-
-    // Ruelle arrière nord (derrière les maisons)
-    ribbon(scene, [[-118,-30],[-145,-30],[-170,-30],[-200,-30],[-230,-30],[-252,-30]], 3.2, M.roadDirt, false);
-    // Ruelle arrière sud
-    ribbon(scene, [[-118,30],[-145,30],[-170,30],[-200,30],[-230,30],[-252,30]], 3.2, M.roadDirt, false);
-
-    // Rue transversale N-S — centre-ville
-    ribbon(scene, [[-170,-48],[-170,-30],[-170,-16],[-170,0],[-170,16],[-170,30],[-170,46]], 4.5, M.road, false);
-    // Rue transversale est
-    ribbon(scene, [[-136,-46],[-136,-30],[-136,-16],[-136,0],[-136,16],[-136,30],[-136,46]], 3.8, M.road, false);
-    // Rue transversale ouest
-    ribbon(scene, [[-210,-46],[-210,-30],[-210,-16],[-210,0],[-210,16],[-210,30],[-210,46]], 3.8, M.road, false);
-
     // Trottoirs béton le long de la route principale (nord et sud)
     B.slab(scene, -177, -4.5, ZS.getTerrainHeight(-177,-4.5)+0.07, 120, 2.2, B.M.concDark);
     B.slab(scene, -177,  4.5, ZS.getTerrainHeight(-177, 4.5)+0.07, 120, 2.2, B.M.concDark);
@@ -311,10 +302,8 @@
     const signMat = new THREE.MeshLambertMaterial({ color: 0x0a2060 });
     B.box(scene, cx, cz+D/2+0.22, baseY+wallH-0.55, W-0.4, 0.65, 0.28, signMat);
 
-    // Parvis + voiture de police
+    // Parvis
     B.slab(scene, cx, cz+D/2+2.5, baseY+0.07, W+2.0, 5.0, B.M.concDark);
-    B.car(scene, cx-3, cz+D/2+4.0,  0.05, 0x111133);
-    B.car(scene, cx+3, cz+D/2+4.0, -0.05, 0x111133);
 
     // ── Intérieur ──
     // Accueil (comptoir central)
@@ -545,8 +534,6 @@
     B.wall(scene, cx, cz+D/2, baseY+doorH, doorW, 0.25, wallH-doorH, B.M.concrete, true);
     B.box(scene, cx, cz+D/2+0.01, baseY+doorH/2, doorW-0.1, doorH, 0.06, B.M.metal);
 
-    // Voiture + établi + étagère
-    B.car(scene, cx, cz-0.8, 0);
     _fCounter(scene, B, cx-W/2+1.0, cz-D/2+0.9, baseY, 0.9, 2.5);
     _fShelf(scene, B, cx+W/2-0.12, cz-0.5, baseY, 3.5, 'z');
     // Tonneaux de pétrole
@@ -600,57 +587,6 @@
       pt.position.set(lx, fy-0.15, fz); scene.add(pt);
       B.addCollider({ x:lx, z:lz, r:0.12 });
     }
-  }
-
-  // ── Véhicules abandonnés ──────────────────────────────────────────────────────
-
-  function _buildAbandonedVehicles(scene, B) {
-    _buildBus(scene, B, -158, 3.5, 0.18);
-    // Embouteillage — couleurs variées
-    for (const [x,z,r,c] of [
-      [-136,-2,   0.08, 0x5a3015], [-144, 2.2,-0.05, 0x2a4a2a],
-      [-157,-1.8, 3.18, 0x1a2a4a], [-182, 2,   0.10, 0x4a3a10],
-      [-196,-1.5,-0.08, 0x3a3a3a], [-209, 2.2, 3.12, 0x5a1a1a],
-      [-222,-1,   0.06, 0x4a4010], [-240, 1.8,-0.10, 0x2a3a2a],
-    ]) B.car(scene, x, z, r, c);
-    // Rues résidentielles
-    for (const [x,z,r,c] of [
-      [-146,-19, 0.5,  0x3a3a3a], [-183,-20,-0.4,  0x5a1a1a],
-      [-145, 19, 3.2,  0x2a4a2a], [-200, 20, 0.25, 0x4a3a10],
-      [-145,-32, 0.3,  0x1a2a4a], [-220,-26,-0.2,  0x5a3015],
-      [-145, 32, 0.15, 0x4a4010],
-    ]) B.car(scene, x, z, r, c);
-    // Parking
-    B.car(scene, -143, 5.5, -0.15, 0x3a3a3a);
-    B.car(scene, -158, 5.5,  0.05, 0x2a4a2a);
-    B.car(scene, -174, 5.5,  0.08, 0x5a3015);
-  }
-
-  function _buildBus(scene, B, cx, cz, rotY) {
-    const py=ZS.getTerrainHeight(cx,cz);
-    const bodyMat=new THREE.MeshLambertMaterial({color:0x1e2a6a});
-    const darkMat=new THREE.MeshLambertMaterial({color:0x181818});
-    const glassMat=new THREE.MeshLambertMaterial({color:0x3a5566,transparent:true,opacity:0.55});
-    const stripMat=new THREE.MeshLambertMaterial({color:0xddcc00});
-    const g=new THREE.Group();
-    const busBody=new THREE.Mesh(new THREE.BoxGeometry(2.5,2.1,9.0),bodyMat);
-    busBody.position.set(0,1.12,0); busBody.castShadow=true; busBody.receiveShadow=true; g.add(busBody);
-    const busRoof=new THREE.Mesh(new THREE.BoxGeometry(2.4,0.28,8.8),bodyMat);
-    busRoof.position.set(0,2.24,0); g.add(busRoof);
-    for(let i=0;i<5;i++) for(const sx of[-1.27,1.27]){
-      const w=new THREE.Mesh(new THREE.BoxGeometry(0.05,0.75,1.3),glassMat);
-      w.position.set(sx,1.65,-3.0+i*1.52); g.add(w);
-    }
-    const fw=new THREE.Mesh(new THREE.BoxGeometry(2.1,1.0,0.05),glassMat); fw.position.set(0,1.65,-4.46); g.add(fw);
-    const bw=new THREE.Mesh(new THREE.BoxGeometry(2.1,1.0,0.05),glassMat); bw.position.set(0,1.65,4.46);  g.add(bw);
-    for(const sx of[-1.27,1.27]){const s=new THREE.Mesh(new THREE.BoxGeometry(0.04,0.22,8.6),stripMat);s.position.set(sx,0.6,0);g.add(s);}
-    for(const[ox,oz]of[[-1.3,-3.1],[1.3,-3.1],[-1.3,0],[1.3,0],[-1.3,3.1],[1.3,3.1]]){
-      const w=new THREE.Mesh(new THREE.CylinderGeometry(0.46,0.46,0.28,9),darkMat);
-      w.rotation.z=Math.PI/2; w.position.set(ox,0.48,oz); g.add(w);
-    }
-    g.position.set(cx,py,cz); g.rotation.y=rotY; scene.add(g);
-    // maxY = toit du bus (~2.38m) — accessible depuis le toit d'une voiture
-    B.addCollider({type:'box',cx,cz,hw:1.35,hd:4.6,maxY:py+2.38});
   }
 
   // ── Décors de rue ─────────────────────────────────────────────────────────────
@@ -1068,5 +1004,5 @@
 
   // ─────────────────────────────────────────────────────────────────────────────
 
-  ZS.Buildings.registerSector({ build });
+  ZS.Buildings.registerSector({ build, roads: TOWN_ROADS });
 }());

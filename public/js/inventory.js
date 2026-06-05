@@ -1008,6 +1008,7 @@
 
   function _bindKeys() {
     document.addEventListener('keydown', (e) => {
+      if (window.ZS?.Rcon?.isOpen?.()) return;
       const digit = parseInt(e.key);
       if (digit >= 1 && digit <= 6) _setActiveSlot(digit - 1);
       if (e.code === 'KeyE') { if (!grabNearest()) _useActiveItem(); }

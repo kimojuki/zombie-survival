@@ -2,6 +2,9 @@
 
 # Road Network Design
 
+> **Implémentation technique (code)** : voir [docs/ROAD_NETWORK.md](../docs/ROAD_NETWORK.md)  
+> Module : `public/js/road_network.js` — refonte 2026-06-05
+
 Roads are EXTREMELY important for world readability.
 
 The map must contain:
@@ -19,7 +22,7 @@ Features:
 
 * road markings
 * broken sections
-* abandoned vehicles
+* abandoned vehicles — **placement centralisé** : `public/js/vehicles.js` (le long des routes RoadNetwork, pas dans les bâtiments)
 * utility poles
 * road signs
 

@@ -3,90 +3,74 @@
 (function () {
   'use strict';
 
-  // ── Flat zones (exécutées avant buildTerrain) ─────────────────────────────────
-  ZS.registerFlatZone(  0,   0,  6,  6, 3);   // Spawn / feu de camp
-  ZS.registerFlatZone(-20,  33, 22, 18, 5);   // Campement + grande tente
-  ZS.registerFlatZone(-60, -70, 13, 11, 4);   // Cabane forestière nord
-  ZS.registerFlatZone(-80,  42, 13, 11, 4);   // Cabane forestière sud
-  ZS.registerFlatZone( 82,-100, 18, 11, 5);   // Station essence
+  // ── Carte locale spawn (rayon ~45 m) ─────────────────────────────────────────
+  // Clairière au centre → 1 sentier de sortie sud → jonction ville (14,-18)
+  // Carrefour forestier isolé à (28,-42) : branches vers cabanes / sud / essence
+  // Aucune autre route ne traverse la clairière.
+  const SPAWN_CX = 0, SPAWN_CZ = -6;
+  const TOWN_JUNCTION = [14, -18];
+  const FOREST_HUB    = [28, -42];
+
+  // ── Flat zones ────────────────────────────────────────────────────────────────
+  // Spawn : clairière circulaire via RoadNetwork.defineClearing (plus de boîte rectangulaire)
+  ZS.registerFlatZone(FOREST_HUB[0], FOREST_HUB[1], 7, 7, 6);
+  ZS.registerFlatZone(-20,  33, 22, 18, 8);   // Campement + grande tente
+  ZS.registerFlatZone(-60, -70, 13, 11, 6);   // Cabane forestière nord
+  ZS.registerFlatZone(-80,  42, 13, 11, 6);   // Cabane forestière sud
+  ZS.registerFlatZone( 82,-100, 18, 11, 7);   // Station essence
 
   const RIVER_PTS = [
     [-118, -270], [-112, -210], [-106, -150], [-100, -85],
     [ -96,    0], [-100,   75], [-105,  150], [ -98,  210]
   ];
-  const RIVER_WIDTH = 14;
-  const RIVER_WATER_WIDTH = 11;
-  const RIVER_DEPTH = 0.42;
-  const RIVER_WATER_RISE = 0.36; // surface au-dessus du lit creusé
-  ZS.registerRiverChannel(RIVER_PTS, RIVER_WIDTH, RIVER_DEPTH, 7, 2.0);
+  const RIVER_WIDTH = 12;
+  const RIVER_WATER_WIDTH = 10;
+  const RIVER_DEPTH = 0.18;
+  const RIVER_WATER_RISE = 0.26;
+  ZS.registerRiverChannel(RIVER_PTS, RIVER_WIDTH, RIVER_DEPTH, 14);
+  ZS.registerFlatZone(-104, -9, 18, 5, 5);   // Pont S01→S02
+
+  const SPAWN_CLEARING = { id: 'spawn_camp', cx: SPAWN_CX, cz: SPAWN_CZ, rx: 5.8, rz: 5.2, blend: 4.5 };
+
+  function _forestRoads() {
+    const trail = (ZS.SPAWN_TRAIL_PTS || [[0, -11.2], [14, -18]]).map(p => p.slice());
+    return [
+      { id: 'spawn_trail', pts: trail, width: 2.0, type: 'dirt', smooth: true },
+    ];
+  }
 
   // ── Build ─────────────────────────────────────────────────────────────────────
 
-  function build(scene) {
+  function     build(scene) {
     const B = ZS.B;
     _buildSpawn(scene, B);
+    if (ZS.buildClearingRing) ZS.buildClearingRing(scene, SPAWN_CX, SPAWN_CZ, B);
+    if (ZS.buildSpawnTrail && ZS.SPAWN_TRAIL_PTS) {
+      ZS.buildSpawnTrail(scene, ZS.SPAWN_TRAIL_PTS, B);
+    } else if (ZS.buildClearingExit) {
+      ZS.buildClearingExit(scene, SPAWN_CX, -20, B);
+    }
     _buildCampsite(scene, B);
     _buildCabinNorth(scene, B);
     _buildCabinSouth(scene, B);
     _buildGasStation(scene, B);
-    _buildForestRoads(scene, B);
     _buildUtilityPoles(scene, B);
     _buildTreeStumps(scene, B);
     _buildRiver(scene);
     _spawnForestTrees(scene);
     _spawnDeadTrees(scene);
-    _buildAbandonedCars(scene, B);
   }
 
   // ── Zone de spawn ─────────────────────────────────────────────────────────────
 
   function _buildSpawn(scene, B) {
-    const baseY = ZS.getTerrainHeight(0, 0);
-    ZS.registerLoot('maison', 2.5, 2, 5, 5);   // quelques objets près du feu de camp (départ)
+    const cx = SPAWN_CX, cz = SPAWN_CZ;
+    const baseY = ZS.getTerrainHeight(cx, cz);
+    ZS.registerLoot('maison', cx, cz, 5, 5);
 
-    const platMat = new THREE.MeshLambertMaterial({ color: 0x8B7355 });
-    const plat    = new THREE.Mesh(new THREE.CylinderGeometry(3, 3.5, 0.4, 16), platMat);
-    plat.position.set(0, baseY + 0.2, 0);
-    plat.receiveShadow = true;
-    scene.add(plat);
-
-    const stoneMat = new THREE.MeshLambertMaterial({ color: 0x585858 });
-    for (let i = 0; i < 7; i++) {
-      const a     = i / 7 * Math.PI * 2;
-      const stone = new THREE.Mesh(new THREE.SphereGeometry(0.18 + (i % 3) * 0.04, 5, 4), stoneMat);
-      stone.position.set(Math.cos(a) * 0.62, baseY + 0.34, Math.sin(a) * 0.62);
-      stone.castShadow = true;
-      scene.add(stone);
-    }
-
-    const logMat = new THREE.MeshLambertMaterial({ color: 0x5a3010 });
-    for (let i = 0; i < 3; i++) {
-      const a   = i / 3 * Math.PI * 2;
-      const log = new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.1, 1.1, 6), logMat);
-      log.position.set(Math.cos(a) * 0.28, baseY + 0.38, Math.sin(a) * 0.28);
-      log.rotation.z = 0.72;
-      log.rotation.y = a;
-      log.castShadow = true;
-      scene.add(log);
-    }
-
-    const fireMat  = new THREE.MeshLambertMaterial({ color: 0xff7700, emissive: 0xff3300, emissiveIntensity: 1.5 });
-    const fireMesh = new THREE.Mesh(new THREE.ConeGeometry(0.26, 0.82, 7), fireMat);
-    fireMesh.position.set(0, baseY + 0.82, 0);
-    scene.add(fireMesh);
-
-    const fireLight = new THREE.PointLight(0xff8830, 2.2, 22);
-    fireLight.position.set(0, baseY + 1.5, 0);
-    scene.add(fireLight);
-    ZS.registerFireLight(fireLight, fireMesh);
-
-    B.box(scene,  2.5,  2.2, baseY + 0.4, 0.7, 0.7, 0.7, B.M.wood2);
-    B.box(scene,  2.5,  2.2, baseY + 1.1, 0.7, 0.7, 0.7, B.M.wood2);
-    B.box(scene,  3.3,  1.6, baseY + 0.4, 0.8, 0.8, 0.8, B.M.wood2);
-    B.addCollider({ type: 'box', cx: 2.8, cz: 2.0, hw: 1.2, hd: 1.0 });
-
-    const bagMat = new THREE.MeshLambertMaterial({ color: 0x3a4a2a });
-    B.box(scene, -1.8, 1.2, baseY + 0.3, 0.45, 0.6, 0.3, bagMat);
+    if (ZS.buildCampfire) ZS.buildCampfire(scene, cx, cz, baseY);
+    if (ZS.buildCampLayout) ZS.buildCampLayout(scene, cx, cz, baseY, B);
+    if (ZS.buildCampProps) ZS.buildCampProps(scene, cx, cz, baseY, B);
   }
 
   // ── Campement abandonné ───────────────────────────────────────────────────────
@@ -340,36 +324,6 @@
     B.box(scene, 72, -95, baseY + 3.4, 2.2, 0.6, 0.12, B.M.concDark);
   }
 
-  // ── Routes forestières ────────────────────────────────────────────────────────
-
-  function _buildForestRoads(scene, B) {
-    const { M, ribbon } = B;
-
-    ribbon(scene, [
-      [ 18, -135], [ 12, -100], [ 10,  -72], [  8,  -48], [  6,  -28], [  4,  -10]
-    ], 4.5, M.roadDirt, false);
-
-    ribbon(scene, [
-      [  6, -28], [-10, -42], [-28, -56], [-52, -67]
-    ], 3.0, M.path, false);
-
-    ribbon(scene, [
-      [ 10, -72], [ 32, -78], [ 56, -88], [ 80, -98]
-    ], 3.5, M.roadDirt, false);
-
-    ribbon(scene, [
-      [  4, -10], [  1,  -2], [ -6,  10], [-14,  22], [-20,  28]
-    ], 2.8, M.path, false);
-
-    ribbon(scene, [
-      [-20,  28], [-34,  33], [-50,  37], [-72,  40]
-    ], 2.5, M.path, false);
-
-    ribbon(scene, [
-      [ -20,  28], [ -16,  46], [ -13,  72], [ -12,  98], [ -16, 130]
-    ], 2.5, M.path, false);
-  }
-
   // ── Rivière ───────────────────────────────────────────────────────────────────
 
   function _buildRiver(scene) {
@@ -380,20 +334,15 @@
       polygonOffset: true, polygonOffsetFactor: -6, polygonOffsetUnits: -12,
       depthWrite: false,
     });
-    const bedMat = new THREE.MeshLambertMaterial({
-      color: 0x3a4a38, emissive: 0x0a1208, emissiveIntensity: 0.04,
-      polygonOffset: true, polygonOffsetFactor: 1, polygonOffsetUnits: 2,
-    });
     ZS.registerWaterMaterial(riverMat);
 
     const pts = RIVER_PTS;
     const width = RIVER_WATER_WIDTH;
-    const STEP = 1.2;
-    const CROSS_SEGS = 8;
+    const STEP = 1.0;
+    const CROSS_SEGS = 10;
+    const WATER_LIFT = 0.10;
     const pos = [], idx = [];
-    const bedPos = [], bedIdx = [];
     let prevRow = null;
-    let prevBedRow = null;
 
     for (let si = 0; si < pts.length - 1; si++) {
       const [x0, z0] = pts[si], [x1, z1] = pts[si + 1];
@@ -405,46 +354,25 @@
       for (let i = (si === 0 ? 0 : 1); i <= steps; i++) {
         const t = i / steps;
         const x = x0 + sdx * t, z = z0 + sdz * t;
-        let minBed = Infinity;
-        const crossPts = [];
+        const row = [];
         for (let ci = 0; ci <= CROSS_SEGS; ci++) {
           const u = ci / CROSS_SEGS;
           const off = (u - 0.5) * width;
           const vx = x + nx * off;
           const vz = z + nz * off;
           const bedY = ZS.getTerrainHeight(vx, vz);
-          minBed = Math.min(minBed, bedY);
-          crossPts.push({ vx, vz, bedY });
-        }
-        const waterY = minBed + RIVER_WATER_RISE;
-        const row = [];
-        const bedRow = [];
-        for (const p of crossPts) {
           row.push(pos.length / 3);
-          pos.push(p.vx, waterY, p.vz);
-          bedRow.push(bedPos.length / 3);
-          bedPos.push(p.vx, p.bedY + 0.02, p.vz);
+          pos.push(vx, bedY + RIVER_WATER_RISE + WATER_LIFT, vz);
         }
         if (prevRow) {
           for (let ci = 0; ci < CROSS_SEGS; ci++) {
             const a = prevRow[ci], b = prevRow[ci + 1];
             const c = row[ci], d = row[ci + 1];
-            idx.push(a, c, b, b, c, d);
-            const ba = prevBedRow[ci], bb = prevBedRow[ci + 1];
-            const bc = bedRow[ci], bd = bedRow[ci + 1];
-            bedIdx.push(ba, bc, bb, bb, bc, bd);
+            idx.push(a, c, b, c, d, b);
           }
         }
         prevRow = row;
-        prevBedRow = bedRow;
       }
-    }
-    if (bedPos.length >= 9 && bedIdx.length > 0) {
-      const bedGeo = new THREE.BufferGeometry();
-      bedGeo.setAttribute('position', new THREE.Float32BufferAttribute(bedPos, 3));
-      bedGeo.setIndex(bedIdx);
-      bedGeo.computeVertexNormals();
-      scene.add(new THREE.Mesh(bedGeo, bedMat));
     }
     if (pos.length >= 9 && idx.length > 0) {
       const geo = new THREE.BufferGeometry();
@@ -561,17 +489,19 @@
 
   function _spawnForestTrees(scene) {
     const noSpawn = [
-      [  0,    0,  8],
+      [SPAWN_CX, SPAWN_CZ, 22],
       [-20,   33, 24],
       [-60,  -70, 14],
       [-80,   42, 14],
       [ 82, -100, 20],
+      [FOREST_HUB[0], FOREST_HUB[1], 10],
+      [TOWN_JUNCTION[0], TOWN_JUNCTION[1], 8],
     ];
-    ZS.spawnTreesAt(scene, 0, 0, 55, 130, 0.55, noSpawn);
+    ZS.spawnTreesAt(scene, SPAWN_CX, SPAWN_CZ, 55, 130, 0.55, noSpawn);
   }
 
   function _spawnDeadTrees(scene) {
-    ZS.spawnDeadTreesAt(scene,  30, -50, 5, 14);
+    ZS.spawnDeadTreesAt(scene,  32, -55, 4, 12);
     ZS.spawnDeadTreesAt(scene, -40,  60, 4, 12);
   }
 
@@ -583,9 +513,8 @@
     const insMat  = new THREE.MeshLambertMaterial({ color: 0x8a8a8a });
 
     const poleDefs = [
-      [ 16, -118, 0.35], [ 11,  -83, 0  ], [  7,  -49, 0.1 ],
-      [  3,  -16, 0  ],  [ -3,   16, 0.2], [ -7,   47, 0  ],
-      [-11,   76, 0.15], [-14,  108, 0  ],
+      [  9, -18.4, 0.03],
+      [ 28, -58, 0.06], [ 26, -86, 0.04], [ 22, -116, 0.08], [ 18, -140, 0.05],
     ];
 
     // ── Phase 1 : poteaux + traverses + isolateurs ────────────────────────────
@@ -660,7 +589,7 @@
     const mossMat  = new THREE.MeshLambertMaterial({ color: 0x3a5228 });
 
     const stumps = [
-      [ 22, -32, 0.36, 0.42], [ -9, -56, 0.28, 0.30], [ 16,  18, 0.34, 0.40],
+      [  6, -22, 0.32, 0.38], [ 24, -48, 0.34, 0.40], [-12, -50, 0.28, 0.32],
       [-33, -22, 0.30, 0.34], [ 42,  12, 0.26, 0.28], [-16, -87, 0.40, 0.48],
       [ 30,  58, 0.30, 0.36], [-48, -38, 0.28, 0.32], [ 55, -42, 0.32, 0.38],
       [-24,  65, 0.26, 0.28],
@@ -754,15 +683,7 @@
     B.addCollider({ type: 'box', cx, cz, hw: 1.2, hd: 0.5 });
   }
 
-  // ── Voitures abandonnées ──────────────────────────────────────────────────────
-
-  function _buildAbandonedCars(scene, B) {
-    B.car(scene,  14,  -95, -0.3);
-    B.car(scene, -35,  -48,  0.8);
-    B.car(scene, -92,  -28,  2.1);
-  }
-
   // ─────────────────────────────────────────────────────────────────────────────
 
-  ZS.Buildings.registerSector({ build });
+  ZS.Buildings.registerSector({ build, clearings: [SPAWN_CLEARING], roads: _forestRoads() });
 }());

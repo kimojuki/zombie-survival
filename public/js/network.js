@@ -7,24 +7,52 @@
   let _scene, _state, _socket;
   const _DOWN = (typeof THREE !== 'undefined') ? new THREE.Vector3(0, -1, 0) : null;
 
+  function _connecting(show, msg, detail) {
+    const screen = document.getElementById('connecting-screen');
+    const m = document.getElementById('connecting-msg');
+    const d = document.getElementById('connecting-detail');
+    if (!screen) return;
+    if (show) {
+      screen.style.display = 'flex';
+      if (m && msg) m.textContent = msg;
+      if (d) d.textContent = detail || '';
+    } else {
+      screen.style.display = 'none';
+    }
+  }
+
   function init(socket, scene, state) {
     _socket = socket;
     _scene  = scene;
     _state  = state;
 
+    _connecting(true, 'Connexion au serveur…', 'Authentification en cours');
+
     socket.on('connect', () => {
-      // Clear stale meshes on every (re)connect to prevent ghost players
       remotePlayers.forEach(({ mesh }) => _scene.remove(mesh));
       remotePlayers.clear();
-      _lastEquip = undefined;   // force re-broadcast de notre item en main
-      document.getElementById('connecting-screen').style.display = 'none';
+      _lastEquip = undefined;
+      _connecting(true, 'Connexion établie', 'Chargement de votre partie…');
     });
 
-    socket.on('connect_error', (err) => {
-      document.getElementById('connecting-screen').textContent = 'Erreur: ' + err.message;
+    socket.on('connect_error', () => {
+      _connecting(true, 'Serveur indisponible', 'Nouvelle tentative automatique…');
+    });
+
+    socket.on('disconnect', (reason) => {
+      if (reason === 'io client disconnect') return;
+      _connecting(true, 'Connexion perdue', 'Reconnexion en cours…');
     });
 
     socket.on('game-init', (data) => {
+      _connecting(false);
+      if (data.isAdmin || data.rconEnabled) {
+        localStorage.setItem('zombie_is_admin', '1');
+      } else {
+        localStorage.setItem('zombie_is_admin', '0');
+      }
+      if (data.username) localStorage.setItem('zombie_username', data.username);
+      if (ZS.Rcon?.refreshMenu) ZS.Rcon.refreshMenu();
       state.selfId = data.selfId;
       if (data.spawn) {
         state.player.x   = data.spawn.x;
@@ -33,6 +61,7 @@
         localStorage.setItem('zombie_spawn', JSON.stringify(data.spawn));
       }
       if (typeof data.worldTime === 'number') ZS.setWorldTime(data.worldTime);
+      if (ZS.Rcon) ZS.Rcon.init(socket, data);
       ZS.Zombies.syncAll(data.zombies);
       remotePlayers.forEach(({ mesh }) => _scene.remove(mesh));
       remotePlayers.clear();
@@ -98,6 +127,39 @@
     socket.on('zombie-tick',  (d) => {
       ZS.Zombies.syncAll(d.zombies);
       ZS.setWorldTime(d.time);
+    });
+
+    socket.on('world-time', (d) => {
+      if (typeof d?.time === 'number') ZS.setWorldTime(d.time);
+    });
+
+    socket.on('server-flags', (d) => {
+      if (ZS.Rcon) ZS.Rcon.onFlags(d);
+    });
+
+    socket.on('admin-tp', (d) => {
+      if (!d) return;
+      state.player.x = d.x;
+      state.player.y = d.y;
+      state.player.z = d.z;
+      if (d.rotY != null) state.camera.yaw = d.rotY;
+      state.player.velocityY = 0;
+      state.player.onGround = true;
+    });
+
+    socket.on('server-announce', (d) => {
+      if (!d?.message) return;
+      let el = document.getElementById('server-announce');
+      if (!el) {
+        el = document.createElement('div');
+        el.id = 'server-announce';
+        document.body.appendChild(el);
+      }
+      const from = d.from ? `[${d.from}] ` : '';
+      el.textContent = from + d.message;
+      el.style.opacity = '1';
+      clearTimeout(el._hideT);
+      el._hideT = setTimeout(() => { el.style.opacity = '0'; }, 6000);
     });
     socket.on('zombie-spawn', (z)   => ZS.Zombies.spawn(z));
     socket.on('zombie-hit',   (d)   => ZS.Zombies.hit(d.id, d.health));

@@ -9,6 +9,36 @@ const jwt = require('jsonwebtoken');
 require('dotenv').config({ override: true });
 
 const { getPlayer, createPlayer, savePlayerState, pool } = require('./src/db');
+const log = require('./src/logger');
+const { createRcon } = require('./src/rcon');
+
+// Dev SQLite : mot de passe par défaut "dev" si RCON_PASSWORD absent (prod MySQL = désactivé)
+const RCON_PASSWORD = process.env.RCON_PASSWORD
+  || (process.env.DB_CLIENT === 'sqlite' ? 'dev' : '');
+const ADMIN_USERS = new Set(
+  (process.env.ADMIN_USERS || '')
+    .split(',')
+    .map((s) => s.trim().toLowerCase())
+    .filter(Boolean)
+);
+// Dev local : admin auto pour tous (uniquement si RCON_AUTO_ADMIN=true dans .env)
+const RCON_AUTO_ADMIN = process.env.RCON_AUTO_ADMIN === 'true'
+  && process.env.DB_CLIENT === 'sqlite';
+
+if (ADMIN_USERS.size) {
+  log.info('boot', 'RCON admins', { users: [...ADMIN_USERS], autoAll: RCON_AUTO_ADMIN });
+}
+
+function authFromHeader(req) {
+  const h = req.headers.authorization || '';
+  const token = h.startsWith('Bearer ') ? h.slice(7) : null;
+  if (!token) return null;
+  try {
+    return jwt.verify(token, JWT_SECRET);
+  } catch {
+    return null;
+  }
+}
 
 const app = express();
 const server = http.createServer(app);
@@ -43,7 +73,51 @@ function getWaterSlowFactor(x, z) {
 }
 
 app.use(express.json());
-app.use(express.static('public'));
+app.use(express.static('public', {
+  setHeaders(res, filePath) {
+    if (filePath.endsWith('.js')) res.set('Cache-Control', 'no-cache');
+  },
+}));
+
+// ── Game state (avant /api/health pour le handler) ───────────────────────────
+
+const players    = new Map();
+let serverReady  = false;
+
+// ── Health (client attend que le serveur soit prêt) ───────────────────────────
+
+app.get('/api/health', (req, res) => {
+  if (!serverReady) {
+    return res.status(503).json({ ok: false, ready: false, status: 'starting' });
+  }
+  res.json({
+    ok: true,
+    ready: true,
+    players: players.size,
+    uptime: Math.floor(process.uptime()),
+    rcon: !!(RCON_PASSWORD || ADMIN_USERS.size),
+  });
+});
+
+// Console RCON externe (scripts, curl) — header X-RCON-Password ou body.password
+app.post('/api/rcon', async (req, res) => {
+  const pw = req.headers['x-rcon-password'] || req.body?.password || '';
+  if (!RCON_PASSWORD) {
+    return res.status(503).json({ ok: false, error: 'RCON désactivé — définissez RCON_PASSWORD dans .env' });
+  }
+  if (pw !== RCON_PASSWORD) {
+    return res.status(403).json({ ok: false, error: 'Mot de passe RCON invalide' });
+  }
+  const cmd = (req.body?.cmd || req.body?.command || '').trim();
+  if (!cmd) return res.status(400).json({ ok: false, error: 'cmd requis' });
+  if (!rcon) return res.status(503).json({ ok: false, error: 'Serveur en démarrage' });
+  try {
+    const result = await rcon.execute(cmd, { player: { username: 'api' } });
+    res.json(result);
+  } catch (err) {
+    res.status(500).json({ ok: false, error: err.message });
+  }
+});
 
 // ── Auth routes ─────────────────────────────────────────────────────────────
 
@@ -59,11 +133,24 @@ app.post('/api/auth/register', async (req, res) => {
     const hash = await bcrypt.hash(password, 12);
     const id = await createPlayer(username, hash, STARTING_SAVE, FOREST_SPAWN);
     const token = jwt.sign({ id, username }, JWT_SECRET, { expiresIn: '7d' });
-    res.json({ token, username });
+    const isAdmin = isAdminUser(username) || RCON_AUTO_ADMIN;
+    log.info('auth', 'register ok', { username });
+    res.json({ token, username, isAdmin, rconEnabled: isAdmin });
   } catch (err) {
-    console.error('Register error complet:', err);
+    log.error('auth', 'register failed', { username, err: err.message });
     res.status(500).json({ error: 'Erreur serveur: ' + err.message });
   }
+});
+
+app.get('/api/auth/me', (req, res) => {
+  const user = authFromHeader(req);
+  if (!user) return res.status(401).json({ error: 'Non authentifié' });
+  const isAdmin = isAdminUser(user.username) || RCON_AUTO_ADMIN;
+  res.json({
+    username: user.username,
+    isAdmin,
+    rconEnabled: isAdmin,
+  });
 });
 
 app.post('/api/auth/login', async (req, res) => {
@@ -76,21 +163,29 @@ app.post('/api/auth/login', async (req, res) => {
       return res.status(401).json({ error: 'Identifiants invalides' });
 
     const token = jwt.sign({ id: player.id, username }, JWT_SECRET, { expiresIn: '7d' });
+    log.info('auth', 'login ok', {
+      username,
+      spawn: { x: player.pos_x ?? 0, y: player.pos_y ?? 0, z: player.pos_z ?? 0 },
+      health: player.health ?? 100,
+      kills: player.kills ?? 0,
+    });
+    const isAdmin = isAdminUser(username) || RCON_AUTO_ADMIN;
     res.json({
       token, username,
+      isAdmin,
+      rconEnabled: isAdmin,
       spawn: { x: player.pos_x ?? 0, y: player.pos_y ?? 0, z: player.pos_z ?? 0, rotY: player.rot_y ?? 0 },
       health: player.health ?? 100,
       kills: player.kills ?? 0
     });
   } catch (err) {
-    console.error('Login:', err.message);
+    log.error('auth', 'login failed', { username, err: err.message });
     res.status(500).json({ error: 'Erreur serveur' });
   }
 });
 
-// ── Game state ───────────────────────────────────────────────────────────────
+// ── Game state (suite) ───────────────────────────────────────────────────────
 
-const players    = new Map();
 const zombies    = new Map();
 const items      = new Map(); // world pickup items (+ butins de mort : bag:true)
 const structures = new Map(); // structures construites par les joueurs (base)
@@ -178,6 +273,25 @@ function resolveZombieCollision(nx, nz) {
 let _worldTime = 0.3; // 0–1 (0=minuit, 0.25=lever, 0.5=midi, 0.75=coucher)
 const _DAY_DURATION = 600; // secondes par cycle complet (~10 min — transitions lentes et réalistes)
 const _TICK_DT = 0.1;      // durée du tick zombie en secondes
+
+const serverFlags = {
+  autoDay: true,
+  zombieAI: true,
+  zombieSpawn: true,
+  lootEnabled: true,
+};
+
+const adminSockets = new Set();
+
+function isAdminUser(username) {
+  return ADMIN_USERS.has((username || '').toLowerCase());
+}
+
+function setWorldTime(t) {
+  _worldTime = ((t % 1) + 1) % 1;
+}
+
+let rcon = null;
 
 const DROP_CHANCE  = 0.40;
 const DROP_TYPES   = ['ammo', 'ammo', 'ammo', 'medkit', 'medkit', 'food'];
@@ -296,7 +410,8 @@ function generateLoot() {
       io.emit('item-spawn', drop);
     }
   }
-  console.log(`🎒 Loot généré : ${[...items.values()].filter((i) => i.loot).length} objets dans ${lootBuildings.length} bâtiments`);
+  const generatedItems = [...items.values()].filter((i) => i.loot).length;
+  log.info('loot', 'generated', { items: generatedItems, buildings: lootBuildings.length });
 }
 
 // Loot généré UNE seule fois (monde partagé et stable) — pas de régénération
@@ -310,6 +425,7 @@ setInterval(() => {
     if (it.bag && it.expiresAt && now > it.expiresAt) {
       items.delete(id);
       io.emit('item-remove', id);
+      log.debug('death', 'death bag expired', { id, owner: it.owner });
     }
   }
 }, 60 * 1000);
@@ -348,13 +464,41 @@ for (let i = 0; i < ZOMBIE_COUNT; i++) {
   zombies.set(z.id, z);
 }
 
+rcon = createRcon({
+  io,
+  players,
+  zombies,
+  items,
+  structures,
+  flags: serverFlags,
+  worldColliders: () => worldColliders,
+  lootBuildings: () => lootBuildings,
+  worldWaterZones: () => worldWaterZones,
+  getWorldTime: () => _worldTime,
+  setWorldTime,
+  makeZombie,
+  savePlayerState,
+  saveBlob,
+  generateLoot,
+  clearLoot,
+  log,
+});
+
 // Zombie AI — 100ms tick
 setInterval(() => {
-  _worldTime = (_worldTime + _TICK_DT / _DAY_DURATION) % 1;
+  const _tickStart = log.isDebug() ? Date.now() : 0;
+  if (serverFlags.autoDay) {
+    _worldTime = (_worldTime + _TICK_DT / _DAY_DURATION) % 1;
+  }
 
   if (players.size === 0) return;
   const pList = Array.from(players.values());
   const DT = _TICK_DT;
+
+  if (!serverFlags.zombieAI) {
+    io.emit('zombie-tick', { zombies: Array.from(zombies.values()), time: _worldTime });
+    return;
+  }
 
   zombies.forEach((z) => {
     // Nearest player
@@ -387,6 +531,14 @@ setInterval(() => {
         z.attackTimer = ZOMBIE_ATTACK_CD;
         nearestP.health = Math.max(0, nearestP.health - ZOMBIE_DMG);
         io.to(nearestP.socketId).emit('take-damage', { dmg: ZOMBIE_DMG });
+        log.throttled(`zombie-hit:${nearestP.username}`, 2000, () => {
+          log.debug('combat', 'zombie hit player', {
+            player: nearestP.username,
+            dmg: ZOMBIE_DMG,
+            health: nearestP.health,
+            pos: { x: +nearestP.x.toFixed(1), z: +nearestP.z.toFixed(1) },
+          });
+        });
       }
     } else {
       // Wander slowly — change direction periodically, not every tick
@@ -406,7 +558,24 @@ setInterval(() => {
   });
 
   io.emit('zombie-tick', { zombies: Array.from(zombies.values()), time: _worldTime });
+  if (_tickStart) log.tickSummary(zombies, players, Date.now() - _tickStart);
 }, 100);
+
+if (log.PLAYER_SNAPSHOT_MS > 0) {
+  setInterval(() => log.playerSnapshot(players), log.PLAYER_SNAPSHOT_MS);
+}
+if (log.SERVER_STATS_MS > 0) {
+  setInterval(() => log.serverStats({
+    players: players.size,
+    zombies: zombies.size,
+    items: items.size,
+    structures: structures.size,
+    colliders: worldColliders.length,
+    lootBuildings: lootBuildings.length,
+    waterZones: worldWaterZones.length,
+    worldTime: _worldTime,
+  }), log.SERVER_STATS_MS);
+}
 
 // Auto-save player state every 5s
 setInterval(() => {
@@ -424,7 +593,8 @@ io.use((socket, next) => {
   try {
     socket.user = jwt.verify(socket.handshake.auth.token, JWT_SECRET);
     next();
-  } catch {
+  } catch (err) {
+    log.warn('socket', 'auth rejected', { err: err.message, ip: socket.handshake.address });
     next(new Error('Authentification requise'));
   }
 });
@@ -458,7 +628,13 @@ io.on('connection', async (socket) => {
   };
   setTimeout(() => { if (players.has(socket.id)) p.invincible = false; }, 5000);
   players.set(socket.id, p);
-  console.log(`+ ${p.username} (${players.size} en ligne)`);
+  log.info('socket', 'connect', {
+    username: p.username,
+    online: players.size,
+    spawn: { x: +p.x.toFixed(1), y: +p.y.toFixed(1), z: +p.z.toFixed(1) },
+    health: p.health,
+    kills: p.kills,
+  });
 
   socket.emit('game-init', {
     selfId: socket.id,
@@ -470,6 +646,11 @@ io.on('connection', async (socket) => {
     items:   Array.from(items.values()),
     structures: Array.from(structures.values()),
     worldTime: _worldTime,
+    serverFlags: { ...serverFlags },
+    username: p.username,
+    rconEnabled: isAdminUser(p.username) || RCON_AUTO_ADMIN,
+    isAdmin: isAdminUser(p.username) || RCON_AUTO_ADMIN,
+    rconPreAuth: isAdminUser(p.username) || RCON_AUTO_ADMIN,
     inventory: p.inv,
     survival:  p.survival
   });
@@ -480,6 +661,7 @@ io.on('connection', async (socket) => {
     if (worldColliders.length === 0 && Array.isArray(cols)) {
       // On exclut les murs d'étage / parapets (minY) : ils ne concernent pas le sol.
       worldColliders = cols.filter(c => c && c.minY === undefined);
+      log.info('world', 'colliders loaded', { count: worldColliders.length, from: p.username });
     }
   });
 
@@ -491,6 +673,7 @@ io.on('connection', async (socket) => {
         Number.isFinite(z.z) &&
         Number.isFinite(z.r)
       );
+      log.info('world', 'water zones loaded', { count: worldWaterZones.length, from: p.username });
     }
   });
 
@@ -498,13 +681,19 @@ io.on('connection', async (socket) => {
   socket.on('loot-buildings', (list) => {
     if (lootBuildings.length === 0 && Array.isArray(list) && list.length) {
       lootBuildings = list.filter(b => b && typeof b.cx === 'number' && typeof b.cz === 'number');
-      generateLoot();
+      log.info('world', 'loot buildings loaded', { count: lootBuildings.length, from: p.username });
+      if (serverFlags.lootEnabled) generateLoot();
     }
   });
 
   socket.on('move', (d) => {
     p.x = d.x; p.y = d.y; p.z = d.z; p.rotY = d.rotY; p.dirty = true;
     socket.broadcast.emit('player-move', { id: socket.id, x: d.x, y: d.y, z: d.z, rotY: d.rotY });
+    if (log.isTrace()) {
+      log.throttled(`move:${p.username}`, 1000, () => {
+        log.trace('move', p.username, { x: +d.x.toFixed(1), y: +d.y.toFixed(1), z: +d.z.toFixed(1) });
+      });
+    }
   });
 
   // Item tenu en main → visible des autres joueurs (arme, torche, outil…).
@@ -543,7 +732,15 @@ io.on('connection', async (socket) => {
 
     if (hit) {
       hit.health -= dmg;
+      log.debug('combat', 'shoot hit', {
+        player: p.username,
+        zombieId: hit.id,
+        dmg,
+        healthLeft: hit.health,
+        pos: { x: +hit.x.toFixed(1), z: +hit.z.toFixed(1) },
+      });
       if (hit.health <= 0) {
+        log.info('combat', 'zombie kill', { player: p.username, zombieId: hit.id, kills: p.kills + 1 });
         io.emit('zombie-die', hit.id);
         // Random drop
         if (Math.random() < DROP_CHANCE) {
@@ -561,11 +758,13 @@ io.on('connection', async (socket) => {
         zombies.delete(hit.id);
         p.kills++;
         io.to(socket.id).emit('score-update', { kills: p.kills });
-        setTimeout(() => {
-          const nz = makeZombie();
-          zombies.set(nz.id, nz);
-          io.emit('zombie-spawn', nz);
-        }, 4000);
+        if (serverFlags.zombieSpawn) {
+          setTimeout(() => {
+            const nz = makeZombie();
+            zombies.set(nz.id, nz);
+            io.emit('zombie-spawn', nz);
+          }, 4000);
+        }
       } else {
         // Recul (mêlée) : on repousse le zombie en arrière le long du coup, en
         // respectant les collisions (murs/objets). Diffusé au prochain zombie-tick.
@@ -584,9 +783,25 @@ io.on('connection', async (socket) => {
     const item = items.get(d.id);
     if (!item) return; // already taken
     // Proximity guard — reject if player is too far (3 units tolerance for latency)
-    if (Math.hypot(item.x - p.x, item.z - p.z) > 3.0) return;
+    if (Math.hypot(item.x - p.x, item.z - p.z) > 3.0) {
+      log.throttled(`pickup-far:${p.username}`, 3000, () => {
+        log.debug('items', 'pickup rejected (too far)', {
+          player: p.username,
+          itemId: d.id,
+          dist: +Math.hypot(item.x - p.x, item.z - p.z).toFixed(1),
+        });
+      });
+      return;
+    }
     items.delete(d.id);
     io.emit('item-remove', item.id);       // use authoritative id, not client-supplied
+    log.debug('items', 'pickup', {
+      player: p.username,
+      type: item.type,
+      qty: item.qty || 1,
+      bag: !!item.bag,
+      pos: { x: +item.x.toFixed(1), z: +item.z.toFixed(1) },
+    });
     if (item.bag) {
       socket.emit('bag-collect', { items: item.items || [] });  // butin : rend tout
     } else {
@@ -607,6 +822,7 @@ io.on('connection', async (socket) => {
     };
     items.set(id, drop);
     io.emit('item-spawn', drop);
+    log.debug('items', 'drop', { player: p.username, type: d.type, qty, pos: { x: +drop.x.toFixed(1), z: +drop.z.toFixed(1) } });
   });
 
   socket.on('place-structure', (d) => {
@@ -628,6 +844,12 @@ io.on('connection', async (socket) => {
     // Les zombies (au sol) ne se cognent que dans les murs du rez-de-chaussée (sans minY)
     for (const c of colliders) if (c.minY === undefined) structureColliders.push(c);
     io.emit('structure-spawn', st);
+    log.info('build', 'structure placed', {
+      player: p.username,
+      type: d.type,
+      pos: { x: +x.toFixed(1), z: +z.toFixed(1) },
+      colliders: colliders.length,
+    });
   });
 
   socket.on('inventory-sync', (slots) => {
@@ -657,6 +879,13 @@ io.on('connection', async (socket) => {
                     items: loot, expiresAt: Date.now() + DEATH_BAG_MS, owner: p.username };
       items.set(id, bag);
       io.emit('item-spawn', bag);
+      log.info('death', 'death bag spawned', {
+        player: p.username,
+        items: loot.length,
+        pos: { x: +p.x.toFixed(1), z: +p.z.toFixed(1) },
+      });
+    } else {
+      log.info('death', 'player died (empty inv)', { player: p.username });
     }
   });
 
@@ -670,11 +899,59 @@ io.on('connection', async (socket) => {
     setTimeout(() => { if (players.has(socket.id)) p.invincible = false; }, 3000);
     socket.emit('take-damage', { health: 100 });
     socket.emit('respawn-at', { spawn: FOREST_SPAWN, inventory: STARTING_ITEMS, survival: DEFAULT_SURVIVAL });
+    log.info('death', 'respawn', { player: p.username, spawn: FOREST_SPAWN });
+  });
+
+  // ── Console RCON in-game ────────────────────────────────────────────────────
+  if (isAdminUser(p.username) || RCON_AUTO_ADMIN) adminSockets.add(socket.id);
+  if (isAdminUser(p.username) || RCON_AUTO_ADMIN) {
+    log.info('rcon', 'admin session', { username: p.username });
+  }
+
+  socket.on('rcon-auth', (password, cb) => {
+    if (typeof cb !== 'function') return;
+    if (!RCON_PASSWORD && !isAdminUser(p.username)) {
+      return cb({ ok: false, error: 'RCON non configuré — définissez RCON_PASSWORD dans .env' });
+    }
+    if (isAdminUser(p.username) || RCON_AUTO_ADMIN || password === RCON_PASSWORD) {
+      adminSockets.add(socket.id);
+      log.info('rcon', 'admin auth ok', { username: p.username });
+      return cb({ ok: true });
+    }
+    cb({ ok: false, error: 'Mot de passe incorrect' });
+  });
+
+  socket.on('rcon', (cmd, cb) => {
+    if (typeof cb !== 'function') return;
+    const run = async () => {
+      const authorized = adminSockets.has(socket.id) || isAdminUser(p.username) || RCON_AUTO_ADMIN;
+      if (!authorized) {
+        return cb({
+          ok: false,
+          lines: ['Non autorisé — tapez: auth <mot_de_passe> (dev SQLite: auth dev)'],
+        });
+      }
+      if (!rcon) return cb({ ok: false, lines: ['RCON pas encore initialisé — réessayez dans 1s'] });
+      const result = await rcon.execute(String(cmd || ''), { socket, player: p });
+      log.info('rcon', 'cmd', { user: p.username, cmd: String(cmd).slice(0, 80), ok: result.ok });
+      cb(result);
+    };
+    run().catch((err) => {
+      log.error('rcon', 'cmd error', { user: p.username, err: err.message });
+      cb({ ok: false, lines: [`Erreur serveur: ${err.message}`] });
+    });
   });
 
   socket.on('disconnect', () => {
+    adminSockets.delete(socket.id);
     players.delete(socket.id);
-    console.log(`- ${p.username} (${players.size} en ligne)`);
+    log.info('socket', 'disconnect', {
+      username: p.username,
+      online: players.size,
+      lastPos: { x: +p.x.toFixed(1), y: +p.y.toFixed(1), z: +p.z.toFixed(1) },
+      health: p.health,
+      kills: p.kills,
+    });
     io.emit('player-leave', socket.id);
     if (p.id) savePlayerState(p.id, p.x, p.y, p.z, p.rotY, p.health, p.kills, saveBlob(p)).catch(() => {});
   });
@@ -693,16 +970,26 @@ async function resetAllPlayersOnce() {
       [STARTING_SAVE, FOREST_SPAWN.x, FOREST_SPAWN.y, FOREST_SPAWN.z, FOREST_SPAWN.rotY]
     );
     fs.writeFileSync(marker, new Date().toISOString());
-    console.log(`🔄 Joueurs réinitialisés (inventaire vide + spawn forêt) : ${r.affectedRows} joueur(s).`);
+    log.info('boot', 'players reset once', { affected: r.affectedRows });
   } catch (e) {
-    console.error('Reset joueurs échoué (réessai au prochain démarrage):', e.message);
+    log.error('boot', 'player reset failed', { err: e.message });
   }
 }
 
-server.listen(PORT, async () => {
-  console.log(`🧟 Zombie Survival → http://localhost:${PORT} (db: ${require('./src/db').DB_CLIENT})`);
-  await resetAllPlayersOnce();
+server.listen(PORT, () => {
+  serverReady = true;
+  log.info('boot', 'server started', {
+    url: `http://localhost:${PORT}`,
+    db: require('./src/db').DB_CLIENT,
+    logLevel: log.level,
+    playerSnapshotMs: log.PLAYER_SNAPSHOT_MS,
+    serverStatsMs: log.SERVER_STATS_MS,
+    zombies: ZOMBIE_COUNT,
+    rcon: !!(RCON_PASSWORD || ADMIN_USERS.size),
+    admins: ADMIN_USERS.size,
+  });
+  resetAllPlayersOnce().then(() => log.info('boot', 'player reset check done'));
 }).on('error', (err) => {
-  console.error('Serveur impossible à démarrer:', err.message);
+  log.error('boot', 'server failed to start', { err: err.message });
   process.exit(1);
 });

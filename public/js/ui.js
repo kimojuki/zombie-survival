@@ -270,7 +270,7 @@
   }
 
   function logout() {
-    ['zombie_token','zombie_username','zombie_spawn','zombie_health','zombie_kills']
+    ['zombie_token','zombie_username','zombie_is_admin','zombie_spawn','zombie_health','zombie_kills']
       .forEach(k => localStorage.removeItem(k));
     window.location.href = '/';
   }

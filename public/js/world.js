@@ -4,6 +4,8 @@
 
   let _scene, _ambientLight, _sunLight, _moonLight, _hemiLight;
   const _fireLights = [];
+  const _billboards = [];
+  const _billboardVec = new THREE.Vector3();
   const _waterSurfaces = [];
   const _waterMats  = []; // matériaux de surface d'eau → animés chaque frame
   const _colliders  = [];
@@ -37,6 +39,10 @@
   const _leafTex = _atlasSlice(_treeAtlas, 0.5, 0.5);
 
   function _inRiver(x, z) { return ZS.isInRiverChannel?.(x, z, 0.8) ?? false; }
+  function _onRoad(x, z) { return ZS.isNearRoad?.(x, z, 1.0) ?? false; }
+  function _blockedSpawn(x, z) { return _inRiver(x, z) || _onRoad(x, z); }
+
+  let _terrainMesh = null;
 
   // ── Keyframes ciel jour/nuit ──────────────────────────────────────────────────
   const _KEYS = [
@@ -97,17 +103,34 @@
     _moonLight = new THREE.DirectionalLight(0x6677bb, 0);
     scene.add(_moonLight);
 
+    ZS.Buildings.applyRoadFlattening();
     buildTerrain(scene);
+    spawnClouds(scene);
+
+    const buildingColliders = ZS.Buildings.buildAll(scene);
+    if (ZS.RoadNetwork) ZS.RoadNetwork.buildMeshes(scene, ZS.B.M);
+    if (ZS.Vehicles) ZS.Vehicles.buildAll(scene);
+    for (const c of buildingColliders) _colliders.push(c);
+
     spawnFlowers(scene, 200);
     spawnGrassTufts(scene, 220);
     spawnTrees(scene, 130);
     spawnRocks(scene, 50);
     spawnBushes(scene, 90);
-    spawnClouds(scene);
-
-    const buildingColliders = ZS.Buildings.buildAll(scene);
-    for (const c of buildingColliders) _colliders.push(c);
     tickDayNight(0);
+  }
+
+  function applyTerrainRoadTint() {
+    if (!_terrainMesh || !ZS.isNearRoad) return;
+    const attr = _terrainMesh.geometry.attributes.color;
+    const pos  = _terrainMesh.geometry.attributes.position;
+    const dirt = new THREE.Color(0x7a6248);
+    for (let i = 0; i < pos.count; i++) {
+      const vx = pos.getX(i), vz = pos.getZ(i);
+      if (!ZS.isNearRoad(vx, vz, 0.6)) continue;
+      attr.setXYZ(i, dirt.r, dirt.g, dirt.b);
+    }
+    attr.needsUpdate = true;
   }
 
   function setWorldTime(t) { _timeOfDay = t; }
@@ -186,9 +209,12 @@
     if (_fireLights.length > 0) {
       const t = Date.now();
       const f = 0.82 + Math.sin(t * 0.011) * 0.09 + Math.sin(t * 0.019) * 0.06 + Math.sin(t * 0.034) * 0.04;
+      const nightBoost = 0.4 + night * 1.1;
       for (const fl of _fireLights) {
-        fl.light.intensity = f * 2.2;
+        const base = fl.baseIntensity ?? 2.2;
+        fl.light.intensity = f * base * nightBoost;
         if (fl.mesh) fl.mesh.scale.y = 0.85 + f * 0.22;
+        if (fl.onTick) fl.onTick(t, f, night);
       }
     }
   }
@@ -288,7 +314,7 @@
   }
 
   function buildTerrain(scene) {
-    const SIZE = 600, SEG = 132;
+    const SIZE = 600, SEG = 144;
     const geo  = new THREE.PlaneGeometry(SIZE, SIZE, SEG, SEG).toNonIndexed();
     geo.rotateX(-Math.PI / 2);
     const pos = geo.attributes.position;
@@ -316,7 +342,10 @@
 
       const slope = 1 - Math.max(0, nrm.y);
       const avgH = (a.y + b.y + c.y) / 3;
-      const useDirt = slope > 0.22 || avgH > 13.5;
+      const cx = (a.x + b.x + c.x) / 3, cz = (a.z + b.z + c.z) / 3;
+      const inRiver = ZS.isInRiverChannel?.(cx, cz, 0) ?? false;
+      const onRoad  = ZS.isInRoadCorridor?.(cx, cz, 0.8) ?? ZS.isNearRoad?.(cx, cz, 1.2) ?? false;
+      const useDirt = inRiver || onRoad || slope > 0.22 || avgH > 13.5;
       const uBase = useDirt ? 0.52 : 0.02;
       const uSpan = 0.46;
 
@@ -340,6 +369,7 @@
     }));
     mesh.receiveShadow = true;
     scene.add(mesh);
+    _terrainMesh = mesh;
   }
 
   // ── PRNG déterministe ────────────────────────────────────────────────────────
@@ -363,7 +393,7 @@
     for (let i = 0; i < count; i++) {
       const x = (_rng() - 0.5) * 540, z = (_rng() - 0.5) * 540;
       if (x > -262 && x < -100 && z > -55 && z < 58) continue;
-      if (_inRiver(x, z)) continue;
+      if (_blockedSpawn(x, z)) continue;
       const by = ZS.getTerrainHeight(x, z);
       if (by > 9) continue;
       const h    = 0.16 + _rng() * 0.14;
@@ -419,7 +449,7 @@
     for (let i = 0; i < count; i++) {
       const x = (_rng() - 0.5) * 540, z = (_rng() - 0.5) * 540;
       if (x > -262 && x < -100 && z > -55 && z < 58) continue;
-      if (_inRiver(x, z)) continue;
+      if (_blockedSpawn(x, z)) continue;
       const by = ZS.getTerrainHeight(x, z);
       if (by > 10) continue;
       const mi = Math.floor(_rng() * mats.length);
@@ -533,7 +563,7 @@
     for (let i = 0; i < count; i++) {
       const x = (_rng() - 0.5) * 560, z = (_rng() - 0.5) * 560;
       if (Math.hypot(x, z) < 4) continue;
-      if (_inRiver(x, z)) continue;
+      if (_blockedSpawn(x, z)) continue;
       const col = { x, z, r: 0.55 };
       _colliders.push(col);
       const r = _rng();
@@ -670,7 +700,7 @@
       const a = _rng() * Math.PI * 2, r = _rng() * radius;
       const x = cx + Math.cos(a) * r, z = cz + Math.sin(a) * r;
       if (skipNear && skipNear.some(s => Math.hypot(x - s[0], z - s[1]) < s[2])) continue;
-      if (_inRiver(x, z)) continue;
+      if (_blockedSpawn(x, z)) continue;
       const col = { x, z, r: 0.55 };
       _colliders.push(col);
       const tree = _rng() < (pineRatio || 0.28) ? makePineTree() : makeTree();
@@ -688,7 +718,7 @@
 
     for (let i = 0; i < count; i++) {
       const x  = (_rng()-0.5)*560, z = (_rng()-0.5)*560;
-      if (_inRiver(x, z)) continue;
+      if (_blockedSpawn(x, z)) continue;
       const s  = 0.3 + _rng() * 0.85;
       const by = ZS.getTerrainHeight(x, z);
       _colliders.push({ x, z, r: s + 0.25, topY: by + s * 1.4 });
@@ -725,7 +755,7 @@
     for (let i = 0; i < count; i++) {
       const x = (_rng()-0.5)*540, z = (_rng()-0.5)*540;
       if (Math.hypot(x, z) < 5) continue;
-      if (_inRiver(x, z)) continue;
+      if (_blockedSpawn(x, z)) continue;
       const r  = 0.28 + _rng() * 0.55;
       const mi = Math.floor(_rng() * mats.length);
       const sx = 1.0 + _rng()*0.5, sy = 0.55 + _rng()*0.4, sz = 1.0 + _rng()*0.4;
@@ -751,7 +781,27 @@
     }
   }
 
-  function registerFireLight(light, mesh) { _fireLights.push({ light, mesh }); }
+  function registerBillboards(meshes) {
+    for (const m of meshes) if (m) _billboards.push(m);
+  }
+
+  function updateBillboards(camX, camZ) {
+    for (const m of _billboards) {
+      if (!m.parent) continue;
+      m.getWorldPosition(_billboardVec);
+      // Plans verticaux face à la caméra (flammes, fumée)
+      m.rotation.set(0, Math.atan2(camX - _billboardVec.x, camZ - _billboardVec.z), 0);
+    }
+  }
+
+  function registerFireLight(light, mesh, opts) {
+    _fireLights.push({
+      light,
+      mesh: mesh || null,
+      baseIntensity: opts?.baseIntensity,
+      onTick: opts?.onTick || null,
+    });
+  }
   function registerWaterMaterial(mat)     { _waterMats.push(mat); }
   function registerWaterSurface(mesh, amp, speed) {
     const arr = mesh.geometry.attributes.position.array;
@@ -790,6 +840,8 @@
   ZS.getColliders      = () => _colliders;
   ZS.chopTree          = chopTree;
   ZS.registerFireLight     = registerFireLight;
+  ZS.registerBillboards    = registerBillboards;
+  ZS.updateBillboards      = updateBillboards;
   ZS.registerWaterMaterial = registerWaterMaterial;
   ZS.registerWaterSurface  = registerWaterSurface;
   ZS.registerWaterZone     = registerWaterZone;

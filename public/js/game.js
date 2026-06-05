@@ -84,7 +84,13 @@
   }
 
   // ── Build world ───────────────────────────────────────────────────────────
+  const _tWorld = performance.now();
   ZS.buildWorld(scene);
+  console.log('[world] build', Math.round(performance.now() - _tWorld), 'ms');
+
+  // Lumières ponctuelles — collectées une fois (évite scene.traverse chaque frame)
+  const _pointLights = [];
+  scene.traverse((o) => { if (o.isPointLight) _pointLights.push(o); });
   ZS.Zombies.init(scene);
 
   // FPS arms attached to camera
@@ -134,16 +140,44 @@
   _addTestItems();
 
   // ── Menu (☰) : audio on/off + déconnexion ───────────────────────────────────
+  async function _syncAdminMenu() {
+    if (ZS.Rcon?.refreshMenu) ZS.Rcon.refreshMenu();
+    try {
+      const res = await fetch('/api/auth/me', {
+        headers: { Authorization: 'Bearer ' + token },
+      });
+      if (res.ok) {
+        const data = await res.json();
+        localStorage.setItem('zombie_is_admin', data.isAdmin ? '1' : '0');
+        if (data.username) localStorage.setItem('zombie_username', data.username);
+      }
+    } catch { /* hors ligne */ }
+    if (ZS.Rcon?.refreshMenu) ZS.Rcon.refreshMenu();
+  }
+
   function _initMenu() {
-    const btn   = document.getElementById('menu-btn');
-    const panel = document.getElementById('menu-panel');
-    const audio = document.getElementById('menu-audio');
-    const out   = document.getElementById('menu-logout');
+    const btn     = document.getElementById('menu-btn');
+    const panel   = document.getElementById('menu-panel');
+    const audio   = document.getElementById('menu-audio');
+    const out     = document.getElementById('menu-logout');
+    const consoleBtn = document.getElementById('menu-console');
     if (!btn || !panel) return;
 
     const setOpen = (open) => { panel.style.display = open ? 'flex' : 'none'; };
+
+    if (consoleBtn) {
+      consoleBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        setOpen(false);
+        if (ZS.Rcon?.open) ZS.Rcon.open();
+      });
+    }
+
+    _syncAdminMenu();
+
     btn.addEventListener('click', (e) => {
       e.stopPropagation();
+      if (ZS.Rcon?.refreshMenu) ZS.Rcon.refreshMenu();
       setOpen(panel.style.display === 'none');
     });
     // Clic en dehors du menu → fermeture
@@ -284,13 +318,39 @@
   }
 
   // ── Input: keyboard ───────────────────────────────────────────────────────
-  document.addEventListener('keydown', (e) => { state.keys[e.code] = true; });
-  document.addEventListener('keyup',   (e) => { state.keys[e.code] = false; });
+  function _rconTyping(e) {
+    const t = e.target;
+    return t && (t.id === 'rcon-input' || t.closest?.('#rcon-panel'));
+  }
+
+  document.addEventListener('keydown', (e) => {
+    if (ZS.Rcon?.isOpen?.()) {
+      if (_rconTyping(e)) return;
+      if (e.code === 'Backquote' || e.code === 'F2' || e.code === 'Escape') {
+        if (ZS.Rcon) { e.preventDefault(); ZS.Rcon.toggle(); }
+      }
+      return;
+    }
+    if (e.code === 'Backquote' || e.code === 'F2') {
+      if (ZS.Rcon?.isAdmin?.()) {
+        e.preventDefault();
+        ZS.Rcon.toggle();
+      }
+      return;
+    }
+    state.keys[e.code] = true;
+  });
+  document.addEventListener('keyup', (e) => {
+    if (ZS.Rcon?.isOpen?.() || _rconTyping(e)) return;
+    state.keys[e.code] = false;
+  });
 
   // ── Input: desktop pointer lock ───────────────────────────────────────────
   let pointerLocked = false;
   document.addEventListener('click', (e) => {
     if (pointerLocked) return;
+    if (ZS.Rcon?.isOpen?.()) return;
+    if (e.target.closest?.('#rcon-panel')) return;
     // On ne verrouille (et n'entre en mode tir) qu'en cliquant la zone de jeu,
     // jamais en cliquant un bouton/panneau d'UI.
     if (e.target !== canvas && e.target !== document.body) return;
@@ -470,24 +530,19 @@
   // actives (en forward rendering chaque fragment éclairé calcule TOUTES les
   // lumières → coût majeur sur mobile). Le compte reste constant = pas de recompile.
   const MAX_ACTIVE_LIGHTS = _isMobile ? 5 : 8;
-  let _lightList = [], _lightRefresh = 0;
+  let _bbCamX = NaN, _bbCamZ = NaN;
   const _lp = new THREE.Vector3();
-  function _cullLights(dt) {
-    _lightRefresh -= dt;
-    if (_lightRefresh <= 0) {
-      _lightList = [];
-      scene.traverse((o) => { if (o.isPointLight) _lightList.push(o); });
-      _lightRefresh = 2;
-    }
-    const n = _lightList.length;
-    if (n <= MAX_ACTIVE_LIGHTS) { for (const l of _lightList) l.visible = true; return; }
+  function _cullLights() {
+    const n = _pointLights.length;
+    if (n <= MAX_ACTIVE_LIGHTS) { for (const l of _pointLights) l.visible = true; return; }
     const cx = camera.position;
-    for (const l of _lightList) { l.getWorldPosition(_lp); l.userData._d = _lp.distanceToSquared(cx); }
-    _lightList.sort((a, b) => a.userData._d - b.userData._d);
-    for (let i = 0; i < n; i++) _lightList[i].visible = i < MAX_ACTIVE_LIGHTS;
+    for (const l of _pointLights) { l.getWorldPosition(_lp); l.userData._d = _lp.distanceToSquared(cx); }
+    _pointLights.sort((a, b) => a.userData._d - b.userData._d);
+    for (let i = 0; i < n; i++) _pointLights[i].visible = i < MAX_ACTIVE_LIGHTS;
   }
 
   let _shadowTick = 0;
+  const _SHADOW_INTERVAL = _isMobile ? 24 : 18;
   function loop(timestamp) {
     requestAnimationFrame(loop);
     const dt = Math.min((timestamp - state.lastTime) / 1000, 0.05);
@@ -500,20 +555,30 @@
     _tickSwing();
     ZS.setShadowCenter(state.player.x, state.player.z);
     ZS.tickDayNight(dt);
+    const camX = camera.position.x, camZ = camera.position.z;
+    if (Math.hypot(camX - _bbCamX, camZ - _bbCamZ) > 0.2) {
+      _bbCamX = camX; _bbCamZ = camZ;
+      if (ZS.updateBillboards) ZS.updateBillboards(camX, camZ);
+    }
     ZS.Zombies.tick(dt);
     ZS.Network.tick(dt);
     ZS.Inventory.tick(dt);
     ZS.Survival.tick(dt);
     ZS.Map.tick();
-    _cullLights(dt);
+    _cullLights();
 
-    // Ombres recalculées seulement toutes les ~16 frames (le soleil bouge lentement).
-    if (++_shadowTick >= 16) { _shadowTick = 0; renderer.shadowMap.needsUpdate = true; }
+    if (++_shadowTick >= _SHADOW_INTERVAL) { _shadowTick = 0; renderer.shadowMap.needsUpdate = true; }
 
     renderer.render(scene, camera);
   }
 
-  requestAnimationFrame((t) => { state.lastTime = t; loop(t); });
+  requestAnimationFrame((t) => {
+    state.lastTime = t;
+    if (ZS.updateBillboards) ZS.updateBillboards(camera.position.x, camera.position.z);
+    _bbCamX = camera.position.x;
+    _bbCamZ = camera.position.z;
+    requestAnimationFrame(loop);
+  });
 
   // ── Movement ──────────────────────────────────────────────────────────────
   const _fwd   = new THREE.Vector3();

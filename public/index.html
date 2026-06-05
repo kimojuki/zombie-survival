@@ -71,6 +71,7 @@
 
       localStorage.setItem('zombie_token', data.token);
       localStorage.setItem('zombie_username', data.username);
+      localStorage.setItem('zombie_is_admin', data.isAdmin ? '1' : '0');
       if (data.spawn) localStorage.setItem('zombie_spawn', JSON.stringify(data.spawn));
       if (data.health) localStorage.setItem('zombie_health', data.health);
       if (data.kills) localStorage.setItem('zombie_kills', data.kills);

@@ -4,6 +4,12 @@
 
   const _colliders = [];
   const _sectors   = [];
+  function isNearRoad(x, z, margin) {
+    if (ZS.RoadNetwork && ZS.RoadNetwork.isNearRoad) {
+      return ZS.RoadNetwork.isNearRoad(x, z, margin);
+    }
+    return false;
+  }
 
   // ── Registre de loot ────────────────────────────────────────────────────────
   // Chaque bâtiment "lootable" déclare son empreinte + sa catégorie. Le serveur
@@ -44,21 +50,24 @@
     window:   new THREE.MeshLambertMaterial({ color: 0x5a8aaa, transparent: true, opacity: 0.55 }),
     metal:    new THREE.MeshLambertMaterial({ color: 0x778899 }),
     rust:     new THREE.MeshLambertMaterial({ color: 0x8a5a30 }),
-    road:     new THREE.MeshLambertMaterial({ map: _texAsphalt, polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -4 }),
-    roadBroken:new THREE.MeshLambertMaterial({ map: _texAsphalt, polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -4 }),
-    roadShoulder: new THREE.MeshLambertMaterial({ color: 0x5a4a36, polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -3 }),
-    roadEdge: new THREE.MeshLambertMaterial({ color: 0xe3ddd0, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -6 }),
-    roadLine: new THREE.MeshLambertMaterial({ color: 0xeecc22, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -6 }),
-    roadDirt: new THREE.MeshLambertMaterial({ map: _texDirt, polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -4 }),
-    path:     new THREE.MeshLambertMaterial({ color: 0x5e4a34, polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -3 }),
+    road:     new THREE.MeshLambertMaterial({ map: _texAsphalt, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -8 }),
+    roadBroken:new THREE.MeshLambertMaterial({ map: _texAsphalt, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -8 }),
+    roadShoulder: new THREE.MeshLambertMaterial({ color: 0x5a4a36, polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -4 }),
+    roadEdge: new THREE.MeshLambertMaterial({ color: 0xe3ddd0, polygonOffset: true, polygonOffsetFactor: -3, polygonOffsetUnits: -10 }),
+    roadLine: new THREE.MeshLambertMaterial({ color: 0xeecc22, polygonOffset: true, polygonOffsetFactor: -3, polygonOffsetUnits: -10 }),
+    roadDirt: new THREE.MeshLambertMaterial({ map: _texDirt, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -8 }),
+    path:     new THREE.MeshLambertMaterial({ map: _texDirt, color: 0x9a8870, polygonOffset: true, polygonOffsetFactor: -3, polygonOffsetUnits: -8 }),
     stairs:   new THREE.MeshLambertMaterial({ color: 0x6b4f30 }),
   };
 
   // ── Primitives ────────────────────────────────────────────────────────────────
 
+  function _finite(v, fb) { return Number.isFinite(v) ? v : fb; }
+  function _dim(v, fb) { const n = Number(v); return Number.isFinite(n) && n > 0 ? n : fb; }
+
   function _mesh(scene, geo, mat, x, y, z) {
     const m = new THREE.Mesh(geo, mat);
-    m.position.set(x, y, z);
+    m.position.set(_finite(x, 0), _finite(y, 0), _finite(z, 0));
     m.castShadow = true;
     m.receiveShadow = true;
     scene.add(m);
@@ -69,9 +78,11 @@
   // maxY → le joueur peut sauter par-dessus si ses pieds dépassent maxY
   // minY → collider actif seulement si les pieds du joueur sont au-dessus de minY
   function _wall(scene, x, z, baseY, lenX, lenZ, height, mat, noCollide, maxY, minY) {
-    _mesh(scene, new THREE.BoxGeometry(lenX, height, lenZ), mat, x, baseY + height / 2, z);
+    const w = _dim(lenX, 0.1), d = _dim(lenZ, 0.1), h = _dim(height, 0.1);
+    const y = _finite(baseY, 0);
+    _mesh(scene, new THREE.BoxGeometry(w, h, d), mat, x, y + h / 2, z);
     if (!noCollide) {
-      const col = { type: 'box', cx: x, cz: z, hw: lenX / 2, hd: lenZ / 2 };
+      const col = { type: 'box', cx: x, cz: z, hw: w / 2, hd: d / 2 };
       if (maxY !== undefined) col.maxY = maxY;
       if (minY !== undefined) col.minY = minY;
       _colliders.push(col);
@@ -79,7 +90,7 @@
   }
 
   function _slab(scene, x, z, y, w, d, mat) {
-    _mesh(scene, new THREE.BoxGeometry(w, 0.14, d), mat, x, y + 0.07, z);
+    _mesh(scene, new THREE.BoxGeometry(_dim(w, 0.1), 0.14, _dim(d, 0.1)), mat, x, _finite(y, 0) + 0.07, z);
   }
 
   // Dalle percée d'une trémie rectangulaire (cage d'escalier)
@@ -95,7 +106,7 @@
   }
 
   function _box(scene, x, z, y, w, h, d, mat) {
-    _mesh(scene, new THREE.BoxGeometry(w, h, d), mat, x, y, z);
+    _mesh(scene, new THREE.BoxGeometry(_dim(w, 0.1), _dim(h, 0.1), _dim(d, 0.1)), mat, x, y, z);
   }
 
   function _visualStairs(scene, cx, cz, fromY, toY, axis, stairWidth, halfLen) {
@@ -113,133 +124,20 @@
     }
   }
 
-  // Ruban de route/chemin collé au terrain.
-  // LIFT : très léger décollement du sol (le polygonOffset des matériaux évite le
-  // z-fighting) — la route reste praticable, on marche dessus.
-  const _RIBBON_LIFT = 0.07;
-  function _ribbon(scene, pts, width, mat, withLine) {
-    const isRoadSurface = mat === M.road || mat === M.roadBroken;
-
-    function _buildRibbonMesh(surfaceWidth, surfaceMat, yOffset, tileScale, crossSegments) {
-      const stepSize = surfaceMat.map ? 0.25 : 0.7;
-      const pos = [];
-      const uv = [];
-      const idx = [];
-      let prevRow = -1;
-      let acc = 0;
-      const tileLen = Math.max((tileScale || surfaceWidth * 0.65), 3.2);
-      const cols = Math.max(1, crossSegments || 1);
-
-      for (let si = 0; si < pts.length - 1; si++) {
-        const [x0, z0] = pts[si];
-        const [x1, z1] = pts[si + 1];
-        const sdx = x1 - x0, sdz = z1 - z0;
-        const sLen = Math.hypot(sdx, sdz);
-        if (sLen < 0.01) continue;
-        const nx = -sdz / sLen, nz = sdx / sLen;
-        const hw = surfaceWidth / 2;
-        const segStart = acc;
-        const steps = Math.max(1, Math.ceil(sLen / stepSize));
-
-        for (let i = (si === 0 ? 0 : 1); i <= steps; i++) {
-          const t = i / steps;
-          const x = x0 + sdx * t;
-          const z = z0 + sdz * t;
-          const v = (segStart + sLen * t) / tileLen;
-          const rowStart = pos.length / 3;
-          for (let c = 0; c <= cols; c++) {
-            const u = c / cols;
-            const off = -hw + surfaceWidth * u;
-            const px = x + nx * off;
-            const pz = z + nz * off;
-            const py = ZS.getTerrainHeight(px, pz) + yOffset;
-            pos.push(px, py, pz);
-            uv.push(u, v);
-          }
-          if (prevRow >= 0) {
-            for (let c = 0; c < cols; c++) {
-              const a = prevRow + c;
-              const b = prevRow + c + 1;
-              const d = rowStart + c;
-              const e = rowStart + c + 1;
-              idx.push(a, b, d, b, e, d);
-            }
-          }
-          prevRow = rowStart;
-        }
-        acc += sLen;
-      }
-
-      if (pos.length < 6) return false;
-      const geo = new THREE.BufferGeometry();
-      geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
-      geo.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));
-      geo.setIndex(idx);
-      geo.computeVertexNormals();
-      scene.add(new THREE.Mesh(geo, surfaceMat));
-      return true;
-    }
-
-    if (isRoadSurface) {
-      const shoulderWidth = width + (mat === M.road ? 0.75 : 1.15);
-      _buildRibbonMesh(shoulderWidth, M.roadShoulder, _RIBBON_LIFT - 0.015, shoulderWidth * 0.85, 4);
-    }
-
-    const surfaceCols = mat.map ? 16 : 2;
-    if (!_buildRibbonMesh(width, mat, _RIBBON_LIFT, width * 0.65, surfaceCols)) return;
-
-    function _overlayStrip(stripWidth, offset, material, dashOn, dashOff) {
-      const lPos = [], lIdx = [];
-      let lprev = -1;
-      let dashAcc = 0;
-      for (let si = 0; si < pts.length - 1; si++) {
-        const [x0, z0] = pts[si];
-        const [x1, z1] = pts[si + 1];
-        const sdx = x1 - x0, sdz = z1 - z0;
-        const sLen = Math.hypot(sdx, sdz);
-        if (sLen < 0.01) continue;
-        const nx = -sdz / sLen, nz = sdx / sLen;
-        const steps = Math.max(1, Math.ceil(sLen / 0.25));
-        for (let i = (si === 0 ? 0 : 1); i <= steps; i++) {
-          const t = i / steps;
-          const x = x0 + sdx * t + nx * offset;
-          const z = z0 + sdz * t + nz * offset;
-          const y = ZS.getTerrainHeight(x, z) + _RIBBON_LIFT + 0.02;
-          const li = lPos.length / 3;
-          lPos.push(x - nx * stripWidth, y, z - nz * stripWidth, x + nx * stripWidth, y, z + nz * stripWidth);
-          if (lprev >= 0) {
-            const segPiece = sLen / steps;
-            const cycle = dashOn > 0 ? dashOn + dashOff : 0;
-            let draw = true;
-            if (cycle > 0) {
-              const mid = (dashAcc + segPiece * 0.5) % cycle;
-              draw = mid < dashOn;
-            }
-            if (draw) lIdx.push(lprev, lprev + 1, li, lprev + 1, li + 1, li);
-            dashAcc += segPiece;
-          }
-          lprev = li;
-        }
-      }
-      if (lPos.length >= 6 && lIdx.length > 0) {
-        const lGeo = new THREE.BufferGeometry();
-        lGeo.setAttribute('position', new THREE.Float32BufferAttribute(lPos, 3));
-        lGeo.setIndex(lIdx);
-        lGeo.computeVertexNormals();
-        scene.add(new THREE.Mesh(lGeo, material));
-      }
-    }
-
-    if (mat === M.road) {
-      const edgeOffset = Math.max(0.22, width * 0.5 - 0.18);
-      _overlayStrip(0.05, -edgeOffset, M.roadEdge, 0, 0);
-      _overlayStrip(0.05,  edgeOffset, M.roadEdge, 0, 0);
-      if (withLine && width >= 5.0) _overlayStrip(0.12, 0, M.roadLine, 2.2, 2.8);
-    } else if (mat === M.roadBroken) {
-      if (withLine && width >= 4.5) _overlayStrip(0.10, 0, M.roadLine, 1.8, 3.6);
-    } else if (withLine && !mat.map) {
-      _overlayStrip(0.14, 0, M.roadLine, 1.4, 1.4);
-    }
+  // Enregistre une arête (rendu via RoadNetwork.buildMeshes)
+  function _ribbon(scene, pts, width, mat, withLine, opts) {
+    if (!ZS.RoadNetwork) return;
+    const roadType = mat === M.road || mat === M.roadBroken ? 'asphalt'
+      : mat === M.roadDirt ? 'dirt' : 'path';
+    ZS.RoadNetwork.defineEdge({
+      pts,
+      width,
+      type: roadType,
+      line: !!withLine,
+      broken: mat === M.roadBroken,
+      taperStart: opts?.taperStart || 0,
+      taperEnd: opts?.taperEnd || 0,
+    });
   }
 
   // ── Reusable building templates ───────────────────────────────────────────────
@@ -473,40 +371,115 @@
     _slab(scene, canX, cz, apronY + 0.01, 6, 8, M.concDark);
   }
 
-  function _car(scene, cx, cz, rotY, colorHex) {
-    const cy     = ZS.getTerrainHeight(cx, cz);
-    const rusted = new THREE.MeshLambertMaterial({ color: colorHex || 0x5a3015 });
-    const dark   = new THREE.MeshLambertMaterial({ color: 0x181818 });
-    const glass  = new THREE.MeshLambertMaterial({ color: 0x334444, transparent: true, opacity: 0.5 });
+  const _WHEEL_SLOTS = [[-0.97, -1.38], [0.97, -1.38], [-0.97, 1.38], [0.97, 1.38]];
+
+  function _carcass(scene, cx, cz, opts) {
+    opts = opts || {};
+    const rotY   = opts.rotY || 0;
+    const tilt   = opts.tilt || 0;
+    const sink   = opts.sink || 0;
+    const burnt  = !!opts.burnt;
+    const color  = burnt ? 0x1a1510 : (opts.color || 0x5a3015);
+    const cy     = ZS.getTerrainHeight(cx, cz) - sink;
+
+    const bodyM  = new THREE.MeshLambertMaterial({ color });
+    const darkM  = new THREE.MeshLambertMaterial({ color: 0x181818 });
+    const flatM  = new THREE.MeshLambertMaterial({ color: 0x222222 });
+    const glassM = new THREE.MeshLambertMaterial({ color: burnt ? 0x1a2020 : 0x334444, transparent: true, opacity: burnt ? 0.25 : 0.45 });
+    const charM  = new THREE.MeshLambertMaterial({ color: 0x0a0806 });
     const g      = new THREE.Group();
 
-    const body = new THREE.Mesh(new THREE.BoxGeometry(1.78, 0.72, 4.1), rusted);
+    const body = new THREE.Mesh(new THREE.BoxGeometry(1.78, 0.72, 4.1), bodyM);
     body.position.y = 0.62; body.castShadow = true; body.receiveShadow = true;
 
-    const cabin = new THREE.Mesh(new THREE.BoxGeometry(1.48, 0.62, 2.15), rusted);
+    const cabin = new THREE.Mesh(new THREE.BoxGeometry(1.48, 0.62, 2.15), bodyM);
     cabin.position.set(0, 1.25, -0.18); cabin.castShadow = true;
 
-    const windshield = new THREE.Mesh(new THREE.BoxGeometry(1.3, 0.5, 0.06), glass);
+    const windshield = new THREE.Mesh(new THREE.BoxGeometry(1.3, 0.5, 0.06), glassM);
     windshield.position.set(0, 1.3, -1.2);
+    if (burnt) windshield.rotation.x = 0.22;
 
-    for (const [ox, oz] of [[-0.97,-1.38],[0.97,-1.38],[-0.97,1.38],[0.97,1.38]]) {
-      const w = new THREE.Mesh(new THREE.CylinderGeometry(0.34, 0.34, 0.22, 9), dark);
+    const wheelCount = opts.wheels == null ? 4 : Math.max(0, Math.min(4, opts.wheels | 0));
+    const skipFrom = wheelCount >= 4 ? 0 : 4 - wheelCount;
+    for (let i = 0; i < _WHEEL_SLOTS.length; i++) {
+      if (i < skipFrom) continue;
+      const [ox, oz] = _WHEEL_SLOTS[i];
+      const flat = i >= 2 && (tilt > 0.12 || wheelCount <= 2);
+      const w = new THREE.Mesh(
+        new THREE.CylinderGeometry(flat ? 0.36 : 0.34, flat ? 0.36 : 0.34, flat ? 0.12 : 0.22, 9),
+        flat ? flatM : darkM
+      );
       w.rotation.z = Math.PI / 2;
-      w.position.set(ox, 0.37, oz);
+      w.position.set(ox, flat ? 0.28 : 0.37, oz);
       g.add(w);
     }
+
+    if (tilt > 0.1 || burnt) {
+      const hood = new THREE.Mesh(new THREE.BoxGeometry(1.5, 0.18, 1.1), bodyM);
+      hood.position.set(0, 0.92, 1.55);
+      hood.rotation.x = burnt ? -0.55 : -0.35;
+      g.add(hood);
+    }
+
+    if (burnt) {
+      const scorch = new THREE.Mesh(new THREE.BoxGeometry(1.6, 0.04, 2.2), charM);
+      scorch.position.set(0, 0.78, 0.2);
+      g.add(scorch);
+    }
+
     g.add(body); g.add(cabin); g.add(windshield);
     g.position.set(cx, cy, cz);
     g.rotation.y = rotY;
+    g.rotation.z = tilt;
     scene.add(g);
-    // maxY = dessus de la carrosserie (~0.98m) — le joueur peut sauter dessus
     _colliders.push({ type: 'box', cx, cz, hw: 1.0, hd: 2.2, maxY: cy + 0.98 });
+  }
+
+  function _car(scene, cx, cz, rotY, colorHex) {
+    _carcass(scene, cx, cz, { rotY, color: colorHex });
   }
 
   // ── Sector registry ───────────────────────────────────────────────────────────
 
   function registerSector(sectorObj) {
     _sectors.push(sectorObj);
+    if (!ZS.RoadNetwork) return;
+    if (sectorObj.clearings) {
+      for (const c of sectorObj.clearings) ZS.RoadNetwork.defineClearing(c);
+    }
+    if (sectorObj.roads) {
+      for (const r of sectorObj.roads) {
+        ZS.RoadNetwork.defineEdge({
+          id: r.id,
+          pts: r.pts,
+          width: r.width,
+          type: r.type || 'dirt',
+          visual: r.visual !== false,
+          smooth: r.smooth !== false,
+          taperStart: r.taperStart || 0,
+          taperEnd: r.taperEnd || 0,
+          line: !!r.line,
+          broken: !!r.broken,
+          barriers: r.barriers !== false,
+        });
+      }
+    }
+  }
+
+  function applyRoadFlattening() {
+    if (ZS.RoadNetwork) {
+      ZS.RoadNetwork.resolve();
+      ZS.RoadNetwork.applyFlattening();
+      return;
+    }
+    if (ZS.finalizeRoadNetwork) ZS.finalizeRoadNetwork();
+  }
+
+  function _roadRibbonOpts(def) {
+    const o = {};
+    if (def.taperStart) o.taperStart = def.taperStart;
+    if (def.taperEnd)   o.taperEnd   = def.taperEnd;
+    return o;
   }
 
   function buildAll(scene) {
@@ -526,6 +499,7 @@
     box:          _box,
     visualStairs: _visualStairs,
     ribbon:       _ribbon,
+    roadOpts:     _roadRibbonOpts,
     house:        _house,
     immeuble2F:   _buildImmeuble2F,
     farmhouse2F:  _buildFarmhouse2F,
@@ -533,8 +507,11 @@
     watchtower:   _buildWatchtower,
     gasStation:   _buildGasStation,
     car:          _car,
+    carcass:      _carcass,
     addCollider:  (c) => _colliders.push(c),
   };
   ZS.registerLoot = registerLoot;
-  ZS.Buildings = { buildAll, registerSector, getLootBuildings: () => _lootBuildings };
+  ZS.isNearRoad     = isNearRoad;
+  ZS.getRoadPaths   = () => (ZS.RoadNetwork ? ZS.RoadNetwork.getResolvedEdges() : []);
+  ZS.Buildings = { buildAll, registerSector, applyRoadFlattening, getLootBuildings: () => _lootBuildings };
 }());

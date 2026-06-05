@@ -6,6 +6,16 @@
   const CX = -20, CZ = -185;
   ZS.registerFlatZone(CX, CZ, 65, 65, 15);
 
+  const CITY_ROADS = [
+    { id: 'city_highway', pts: [[-104,-9],[-96,-32],[-82,-58],[-65,-85],[-48,-105],[-32,-116],[-20,-122]], width: 12, type: 'asphalt', line: true, barriers: true, smooth: true, taperEnd: 10 },
+    { id: 'city_row_s', pts: [[-85,-185],[-50,-185],[-20,-185],[10,-185],[42,-185]], width: 7.0, type: 'asphalt' },
+    { id: 'city_row_n', pts: [[-85,-240],[-50,-240],[-20,-240],[10,-240],[42,-240]], width: 5.5, type: 'asphalt' },
+    { id: 'city_row_m', pts: [[-85,-135],[-50,-135],[-20,-135],[10,-135],[42,-135]], width: 5.5, type: 'asphalt' },
+    { id: 'city_col_c', pts: [[-20,-120],[-20,-135],[-20,-185],[-20,-240],[-20,-250]], width: 6.0, type: 'asphalt' },
+    { id: 'city_col_e', pts: [[36,-120],[36,-135],[36,-185],[36,-240],[36,-250]], width: 4.5, type: 'asphalt' },
+    { id: 'city_col_w', pts: [[-64,-120],[-64,-135],[-64,-185],[-64,-240],[-64,-250]], width: 4.5, type: 'asphalt' },
+  ];
+
   function build(scene) {
     const B = ZS.B;
     _buildAllRoads(scene, B);
@@ -20,7 +30,6 @@
     _buildGasStation(scene, B);
     _buildParkingStructure(scene, B);
     _buildResidential(scene, B);
-    _buildVehicles(scene, B);
     _buildStreetLights(scene, B);
     _buildStreetFurniture(scene, B);
     _buildDebris(scene, B);
@@ -41,15 +50,8 @@
   // ── Routes ────────────────────────────────────────────────────────────────────
 
   function _buildAllRoads(scene, B) {
-    const M = B.M;
     const ty = ZS.getTerrainHeight(CX, CZ);
-    _buildHighway(scene, B);   // autoroute small town ↔ main city
-    B.ribbon(scene, [[-85,-185],[-50,-185],[-20,-185],[10,-185],[42,-185]], 7.0, M.road, false);
-    B.ribbon(scene, [[-85,-240],[-50,-240],[-20,-240],[10,-240],[42,-240]], 5.5, M.road, false);
-    B.ribbon(scene, [[-85,-135],[-50,-135],[-20,-135],[10,-135],[42,-135]], 5.5, M.road, false);
-    B.ribbon(scene, [[-20,-120],[-20,-135],[-20,-185],[-20,-240],[-20,-250]], 6.0, M.road, false);
-    B.ribbon(scene, [[36,-120],[36,-135],[36,-185],[36,-240],[36,-250]], 4.5, M.road, false);
-    B.ribbon(scene, [[-64,-120],[-64,-135],[-64,-185],[-64,-240],[-64,-250]], 4.5, M.road, false);
+    _buildHighway(scene, B);
     const trot = new THREE.MeshLambertMaterial({ color: 0x7a7268, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -5 });
     B.slab(scene, CX, -190, ty+0.07, 132, 2.2, trot);
     B.slab(scene, CX, -180, ty+0.07, 132, 2.2, trot);
@@ -64,57 +66,7 @@
   // Large chaussée asphaltée (texture tileset : axe jaune + bords blancs) bordée de
   // glissières de sécurité métalliques.
   function _buildHighway(scene, B) {
-    const M = B.M;
-    const pts = [[2,-2],[-2,-22],[-7,-48],[-12,-75],[-16,-100],[-19,-118],[-20,-122]];
-    const W = 12;
-    B.ribbon(scene, pts, W, M.road, true);
-
-    // Glissières : poteaux + lisse horizontale de part et d'autre de la chaussée.
-    const railMat = M.metal;
-    const hw = W / 2 + 0.5;
-    const postStep = 3.0;
-    const skipZones = [
-      { x: 0, z: 0, r: 16 },
-      { x: -20, z: -135, r: 15 },
-    ];
-    function inSkipZone(x, z) {
-      return skipZones.some(zone => Math.hypot(x - zone.x, z - zone.z) < zone.r);
-    }
-    for (let si = 0; si < pts.length - 1; si++) {
-      const [x0, z0] = pts[si], [x1, z1] = pts[si + 1];
-      const dx = x1 - x0, dz = z1 - z0, len = Math.hypot(dx, dz);
-      if (len < 0.01) continue;
-      const nx = -dz / len, nz = dx / len;
-      const steps = Math.max(1, Math.ceil(len / postStep));
-      for (const s of [-1, 1]) {
-        const posts = [];
-        for (let i = 0; i <= steps; i++) {
-          const t = i / steps;
-          const x = x0 + dx * t + nx * hw * s;
-          const z = z0 + dz * t + nz * hw * s;
-          if (inSkipZone(x, z)) {
-            posts.push(null);
-            continue;
-          }
-          const y = ZS.getTerrainHeight(x, z);
-          B.box(scene, x, z, y + 0.55, 0.14, 0.8, 0.14, railMat);   // poteau
-          posts.push({ x, y, z });
-        }
-        // Lisse continue, orientée le long du tronçon
-        for (let i = 0; i < posts.length - 1; i++) {
-          const a = posts[i], b = posts[i + 1];
-          if (!a || !b) continue;
-          const segDx = b.x - a.x, segDz = b.z - a.z;
-          const segLen = Math.hypot(segDx, segDz);
-          if (segLen < 0.1) continue;
-          const mx = (a.x + b.x) / 2;
-          const mz = (a.z + b.z) / 2;
-          const my = (a.y + b.y) / 2;
-          const beam = B.mesh(scene, new THREE.BoxGeometry(0.1, 0.16, segLen), railMat, mx, my + 0.78, mz);
-          beam.rotation.y = Math.atan2(segDx, segDz);
-        }
-      }
-    }
+    // Chaussée + glissières rendues par ZS.RoadNetwork.buildMeshes (city_highway)
   }
 
   // ─── Helper : planchers intérieurs + escalier intérieur ──────────────────────
@@ -213,7 +165,6 @@
     B.box(scene,cx,cz+D/2+0.01,y+wH-1.4,0.06,1.0,13,new THREE.MeshLambertMaterial({color:0x1a5a28}));
     // Parking + chariots
     B.slab(scene,cx+W/2+5,cz,y+0.04,6,10,mAsph);
-    B.car(scene,cx+W/2+4,cz-3.5,0.1,0x3a2818);
     const cM=new THREE.MeshLambertMaterial({color:0x888880});
     for(const[ox,oz]of[[cx+W/2+3,cz-1],[cx+W/2+5,cz+2],[cx+W/2+7,cz-3]])B.box(scene,ox,oz,ZS.getTerrainHeight(ox,oz)+0.3,0.85,0.6,0.4,cM);
   }
@@ -245,7 +196,6 @@
     f.position.set(cx+W/2+1.6,y+8.7,cz+D/2);scene.add(f);
     B.box(scene,cx+W/2+0.01,cz,y+wH-1.8,0.06,0.8,8,mSign);
     for(const bz of[-4,-2,0,2,4])B.box(scene,cx+W/2+2,cz+bz,y+0.5,0.5,1.0,0.48,mConc);
-    B.car(scene,cx+W/2+5,cz-2,0.1,0x1a1a3a); B.car(scene,cx+W/2+5,cz+2,-0.1,0x1a1a3a);
     _addFloorsAndStairs(scene,B,cx,cz,W,D,floors,flH,y,'north');
   }
 
@@ -329,7 +279,6 @@
     for(const fz of[-5,-1,3])B.box(scene,cx-W/2-0.01,cz+fz,y+2.2,0.07,1.6,2.0,mGlass);
     const shM=new THREE.MeshLambertMaterial({color:0x6a5a38});
     for(const[sx,sz]of[[-34,-190],[-30,-190],[-26,-190],[-34,-180],[-30,-180],[-26,-180]])B.box(scene,sx,sz,y+1.4,0.1,2.8,4.5,shM);
-    B.car(scene,cx-W/2-4,cz-5,Math.PI*0.55,0x2a2a28);
   }
 
   // ══════════════════════════════════════════════════════════════════════════════
@@ -413,7 +362,6 @@
 
   function _buildGasStation(scene,B){
     B.gasStation(scene,-72,-132);
-    B.car(scene,-62,-126,0.2,0x5a4a30); B.car(scene,-62,-132,-0.1,0x3a3a28);
   }
 
   function _buildParkingStructure(scene,B){
@@ -431,11 +379,6 @@
       B.box(scene,cx+W/2,cz,ly+2.6,0.14,0.8,D,pkM);
       B.box(scene,cx,cz-D/2,ly+2.6,W,0.8,0.14,pkM);
       for(let i=-3;i<=3;i++) B.box(scene,cx+i*1.9,cz-2,ly+0.07,0.1,0.01,7,lnM);
-      if(lvl<2){
-        B.car(scene,cx-4,cz-2,0,0x2a2a22+lvl*0x0f0f0f);
-        B.car(scene,cx,cz-2,0.05,0x3a4a2a);
-        B.car(scene,cx+4,cz-2,-0.07,0x4a3a20);
-      }
     }
 
     // ──  PLANCHERS PHYSIQUES (fix chute) ──────────────────────────────────────
@@ -496,38 +439,6 @@
 
     // Planchers physiques + escalier intérieur
     _addFloorsAndStairs(scene,B,cx,cz,W,D,floors,flH,y,'south');
-  }
-
-  // ══════════════════════════════════════════════════════════════════════════════
-  // VÉHICULES
-  // ══════════════════════════════════════════════════════════════════════════════
-
-  function _buildVehicles(scene,B){
-    for(const[vx,vz,vr,vc]of[
-      [42,-186.5,0.05,0x3a2a18],[32,-183.5,-0.07,0x2a3a2a],[22,-186,-0.08,0x4a3818],
-      [12,-184,0.10,0x1a2a3a],[2,-186.8,-0.05,0x3a3a28],[-8,-183,0.08,0x2a1a18],
-      [-18,-186,3.1,0x4a4030],[-28,-183.5,-0.09,0x3a2820],[-38,-186.5,0.06,0x1a3a2a],
-      [-48,-183,0.0,0x2a3030],[-58,-186.8,-0.07,0x4a2a18],[-68,-183.5,0.09,0x3a3828],
-      [-78,-186,3.18,0x2a2a20],
-    ])B.car(scene,vx,vz,vr,vc);
-    B.car(scene,16,-183.5,-0.12,0xddbb00); B.car(scene,-22,-186,0.08,0xddbb00);
-    for(const[vx,vc]of[[40,0x3a2a18],[15,0x2a3a2a],[-10,0x4a3018],[-35,0x1a2a3a],[-60,0x3a3028]])B.car(scene,vx,-240,0.1,vc);
-    for(const[vx,vc]of[[38,0x2a2a20],[12,0x3a2818],[-14,0x4a3a28],[-38,0x2a3a2a],[-62,0x1a2820]])B.car(scene,vx,-135,Math.PI+0.1,vc);
-    for(const[vx,vz]of[[42,-185],[-8,-186.5],[-58,-183]])B.car(scene,vx,vz,0.22,0x1a1a18);
-    _bus(scene,B,26,-185.5,0.10); _bus(scene,B,-42,-184.5,Math.PI);
-  }
-
-  function _bus(scene,B,cx,cz,ry){
-    const py=ZS.getTerrainHeight(cx,cz);
-    const bodyM=new THREE.MeshLambertMaterial({color:0x1e2a6a}),dM=new THREE.MeshLambertMaterial({color:0x181818});
-    const g=new THREE.Group();
-    const b=new THREE.Mesh(new THREE.BoxGeometry(2.4,2.0,8.5),bodyM);b.position.y=1.08;b.castShadow=true;g.add(b);
-    for(let i=0;i<5;i++)for(const sx of[-1.22,1.22]){const w=new THREE.Mesh(new THREE.BoxGeometry(0.05,0.72,1.25),mGlass);w.position.set(sx,1.6,-2.88+i*1.45);g.add(w);}
-    for(const[ox,oz]of[[-1.25,-3.0],[1.25,-3.0],[-1.25,0],[1.25,0],[-1.25,3.0],[1.25,3.0]]){
-      const w=new THREE.Mesh(new THREE.CylinderGeometry(0.44,0.44,0.26,9),dM);w.rotation.z=Math.PI/2;w.position.set(ox,0.46,oz);g.add(w);
-    }
-    g.position.set(cx,py,cz);g.rotation.y=ry;scene.add(g);
-    B.addCollider({type:'box',cx,cz,hw:1.3,hd:4.4,maxY:py+2.2});
   }
 
   // ══════════════════════════════════════════════════════════════════════════════
@@ -628,5 +539,5 @@
   }
 
   // ─────────────────────────────────────────────────────────────────────────────
-  ZS.Buildings.registerSector({ build });
+  ZS.Buildings.registerSector({ build, roads: [CITY_ROADS[0]] });
 }());

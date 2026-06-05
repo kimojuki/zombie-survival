@@ -13,6 +13,16 @@
 
   ZS.registerFlatZone(CX, CZ, 80, 85, 12);
 
+  const MILITARY_ROADS = [
+    { id: 'mil_access', pts: [[-177,-5],[-185,-18],[-194,-36],[-198,-55],[-200,-72],[-200,-80]], width: 6.0, type: 'dirt' },
+    { id: 'mil_main_ns', pts: [[CX,Z1],[CX,Z0+5]], width: 8.0, type: 'dirt' },
+    { id: 'mil_row_1', pts: [[X0+5,-120],[X1-5,-120]], width: 6.0, type: 'dirt' },
+    { id: 'mil_row_2', pts: [[X0+5,-170],[X1-5,-170]], width: 6.0, type: 'dirt' },
+    { id: 'mil_row_3', pts: [[X0+5,-212],[X1-5,-212]], width: 6.0, type: 'dirt' },
+    { id: 'mil_col_w', pts: [[X0+8,Z1],[X0+8,Z0+5]], width: 5.0, type: 'dirt' },
+    { id: 'mil_col_e', pts: [[X1-8,Z1],[X1-8,Z0+5]], width: 5.0, type: 'dirt' },
+  ];
+
   // ── Build ─────────────────────────────────────────────────────────────────────
 
   function build(scene) {
@@ -73,8 +83,7 @@
   // ── Route d'accès ─────────────────────────────────────────────────────────────
 
   function _buildAccessRoad(scene, B) {
-    B.ribbon(scene, [[-177,-5],[-185,-18],[-194,-36],[-198,-55],[-200,-72],[-200,-80]],
-      6.0, B.M.roadDirt, false);
+    // Route rendue par ZS.RoadNetwork.buildMeshes
   }
 
   // ── Clôture périmétrique ──────────────────────────────────────────────────────
@@ -173,13 +182,7 @@
   // ── Réseau routier interne ────────────────────────────────────────────────────
 
   function _buildInternalRoads(scene, B) {
-    const rm = new THREE.MeshLambertMaterial({color:0x555048,polygonOffset:true,polygonOffsetFactor:-1,polygonOffsetUnits:-3});
-    B.ribbon(scene,[[CX,Z1],[CX,Z0+5]],8.0,rm,false);                          // axe N-S
-    B.ribbon(scene,[[X0+5,-120],[X1-5,-120]],6.0,rm,false);                     // E-O zone 1
-    B.ribbon(scene,[[X0+5,-170],[X1-5,-170]],6.0,rm,false);                     // E-O zone 2
-    B.ribbon(scene,[[X0+5,-212],[X1-5,-212]],6.0,rm,false);                     // E-O zone 3
-    B.ribbon(scene,[[X0+8,Z1],[X0+8,Z0+5]],5.0,rm,false);                      // route ouest interne
-    B.ribbon(scene,[[X1-8,Z1],[X1-8,Z0+5]],5.0,rm,false);                      // route est interne
+    // Routes internes rendues par ZS.RoadNetwork.buildMeshes
   }
 
   // ══════════════════════════════════════════════════════════════════════════════
@@ -591,14 +594,7 @@
   }
 
   function _buildVehicles(scene, B) {
-    const mg=0x3a4a2a;
-    // Parking (zone 1)
-    B.car(scene,-237,-92,0.1,mg); B.car(scene,-237,-98,-0.1,mg);
-    B.car(scene,-245,-92,0.08,0x2a3020); B.car(scene,-245,-98,3.1,0x3a3a30);
-    B.car(scene,-253,-92,0.0,mg); B.car(scene,-253,-98,-0.05,mg);
-    // Devant bâtiments opérations
-    B.car(scene,-162,-205,0.1,mg); B.car(scene,-162,-215,-0.1,mg);
-    B.car(scene,-200,-100,0.05,mg); B.car(scene,-188,-108,3.1,0x3a3a30);
+    const mg = 0x3a4a2a;
     // Tank devant motor pool
     _buildTank(scene,B,-235,-180,mg);
     // Hélicoptère sur héliport
@@ -742,5 +738,6 @@
 
   // ─────────────────────────────────────────────────────────────────────────────
 
-  ZS.Buildings.registerSector({ build });
+  // Routes désactivées — brick 0 (voir road_network.js)
+  ZS.Buildings.registerSector({ build, roads: [] });
 }());

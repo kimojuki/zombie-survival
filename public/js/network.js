@@ -53,6 +53,8 @@
       }
       if (data.username) localStorage.setItem('zombie_username', data.username);
       if (ZS.Chat?.setUsername) ZS.Chat.setUsername(data.username);
+      if (ZS.Chat?.setSelfId) ZS.Chat.setSelfId(data.selfId);
+      if (ZS.Chat?.setServerReady) ZS.Chat.setServerReady(data.features?.chat !== false);
       if (ZS.Rcon?.refreshMenu) ZS.Rcon.refreshMenu();
       state.selfId = data.selfId;
       if (data.spawn) {

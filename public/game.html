@@ -34,16 +34,13 @@
   <small>WASD · souris · Échap pour libérer le curseur</small>
 </div>
 
-<div id="chat-wrap">
-  <div id="chat-header">
-    <span id="chat-title">Chat</span>
-    <button id="chat-toggle" type="button" title="Chat (Entrée ou T)">💬</button>
-  </div>
-  <div id="chat-log" aria-live="polite"></div>
+<div id="chat-wrap" aria-live="polite">
+  <div id="chat-log"></div>
   <div id="chat-input-row" hidden>
     <input id="chat-input" type="text" maxlength="200" enterkeyhint="send"
       autocapitalize="off" autocomplete="off" autocorrect="off" spellcheck="false"
-      placeholder="Message… Entrée pour envoyer" />
+      placeholder="Message…" />
+    <button id="chat-send-btn" type="button" title="Envoyer">➤</button>
   </div>
 </div>
 
@@ -106,6 +103,7 @@
 <button id="craft-btn" title="Artisanat [C]">⚒</button>
 <button id="inv-btn"   title="Inventaire [I]" onclick="ZS.Inventory.togglePanel()">🎒</button>
 <button id="map-btn"   title="Carte [M]"      onclick="ZS.Map.toggleMap()">🗺️</button>
+<button id="chat-btn"  title="Chat — écrire" type="button">💬</button>
 
 <!-- Hotbar -->
 <div id="hotbar"></div>
@@ -195,7 +193,7 @@
     setConnectingMsg('Chargement du jeu…', 'Délai dépassé — tentative de connexion quand même');
   }
 
-  const CACHE_BUST = '20260606e';
+  const CACHE_BUST = '20260606j';
   // Attendre le serveur, puis charger les scripts du jeu
   const modules = [
     '/js/items.js', '/js/survival.js', '/js/craft.js', '/js/noise.js',

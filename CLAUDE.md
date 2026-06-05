@@ -27,7 +27,9 @@ Copy `.env.example` → `.env` for local development.
 |-----|----------------|
 | `DEV_TRACKER.md` | **Always** — every work session |
 | `README.md` | Setup, onboarding changes |
-| `docs/ARCHITECTURE.md` | Client/server flow changes |
+| `docs/DEPLOY.md` | Prod deploy, pm2, cron, webhook |
+| `docs/DEPLOY.md` | Prod deploy, pm2, cron, webhook |
+| `docs/ARCHITECTURE.md` | Client/server flow, chat, sync |
 | `docs/RCON.md` | Admin commands, flags, API |
 | `docs/ROAD_NETWORK.md` | Roads, terrain corridors, spawn paths |
 | `.env.example` | New environment variables |
@@ -44,6 +46,7 @@ Copy `.env.example` → `.env` for local development.
 | `public/js/buildings.js` | Building utils, sector registry → RoadNetwork |
 | `public/js/sector_*.js` | World sectors (forest, town, maincity, military) |
 | `public/js/rcon.js` | In-game admin console UI |
+| `public/js/chat.js` | Multiplayer chat (discrete feed + input) |
 | `public/js/network.js` | Socket.io client sync |
 | `src/db.js` | Dual SQLite/MySQL data layer |
 | `DEV_TRACKER.md` | **Keep updated** with every local work session |

@@ -96,6 +96,7 @@ app.get('/api/health', (req, res) => {
     players: players.size,
     uptime: Math.floor(process.uptime()),
     rcon: !!(RCON_PASSWORD || ADMIN_USERS.size),
+    chat: true,
   });
 });
 
@@ -162,16 +163,16 @@ app.post('/api/auth/login', async (req, res) => {
     if (!player || !(await bcrypt.compare(password, player.password_hash)))
       return res.status(401).json({ error: 'Identifiants invalides' });
 
-    const token = jwt.sign({ id: player.id, username }, JWT_SECRET, { expiresIn: '7d' });
+    const token = jwt.sign({ id: player.id, username: player.username }, JWT_SECRET, { expiresIn: '7d' });
     log.info('auth', 'login ok', {
-      username,
+      username: player.username,
       spawn: { x: player.pos_x ?? 0, y: player.pos_y ?? 0, z: player.pos_z ?? 0 },
       health: player.health ?? 100,
       kills: player.kills ?? 0,
     });
-    const isAdmin = isAdminUser(username) || RCON_AUTO_ADMIN;
+    const isAdmin = isAdminUser(player.username) || RCON_AUTO_ADMIN;
     res.json({
-      token, username,
+      token, username: player.username,
       isAdmin,
       rconEnabled: isAdmin,
       spawn: { x: player.pos_x ?? 0, y: player.pos_y ?? 0, z: player.pos_z ?? 0, rotY: player.rot_y ?? 0 },
@@ -651,6 +652,7 @@ io.on('connection', async (socket) => {
     rconEnabled: isAdminUser(p.username) || RCON_AUTO_ADMIN,
     isAdmin: isAdminUser(p.username) || RCON_AUTO_ADMIN,
     rconPreAuth: isAdminUser(p.username) || RCON_AUTO_ADMIN,
+    features: { chat: true },
     inventory: p.inv,
     survival:  p.survival
   });
@@ -923,7 +925,12 @@ io.on('connection', async (socket) => {
       return;
     }
     player._lastChat = now;
-    const payload = { from: player.username, message: msg, ts: now };
+    const payload = {
+      from: player.username,
+      message: msg,
+      ts: now,
+      senderId: socket.id,
+    };
     io.emit('chat-message', payload);
     log.info('chat', player.username, { msg: msg.slice(0, 80) });
     if (typeof cb === 'function') cb({ ok: true });

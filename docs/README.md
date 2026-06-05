@@ -9,6 +9,7 @@ Index pour l'équipe — à maintenir à jour à chaque push.
 | [ARCHITECTURE.md](ARCHITECTURE.md) | Client/serveur, sync, secteurs, `.env` |
 | [RCON.md](RCON.md) | Console admin in-game, API, commandes, flags |
 | [ROAD_NETWORK.md](ROAD_NETWORK.md) | Routes, sentiers, terrain, spawn |
+| [DEPLOY.md](DEPLOY.md) | Prod Infomaniak, cron / webhook auto-deploy |
 
 ## Ailleurs dans le repo
 

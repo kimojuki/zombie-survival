@@ -365,7 +365,7 @@
     if (!el || el === canvas) return false;
     return !!el.closest?.(
       '#menu-panel, #menu-btn, #inv-panel, #craft-panel, #map-overlay, #death-screen, '
-      + '#connecting-screen, #rcon-panel, #chat-wrap, #hotbar, #craft-btn, #inv-btn, #map-btn, '
+      + '#connecting-screen, #rcon-panel, #chat-wrap, #hotbar, #craft-btn, #inv-btn, #map-btn, #chat-btn, '
       + '#build-ctl, button, a, input, textarea, select, [contenteditable]'
     );
   }
@@ -379,6 +379,7 @@
   function _requestPointerLock() {
     if (_isMobile || pointerLocked) return;
     if (ZS.Rcon?.isOpen?.()) return;
+    if (ZS.Chat?.isOpen?.() || document.body.classList.contains('chat-open')) return;
     const conn = document.getElementById('connecting-screen');
     if (conn && conn.style.display === 'flex') return;
     canvas.requestPointerLock();
@@ -408,6 +409,7 @@
     _syncPointerLockUi();
   });
   _syncPointerLockUi();
+  ZS.requestPointerLock = _requestPointerLock;
 
   document.addEventListener('mousemove', (e) => {
     if (!pointerLocked) return;

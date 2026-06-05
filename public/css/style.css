@@ -251,7 +251,7 @@ body.mode-desktop.pointer-locked #crosshair {
 .status-infect { background: rgba(0,120,0,0.75); }
 
 /* ── Boutons flottants craft / inventaire ───────────────────── */
-#craft-btn, #inv-btn, #map-btn {
+#craft-btn, #inv-btn, #map-btn, #chat-btn {
   position: fixed;
   width: 44px; height: 44px; border-radius: 10px;
   background: rgba(0,0,0,0.65); border: 1px solid rgba(255,255,255,0.2);
@@ -264,7 +264,15 @@ body.mode-desktop.pointer-locked #crosshair {
 #craft-btn { bottom: 174px; left: 16px; }
 #inv-btn   { bottom: 226px; left: 16px; }
 #map-btn   { bottom: 278px; left: 16px; }
-#craft-btn:active, #inv-btn:active, #map-btn:active { background: rgba(100,80,20,0.7); transform: scale(0.9); }
+#chat-btn  { bottom: 330px; left: 16px; }
+#craft-btn:active, #inv-btn:active, #map-btn:active, #chat-btn:active {
+  background: rgba(100,80,20,0.7); transform: scale(0.9);
+}
+body.mode-desktop #chat-btn { display: none !important; }
+body.chat-open #chat-btn {
+  border-color: rgba(120, 180, 255, 0.65);
+  background: rgba(40, 55, 80, 0.75);
+}
 #kills-display {
   position: absolute; top: 16px; right: 62px;
   font-size: 0.9rem; color: #ffd700;
@@ -480,41 +488,62 @@ body.rcon-open #reload-btn {
   text-align: center;
 }
 
-/* ── Chat multijoueur ─────────────────────────────────────────── */
+/* ── Chat multijoueur (fil discret, bas gauche) ───────────────── */
 #chat-wrap {
   position: fixed;
-  top: 118px;
-  left: 16px;
-  width: min(320px, 46vw);
-  z-index: 58;
-  pointer-events: auto;
-  background: rgba(8, 10, 14, 0.72);
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  border-radius: 10px;
-  backdrop-filter: blur(4px);
-  box-shadow: 0 4px 18px rgba(0, 0, 0, 0.45);
-}
-#chat-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  padding: 6px 10px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
-}
-#chat-title {
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  color: rgba(255, 255, 255, 0.55);
-}
-#chat-toggle {
-  width: 30px;
-  height: 30px;
+  bottom: 62px;
+  left: 10px;
+  width: min(240px, 42vw);
+  max-width: calc(100vw - 76px);
+  z-index: 55;
+  pointer-events: none;
+  background: none;
   border: none;
+  box-shadow: none;
+}
+#chat-log {
+  max-height: 3.6em;
+  overflow: hidden;
+  padding: 0;
+  font-size: 11px;
+  line-height: 1.35;
+  pointer-events: none;
+  -webkit-mask-image: linear-gradient(to bottom, transparent 0%, #000 28%);
+  mask-image: linear-gradient(to bottom, transparent 0%, #000 28%);
+}
+.chat-line {
+  margin-bottom: 1px;
+  word-break: break-word;
+  text-shadow:
+    0 0 4px rgba(0, 0, 0, 1),
+    0 1px 2px rgba(0, 0, 0, 0.95),
+    1px 0 2px rgba(0, 0, 0, 0.9);
+}
+.chat-self  { color: #9fd4ff; }
+.chat-other { color: #f0f0f0; }
+.chat-system { color: rgba(255, 255, 255, 0.5); font-style: italic; font-size: 10px; }
+#chat-input-row {
+  display: none;
+  align-items: center;
+  gap: 5px;
+  margin-top: 5px;
+  padding: 4px 6px;
   border-radius: 8px;
-  background: rgba(255, 255, 255, 0.08);
+  background: rgba(0, 0, 0, 0.62);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  backdrop-filter: blur(4px);
+  pointer-events: auto;
+}
+body.chat-open #chat-wrap { pointer-events: auto; }
+body.chat-open #chat-input-row { display: flex; }
+#chat-input-row[hidden] { display: none !important; }
+#chat-send-btn {
+  flex-shrink: 0;
+  width: 36px;
+  height: 36px;
+  border: none;
+  border-radius: 7px;
+  background: rgba(80, 140, 220, 0.55);
   color: #fff;
   font-size: 15px;
   cursor: pointer;
@@ -522,36 +551,30 @@ body.rcon-open #reload-btn {
   align-items: center;
   justify-content: center;
 }
-#chat-toggle:hover { background: rgba(255, 255, 255, 0.14); }
-#chat-log {
-  max-height: 108px;
-  overflow-y: auto;
-  padding: 6px 10px 8px;
-  font-size: 12px;
-  line-height: 1.35;
-  -webkit-overflow-scrolling: touch;
-}
-.chat-line { margin-bottom: 3px; word-break: break-word; }
-.chat-self  { color: #9fd4ff; }
-.chat-other { color: #e8e8e8; }
-.chat-system { color: rgba(255, 255, 255, 0.45); font-style: italic; }
-#chat-input-row {
-  display: flex;
-  padding: 0 8px 8px;
-}
-#chat-input-row[hidden] { display: none !important; }
+#chat-send-btn:active { background: rgba(80, 140, 220, 0.85); transform: scale(0.94); }
+body.mode-desktop #chat-send-btn { display: none !important; }
 #chat-input {
   flex: 1;
   min-width: 0;
-  padding: 8px 10px;
-  border-radius: 8px;
-  border: 1px solid rgba(255, 255, 255, 0.18);
-  background: rgba(0, 0, 0, 0.45);
+  padding: 7px 8px;
+  border-radius: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  background: rgba(0, 0, 0, 0.35);
   color: #fff;
   font-size: 13px;
   outline: none;
 }
 #chat-input:focus { border-color: rgba(120, 180, 255, 0.55); }
+
+body.mode-desktop #chat-wrap {
+  bottom: 16px;
+  left: 16px;
+  width: min(340px, 30vw);
+}
+body.mode-desktop #chat-log {
+  max-height: 5em;
+  font-size: 12px;
+}
 
 body.chat-open #left-zone,
 body.chat-open #right-zone,
@@ -561,18 +584,16 @@ body.chat-open #reload-btn {
   pointer-events: none !important;
   opacity: 0.35;
 }
-body.chat-open.pointer-locked { /* relâche visuellement le mode tir */ }
 body.chat-open #pc-play-hint { display: none !important; }
 
 @media (pointer: coarse), (max-width: 900px) {
   #chat-wrap {
-    top: auto;
-    bottom: 96px;
-    left: 10px;
-    width: min(280px, 58vw);
+    bottom: 58px;
+    left: 8px;
+    width: min(210px, 40vw);
   }
-  #chat-log { max-height: 72px; }
-  #chat-input { font-size: 16px; min-height: 44px; }
+  #chat-log { max-height: 3.2em; font-size: 10px; }
+  #chat-input { font-size: 16px; min-height: 40px; }
 }
 
 /* ── Hotbar ──────────────────────────────────────────────────── */

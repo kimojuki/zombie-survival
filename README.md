@@ -43,6 +43,7 @@ ADMIN_USERS=votre_username
 |----------|---------|
 | [DEV_TRACKER.md](DEV_TRACKER.md) | Journal de dev, règles Git, checklist PR |
 | [docs/RCON.md](docs/RCON.md) | Console admin in-game + API |
+| [docs/DEPLOY.md](docs/DEPLOY.md) | Prod Infomaniak, auto-deploy (cron / webhook) |
 | [docs/ROAD_NETWORK.md](docs/ROAD_NETWORK.md) | Architecture routes/sentiers (2026-06) |
 | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | Vue d'ensemble client/serveur |
 | [.env.example](.env.example) | Variables d'environnement commentées |
@@ -81,7 +82,8 @@ public/
 3. Si feature admin / API → mettre à jour **`docs/RCON.md`**
 4. Si routes/terrain → mettre à jour **`docs/ROAD_NETWORK.md`**
 5. Incrémenter **`CACHE_BUST`** dans `public/game.html` après changement JS client
-6. Redémarrer le serveur et tester manuellement
+6. Redémarrer le serveur Node après modif **`server.js`** (`pm2 restart zombie` en prod) — obligatoire pour le chat et les nouveaux handlers Socket.io
+7. Vérifier `GET /api/health` → `"chat": true` si vous touchez au chat
 
 ---
 
@@ -96,7 +98,7 @@ public/
 
 | URL | Description |
 |-----|-------------|
-| `GET /api/health` | État serveur (`ready`, joueurs, uptime) |
+| `GET /api/health` | État serveur (`ready`, `players`, `uptime`, **`chat`**) |
 | `POST /api/rcon` | Commandes admin (mot de passe requis) |
 | `POST /api/auth/register` | Inscription |
 | `POST /api/auth/login` | Connexion → JWT + `isAdmin` |

@@ -172,12 +172,50 @@ These are intentionally ignored by Git for local development.
 - **CLAUDE.md** — fichiers clés à jour (road_network, rcon)
 - **Cache bust RCON** : `20260605k` dans `game.html`
 
+### Completed — Auto-deploy prod (2026-06-06)
+
+- **`scripts/deploy-prod.sh`** : `git pull` + `npm ci` si besoin + `pm2 restart zombie` + logs `~/logs/zombie-deploy.log`
+- **`scripts/git-watch-deploy.sh`** : pour crontab (vérifie toutes les 2 min)
+- **`scripts/webhook-deploy.js`** : webhook GitHub instantané (optionnel)
+- **Doc** : [docs/DEPLOY.md](docs/DEPLOY.md)
+
+### Completed — Push équipe : chat + deploy + doc (2026-06-06)
+
+- **Chat** : sync multijoueur (`senderId`), UI discrète bas gauche, bouton 💬 mobile, Entrée/T PC, reprise pointer lock.
+- **Deploy** : `scripts/deploy-prod.sh`, cron, `docs/DEPLOY.md`, `ecosystem.config.cjs`.
+- **Doc** : README, ARCHITECTURE, DEPLOY, DEV_TRACKER, CLAUDE.md.
+- **Cache bust** : `20260606j` — **prod** : `git pull` + `pm2 restart zombie` après merge.
+
+### Completed — Chat discret bas gauche (2026-06-06)
+
+- **UI** : fil de texte sans carte ni fond (ombre portée) ; ~3 lignes mobile / ~4 PC.
+- **Saisie** : barre compacte uniquement en mode `chat-open` (💬 mobile, Entrée/T PC).
+- **Cache bust** : `20260606j`
+
+### Completed — Fix chat multijoueur + reprise pointer lock (2026-06-06)
+
+- **Cause racine** : serveur Node non redémarré → handler `socket.on('chat')` absent (test local reproduit ; OK après restart).
+- **Sync messages** : `senderId` (socket.id) côté serveur ; listener dans `chat.js` ; anti-doublon par session.
+- **Diagnostic** : `/api/health` → `chat: true` ; timeout 4 s si le serveur ne répond pas à `emit('chat')`.
+- **Login** : JWT avec `player.username` depuis la DB.
+- **PC** : reprise pointer lock après envoi / fermeture chat.
+- **Cache bust** : `20260606i`
+- **Action prod** : `git push` + `pm2 restart zombie` obligatoire après modif `server.js`.
+
+### Completed — Bouton chat mobile (2026-06-06)
+
+- **`#chat-btn`** : icône 💬 avec craft / inventaire / carte (gauche, `bottom: 330px`), visible uniquement en `mode-mobile`.
+- **`#chat-toggle`** masqué sur mobile ; PC inchangé (Entrée / T).
+- **`#chat-send-btn`** : envoi tactile dans la ligne de saisie (mobile).
+- **Cache bust** : `20260606g`
+
 ### Completed — Chat multijoueur (2026-06-06)
 
 - **`public/js/chat.js`** : panneau chat (Entrée / T), historique 50 lignes, envoi socket.
 - **Serveur** : event `chat` → broadcast `chat-message` à tous (rate limit 800 ms, 200 car. max).
 - **UI** : coin haut-gauche PC, bas-gauche mobile ; libère pointer lock à l'ouverture.
-- **Cache bust** : `20260606e`
+- **Fix PC Entrée** : envoi sans vider le champ ; echo optimiste ; capture clavier anti-conflit.
+- **Cache bust** : `20260606f`
 
 ### Completed — Contrôles PC / pointer lock (2026-06-06)
 

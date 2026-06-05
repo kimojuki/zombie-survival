@@ -44,7 +44,7 @@ Ordre des scripts (important) :
 1. `noise.js` — hauteur terrain
 2. `road_network.js` — **avant** buildings
 3. `buildings.js`, `vehicles.js`, secteurs, `world.js`
-4. `rcon.js`, `network.js`, `game.js`
+4. `rcon.js`, `chat.js`, `network.js`, `game.js`
 
 Le premier client connecté envoie au serveur :
 - `world-colliders` — collision zombies
@@ -76,10 +76,21 @@ Le premier client connecté envoie au serveur :
 
 | Event | Direction | Payload |
 |-------|-----------|---------|
-| `chat` | client → serveur | texte (max 200 car.) → callback `{ ok }` |
-| `chat-message` | serveur → tous | `{ from, message, ts }` |
+| `chat` | client → serveur | texte (max 200 car.) → callback `{ ok }` ou `{ error }` |
+| `chat-message` | serveur → tous | `{ from, message, ts, senderId }` |
 
-Raccourcis : **Entrée** ou **T** pour ouvrir, **Entrée** pour envoyer, **Échap** pour fermer.
+**UI (discret, bas gauche)** — pas de panneau ni fond : fil de texte (~3 lignes mobile, ~4 PC) avec ombre portée. La saisie n’apparaît qu’en mode `chat-open`.
+
+| Plateforme | Ouvrir la saisie | Envoyer | Fermer |
+|------------|------------------|---------|--------|
+| **PC** | **Entrée** ou **T** | **Entrée** | **Échap** |
+| **Mobile** | bouton **💬** (colonne gauche, avec 🎒/🗺️) | **➤** ou Entrée clavier | re-clic **💬** ou **Échap** |
+
+Après envoi sur PC, le **pointer lock** reprend automatiquement.
+
+**Serveur** : rate limit 800 ms par joueur. **`GET /api/health`** expose `"chat": true` si le handler est actif — **redémarrer Node** (`pm2 restart zombie`) après toute modif de `server.js`.
+
+Anti-doublon client : ignore l’écho serveur via `senderId` (socket.id), pas via le pseudo.
 
 Sur PC, les zones tactiles `#left-zone` / `#right-zone` sont désactivées (`body.mode-desktop`).
 

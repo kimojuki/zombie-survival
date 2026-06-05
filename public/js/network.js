@@ -52,6 +52,7 @@
         localStorage.setItem('zombie_is_admin', '0');
       }
       if (data.username) localStorage.setItem('zombie_username', data.username);
+      if (ZS.Chat?.setUsername) ZS.Chat.setUsername(data.username);
       if (ZS.Rcon?.refreshMenu) ZS.Rcon.refreshMenu();
       state.selfId = data.selfId;
       if (data.spawn) {

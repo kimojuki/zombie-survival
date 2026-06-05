@@ -68,6 +68,7 @@ public/
     buildings.js       # Bâtiments, registre secteurs, B.carcass()
     sector_*.js        # S01 forêt … S05 militaire
     rcon.js            # Console admin in-game
+    chat.js            # Chat multijoueur
     network.js         # Sync multijoueur
 ```
 

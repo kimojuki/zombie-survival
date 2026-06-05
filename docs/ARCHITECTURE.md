@@ -65,6 +65,24 @@ Le premier client connecté envoie au serveur :
 | Routes / terrain | Client | Généré localement, identique pour tous |
 | Admin RCON | Serveur | Commandes via socket ou API |
 
+### Contrôles
+
+| Plateforme | Déplacement | Caméra | Tir |
+|------------|-------------|--------|-----|
+| **PC** | WASD / flèches | Pointer lock (clic zone jeu) | Clic gauche |
+| **Mobile** | Joystick gauche | Glisser zone droite | Bouton 🔫 |
+
+### Chat joueurs
+
+| Event | Direction | Payload |
+|-------|-----------|---------|
+| `chat` | client → serveur | texte (max 200 car.) → callback `{ ok }` |
+| `chat-message` | serveur → tous | `{ from, message, ts }` |
+
+Raccourcis : **Entrée** ou **T** pour ouvrir, **Entrée** pour envoyer, **Échap** pour fermer.
+
+Sur PC, les zones tactiles `#left-zone` / `#right-zone` sont désactivées (`body.mode-desktop`).
+
 ---
 
 ## Secteurs monde

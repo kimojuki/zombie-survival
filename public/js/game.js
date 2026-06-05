@@ -40,7 +40,15 @@
 
   // ── Three.js ──────────────────────────────────────────────────────────────
   const canvas   = document.getElementById('game-canvas');
-  const _isMobile = /Android|iPhone|iPad|iPod|Mobile|Silk/i.test(navigator.userAgent) || 'ontouchstart' in window;
+  function _detectMobile() {
+    const ua = /Android|iPhone|iPad|iPod|Mobile|Silk/i.test(navigator.userAgent);
+    const coarse = window.matchMedia('(pointer: coarse)').matches;
+    const narrow = window.matchMedia('(max-width: 900px)').matches;
+    // PC avec écran tactile : pointer fine + large → mode souris/clavier
+    return ua || (coarse && narrow);
+  }
+  const _isMobile = _detectMobile();
+  document.body.classList.add(_isMobile ? 'mode-mobile' : 'mode-desktop');
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: false, powerPreference: 'high-performance' });
   // Pixel ratio plafonné : énorme gain mobile (moins de fragments → moins de chauffe).
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, _isMobile ? 1.25 : 1.75));
@@ -136,6 +144,7 @@
   ZS.Map.init(state, scene);
   ZS.Craft.init();
   ZS.Audio.init();
+  if (ZS.Chat) ZS.Chat.init(socket);
   _initMenu();
   _addTestItems();
 
@@ -303,9 +312,11 @@
     _iosScrollHide();
   }
 
-  // Retry sur chaque touch (sans { once }) jusqu'à succès
-  document.addEventListener('touchstart', _enterFullscreen);
-  document.addEventListener('click',      _enterFullscreen);
+  // Retry plein écran — mobile uniquement (évite de voler le premier clic PC)
+  if (_isMobile) {
+    document.addEventListener('touchstart', _enterFullscreen);
+    document.addEventListener('click', _enterFullscreen);
+  }
 
   if (screen.orientation) {
     screen.orientation.addEventListener('change', () => {
@@ -324,6 +335,7 @@
   }
 
   document.addEventListener('keydown', (e) => {
+    if (ZS.Chat?.isOpen?.()) return;
     if (ZS.Rcon?.isOpen?.()) {
       if (_rconTyping(e)) return;
       if (e.code === 'Backquote' || e.code === 'F2' || e.code === 'Escape') {
@@ -341,24 +353,62 @@
     state.keys[e.code] = true;
   });
   document.addEventListener('keyup', (e) => {
+    if (ZS.Chat?.isOpen?.()) return;
     if (ZS.Rcon?.isOpen?.() || _rconTyping(e)) return;
     state.keys[e.code] = false;
   });
 
   // ── Input: desktop pointer lock ───────────────────────────────────────────
   let pointerLocked = false;
-  document.addEventListener('click', (e) => {
-    if (pointerLocked) return;
+
+  function _blocksPointerLock(el) {
+    if (!el || el === canvas) return false;
+    return !!el.closest?.(
+      '#menu-panel, #menu-btn, #inv-panel, #craft-panel, #map-overlay, #death-screen, '
+      + '#connecting-screen, #rcon-panel, #chat-wrap, #hotbar, #craft-btn, #inv-btn, #map-btn, '
+      + '#build-ctl, button, a, input, textarea, select, [contenteditable]'
+    );
+  }
+
+  function _syncPointerLockUi() {
+    pointerLocked = document.pointerLockElement === canvas;
+    document.body.classList.toggle('pointer-locked', pointerLocked);
+    if (canvas) canvas.style.cursor = pointerLocked ? 'none' : 'crosshair';
+  }
+
+  function _requestPointerLock() {
+    if (_isMobile || pointerLocked) return;
     if (ZS.Rcon?.isOpen?.()) return;
-    if (e.target.closest?.('#rcon-panel')) return;
-    // On ne verrouille (et n'entre en mode tir) qu'en cliquant la zone de jeu,
-    // jamais en cliquant un bouton/panneau d'UI.
-    if (e.target !== canvas && e.target !== document.body) return;
+    const conn = document.getElementById('connecting-screen');
+    if (conn && conn.style.display === 'flex') return;
     canvas.requestPointerLock();
+  }
+
+  if (!_isMobile) {
+    document.addEventListener('mousedown', (e) => {
+      if (pointerLocked) return;
+      if (e.button !== 0) return;
+      if (ZS.Rcon?.isOpen?.()) return;
+      if (_blocksPointerLock(e.target)) return;
+      _requestPointerLock();
+    }, true);
+  } else {
+    document.addEventListener('click', (e) => {
+      if (pointerLocked) return;
+      if (ZS.Rcon?.isOpen?.()) return;
+      if (e.target.closest?.('#rcon-panel')) return;
+      if (e.target !== canvas && e.target !== document.body) return;
+      canvas.requestPointerLock();
+    });
+  }
+
+  document.addEventListener('pointerlockchange', _syncPointerLockUi);
+  document.addEventListener('pointerlockerror', () => {
+    console.warn('[input] pointer lock refusé');
+    _syncPointerLockUi();
   });
-  document.addEventListener('pointerlockchange', () => {
-    pointerLocked = !!document.pointerLockElement;
-  });
+  _syncPointerLockUi();
+
   document.addEventListener('mousemove', (e) => {
     if (!pointerLocked) return;
     state.camera.yaw   -= e.movementX * 0.002;
@@ -503,9 +553,9 @@
   };
   state.onJump   = () => { state.jumpPressed = true; };
   document.addEventListener('mousedown', (e) => {
-    // Tir uniquement en mode jeu (pointeur verrouillé sur le canvas) : un clic sur
-    // un bouton/panneau d'UI ne tire pas. En pointer lock, la cible est le canvas.
-    if (e.button === 0 && pointerLocked && e.target === canvas) attack();
+    if (e.button !== 0 || !pointerLocked) return;
+    if (_blocksPointerLock(e.target)) return;
+    attack();
   });
   document.addEventListener('keydown', (e) => {
     if (e.code === 'KeyR' && state.onReload) state.onReload();

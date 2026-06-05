@@ -902,6 +902,33 @@ io.on('connection', async (socket) => {
     log.info('death', 'respawn', { player: p.username, spawn: FOREST_SPAWN });
   });
 
+  // ── Chat joueurs ────────────────────────────────────────────────────────────
+  const CHAT_MAX_LEN = 200;
+  const CHAT_COOLDOWN_MS = 800;
+
+  socket.on('chat', (text, cb) => {
+    const player = players.get(socket.id);
+    if (!player) {
+      if (typeof cb === 'function') cb({ ok: false, error: 'Non connecté' });
+      return;
+    }
+    const msg = String(text || '').trim().replace(/\s+/g, ' ').slice(0, CHAT_MAX_LEN);
+    if (!msg) {
+      if (typeof cb === 'function') cb({ ok: false, error: 'Message vide' });
+      return;
+    }
+    const now = Date.now();
+    if (player._lastChat && now - player._lastChat < CHAT_COOLDOWN_MS) {
+      if (typeof cb === 'function') cb({ ok: false, error: 'Attendez un instant…' });
+      return;
+    }
+    player._lastChat = now;
+    const payload = { from: player.username, message: msg, ts: now };
+    io.emit('chat-message', payload);
+    log.info('chat', player.username, { msg: msg.slice(0, 80) });
+    if (typeof cb === 'function') cb({ ok: true });
+  });
+
   // ── Console RCON in-game ────────────────────────────────────────────────────
   if (isAdminUser(p.username) || RCON_AUTO_ADMIN) adminSockets.add(socket.id);
   if (isAdminUser(p.username) || RCON_AUTO_ADMIN) {

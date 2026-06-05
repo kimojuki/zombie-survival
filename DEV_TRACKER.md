@@ -172,6 +172,21 @@ These are intentionally ignored by Git for local development.
 - **CLAUDE.md** — fichiers clés à jour (road_network, rcon)
 - **Cache bust RCON** : `20260605k` dans `game.html`
 
+### Completed — Chat multijoueur (2026-06-06)
+
+- **`public/js/chat.js`** : panneau chat (Entrée / T), historique 50 lignes, envoi socket.
+- **Serveur** : event `chat` → broadcast `chat-message` à tous (rate limit 800 ms, 200 car. max).
+- **UI** : coin haut-gauche PC, bas-gauche mobile ; libère pointer lock à l'ouverture.
+- **Cache bust** : `20260606e`
+
+### Completed — Contrôles PC / pointer lock (2026-06-06)
+
+- **Cause** : `#left-zone` / `#right-zone` (45 %+55 % écran) interceptaient les clics souris sur PC → pointer lock jamais demandé, caméra bloquée.
+- **Fix** : `mode-desktop` / `mode-mobile` sur `<body>` (détection `pointer: fine` + largeur, pas seulement `ontouchstart`).
+- **PC** : zones tactiles + boutons tir/saut masqués ; clic zone de jeu → pointer lock ; overlay « Cliquez pour jouer » ; curseur crosshair / none.
+- **Mobile** : inchangé (joystick + zone regard).
+- **Cache bust** : `20260606d`
+
 ### Completed — Véhicules + barrières (2026-06-06)
 
 - **`public/js/vehicles.js`** : système centralisé de carcasses (`WRECKS`) placées via `RoadNetwork.sampleAlong`.

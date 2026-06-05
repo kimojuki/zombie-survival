@@ -29,6 +29,24 @@
 
 <canvas id="game-canvas"></canvas>
 
+<div id="pc-play-hint" aria-hidden="true">
+  <span>Cliquez pour jouer</span>
+  <small>WASD · souris · Échap pour libérer le curseur</small>
+</div>
+
+<div id="chat-wrap">
+  <div id="chat-header">
+    <span id="chat-title">Chat</span>
+    <button id="chat-toggle" type="button" title="Chat (Entrée ou T)">💬</button>
+  </div>
+  <div id="chat-log" aria-live="polite"></div>
+  <div id="chat-input-row" hidden>
+    <input id="chat-input" type="text" maxlength="200" enterkeyhint="send"
+      autocapitalize="off" autocomplete="off" autocorrect="off" spellcheck="false"
+      placeholder="Message… Entrée pour envoyer" />
+  </div>
+</div>
+
 <!-- HUD -->
 <div id="hud">
   <div id="health-bar-wrap">
@@ -177,13 +195,13 @@
     setConnectingMsg('Chargement du jeu…', 'Délai dépassé — tentative de connexion quand même');
   }
 
-  const CACHE_BUST = '20260606c';
+  const CACHE_BUST = '20260606e';
   // Attendre le serveur, puis charger les scripts du jeu
   const modules = [
     '/js/items.js', '/js/survival.js', '/js/craft.js', '/js/noise.js',
     '/js/road_network.js', '/js/buildings.js', '/js/vehicles.js', '/js/campfire.js', '/js/spawn_clearing.js', '/js/sector_01_forest.js', '/js/sector_02_town.js',
     '/js/sector_03_maincity.js', '/js/sector_05_military.js', '/js/world.js',
-    '/js/player.js', '/js/icons.js', '/js/audio.js', '/js/zombie.js', '/js/rcon.js', '/js/network.js', '/js/ui.js',
+    '/js/player.js', '/js/icons.js', '/js/audio.js', '/js/zombie.js', '/js/rcon.js', '/js/chat.js', '/js/network.js', '/js/ui.js',
     '/js/inventory.js', '/js/map.js', '/js/game.js'
   ];
   (async () => {

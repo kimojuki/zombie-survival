@@ -20,6 +20,7 @@
   // ── Joystick (left zone) — native touch, no nipplejs ────────────────────
 
   function _setupJoystick() {
+    if (!document.body.classList.contains('mode-mobile')) return;
     const zone     = document.getElementById('left-zone');
     const MAX_DIST = 60;
     let   originX  = 0, originY = 0, activeId = null;
@@ -81,6 +82,7 @@
   // ── Look zone (right half) ───────────────────────────────────────────────
 
   function _setupLookZone() {
+    if (!document.body.classList.contains('mode-mobile')) return;
     const zone = document.getElementById('right-zone');
     const SENS = 0.004;
     let lastX = null, lastY = null, activeId = null;

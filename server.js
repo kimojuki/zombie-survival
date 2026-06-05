@@ -99,6 +99,10 @@ app.use(express.static('public', {
 const players    = new Map();
 let serverReady  = false;
 
+function _emitPlayersOnline() {
+  io.emit('players-online', { count: players.size });
+}
+
 // ── Health (client attend que le serveur soit prêt) ───────────────────────────
 
 app.get('/api/health', (req, res) => {
@@ -669,10 +673,12 @@ io.on('connection', async (socket) => {
     isAdmin: isAdminUser(p.username) || RCON_AUTO_ADMIN,
     rconPreAuth: isAdminUser(p.username) || RCON_AUTO_ADMIN,
     features: { chat: true },
+    onlineCount: players.size,
     inventory: p.inv,
     survival:  p.survival
   });
   socket.broadcast.emit('player-join', { id: socket.id, username: p.username, x: p.x, y: p.y, z: p.z, rotY: p.rotY, equipped: p.equipped });
+  _emitPlayersOnline();
 
   // Le premier client transmet la géométrie de collision (murs, arbres, etc.).
   socket.on('world-colliders', (cols) => {
@@ -1003,6 +1009,7 @@ io.on('connection', async (socket) => {
       kills: p.kills,
     });
     io.emit('player-leave', socket.id);
+    _emitPlayersOnline();
     if (p.id) savePlayerState(p.id, p.x, p.y, p.z, p.rotY, p.health, p.kills, saveBlob(p)).catch(() => {});
   });
 });

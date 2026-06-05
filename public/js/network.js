@@ -21,6 +21,10 @@
     }
   }
 
+  function _setOnlineCount(n) {
+    if (typeof n === 'number' && ZS.UI?.setOnlineCount) ZS.UI.setOnlineCount(n);
+  }
+
   function init(socket, scene, state) {
     _socket = socket;
     _scene  = scene;
@@ -32,6 +36,7 @@
       remotePlayers.forEach(({ mesh }) => _scene.remove(mesh));
       remotePlayers.clear();
       _lastEquip = undefined;
+      _setOnlineCount(0);
       _connecting(true, 'Connexion établie', 'Chargement de votre partie…');
     });
 
@@ -75,6 +80,12 @@
       // = nouveau joueur → on garde les objets de test + sac par défaut.
       if (data.inventory) ZS.Inventory.loadFromSave(data.inventory);
       if (data.survival)  ZS.Survival.loadFromSave(data.survival);
+      if (typeof data.onlineCount === 'number') _setOnlineCount(data.onlineCount);
+      else _setOnlineCount(remotePlayers.size + 1);
+    });
+
+    socket.on('players-online', (d) => {
+      if (typeof d?.count === 'number') _setOnlineCount(d.count);
     });
 
     socket.on('player-join', (p) => {

@@ -67,7 +67,10 @@
     <span class="stat-text" style="color:#88ff88">Infection</span>
   </div>
   <div id="status-effects"></div>
-  <div id="kills-display">☠️ <span id="kills-count">0</span></div>
+  <div id="hud-stats-tr">
+    <div id="online-display" title="Joueurs en ligne">👥 <span id="online-count">1</span></div>
+    <div id="kills-display">☠️ <span id="kills-count">0</span></div>
+  </div>
   <div id="ammo-display">🔫 <span id="ammo-count">30</span></div>
   <div id="crosshair"></div>
   <div id="damage-flash"></div>
@@ -193,7 +196,7 @@
     setConnectingMsg('Chargement du jeu…', 'Délai dépassé — tentative de connexion quand même');
   }
 
-  const CACHE_BUST = '20260606l';
+  const CACHE_BUST = '20260606n';
   // Attendre le serveur, puis charger les scripts du jeu
   const modules = [
     '/js/items.js', '/js/survival.js', '/js/craft.js', '/js/noise.js',

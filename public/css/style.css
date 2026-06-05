@@ -296,10 +296,24 @@ body.chat-open #chat-btn {
   border-color: rgba(120, 180, 255, 0.65);
   background: rgba(40, 55, 80, 0.75);
 }
-#kills-display {
-  position: absolute; top: 16px; right: 62px;
-  font-size: 0.9rem; color: #ffd700;
+#hud-stats-tr {
+  position: absolute;
+  top: 16px;
+  right: 62px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
   pointer-events: none;
+}
+#online-display {
+  font-size: 0.9rem;
+  color: #9fd4ff;
+  white-space: nowrap;
+}
+#kills-display {
+  font-size: 0.9rem;
+  color: #ffd700;
+  white-space: nowrap;
 }
 
 #menu-btn {
@@ -614,9 +628,22 @@ body.chat-open #pc-play-hint { display: none !important; }
     bottom: 58px;
     left: 8px;
     width: min(210px, 40vw);
+    transition: bottom 0.15s ease-out;
   }
   #chat-log { max-height: 3.2em; font-size: 10px; }
   #chat-input { font-size: 16px; min-height: 40px; }
+}
+
+/* Clavier virtuel ouvert — chat remonté (JS : body.chat-keyboard) */
+body.mode-mobile.chat-open.chat-keyboard #chat-wrap {
+  left: 8px;
+  right: 8px;
+  width: auto;
+  max-width: none;
+  z-index: 230;
+}
+body.mode-mobile.chat-open.chat-keyboard #chat-log {
+  max-height: 4.5em;
 }
 
 /* ── Hotbar ──────────────────────────────────────────────────── */

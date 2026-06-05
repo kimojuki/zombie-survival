@@ -179,6 +179,17 @@ These are intentionally ignored by Git for local development.
 - **`scripts/webhook-deploy.js`** : webhook GitHub instantané (optionnel)
 - **Doc** : [docs/DEPLOY.md](docs/DEPLOY.md)
 
+### Completed — Compteur joueurs en ligne HUD (2026-06-06)
+
+- **👥 N** en haut à droite, à gauche de ☠️ kills.
+- **Serveur** : `onlineCount` dans `game-init`, event `players-online` à chaque connect/disconnect.
+- **Cache bust** : `20260606n`
+
+### Completed — Chat au-dessus du clavier mobile (2026-06-06)
+
+- **`visualViewport`** : `#chat-wrap` remonte quand le clavier s’ouvre (`body.chat-keyboard`).
+- **Cache bust** : `20260606m`
+
 ### Completed — Deploy auto robuste (reset hard) (2026-06-06)
 
 - **`deploy-prod.sh`** : `git reset --hard origin/master` au lieu de `git pull` (plus de conflits locaux).

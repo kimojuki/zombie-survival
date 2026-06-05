@@ -192,6 +192,11 @@
     document.getElementById('kills-count').textContent = k;
   }
 
+  function setOnlineCount(n) {
+    const el = document.getElementById('online-count');
+    if (el) el.textContent = Math.max(0, n | 0);
+  }
+
   function setAmmo(a) {
     document.getElementById('ammo-count').textContent = a;
   }
@@ -278,6 +283,6 @@
   }
 
   window.ZS = window.ZS || {};
-  ZS.UI     = { init, setHealth, setKills, setAmmo, setHunger, setThirst, setInfection, setStatus, showNotif, flashDamage, showWave, showDeath, hideDeath, setWeaponUI };
+  ZS.UI     = { init, setHealth, setKills, setOnlineCount, setAmmo, setHunger, setThirst, setInfection, setStatus, showNotif, flashDamage, showWave, showDeath, hideDeath, setWeaponUI };
   ZS.logout = logout;
 }());

@@ -65,7 +65,38 @@
   function _focusInput() {
     const { input } = _els();
     if (!input) return;
-    requestAnimationFrame(() => input.focus({ preventScroll: true }));
+    requestAnimationFrame(() => {
+      input.focus({ preventScroll: true });
+      _syncChatViewport();
+    });
+  }
+
+  function _isMobile() {
+    return document.body.classList.contains('mode-mobile');
+  }
+
+  function _resetChatViewport() {
+    const { wrap } = _els();
+    if (!wrap) return;
+    wrap.style.bottom = '';
+    document.body.classList.remove('chat-keyboard');
+  }
+
+  /** Remonte le chat au-dessus du clavier virtuel (visualViewport). */
+  function _syncChatViewport() {
+    const { wrap } = _els();
+    if (!wrap || !_isMobile() || !_open) {
+      _resetChatViewport();
+      return;
+    }
+    const vp = window.visualViewport;
+    if (!vp) return;
+
+    const margin = 10;
+    const baseBottom = 58;
+    const kbInset = Math.max(0, window.innerHeight - vp.offsetTop - vp.height);
+    wrap.style.bottom = `${baseBottom + kbInset + margin}px`;
+    document.body.classList.toggle('chat-keyboard', kbInset > 36);
   }
 
   function _resumeGameInput() {
@@ -92,6 +123,7 @@
     row.hidden = false;
     input.value = '';
     _focusInput();
+    _syncChatViewport();
   }
 
   function close() {
@@ -100,6 +132,7 @@
     document.body.classList.remove('chat-open');
     if (row) row.hidden = true;
     if (input) input.blur();
+    _resetChatViewport();
     _resumeGameInput();
   }
 
@@ -216,6 +249,16 @@
 
     input?.addEventListener('keydown', _onInputKey, true);
     input?.addEventListener('keyup', (e) => e.stopImmediatePropagation(), true);
+    input?.addEventListener('focus', () => requestAnimationFrame(_syncChatViewport));
+    input?.addEventListener('blur', () => {
+      setTimeout(() => { if (!_open) _resetChatViewport(); }, 120);
+    });
+
+    if (window.visualViewport) {
+      window.visualViewport.addEventListener('resize', _syncChatViewport);
+      window.visualViewport.addEventListener('scroll', _syncChatViewport);
+    }
+    window.addEventListener('resize', _syncChatViewport);
 
     wrap?.addEventListener('mousedown', (e) => e.stopPropagation());
     wrap?.addEventListener('click', (e) => e.stopPropagation());

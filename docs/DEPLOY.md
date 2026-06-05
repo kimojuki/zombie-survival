@@ -15,7 +15,26 @@ cd ~/sites/jeu.zombieOfficel.ch/zombie-survival && git pull && pm2 restart zombi
 
 Vérifie Git toutes les 2 minutes et redémarre **seulement** s'il y a un nouveau commit sur `master`.
 
-### 1. Rendre les scripts exécutables (une fois, en SSH)
+> **Important :** le cron est une config **une seule fois en SSH** sur le serveur Infomaniak.  
+> Un `git push` depuis votre PC **ne configure pas** le cron automatiquement.  
+> Les scripts `scripts/deploy-prod.sh` doivent **exister sur le serveur** (après au moins un `git pull` manuel).
+
+### 1. Premier déploiement manuel (obligatoire une fois)
+
+```bash
+ssh votre-user@infomaniak
+cd ~/sites/jeu.zombieOfficel.ch/zombie-survival
+git pull origin master
+chmod +x scripts/deploy-prod.sh scripts/git-watch-deploy.sh
+mkdir -p ~/logs
+bash scripts/deploy-prod.sh
+pm2 restart zombie
+```
+
+Vérifier : `curl -s https://3k51myccypp.preview.infomaniak.website/api/health`  
+→ doit contenir `"chat": true` et `"commit": "36b2a1e"` (ou plus récent).
+
+### 2. Rendre les scripts exécutables (si pas déjà fait)
 
 ```bash
 cd ~/sites/jeu.zombieOfficel.ch/zombie-survival
@@ -23,26 +42,36 @@ chmod +x scripts/deploy-prod.sh scripts/git-watch-deploy.sh
 mkdir -p ~/logs
 ```
 
-### 2. Tester à la main
+### 3. Tester le script à la main
 
 ```bash
 bash scripts/deploy-prod.sh
-tail -f ~/logs/zombie-deploy.log
+tail -20 ~/logs/zombie-deploy.log
 ```
 
-### 3. Crontab
+### 4. Crontab
 
 ```bash
 crontab -e
 ```
 
-Ajouter :
+Ajouter (adapter le chemin `$HOME` si besoin) :
 
 ```cron
 */2 * * * * /bin/bash $HOME/sites/jeu.zombieOfficel.ch/zombie-survival/scripts/git-watch-deploy.sh >> $HOME/logs/zombie-deploy-cron.log 2>&1
 ```
 
 **Workflow dev :** `git push origin master` → sous 2 min max, le serveur pull + `pm2 restart zombie`.
+
+### 5. Vérifier que le cron tourne
+
+```bash
+crontab -l
+tail -30 ~/logs/zombie-deploy-cron.log
+tail -30 ~/logs/zombie-deploy.log
+```
+
+Si `zombie-deploy-cron.log` n'existe pas ou est vide → le cron n'est **pas** installé ou le chemin est faux.
 
 ---
 
@@ -98,6 +127,24 @@ Le webhook n'agit que sur la branche `master` (ou `ZOMBIE_DEPLOY_BRANCH`).
 ---
 
 ## Dépannage
+
+### Le serveur prod ne se met pas à jour tout seul
+
+| Symptôme | Cause probable | Action |
+|----------|----------------|--------|
+| `/api/health` sans `"chat"` ni `"commit"` | Vieux `server.js` encore en mémoire | SSH → `bash scripts/deploy-prod.sh` |
+| Pas de fichier `~/logs/zombie-deploy-cron.log` | Cron **jamais** configuré | `crontab -e` (voir Option A) |
+| Log cron : `pm2: command not found` | PATH cron trop court | Script mis à jour charge nvm ; refaire `git pull` + retester |
+| Log : `git fetch failed` | Repo privé sans credentials SSH | Configurer deploy key GitHub sur le serveur |
+| Log : `already up to date` mais health ancien | mauvaise branche / mauvais dossier | `git remote -v` + `git log -1` en SSH |
+
+**Vérification rapide depuis votre PC :**
+
+```bash
+curl -s https://3k51myccypp.preview.infomaniak.website/api/health
+```
+
+Attendu après deploy : `"chat":true,"commit":"36b2a1e"` (ou commit plus récent).
 
 ```bash
 # État pm2

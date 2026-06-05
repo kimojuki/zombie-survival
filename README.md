@@ -98,7 +98,7 @@ public/
 
 | URL | Description |
 |-----|-------------|
-| `GET /api/health` | État serveur (`ready`, `players`, `uptime`, **`chat`**) |
+| `GET /api/health` | État serveur (`ready`, `players`, `uptime`, **`chat`**, **`commit`**) |
 | `POST /api/rcon` | Commandes admin (mot de passe requis) |
 | `POST /api/auth/register` | Inscription |
 | `POST /api/auth/login` | Connexion → JWT + `isAdmin` |

@@ -3,6 +3,7 @@ const express = require('express');
 const http = require('http');
 const fs = require('fs');
 const path = require('path');
+const { execSync } = require('child_process');
 const { Server } = require('socket.io');
 const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
@@ -24,6 +25,20 @@ const ADMIN_USERS = new Set(
 // Dev local : admin auto pour tous (uniquement si RCON_AUTO_ADMIN=true dans .env)
 const RCON_AUTO_ADMIN = process.env.RCON_AUTO_ADMIN === 'true'
   && process.env.DB_CLIENT === 'sqlite';
+
+function _gitCommit() {
+  if (process.env.GIT_COMMIT) return process.env.GIT_COMMIT;
+  try {
+    return execSync('git rev-parse --short HEAD', {
+      cwd: __dirname,
+      encoding: 'utf8',
+      stdio: ['ignore', 'pipe', 'ignore'],
+    }).trim();
+  } catch {
+    return null;
+  }
+}
+const GIT_COMMIT = _gitCommit();
 
 if (ADMIN_USERS.size) {
   log.info('boot', 'RCON admins', { users: [...ADMIN_USERS], autoAll: RCON_AUTO_ADMIN });
@@ -97,6 +112,7 @@ app.get('/api/health', (req, res) => {
     uptime: Math.floor(process.uptime()),
     rcon: !!(RCON_PASSWORD || ADMIN_USERS.size),
     chat: true,
+    commit: GIT_COMMIT,
   });
 });
 

@@ -179,6 +179,12 @@ These are intentionally ignored by Git for local development.
 - **`scripts/webhook-deploy.js`** : webhook GitHub instantané (optionnel)
 - **Doc** : [docs/DEPLOY.md](docs/DEPLOY.md)
 
+### Completed — Fix auto-deploy + health commit (2026-06-06)
+
+- **`/api/health`** : champ `commit` (hash git) pour vérifier la version prod.
+- **`deploy-prod.sh`** : PATH nvm/pm2 pour cron, logs fetch/pull explicites.
+- **`docs/DEPLOY.md`** : premier deploy manuel obligatoire, dépannage cron.
+
 ### Completed — Push équipe : chat + deploy + doc (2026-06-06)
 
 - **Chat** : sync multijoueur (`senderId`), UI discrète bas gauche, bouton 💬 mobile, Entrée/T PC, reprise pointer lock.

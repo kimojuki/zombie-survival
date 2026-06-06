@@ -48,6 +48,12 @@ Copier dans la description de PR :
 
 ## 2026-06-06
 
+### Completed — Caillou : frappe rotative `rock_slam` (2026-06-06)
+
+- **Melee** : wind-up court puis rotation épaules/coudes/poignets vers l'avant et le bas (plus de simple translation).
+- **Idle** : bras un peu plus écartés, poignets inclinés vers le rocher.
+- **Cache bust** : `20260606-tool-caillou-slam-30`
+
 ### Completed — Fix toit cabane (pans inclinés corrects) (2026-06-06)
 
 - **Prefab** : `building_survivor_shack` — remplace BufferGeometry cassé par 2 pans + pignons + faîtière alignés sur les murs.

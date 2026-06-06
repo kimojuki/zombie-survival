@@ -385,25 +385,24 @@
     }),
     tool_caillou: _grip({
       twoHanded: true,
-      item: { x: -0.11, y: 0.05, z: -0.11, rx: 0.08, ry: 0, rz: 0.03 },
+      item: { x: -0.12, y: 0.05, z: -0.10, rx: 0.06, ry: 0, rz: 0.02 },
       rArm: {
-        style: 'grip', mcRotX: -18, mcRotY: -16,
-        mcPostX: 0.06, mcPostZ: -0.05,
-        mcElbowZ: -10, mcWristY: -14,
+        style: 'grip', mcRotX: -16, mcRotY: -20,
+        mcPostX: 0.08, mcPostZ: -0.04,
+        mcElbowZ: -12, mcWristY: -18,
       },
       lArm: {
-        style: 'grip', mcRotX: -18, mcRotY: 16,
-        mcPostX: -0.06, mcPostY: 0.01, mcPostZ: -0.08,
-        mcElbowZ: 10, mcWristY: 14,
+        style: 'grip', mcRotX: -16, mcRotY: 20,
+        mcPostX: -0.08, mcPostY: 0.01, mcPostZ: -0.06,
+        mcElbowZ: 12, mcWristY: 18,
       },
       remote: { rArmRot: [0.58, 0, -0.28], handHolder: [0, -0.66, -0.10], lArmMode: 'aimAtHand' },
       anim: {
         melee: {
-          style: 'thrust_forward',
-          thrustZ: 0.22,
-          rArmX: 0.12,
-          swingX: 0.10,
-          dur: 0.30,
+          style: 'rock_slam',
+          swingX: 0.58,
+          swingZ: 0.14,
+          dur: 0.34,
         },
       },
     }),
@@ -492,6 +491,9 @@
     wx += (ra.mcWristX || 0) * _DEG;
     wy += i * (ra.mcWristY || 0) * _DEG;
     wz += i * (ra.mcWristZ || 0) * _DEG;
+    sx += opts.shoulderRx || 0;
+    ex += opts.elbowRx || 0;
+    wx += opts.wristRx || 0;
 
     if (swing > 0) {
       sx += -0.68 * swingEase;
@@ -621,6 +623,9 @@
       dx: (ro.x || 0) + (ra.mcPostX || 0),
       dy: (ro.y || 0) + (ra.mcPostY || 0),
       dz: (ro.z || 0) + (ra.mcPostZ || 0),
+      shoulderRx: ro.shoulderRx || 0,
+      elbowRx: ro.elbowRx || 0,
+      wristRx: ro.wristRx || 0,
     };
     _applyFPSArmChain(rArm.userData.chain, 'right', grip, mcOpts);
 
@@ -659,6 +664,9 @@
         dx: (lo.x || 0) + (la.mcPostX || 0),
         dy: (lo.y || 0) + (la.mcPostY || 0),
         dz: (lo.z || 0) + (la.mcPostZ || 0),
+        shoulderRx: lo.shoulderRx || 0,
+        elbowRx: lo.elbowRx || 0,
+        wristRx: lo.wristRx || 0,
       });
     } else {
       lArm.visible = false;
@@ -713,7 +721,34 @@
 
     if (anim.kind === 'melee' || anim.kind === 'punch') {
       const a = anim.kind === 'punch' ? grip.anim.punch : grip.anim.melee;
-      if (a.style === 'thrust_forward') {
+      if (a.style === 'rock_slam') {
+        const windEnd = 0.20;
+        let shoulderRx = 0;
+        let elbowRx = 0;
+        let wristRx = 0;
+        if (e <= windEnd) {
+          const u = Math.sin((e / windEnd) * Math.PI * 0.5);
+          shoulderRx = u * 0.28;
+          elbowRx = u * 0.12;
+          io.y = u * 0.04;
+          io.rx = u * 0.06;
+        } else {
+          const t = (e - windEnd) / (1 - windEnd);
+          const hit = Math.sin(t * Math.PI);
+          const ease = Math.sin(Math.sqrt(t) * Math.PI);
+          shoulderRx = -0.82 * ease;
+          elbowRx = -0.52 * hit;
+          wristRx = 0.30 * hit;
+          io.rx = -hit * (a.swingX || 0.55) * 0.18;
+          io.rz = hit * (a.swingZ || 0.12) * 0.22;
+        }
+        ro.shoulderRx = shoulderRx;
+        ro.elbowRx = elbowRx;
+        ro.wristRx = wristRx;
+        lo.shoulderRx = shoulderRx;
+        lo.elbowRx = elbowRx;
+        lo.wristRx = wristRx;
+      } else if (a.style === 'thrust_forward') {
         const thrust = s * (a.thrustZ || 0.20);
         io.z = -thrust;
         ro.z = -thrust;

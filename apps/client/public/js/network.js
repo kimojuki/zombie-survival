@@ -426,7 +426,19 @@
             limbs.rArm.rotation.x = base + s * ((a.rArmX || 0.08) * 2.5);
           } else {
             const a = atkGrip.anim.melee;
-            if (a.style === 'thrust_forward' && atkGrip.twoHanded) {
+            if (a.style === 'rock_slam' && atkGrip.twoHanded) {
+              const base = atkGrip.remote?.rArmRot?.[0] ?? 0.58;
+              const windEnd = 0.20;
+              let ext = 0;
+              if (e <= windEnd) {
+                ext = Math.sin((e / windEnd) * Math.PI * 0.5) * 0.18;
+              } else {
+                const t = (e - windEnd) / (1 - windEnd);
+                ext = -Math.sin(t * Math.PI) * 0.95;
+              }
+              limbs.rArm.rotation.x = base + ext;
+              limbs.lArm.rotation.x = base + ext * 0.94;
+            } else if (a.style === 'thrust_forward' && atkGrip.twoHanded) {
               const base = atkGrip.remote?.rArmRot?.[0] ?? 0.58;
               const ext = s * ((a.rArmX || 0.10) * 1.5);
               limbs.rArm.rotation.x = base + ext;

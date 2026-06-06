@@ -48,6 +48,65 @@ Copier dans la description de PR :
 
 ## 2026-06-05
 
+### Session push `dev` — spawn, sentier, RN 2 voies (2026-06-06)
+
+Résumé livré sur `dev` (cache bust `20260606-spawn-trail-refonte-15`) :
+
+| Zone | Livrable |
+|------|----------|
+| Camp | prefabs RCON, sol/languette, rondins `spawn_border_log` |
+| Sentier | `trails.js` + `buildTrailTowardRoad` → jonction au point RN le plus proche du camp |
+| RN | `proc_roads.js` — `town_main` 8,4 m (2 voies, ligne jaune), `city_highway` 12 m |
+| Pipeline | `road_network.js` + `world.js` flatten → terrain → meshes |
+| **Prochain** | Carcasses abandonnées (`vehicles.js`) le long des routes |
+
+### Completed — RN 2 voies + bande jaune centrale (2026-06-06)
+
+- **`town_main`** : largeur 6,2 m → **8,4 m** (2 voies).
+- **Ligne centrale** : ruban jaune continu aligné sur l'axe route (`_buildLaneOverlay` refait).
+- **Cache bust** : `20260606-spawn-trail-refonte-15`
+
+### Completed — Sentier vers point RN le plus proche du camp (2026-06-06)
+
+- **`buildTrailTowardRoad`** : courbe camp → point `town_main` le plus proche de la bouche (~33 m, ouest).
+- Fini le tracé manuel vers l'est `(56,-58)` ; génération auto dans `proc_roads.js`.
+- **Cache bust** : `20260606-spawn-trail-refonte-14`
+
+### Completed — Jonction sentier au point le plus proche sur la RN (2026-06-06)
+
+- **`computeTrailRoadJoin`** : distance minimale sentier ↔ polyligne `town_main`.
+- **`trimTrailForJoin`** : bouche d'approche + fin au point le plus proche (pas coord fixe).
+- **Patch jonction** : 3 rangées (arrière → bouche → accotement route).
+- **Cache bust** : `20260606-spawn-trail-refonte-13`
+
+### Completed — Sentier naturel + jonction RN sans z-fighting (2026-06-06)
+
+- **Tracé** : ~18 points de contrôle, courbe Chaikin, approche tangentielle vers `(56,-58)`.
+- **Mesh** : `trails.js` s'arrête 2,2 m avant la route (`skipEnd`) ; hauteur blend vers asphalte.
+- **Jonction** : patch éventail `RoadNetwork` pour `spawn_trail` (visual false, junction seule).
+- **Cache bust** : `20260606-spawn-trail-refonte-12`
+
+### Completed — RN + sentier éloignés ×2 du camp (2026-06-06)
+
+- **Jonction** : `(28,-32)` → `(56,-58)` (~76 m du camp).
+- **Sentier** : prolongé (~75 m) ; tracé RN est ajusté.
+- **Cache bust** : `20260606-spawn-trail-refonte-11`
+
+### Completed — Fix RN asphalte (texture blanche + éloignement camp) (2026-06-06)
+
+- **Texture** : `buildMeshes(scene, ZS.B.M)` — matériaux asphalte/barrières corrects.
+- **Position** : RN décalée au sud (`z ≈ -32` près du spawn) ; jonction sentier `(28, -32)`.
+- **Sentier** : prolongé (~42 m) pour rejoindre la nouvelle jonction.
+- **Cache bust** : `20260606-spawn-trail-refonte-10`
+
+### Completed — RN nationale asphalte + sentier prolongé (~34 m) (2026-06-06)
+
+- **Sentier** : prolongé jusqu'à `(14, -18)` — jonction avec la RN est→ouest.
+- **Routes** : `proc_roads.js` — `town_main` (6,2 m, texture `road_asphalt.png`) + `city_highway` (12 m vers grande ville).
+- **Pipeline** : `road_network.js` rechargé ; `world.js` — flatten → terrain → buildAll → `buildMeshes`.
+- **spawn_trail** : flatten RoadNetwork (`visual: false`) ; mesh sentier reste `trails.js`.
+- **Cache bust** : `20260606-spawn-trail-refonte-09`
+
 ### Completed — Sentier camp prolongé (~22 m, courbe naturelle) (2026-06-06)
 
 - **`SPAWN_TRAIL_PTS`** : 20 points — sortie languette, arc doux est puis inflexion ouest (sentier piéton réaliste).

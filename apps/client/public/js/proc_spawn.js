@@ -326,14 +326,6 @@
         sampleRadius: 1.6,
       });
     }
-    if (ZS.Trails?.registerFlatten && ZS.SPAWN_TRAIL_PTS) {
-      ZS.Trails.registerFlatten(ZS.SPAWN_TRAIL_PTS, {
-        width: 1.55,
-        shoulder: 0.65,
-        blend: 3.5,
-        smooth: true,
-      });
-    }
   }
 
   ZS.SpawnZone = {

@@ -85,8 +85,10 @@
       taperStart: def.taperStart || 0,
       taperEnd: def.taperEnd || 0,
       line: !!def.line,
+      lineSolid: !!def.lineSolid,
       broken: !!def.broken,
       barriers: def.barriers !== false,
+      join: def.join || null,
     };
     _raw.push(edge);
     _ready = false;
@@ -114,17 +116,210 @@
     return best;
   }
 
+  function _polylineLength(pts) {
+    let total = 0;
+    for (let i = 1; i < pts.length; i++) {
+      total += Math.hypot(pts[i][0] - pts[i - 1][0], pts[i][1] - pts[i - 1][1]);
+    }
+    return total;
+  }
+
+  function _samplePolyline(pts, step) {
+    const total = _polylineLength(pts);
+    if (total <= 0) return [];
+    const out = [];
+    const s = Math.max(step || 0.4, 0.08);
+    for (let dist = 0; dist <= total; dist += s) {
+      let remain = dist;
+      for (let i = 0; i < pts.length - 1; i++) {
+        const [x0, z0] = pts[i], [x1, z1] = pts[i + 1];
+        const dx = x1 - x0, dz = z1 - z0;
+        const segLen = Math.hypot(dx, dz);
+        if (segLen < 1e-6) continue;
+        if (remain <= segLen || i === pts.length - 2) {
+          const f = segLen > 0 ? Math.min(1, remain / segLen) : 0;
+          out.push({
+            x: x0 + dx * f,
+            z: z0 + dz * f,
+            ux: dx / segLen,
+            uz: dz / segLen,
+            dist,
+          });
+          break;
+        }
+        remain -= segLen;
+      }
+    }
+    const last = pts[pts.length - 1];
+    const prev = pts[pts.length - 2] || last;
+    const dx = last[0] - prev[0], dz = last[1] - prev[1];
+    const len = Math.hypot(dx, dz) || 1;
+    const tail = out[out.length - 1];
+    if (!tail || tail.dist < total - s * 0.3) {
+      out.push({ x: last[0], z: last[1], ux: dx / len, uz: dz / len, dist: total });
+    }
+    return out;
+  }
+
+  /** Point le plus proche sur une polyligne. */
+  function nearestPointOnRoad(roadPts, x, z) {
+    if (!roadPts || roadPts.length < 2) return null;
+    return _nearestOnEdge({ pts: roadPts }, x, z);
+  }
+
+  /**
+   * Courbe camp → RN : vise le point route le plus proche de la bouche (pas l'extrémité est).
+   */
+  function buildTrailTowardRoad(mouth, roadPts, opts) {
+    opts = opts || {};
+    if (!mouth || !roadPts || roadPts.length < 2) return null;
+
+    const [mx, mz] = mouth;
+    const hit = nearestPointOnRoad(roadPts, mx, mz);
+    if (!hit) return null;
+
+    const lead = opts.leadIn || 5.5;
+    const toMx = mx - hit.x;
+    const toMz = mz - hit.z;
+    const toLen = Math.hypot(toMx, toMz) || 1;
+    const approachX = hit.x + (toMx / toLen) * lead;
+    const approachZ = hit.z + (toMz / toLen) * lead;
+
+    const perpX = -toMz / toLen;
+    const perpZ = toMx / toLen;
+    const bend = opts.bend || 3.5;
+    const cx = mx + (approachX - mx) * 0.42 + perpX * bend;
+    const cz = mz + (approachZ - mz) * 0.42 + perpZ * bend * 0.35;
+
+    const steps = opts.steps || 14;
+    const pts = [[mx, mz]];
+    for (let i = 1; i <= steps; i++) {
+      const t = i / steps;
+      const omt = 1 - t;
+      pts.push([
+        omt * omt * mx + 2 * omt * t * cx + t * t * approachX,
+        omt * omt * mz + 2 * omt * t * cz + t * t * approachZ,
+      ]);
+    }
+    return pts;
+  }
+
+  /** Plus proche couple sentier ↔ route (distance minimale le long des polylignes). */
+  function computeTrailRoadJoin(trailPts, roadPts, opts) {
+    opts = opts || {};
+    if (!trailPts || trailPts.length < 2 || !roadPts || roadPts.length < 2) return null;
+
+    let path = trailPts.map(p => [Number(p[0]) || 0, Number(p[1]) || 0]);
+    if (opts.smooth !== false && path.length >= 3) {
+      path = _dedupe(_chaikin(path, 1), 0.12);
+    }
+
+    const maxDist = opts.maxDist || 12;
+    const samples = _samplePolyline(path, opts.step || 0.4);
+    let best = null;
+
+    for (const s of samples) {
+      const hit = _nearestOnEdge({ pts: roadPts }, s.x, s.z);
+      if (!hit || hit.dist > maxDist) continue;
+      if (!best || hit.dist < best.dist - 1e-4) {
+        best = {
+          dist: hit.dist,
+          x: hit.x,
+          z: hit.z,
+          ux: hit.ux,
+          uz: hit.uz,
+          trailX: s.x,
+          trailZ: s.z,
+          trailUx: s.ux,
+          trailUz: s.uz,
+          trailDist: s.dist,
+          roadId: opts.roadId || null,
+        };
+      }
+    }
+    return best;
+  }
+
+  /** Coupe le sentier avant la jonction et ajoute une bouche d'approche. */
+  function trimTrailForJoin(trailPts, join, leadIn) {
+    if (!join || !trailPts || trailPts.length < 2) return trailPts.map(p => p.slice());
+
+    const lead = leadIn || 3.0;
+    const cutDist = Math.max(0, join.trailDist - lead);
+    let path = trailPts.map(p => p.slice());
+    if (path.length >= 3) {
+      path = _dedupe(_chaikin(path, 1), 0.12);
+    }
+
+    const out = [];
+    let acc = 0;
+    for (let i = 0; i < path.length - 1; i++) {
+      const [x0, z0] = path[i], [x1, z1] = path[i + 1];
+      const dx = x1 - x0, dz = z1 - z0;
+      const segLen = Math.hypot(dx, dz);
+      if (segLen < 1e-6) continue;
+
+      if (acc + segLen < cutDist - 0.05) {
+        if (!out.length || out[out.length - 1][0] !== x0 || out[out.length - 1][1] !== z0) {
+          out.push([x0, z0]);
+        }
+        acc += segLen;
+        continue;
+      }
+
+      const f = segLen > 0 ? Math.max(0, Math.min(1, (cutDist - acc) / segLen)) : 0;
+      const cx = x0 + dx * f, cz = z0 + dz * f;
+      if (!out.length || Math.hypot(out[out.length - 1][0] - cx, out[out.length - 1][1] - cz) > 0.15) {
+        out.push([cx, cz]);
+      }
+
+      const tux = join.trailUx || (dx / segLen);
+      const tuz = join.trailUz || (dz / segLen);
+      const mouthX = join.trailX, mouthZ = join.trailZ;
+      out.push([
+        mouthX - tux * 1.1,
+        mouthZ - tuz * 1.1,
+      ]);
+      out.push([mouthX, mouthZ]);
+      return out;
+    }
+
+    out.push([join.trailX, join.trailZ]);
+    return out;
+  }
+
   function _findRoadJoinAtEnd(trail) {
     if (!trail.pts || trail.pts.length < 2) return null;
+
+    if (trail._join && trail._join.roadId) {
+      const road = _resolved.find(r => r.id === trail._join.roadId);
+      if (road) {
+        return {
+          road,
+          x: trail._join.x,
+          z: trail._join.z,
+          ux: trail._join.ux,
+          uz: trail._join.uz,
+          dist: trail._join.dist,
+          trailX: trail._join.trailX,
+          trailZ: trail._join.trailZ,
+          trailUx: trail._join.trailUx,
+          trailUz: trail._join.trailUz,
+        };
+      }
+    }
+
     const [ex, ez] = trail.pts[trail.pts.length - 1];
+    let best = null;
     for (const road of _resolved) {
       if (road.type !== 'asphalt' || road.id === trail.id) continue;
       const hit = _nearestOnEdge(road, ex, ez);
-      if (hit && hit.dist < road.width * 0.65 + 2.5) {
-        return { road, x: hit.x, z: hit.z, ux: hit.ux, uz: hit.uz, dist: hit.dist };
+      const limit = road.width * 0.65 + 2.5;
+      if (hit && hit.dist < limit && (!best || hit.dist < best.dist)) {
+        best = { road, x: hit.x, z: hit.z, ux: hit.ux, uz: hit.uz, dist: hit.dist };
       }
     }
-    return null;
+    return best;
   }
 
   function _taperMul(dist, total, taperStart, taperEnd) {
@@ -174,6 +369,8 @@
         id: e.id, pts, width: e.width, type: e.type, visual: e.visual,
         taperStart: e.taperStart, taperEnd: e.taperEnd, totalLen,
         line: e.line, broken: e.broken, barriers: e.barriers,
+        lineSolid: e.lineSolid,
+        _join: e.join || null,
       });
     }
 
@@ -188,7 +385,9 @@
     }
 
     const trail = _resolved.find(ed => ed.id === 'spawn_trail');
-    if (trail && window.ZS) {
+    if (trail && window.ZS && trail._join) {
+      // Ne pas écraser les points de contrôle : trails.js gère le lissage visuel.
+    } else if (trail && window.ZS && !trail._join) {
       ZS.SPAWN_TRAIL_PTS = trail.pts.map(p => p.slice());
     }
     _ready = true;
@@ -443,56 +642,73 @@
     _pushMesh(scene, pos, uv, idx, mat, 1);
   }
 
-  /** Jonction sentier → ouverture sur route asphaltée */
+  /** Jonction sentier → ouverture sur route asphaltée (bouche = point le plus proche). */
   function _buildTrailRoadJunction(scene, trail, join, trailMat, roadMat) {
-    const pts = trail.pts;
-    const n = pts.length;
-    const [x0, z0] = pts[n - 1], [x1, z1] = pts[n - 2];
-    const len = Math.hypot(x0 - x1, z0 - z1) || 1;
-    const ux = (x0 - x1) / len, uz = (z0 - z1) / len;
-    const nx = -uz, nz = ux;
+    const mouthX = join.trailX != null ? join.trailX : trail.pts[trail.pts.length - 1][0];
+    const mouthZ = join.trailZ != null ? join.trailZ : trail.pts[trail.pts.length - 1][1];
+    const tux = join.trailUx != null ? join.trailUx : (() => {
+      const n = trail.pts.length;
+      const [x0, z0] = trail.pts[n - 1], [x1, z1] = trail.pts[n - 2];
+      const len = Math.hypot(x0 - x1, z0 - z1) || 1;
+      return (x0 - x1) / len;
+    })();
+    const tuz = join.trailUz != null ? join.trailUz : (() => {
+      const n = trail.pts.length;
+      const [x0, z0] = trail.pts[n - 1], [x1, z1] = trail.pts[n - 2];
+      const len = Math.hypot(x0 - x1, z0 - z1) || 1;
+      return (z0 - z1) / len;
+    })();
+    const tnx = -tuz, tnz = tux;
     const hw = trail.width * 0.5;
     const lift = RIBBON_LIFT - 0.01;
     const cols = JUNCTION_ARC_STEPS;
     const road = join.road;
     const roadHw = road.width * 0.5;
+    const rux = join.ux, ruz = join.uz;
+    const rnx = -ruz, rnz = rux;
 
-    const mergeX = x0 - ux * JUNCTION_MERGE * 0.5;
-    const mergeZ = z0 - uz * JUNCTION_MERGE * 0.5;
+    const backX = mouthX - tux * 2.4;
+    const backZ = mouthZ - tuz * 2.4;
+    const rcx = join.x, rcz = join.z;
+
+    const toRoadX = rcx - mouthX, toRoadZ = rcz - mouthZ;
+    const shoulder = (toRoadX * rnx + toRoadZ * rnz) >= 0 ? 1 : -1;
+    const openX = rcx + rnx * roadHw * 0.62 * shoulder;
+    const openZ = rcz + rnz * roadHw * 0.62 * shoulder;
+
+    function _h(x, z, decor) {
+      if (decor && ZS.getDecorGroundHeight) return ZS.getDecorGroundHeight(x, z);
+      return (ZS.getTerrainHeight ? ZS.getTerrainHeight(x, z) : 0) + lift;
+    }
 
     const pos = [], uv = [], idx = [];
-    const trailRow = 0;
-    for (let c = 0; c <= cols; c++) {
-      const off = -hw + trail.width * (c / cols);
-      const px = mergeX + nx * off;
-      const pz = mergeZ + nz * off;
-      pos.push(px, ZS.getTerrainHeight(px, pz) + lift, pz);
-      uv.push(c / cols, 0);
-    }
+    const rows = [
+      { cx: backX, cz: backZ, ux: tux, uz: tuz, w: trail.width, decor: true, v: 0 },
+      { cx: mouthX, cz: mouthZ, ux: tux, uz: tuz, w: trail.width * 1.08, decor: true, v: 0.45 },
+      { cx: openX, cz: openZ, ux: rux, uz: ruz, w: road.width * 0.72, decor: false, v: 1 },
+    ];
 
-    const roadRow = pos.length / 3;
-    const rcx = join.x, rcz = join.z;
-    const rnx = -join.uz, rnz = join.ux;
-    for (let c = 0; c <= cols; c++) {
-      const t = c / cols;
-      const off = -roadHw * 0.85 + roadHw * 1.7 * t;
-      const px = rcx + rnx * off;
-      const pz = rcz + rnz * off;
-      pos.push(px, ZS.getTerrainHeight(px, pz) + lift + 0.01, pz);
-      uv.push(t, 1);
-    }
-
-    const hub = pos.length / 3;
-    const openX = rcx - join.uz * roadHw * 0.2;
-    const openZ = rcz + join.ux * roadHw * 0.2;
-    pos.push(openX, ZS.getTerrainHeight(openX, openZ) + lift + 0.015, openZ);
-    uv.push(0.5, 0.55);
-
-    for (let i = 0; i < cols; i++) {
-      idx.push(trailRow + i, trailRow + i + 1, hub);
-    }
-    for (let i = 0; i < cols; i++) {
-      idx.push(hub, roadRow + i, roadRow + i + 1);
+    for (const row of rows) {
+      const nx = -row.uz, nz = row.ux;
+      const rowIdx = pos.length / 3;
+      const half = row.w * 0.5;
+      for (let c = 0; c <= cols; c++) {
+        const u = c / cols;
+        const off = -half + row.w * u;
+        const px = row.cx + nx * off;
+        const pz = row.cz + nz * off;
+        const py = _h(px, pz, row.decor) + (row.decor ? 0 : 0.012);
+        pos.push(px, py, pz);
+        uv.push(u, row.v);
+      }
+      if (rowIdx > 0) {
+        const prev = rowIdx - (cols + 1);
+        for (let c = 0; c < cols; c++) {
+          const a = prev + c, b = prev + c + 1;
+          const d = rowIdx + c, e = rowIdx + c + 1;
+          idx.push(a, b, d, b, e, d);
+        }
+      }
     }
 
     _pushMesh(scene, pos, uv, idx, trailMat, 2);
@@ -588,38 +804,44 @@
     if (!edge.line || edge.type !== 'asphalt') return;
     const lineMat = M.roadLine;
     if (!lineMat) return;
-    const dashOn = 2.0, dashOff = 2.4;
-    const lPos = [], lIdx = [];
-    let lprev = -1, dashAcc = 0;
-    const step = 0.28;
+
+    const lineW = 0.24;
+    const lift = RIBBON_LIFT + 0.028;
+    const pos = [], idx = [];
+    let prev = -1;
 
     for (let si = 0; si < edge.pts.length - 1; si++) {
       const [x0, z0] = edge.pts[si], [x1, z1] = edge.pts[si + 1];
       const sdx = x1 - x0, sdz = z1 - z0;
       const sLen = Math.hypot(sdx, sdz);
       if (sLen < 0.01) continue;
-      const steps = Math.max(1, Math.ceil(sLen / step));
+      const ux = sdx / sLen, uz = sdz / sLen;
+      const nx = -uz, nz = ux;
+      const hw = lineW * 0.5;
+      const steps = Math.max(1, Math.ceil(sLen / RIBBON_STEP));
+
       for (let i = (si === 0 ? 0 : 1); i <= steps; i++) {
         const t = i / steps;
         const cx = x0 + sdx * t, cz = z0 + sdz * t;
-        const cy = ZS.getTerrainHeight(cx, cz) + RIBBON_LIFT + 0.025;
-        const li = lPos.length / 3;
-        const sw = 0.11;
-        lPos.push(cx - sw, cy, cz, cx + sw, cy, cz);
-        const piece = sLen / steps;
-        const cycle = dashOn + dashOff;
-        const mid = (dashAcc + piece * 0.5) % cycle;
-        if (lprev >= 0 && mid < dashOn) lIdx.push(lprev, lprev + 1, li, lprev + 1, li + 1, li);
-        dashAcc += piece;
-        lprev = li;
+        const cy = ZS.getTerrainHeight(cx, cz) + lift;
+        const row = pos.length / 3;
+        pos.push(
+          cx + nx * (-hw), cy, cz + nz * (-hw),
+          cx + nx * hw, cy, cz + nz * hw,
+        );
+        if (prev >= 0) {
+          idx.push(prev, prev + 1, row, prev + 1, row + 1, row);
+        }
+        prev = row;
       }
     }
-    if (lPos.length < 6 || !lIdx.length) return;
-    const lGeo = new THREE.BufferGeometry();
-    lGeo.setAttribute('position', new THREE.Float32BufferAttribute(lPos, 3));
-    lGeo.setIndex(lIdx);
-    lGeo.computeVertexNormals();
-    const mesh = new THREE.Mesh(lGeo, lineMat);
+
+    if (pos.length < 6) return;
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+    geo.setIndex(idx);
+    geo.computeVertexNormals();
+    const mesh = new THREE.Mesh(geo, lineMat);
     mesh.renderOrder = 3;
     scene.add(mesh);
   }
@@ -721,10 +943,14 @@
     // pour isoler le grand disque brun pendant la refonte du spawn.
 
     for (const e of _resolved) {
+      const roadJoin = _findRoadJoinAtEnd(e);
+      if (!e.visual && roadJoin && (e.type === 'trail' || e.type === 'dirt' || e.type === 'path')) {
+        _buildTrailRoadJunction(scene, e, roadJoin, _matFor(e, M), _matFor(roadJoin.road, M));
+        continue;
+      }
       if (!e.visual) continue;
       const mat = _matFor(e, M);
       const clearing = _findLinkedClearing(e);
-      const roadJoin = _findRoadJoinAtEnd(e);
 
       if (clearing) {
         _buildCampTrailJunction(scene, clearing, e, mat);
@@ -750,6 +976,10 @@
     isNearRoad,
     sampleAlong,
     getResolvedEdges,
+    computeTrailRoadJoin,
+    trimTrailForJoin,
+    nearestPointOnRoad,
+    buildTrailTowardRoad,
   };
   ZS.isNearRoad = isNearRoad;
 }());

@@ -44,10 +44,10 @@ Vue d'ensemble pour onboarding et reviews PR.
 Ordre des scripts legacy (important) dans `apps/client/src/bootstrap/legacy-modules.js` :
 
 1. `noise.js`, `camp_textures.js`, `buildings.js`
-2. `trails.js`, `spawn_clearing.js`, `proc_spawn.js` — **spawn + sentier refonte**
-3. `world.js`, `game.js` — pas de secteurs legacy
+2. `road_network.js`, `trails.js`, `spawn_clearing.js`, `proc_roads.js`, `proc_spawn.js` — **spawn + sentier + RN**
+3. `world.js`, `game.js` — pas de secteurs legacy (`sector_*.js`, `vehicles.js` encore hors chargement)
 
-Le pipeline `RoadNetwork.buildMeshes` / secteurs est **désactivé** pendant la refonte (voir `legacy-modules.js`).
+Pipeline monde (`world.js`) : `registerTerrain` → `applyRoadFlattening` → `buildTerrain` → `buildAll` → `RoadNetwork.buildMeshes(scene, ZS.B.M)`.
 
 Le premier client connecté envoie au serveur :
 - `world-colliders` — collision zombies
@@ -86,7 +86,7 @@ API client : `ZS.CampTextures.load(url, repeatX, repeatY)` et `ZS.CampTextures.m
 Pose in-game / admin :
 - **Prefabs** : `ZS.spawnDecorPrefab(scene, prefabId, x, y, z)` — liste via `ZS.listDecorPrefabs()`
 - **Items posés** : `ZS.spawnDecorItem(scene, type, x, y, z)` — réutilise `getItemModel()` (loot équipable ≠ prefab bois/toile)
-- **Sentiers (refonte)** : `ZS.Trails.registerFlatten(pts)` avant terrain, `ZS.Trails.buildMesh(scene, pts)` après — voir `trails.js` + `SPAWN_TRAIL_PTS`
+- **Sentiers (refonte)** : `proc_roads.js` génère le tracé (`buildTrailTowardRoad`) ; `ZS.Trails.buildMesh` + jonction `RoadNetwork` — voir [docs/ROAD_NETWORK.md](ROAD_NETWORK.md)
 - **RCON** : `decoradd prefab …` — voir [docs/RCON.md](RCON.md)
 
 ### Contrôles

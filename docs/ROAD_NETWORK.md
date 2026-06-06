@@ -6,49 +6,51 @@
 
 ## État actuel (2026-06-06) — refonte progressive
 
-> **Mode refonte** : seul le **spawn + sentier court** est actif côté client.  
-> `road_network.js`, secteurs et véhicules restent dans le repo (legacy) mais **ne sont plus chargés** tant que la refonte n’est pas prête.
+> **Mode refonte** : spawn + sentier + **RN nationale asphalte** actifs.  
+> Secteurs bâtiments (S02–S05) et véhicules restent dans le repo (legacy) mais **ne sont pas chargés**.
 
-### Actif (spawn)
+### Actif (spawn + routes)
 
 | Élément | Module |
 |---------|--------|
 | Camp décor (prefabs RCON) | serveur seed + `spawn_clearing.js` |
 | Lisière bois / herbes camp | `proc_spawn.build` → `buildCampGround`, `buildCampProps` |
-| Sentier ~22 m (piétiné) | `trails.js` + `SPAWN_TRAIL_PTS` (courbe camp → forêt) |
+| Sentier ~35 m | `buildTrailTowardRoad` → point le plus proche de la bouche camp sur `town_main` |
+| RN traversante est→ouest | `proc_roads.js` → `town_main` (asphalte **8,4 m**, 2 voies, ligne jaune) |
+| Autoroute grande ville | `proc_roads.js` → `city_highway` (12 m, `(-104,-9)` → `(-20,-122)`) |
 | Rondins lisière | prefab `spawn_border_log` (seed serveur, RCON, collision) |
 | Texture sentier | `textures/camp/trail_forest.png` |
+| Texture asphalte | `/img/road_asphalt.png` (`B.M.road`) |
 
 ### Legacy (conservé, non chargé)
 
 | ID | Fichier | Statut |
 |----|---------|--------|
-| `spawn_trail` (RoadNetwork) | `road_network.js` | ⏸ non chargé |
-| `town_main`, secteurs S02–S05 | `sector_*.js` | ⏸ non chargés |
+| Secteurs S02–S05 (bâtiments) | `sector_*.js` | ⏸ non chargés |
+| Véhicules épaves | `vehicles.js` | ⏸ non chargé |
 
-### Arêtes actives (historique RoadNetwork — pause refonte)
+### Arêtes actives (RoadNetwork)
 
-| ID | Secteur | Tracé | Largeur | Type |
-|----|---------|-------|---------|------|
-| `spawn_clearing` | S01 | disque `(0,-6)` | ~5.8×5.2 m | clearing |
-| `spawn_trail` | S01 | `SPAWN_TRAIL_PTS` → `(14,-19)` | 1.85 m | trail |
-| `town_main` | S02 | `(88,-26)` → `(-295,0)` est→ouest | 6.2 m | asphalt |
-| `city_highway` | S03 | `(-104,-9)` → `(-20,-122)` | 12 m | asphalt |
+| ID | Source | Tracé | Largeur | Type |
+|----|--------|-------|---------|------|
+| `spawn_trail` | `SPAWN_TRAIL_PTS` | camp → point le plus proche sur `town_main` | 1,55 m | trail (flatten only) |
+| `town_main` | `proc_roads.js` | est→ouest | 8,4 m | asphalt + ligne jaune |
+| `city_highway` | `proc_roads.js` | `(-104,-9)` → `(-20,-122)` | 12 m | asphalt |
 
 Routes S02 résidentielles / grille S03 / S05 : **pas encore** dans `RoadNetwork` (trottoirs manuels ou `roads: []`).
 
-### Pipeline build
+### Pipeline build (refonte spawn)
 
 ```
-registerSector → defineClearing / defineEdge
-resolve()           — snap jonctions (1 m), Chaikin optionnel
-applyFlattening()   — registerRoadCorridor + disques clairière
+proc_spawn.registerTerrain  — clairière + patch terrain camp
+proc_roads.registerTerrain  — town_main, city_highway, spawn_trail (join auto)
+applyRoadFlattening()       — resolve + corridors
 buildTerrain()
-buildAll()          — secteurs (bâtiments, props)
-buildMeshes()       — rubans asphalt/dirt, lignes, barrières
-Vehicles.buildAll() — carcasses le long des routes (vehicles.js)
-végétation          — isNearRoad exclut arbres/herbes
+buildAll()                  — camp, sentier (trails.js), décor
+buildMeshes()               — asphalte, ligne jaune, barrières, jonction sentier
 ```
+
+(Véhicules / carcasses : prochaine brique — `vehicles.js` non chargé.)
 
 ### Barrières autoroute (`_buildBarriers`)
 
@@ -69,6 +71,7 @@ végétation          — isNearRoad exclut arbres/herbes
 
 | Fichier | Rôle |
 |---------|------|
+| `public/js/proc_roads.js` | Définition `town_main` + `city_highway` (refonte progressive) |
 | `public/js/road_network.js` | Graphe, flatten, meshes, barrières, `sampleAlong` |
 | `public/js/trails.js` | API `ZS.Trails` — ruban sentier (`registerFlatten`, `buildMesh`, `sample`, `isNear`) |
 | `public/js/spawn_clearing.js` | `SPAWN_TRAIL_PTS`, `getDecorGroundHeight`, prefabs camp |
@@ -93,15 +96,19 @@ ZS.Trails.buildMesh(scene, pts, { width, taperStart, taperEnd, step })
 ZS.Trails.sample(pts, t)   // t ∈ [0, 1]
 ZS.Trails.isNear(pts, x, z, margin)
 
-// Legacy RoadNetwork (non chargé en refonte)
+// RoadNetwork (actif — refonte spawn)
 ZS.RoadNetwork.defineClearing({ id, cx, cz, rx, rz, blend? })
-ZS.RoadNetwork.defineEdge({ id, pts, width, type, smooth?, line?, broken?, barriers?, taperStart?, taperEnd? })
+ZS.RoadNetwork.defineEdge({ id, pts, width, type, smooth?, line?, lineSolid?, broken?, barriers?, taperStart?, taperEnd? })
 ZS.RoadNetwork.resolve()
 ZS.RoadNetwork.applyFlattening()
 ZS.RoadNetwork.buildMeshes(scene, ZS.B.M)
 ZS.RoadNetwork.isNearRoad(x, z, margin)
 ZS.RoadNetwork.sampleAlong('town_main', 0.42)  // t ∈ [0, 1]
 ZS.RoadNetwork.getResolvedEdges()
+ZS.RoadNetwork.computeTrailRoadJoin(trailPts, roadPts, opts)
+ZS.RoadNetwork.trimTrailForJoin(trailPts, join, leadIn)
+ZS.RoadNetwork.buildTrailTowardRoad(mouth, roadPts, opts)
+ZS.RoadNetwork.nearestPointOnRoad(roadPts, x, z)
 ```
 
 ```javascript
@@ -121,16 +128,17 @@ ZS.RoadNetwork.getResolvedEdges()
 | **2** | Grille rues S02/S03 dans RoadNetwork | ⏳ |
 | **3** | Patches jonction multi-arêtes | ⏳ |
 | **4** | Routes S05 militaire | ⏳ |
-| **5** | Plus de carcasses / bus / camions (vehicles.js) | ⏳ |
+| **5** | Carcasses le long des routes (`vehicles.js`) | ⏳ **prochaine session** |
 
 ---
 
-## Tests manuels
+## Tests manuels (refonte spawn + RN)
 
-1. **Ctrl+F5** (vérifier `CACHE_BUST` dans `game.html`)
-2. Spawn `(0, -6)` — clairière plate, languette sud, sentier ~22 m (courbe est puis retour ouest)
-3. Rondins `spawn_border_log` — collision, `decorlist` ~166 décors au seed
-4. `town_main` — asphalt, ligne centrale, barrières **alignées** avec poteaux dans les virages
-5. `city_highway` — même test barrières
-6. Carcasses visibles sur épaules (pas dans les immeubles)
+1. **Ctrl+F5** — `CACHE_BUST` = `20260606-spawn-trail-refonte-15`
+2. Camp `(0, -6)` — sol texturé, languette sud, rondins `spawn_border_log`
+3. Sentier ~35 m — courbe naturelle vers le **passage le plus proche** de `town_main` (ouest, ~33 m)
+4. Jonction sentier → RN — patch lisse, pas de z-fighting sur l'asphalte
+5. `town_main` — **8,4 m**, 2 voies, **ligne jaune centrale** continue, barrières
+6. `city_highway` — branche vers grande ville (12 m), barrières
 7. Pas d'arbres sur les routes (`isNearRoad`)
+8. *(Prochain)* Carcasses sur épaules — `vehicles.js` à réactiver

@@ -1,5 +1,5 @@
 // Single source of truth for the legacy ZS script order.
-// Refonte progressive : spawn + sentier uniquement (pas de secteurs / RoadNetwork legacy).
+// Refonte progressive : spawn + sentier + RN nationale (pas de secteurs bâtiments legacy).
 export const LEGACY_MODULES = [
   '/js/items.js',
   '/js/survival.js',
@@ -10,8 +10,10 @@ export const LEGACY_MODULES = [
   '/js/mapgen.js',
   '/js/campfire.js',
   '/js/decor_colliders.js',
+  '/js/road_network.js',
   '/js/trails.js',
   '/js/spawn_clearing.js',
+  '/js/proc_roads.js',
   '/js/proc_spawn.js',
   '/js/world.js',
   '/js/player.js',

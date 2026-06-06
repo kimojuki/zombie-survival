@@ -222,8 +222,11 @@
     spawnClouds();
 
     if (ZS.SpawnZone?.registerTerrain) ZS.SpawnZone.registerTerrain();
+    if (ZS.Roads?.registerTerrain) ZS.Roads.registerTerrain();
+    if (ZS.Buildings?.applyRoadFlattening) ZS.Buildings.applyRoadFlattening();
     buildTerrain(scene);
     const buildingColliders = ZS.Buildings.buildAll(scene);
+    if (ZS.RoadNetwork?.buildMeshes) ZS.RoadNetwork.buildMeshes(scene, ZS.B.M);
     for (const c of buildingColliders) _colliders.push(c);
     tickDayNight(0);
   }

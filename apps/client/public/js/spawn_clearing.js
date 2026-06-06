@@ -134,33 +134,16 @@
     return base + surface + lift;
   }
 
-  /** Points du sentier : bouche sud (languette camp) → forêt (~22 m, courbe naturelle) */
-  function _spawnTrailPoints() {
+  /** Bouche sud du sentier (languette camp) — tracé complet généré dans proc_roads.js */
+  function getSpawnTrailMouth() {
     const rx = CLEAR_RX * 0.98;
     const rz = CLEAR_RZ * 0.98;
-    const [mx, mz] = _gapTongueTip(SPAWN_CX, SPAWN_CZ, rx, rz);
-    return [
-      [mx, mz],
-      [mx - 0.04, mz - 0.62],
-      [mx + 0.05, mz - 1.35],
-      [mx + 0.22, mz - 2.28],
-      [mx + 0.48, mz - 3.18],
-      [mx + 0.82, mz - 4.05],
-      [mx + 1.28, mz - 4.92],
-      [mx + 1.82, mz - 5.78],
-      [mx + 2.38, mz - 6.62],
-      [mx + 2.88, mz - 7.48],
-      [mx + 3.28, mz - 8.38],
-      [mx + 3.52, mz - 9.32],
-      [mx + 3.58, mz - 10.28],
-      [mx + 3.42, mz - 11.22],
-      [mx + 3.05, mz - 12.08],
-      [mx + 2.52, mz - 12.82],
-      [mx + 1.88, mz - 13.42],
-      [mx + 1.15, mz - 13.88],
-      [mx + 0.38, mz - 14.18],
-      [mx - 0.35, mz - 14.32],
-    ];
+    return _gapTongueTip(SPAWN_CX, SPAWN_CZ, rx, rz);
+  }
+
+  function _spawnTrailPoints() {
+    const [mx, mz] = getSpawnTrailMouth();
+    return [[mx, mz], [mx - 1, mz - 4], [mx - 4, mz - 10]];
   }
 
   const SPAWN_TRAIL_PTS = _spawnTrailPoints();
@@ -858,14 +841,16 @@
     }
   }
 
-  /** Mesh sentier + décor (refonte spawn, sans RoadNetwork). */
+  /** Mesh sentier + décor ; jonction RN via RoadNetwork.buildMeshes */
   function buildSpawnTrail(scene, pts, B) {
     const path = pts || SPAWN_TRAIL_PTS;
     if (ZS.Trails?.buildMesh) {
       ZS.Trails.buildMesh(scene, path, {
         width: 1.55,
         taperStart: 0,
-        taperEnd: 0.65,
+        taperEnd: 0,
+        skipEnd: 2.2,
+        roadBlend: 3.5,
         step: 0.2,
         smooth: true,
       });
@@ -884,6 +869,7 @@
   ZS.buildSpawnTrailDecor = buildSpawnTrailDecor;
   ZS.buildClearingExit   = buildClearingExit;
   ZS.SPAWN_TRAIL_PTS     = SPAWN_TRAIL_PTS;
+  ZS.getSpawnTrailMouth  = getSpawnTrailMouth;
   ZS.buildCampGround    = buildCampGround;
   ZS.buildCampLayout    = buildCampLayout;
   ZS.buildCampProps     = buildCampProps;

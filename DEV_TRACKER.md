@@ -48,6 +48,25 @@ Copier dans la description de PR :
 
 ## 2026-06-05
 
+### Completed — Zombies prefab RCON + combat (2026-06-06)
+
+- **Shared** : `packages/shared/src/zombie-prefabs.mjs` — `zombie_walker`, `zombie_runner`, `zombie_brute` (HP, dégâts, vitesse, detectRange, hitRadius).
+- **Client** : `zombie_prefabs.js` — visuels procéduraux par archétype ; barre HP relative au maxHealth.
+- **RCON** : `zombieprefabs`, `spawnzombie`, `zombielist`, `killzombie` (+ `spawnzombies` / `clearzombies` existants).
+- **Combat** : tir/mêlée serveur utilise `hitRadius` par prefab ; dégâts zombie utilisent `damage`/`attackCd` par entité.
+- **Collision joueur** : cylindres `collideRadius` par prefab (`resolvePlayerCollision` client).
+- **Cache bust** : `20260606-spawn-trail-refonte-20`
+
+### Completed — Épaves prefab RCON + textures apocalypse (2026-06-06)
+
+- **Prefabs** : `wreck_sedan`, `wreck_pickup` — textures procédurales (`vehicle_textures.js`).
+- **Seed** : 8 épaves sur `town_main` / `city_highway` (`packages/shared/src/road-wrecks.mjs`).
+- **RCON** : `decoradd prefab wreck_sedan x z rotY scale variant tilt wheels sink`.
+- **Cache bust** : `20260606-spawn-trail-refonte-16`
+- **Fix seed** : `ensureRoadWrecks()` au boot + RCON `decorseed wrecks` / `decorseed wrecks reset`
+- **Placements** : 2 épaves à la jonction sentier, 5 le long de `town_main` vers l'ouest (~30 m), 1 sur `city_highway`
+- **Collision épaves** : collider enregistré après build avec `baseY` terrain + box alignée carrosserie
+
 ### Session push `dev` — spawn, sentier, RN 2 voies (2026-06-06)
 
 Résumé livré sur `dev` (cache bust `20260606-spawn-trail-refonte-15`) :
@@ -58,7 +77,7 @@ Résumé livré sur `dev` (cache bust `20260606-spawn-trail-refonte-15`) :
 | Sentier | `trails.js` + `buildTrailTowardRoad` → jonction au point RN le plus proche du camp |
 | RN | `proc_roads.js` — `town_main` 8,4 m (2 voies, ligne jaune), `city_highway` 12 m |
 | Pipeline | `road_network.js` + `world.js` flatten → terrain → meshes |
-| **Prochain** | Carcasses abandonnées (`vehicles.js`) le long des routes |
+| **Prochain** | *(à définir)* secteurs bâtiments, grille rues S02/S03 |
 
 ### Completed — RN 2 voies + bande jaune centrale (2026-06-06)
 

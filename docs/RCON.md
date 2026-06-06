@@ -121,7 +121,13 @@ Erreurs : `403` (mauvais mot de passe), `503` (RCON non configuré ou serveur en
 | `zombies on` / `zombies off` | Active/désactive l'IA (freeze si off) |
 | `nospawn on` / `nospawn off` | Bloque/active le respawn après un kill |
 | `clearzombies` | Supprime tous les zombies |
-| `spawnzombies 10` | Ajoute N zombies (max 200) |
+| `spawnzombies 10` | Ajoute N zombies aléatoires (max 200, prefabs pondérés) |
+| `zombieprefabs` | Liste les archétypes (`walker`, `runner`, `brute`) |
+| `spawnzombie zombie_runner 3` | Spawn 3 runners près de vous |
+| `spawnzombie zombie_brute 1 12 -8` | Spawn 1 brute à la position x z |
+| `zombielist` | Liste les zombies actifs (id, prefab, HP, pos) |
+| `killzombie nearest` | Supprime le zombie le plus proche |
+| `killzombie 42` | Supprime le zombie #42 |
 
 ### Joueurs
 
@@ -155,14 +161,19 @@ Props visibles par tous les joueurs, synchronisés via `decorItems` au `game-ini
 |----------|-------------|
 | `decorprefabs` | Liste les prefabs camp (`spawn_campfire`, `spawn_supply_crate`, …) |
 | `decoradd prefab spawn_border_log [x z] [rotY] [scale]` | Pose un rondin de lisière (scale ≈ longueur / 0.42 m) |
-| `decoradd prefab <id> [x z] [rotY] [scale]` | Pose un prefab décor (bois/toile texturés via `camp_textures.js`) |
+| `decoradd prefab <id> [x z] [rotY] [scale]` | Pose un prefab décor (camp, épaves, …) |
+| `decoradd prefab wreck_sedan [x z] [rotY] [scale] [variant] [tilt] [wheels] [sink]` | Épave — variants : `rust`, `olive`, `navy`, `beige`, `burnt` |
+| `decorseed wrecks` | Ajoute les épaves seed si absentes (sans redémarrer le serveur) |
+| `decorseed wrecks reset` | Supprime toutes les épaves seed et les replace aux positions du gabarit |
 | `decoradd <type> [x z] [rotY] [scale]` | Pose un item de jeu comme prop (`food_conserves`, `tool_hachette`, …) — modèle 3D `getItemModel()` |
 | `decorlist` | Liste les décors actifs (id, kind, position) |
 | `decorremove <id>` | Supprime un décor par id |
 
 **Prefabs camp** : meshes procéduraux avec textures PNG dans `apps/client/public/textures/camp/` (`wood_planks_light.png`, `wood_planks.png`, `olive_canvas.png`). Module client : `camp_textures.js` → `ZS.CampTextures.materials()`.
 
-**Seed spawn** : décors camp + ~60 rondins de lisière (`spawn_border_log`) au boot serveur via `computeCampBorderLogPlacements()` (`packages/shared/src/camp-border-logs.mjs`).
+**Seed spawn** : décors camp + ~60 rondins (`spawn_border_log`) + **8 épaves** le long de `town_main` / `city_highway` (`packages/shared/src/road-wrecks.mjs`).
+
+**Épaves** : prefabs `wreck_sedan` / `wreck_pickup` — textures procédurales (`vehicle_textures.js`), collision décor, sync multijoueur comme les autres prefabs.
 
 Tests automatisés : `node tools/rcon-test.mjs` (inclut `decoradd`, `decorprefabs`, etc.).
 

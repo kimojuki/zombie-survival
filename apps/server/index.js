@@ -293,6 +293,8 @@ const decorPrefabs = [
   'spawn_stone',
   'spawn_workbench',
   'spawn_flat_stone',
+  'wreck_sedan',
+  'wreck_pickup',
 ];
 let zombieIdCounter    = 0;
 let itemIdCounter      = 0;
@@ -327,10 +329,55 @@ function flattenInv(inv) {
   return out;
 }
 
+const ROAD_WRECKS_URL = pathToFileURL(path.join(__dirname, '../../packages/shared/src/road-wrecks.mjs')).href;
+
+function _makeDecorItem(d) {
+  const item = {
+    id: `decor_${decorSeq++}`,
+    y: 0,
+    rotX: 0,
+    rotY: 0,
+    rotZ: 0,
+    scale: 1,
+    createdBy: 'seed',
+    createdAt: Date.now(),
+    ...d,
+  };
+  decorItems.set(item.id, item);
+  return item;
+}
+
+/** Ajoute les épaves routières si absentes (boot ou RCON decorseed wrecks). */
+function ensureRoadWrecks({ broadcast = false, reset = false } = {}) {
+  if (reset) {
+    for (const [id, d] of decorItems) {
+      if (!d.prefabId?.startsWith('wreck_')) continue;
+      decorItems.delete(id);
+      if (broadcast && rcon?.broadcastDecorRemove) rcon.broadcastDecorRemove(id);
+    }
+  } else {
+    const hasWrecks = [...decorItems.values()].some((d) => d.prefabId?.startsWith('wreck_'));
+    if (hasWrecks) return Promise.resolve(0);
+  }
+  return import(ROAD_WRECKS_URL).then(({ computeRoadWreckPlacements }) => {
+    const added = [];
+    for (const w of computeRoadWreckPlacements()) {
+      added.push(_makeDecorItem(w));
+    }
+    if (added.length) {
+      log.info('seed', 'road wrecks added', { count: added.length });
+      if (broadcast && rcon?.broadcastDecorSpawn) {
+        for (const item of added) rcon.broadcastDecorSpawn(item);
+      }
+    }
+    return added.length;
+  });
+}
+
 function seedSpawnDecorItems() {
   if (decorItems.size) return Promise.resolve();
-  return import(pathToFileURL(path.join(__dirname, '../../packages/shared/src/camp-border-logs.mjs')).href)
-    .then(({ computeCampBorderLogPlacements }) => {
+  const borderLogsUrl = pathToFileURL(path.join(__dirname, '../../packages/shared/src/camp-border-logs.mjs')).href;
+  return import(borderLogsUrl).then(({ computeCampBorderLogPlacements }) => {
       const seed = [
     { kind: 'prefab', prefabId: 'spawn_campfire', x: 0.2, z: -6.15, rotY: 0, scale: 1.0 },
     { kind: 'prefab', prefabId: 'spawn_log_pile', x: 2.1, z: -8.25, rotY: 0.2, scale: 1.0 },
@@ -362,20 +409,7 @@ function seedSpawnDecorItems() {
           scale: p.scale,
         });
       }
-      for (const d of seed) {
-        const item = {
-          id: `decor_${decorSeq++}`,
-          y: 0,
-          rotX: 0,
-          rotY: 0,
-          rotZ: 0,
-          scale: 1,
-          createdBy: 'seed',
-          createdAt: Date.now(),
-          ...d,
-        };
-        decorItems.set(item.id, item);
-      }
+      for (const d of seed) _makeDecorItem(d);
     });
 }
 
@@ -587,41 +621,73 @@ setInterval(() => {
   }
 }, 60 * 1000);
 
-const DETECT_RANGE   = 12;   // unités — portée de détection
-const AGGRO_MEMORY   = 5;    // secondes d'aggro après perte de vue
-const ZOMBIE_DMG       = 8;   // dégâts par coup (au lieu de 5 toutes les 100ms)
-const ZOMBIE_ATTACK_CD = 0.9; // secondes entre deux coups d'un même zombie
-const WANDER_SPEED   = 0.25; // fraction de vitesse en mode errance
-const WANDER_TURN_MIN = 2;   // secondes min avant changement de direction
-const WANDER_TURN_MAX = 5;   // secondes max avant changement de direction
+const DETECT_RANGE   = 12;   // défaut si prefab sans detectRange
+const AGGRO_MEMORY   = 5;
+const ZOMBIE_DMG       = 8;
+const ZOMBIE_ATTACK_CD = 0.9;
+const WANDER_SPEED   = 0.25;
+const WANDER_TURN_MIN = 2;
+const WANDER_TURN_MAX = 5;
 
-function makeZombie() {
+const ZOMBIE_PREFABS_URL = pathToFileURL(path.join(__dirname, '../../packages/shared/src/zombie-prefabs.mjs')).href;
+let _zombiePrefabs = null;
+
+async function loadZombiePrefabs() {
+  if (!_zombiePrefabs) _zombiePrefabs = await import(ZOMBIE_PREFABS_URL);
+  return _zombiePrefabs;
+}
+
+function makeZombie(opts = {}) {
+  const zp = _zombiePrefabs;
+  const prefabId = opts.prefabId || (zp ? zp.pickZombiePrefab() : 'zombie_walker');
   const id = ++zombieIdCounter;
-  const zone = pickZombieZone();
-  const ang  = Math.random() * Math.PI * 2;
-  const dist = Math.sqrt(Math.random()) * zone.r;   // réparti uniformément dans le disque
+  let x;
+  let z;
+  if (Number.isFinite(opts.x) && Number.isFinite(opts.z)) {
+    x = opts.x;
+    z = opts.z;
+  } else {
+    const zone = pickZombieZone();
+    const ang = Math.random() * Math.PI * 2;
+    const dist = Math.sqrt(Math.random()) * zone.r;
+    x = zone.cx + Math.cos(ang) * dist;
+    z = zone.cz + Math.sin(ang) * dist;
+  }
+  if (zp?.buildZombieEntity) {
+    return zp.buildZombieEntity(prefabId, { x, z }, id);
+  }
   const wanderAngle = Math.random() * Math.PI * 2;
   return {
     id,
-    x: zone.cx + Math.cos(ang) * dist,
+    prefabId: 'zombie_walker',
+    x,
     y: 0,
-    z: zone.cz + Math.sin(ang) * dist,
+    z,
     health: 100,
+    maxHealth: 100,
     angle: wanderAngle,
     wanderAngle,
     wanderTimer: WANDER_TURN_MIN + Math.random() * (WANDER_TURN_MAX - WANDER_TURN_MIN),
     aggroTimer: 0,
     attackTimer: 0,
-    speed: 1.8 + Math.random() * 1.4
+    speed: 1.8 + Math.random() * 1.4,
+    damage: ZOMBIE_DMG,
+    attackCd: ZOMBIE_ATTACK_CD,
+    detectRange: DETECT_RANGE,
+    hitRadius: 0.8,
+    scale: 1,
   };
 }
 
-for (let i = 0; i < ZOMBIE_COUNT; i++) {
-  const z = makeZombie();
-  zombies.set(z.id, z);
+async function seedInitialZombies() {
+  await loadZombiePrefabs();
+  if (zombies.size > 0) return;
+  for (let i = 0; i < ZOMBIE_COUNT; i++) {
+    const z = makeZombie();
+    zombies.set(z.id, z);
+  }
+  log.info('boot', 'zombies seeded', { count: zombies.size });
 }
-
-seedSpawnDecorItems().catch((err) => log.error('seedSpawnDecorItems failed', err));
 
 rcon = createRcon({
   io,
@@ -638,11 +704,15 @@ rcon = createRcon({
   getWorldTime: () => _worldTime,
   setWorldTime,
   makeZombie,
+  loadZombiePrefabs,
+  listZombiePrefabs: () => (_zombiePrefabs ? _zombiePrefabs.listZombiePrefabIds() : []),
+  getZombiePrefab: (id) => (_zombiePrefabs ? _zombiePrefabs.getZombiePrefab(id) : null),
   savePlayerState,
   saveBlob,
   generateLoot,
   clearLoot,
   makeDecorItemId: () => `decor_${decorSeq++}`,
+  ensureRoadWrecks,
   itemTypes: ALL_ITEMS,
   log,
 });
@@ -672,7 +742,8 @@ setInterval(() => {
     }
 
     // Aggro: detect when close, keep memory after losing sight
-    if (nearestDist < DETECT_RANGE) {
+    const detectRange = z.detectRange || DETECT_RANGE;
+    if (nearestDist < detectRange) {
       z.aggroTimer = AGGRO_MEMORY;
     } else {
       z.aggroTimer = Math.max(0, z.aggroTimer - DT);
@@ -690,14 +761,17 @@ setInterval(() => {
       z.z = chase[1];
       // Attaque avec cadence : un coup toutes ZOMBIE_ATTACK_CD s, dégâts modérés.
       z.attackTimer = Math.max(0, (z.attackTimer || 0) - DT);
+      const zDmg = z.damage || ZOMBIE_DMG;
+      const zCd = z.attackCd || ZOMBIE_ATTACK_CD;
       if (nearestDist < 1.5 && !nearestP.invincible && z.attackTimer <= 0) {
-        z.attackTimer = ZOMBIE_ATTACK_CD;
-        nearestP.health = Math.max(0, nearestP.health - ZOMBIE_DMG);
-        io.to(nearestP.socketId).emit('take-damage', { dmg: ZOMBIE_DMG });
+        z.attackTimer = zCd;
+        nearestP.health = Math.max(0, nearestP.health - zDmg);
+        io.to(nearestP.socketId).emit('take-damage', { dmg: zDmg });
         log.throttled(`zombie-hit:${nearestP.username}`, 2000, () => {
           log.debug('combat', 'zombie hit player', {
             player: nearestP.username,
-            dmg: ZOMBIE_DMG,
+            prefab: z.prefabId,
+            dmg: zDmg,
             health: nearestP.health,
             pos: { x: +nearestP.x.toFixed(1), z: +nearestP.z.toFixed(1) },
           });
@@ -892,7 +966,8 @@ io.on('connection', async (socket) => {
       const tx = z.x - d.ox, tz = z.z - d.oz;
       const t = tx * nx + tz * nz;
       if (t < 0 || t > range) return;
-      if (Math.hypot(d.ox + nx * t - z.x, d.oz + nz * t - z.z) < radius && t < minT) {
+      const hitR = z.hitRadius || radius;
+      if (Math.hypot(d.ox + nx * t - z.x, d.oz + nz * t - z.z) < hitR && t < minT) {
         minT = t; hit = z;
       }
     });
@@ -941,7 +1016,7 @@ io.on('connection', async (socket) => {
           hit.x = pushed[0];
           hit.z = pushed[1];
         }
-        io.emit('zombie-hit', { id: hit.id, health: hit.health });
+        io.emit('zombie-hit', { id: hit.id, health: hit.health, maxHealth: hit.maxHealth || hit.health });
       }
     }
   });
@@ -1176,8 +1251,12 @@ async function resetAllPlayersOnce() {
   }
 }
 
-seedSpawnDecorItems()
+seedInitialZombies()
+  .catch((err) => log.error('seedInitialZombies failed', err))
+  .then(() => seedSpawnDecorItems())
   .catch((err) => log.error('seedSpawnDecorItems failed', err))
+  .then(() => ensureRoadWrecks())
+  .catch((err) => log.error('ensureRoadWrecks failed', err))
   .finally(() => {
     server.listen(PORT, HOST, () => {
       serverReady = true;

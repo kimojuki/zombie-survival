@@ -28,11 +28,11 @@
     if (!zombieMeshes.has(z.id)) _add(z);
   }
 
-  function hit(id, health) {
+  function hit(id, health, maxHealth) {
     const entry = zombieMeshes.get(id);
     if (!entry) return;
     _flashRed(entry.group);
-    _updateHealthBar(entry, health);
+    _updateHealthBar(entry, health, maxHealth ?? entry.maxHealth);
   }
 
   function die(id) {
@@ -52,13 +52,10 @@
         return;
       }
 
-      // Smooth rotation toward server-authoritative angle
       let diff = entry.targetAngle - entry.currentAngle;
       while (diff > Math.PI)  diff -= Math.PI * 2;
       while (diff < -Math.PI) diff += Math.PI * 2;
       entry.currentAngle += diff * Math.min(1, 15 * dt);
-      // ang=0 means +X; Three.js forward is -Z; rotation.y=θ gives forward (-sin θ, 0, -cos θ)
-      // To face +X (ang=0): θ = -π/2 = -(0 + π/2) → negate the sum
       entry.group.rotation.y = -(entry.currentAngle + Math.PI / 2);
 
       const limbs = entry.group.userData.limbs;
@@ -67,25 +64,21 @@
       entry.animTime += dt;
 
       if (entry.isMoving) {
-        // Walk cycle — freq scales with zombie speed
         const freq = entry.speed * 2.2;
         const swing = Math.sin(entry.animTime * freq);
         limbs.lLeg.rotation.x =  swing * 0.45;
         limbs.rLeg.rotation.x = -swing * 0.45;
-        // Arms counter-swing, keep zombie stretch-forward base
-        limbs.lArm.rotation.x = Math.PI / 2.5 + (-swing * 0.28);
-        limbs.rArm.rotation.x = Math.PI / 2.5 + ( swing * 0.28);
+        limbs.lArm.rotation.x = entry.armPose + (-swing * 0.28);
+        limbs.rArm.rotation.x = entry.armPose + ( swing * 0.28);
       } else {
-        // Idle: ease limbs back to default pose
         limbs.lLeg.rotation.x *= 0.85;
         limbs.rLeg.rotation.x *= 0.85;
-        limbs.lArm.rotation.x += (Math.PI / 2.5 - limbs.lArm.rotation.x) * 0.12;
-        limbs.rArm.rotation.x += (Math.PI / 2.5 - limbs.rArm.rotation.x) * 0.12;
+        limbs.lArm.rotation.x += (entry.armPose - limbs.lArm.rotation.x) * 0.12;
+        limbs.rArm.rotation.x += (entry.armPose - limbs.rArm.rotation.x) * 0.12;
       }
     });
   }
 
-  // Distance au zombie vivant le plus proche d'un point (Infinity si aucun).
   function nearestDist(x, z) {
     let best = Infinity;
     zombieMeshes.forEach((e) => {
@@ -96,29 +89,63 @@
     return best;
   }
 
-  // ── Private ──────────────────────────────────────────────────────────────
+  /** Repousse le joueur hors du corps des zombies (collision cylindrique XZ). */
+  function resolvePlayerCollision(px, pz, playerR) {
+    let x = px;
+    let z = pz;
+    const maxDist2 = 900; // 30 m — même cull que les colliders monde
+    zombieMeshes.forEach((entry) => {
+      if (entry.dying) return;
+      const zx = entry.group.position.x;
+      const zz = entry.group.position.z;
+      const dx = x - zx;
+      const dz = z - zz;
+      if (dx * dx + dz * dz > maxDist2) return;
+      const zr = entry.collideRadius || 0.42;
+      const dist = Math.hypot(dx, dz);
+      const min = playerR + zr;
+      if (dist >= min || dist <= 0.001) return;
+      const push = min / dist;
+      x = zx + dx * push;
+      z = zz + dz * push;
+    });
+    return { x, z };
+  }
 
   function _add(z) {
-    const group = ZS.createZombieModel();
+    const prefabId = z.prefabId || 'zombie_walker';
+    const group = ZS.createZombieModel(prefabId);
     const initialAngle = z.angle != null ? z.angle : 0;
     group.position.set(z.x, ZS.getTerrainHeight(z.x, z.z), z.z);
     group.rotation.y = -(initialAngle + Math.PI / 2);
 
+    const hbY = group.userData.healthBarY || 2.4;
     const hbGroup = _makeHealthBar();
-    hbGroup.position.y = 2.4;
+    hbGroup.position.y = hbY;
     group.add(hbGroup);
 
+    const maxHealth = z.maxHealth || z.health || 100;
+    const armPose = group.userData.rig
+      ? (ZS.ZombiePrefabs?.getVisual?.(prefabId)?.armPose || Math.PI / 2.5)
+      : Math.PI / 2.5;
+
+    const vis = ZS.ZombiePrefabs?.getVisual?.(prefabId) || {};
     const entry = {
       group,
       hbGroup,
+      prefabId,
+      maxHealth,
+      collideRadius: z.collideRadius || vis.collideRadius || 0.42,
+      armPose,
       animTime:     0,
       currentAngle: initialAngle,
       targetAngle:  initialAngle,
       speed:        z.speed || 2,
       isMoving:     false,
       prevX:        z.x,
-      prevZ:        z.z
+      prevZ:        z.z,
     };
+    _updateHealthBar(entry, z.health != null ? z.health : maxHealth, maxHealth);
     zombieMeshes.set(z.id, entry);
     _scene.add(group);
   }
@@ -131,6 +158,9 @@
 
     if (z.angle != null) entry.targetAngle = z.angle;
     if (z.speed  != null) entry.speed = z.speed;
+    if (z.maxHealth != null) entry.maxHealth = z.maxHealth;
+    if (z.collideRadius != null) entry.collideRadius = z.collideRadius;
+    if (z.health != null) _updateHealthBar(entry, z.health, entry.maxHealth);
 
     const moved = Math.hypot(z.x - entry.prevX, z.z - entry.prevZ);
     entry.isMoving = moved > 0.005;
@@ -147,7 +177,7 @@
 
   function _flashRed(group) {
     group.traverse((child) => {
-      if (child.isMesh) {
+      if (child.isMesh && child.material?.color) {
         const orig = child.material.color.getHex();
         child.material.color.set(0xff4444);
         setTimeout(() => child.material.color.setHex(orig), 100);
@@ -172,16 +202,16 @@
     return g;
   }
 
-  function _updateHealthBar(entry, health) {
+  function _updateHealthBar(entry, health, maxHealth) {
     const fill = entry.hbGroup && entry.hbGroup.userData.fill;
     if (!fill) return;
-    const ratio = Math.max(0, health / 100);
+    const max = maxHealth || entry.maxHealth || 100;
+    const ratio = Math.max(0, health / max);
     fill.scale.x = ratio;
     fill.position.x = -(1 - ratio) * 0.4;
     fill.material.color.set(ratio > 0.5 ? 0x22cc44 : ratio > 0.25 ? 0xffaa00 : 0xcc2222);
   }
 
-  // ── Grognements ambiants : un zombie proche grogne par intermittence ────────
   const GROAN_RANGE = 30;
   const _gFwd = new THREE.Vector3(), _gRight = new THREE.Vector3(),
         _gTo = new THREE.Vector3(), _gUp = new THREE.Vector3(0, 1, 0);
@@ -196,7 +226,6 @@
   function _maybeGroan() {
     const cam = ZS._camera;
     if (!cam || !ZS.Audio || zombieMeshes.size === 0) return;
-    // Zombie vivant le plus proche
     let best = Infinity, bx = 0, bz = 0;
     zombieMeshes.forEach((e) => {
       if (e.dying) return;
@@ -216,5 +245,5 @@
   _scheduleGroan();
 
   window.ZS = window.ZS || {};
-  ZS.Zombies = { init, syncAll, spawn, hit, die, tick, nearestDist };
+  ZS.Zombies = { init, syncAll, spawn, hit, die, tick, nearestDist, resolvePlayerCollision };
 }());

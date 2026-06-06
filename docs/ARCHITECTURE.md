@@ -44,8 +44,8 @@ Vue d'ensemble pour onboarding et reviews PR.
 Ordre des scripts legacy (important) dans `apps/client/src/bootstrap/legacy-modules.js` :
 
 1. `noise.js`, `camp_textures.js`, `buildings.js`
-2. `road_network.js`, `trails.js`, `spawn_clearing.js`, `proc_roads.js`, `proc_spawn.js` — **spawn + sentier + RN**
-3. `world.js`, `game.js` — pas de secteurs legacy (`sector_*.js`, `vehicles.js` encore hors chargement)
+2. `road_network.js`, `trails.js`, `spawn_clearing.js`, `vehicle_prefabs.js`, `proc_roads.js`, `proc_spawn.js` — **spawn + sentier + RN + épaves**
+3. `world.js`, `game.js` — pas de secteurs legacy (`sector_*.js` non chargés)
 
 Pipeline monde (`world.js`) : `registerTerrain` → `applyRoadFlattening` → `buildTerrain` → `buildAll` → `RoadNetwork.buildMeshes(scene, ZS.B.M)`.
 
@@ -68,6 +68,7 @@ Le premier client connecté envoie au serveur :
 | Routes / terrain | Client | Généré localement, identique pour tous |
 | Admin RCON | Serveur | Commandes via socket ou API |
 | Décor monde | Serveur | `decorItems` Map ; sync spawn/remove aux clients |
+| Épaves routières | serveur seed + RCON | prefabs `wreck_sedan` / `wreck_pickup` (`vehicle_prefabs.js`) |
 
 ### Décor camp et textures (`camp_textures.js`)
 

@@ -48,6 +48,20 @@
     spawn_drink_set: [],
   };
 
+  /** Dimensions épaves — miroir de vehicle_prefabs.js BODY (carrosserie + habitacle). */
+  const WRECK_BODY = {
+    wreck_sedan:  { w: 1.78, h: 0.72, d: 4.1,  cw: 1.48, ch: 0.62, cd: 2.15, cz: -0.18 },
+    wreck_pickup: { w: 1.85, h: 0.78, d: 4.55, cw: 1.52, ch: 0.68, cd: 1.85, cz: -0.35 },
+  };
+
+  function _wreckColliderDefs(prefabId) {
+    const spec = WRECK_BODY[prefabId] || WRECK_BODY.wreck_sedan;
+    return [
+      { type: 'box', lx: 0, lz: 0, hw: spec.w * 0.5, hd: spec.d * 0.5, maxY: 0.62 + spec.h * 0.5 },
+      { type: 'box', lx: 0, lz: spec.cz, hw: spec.cw * 0.5, hd: spec.cd * 0.5, maxY: 1.25 + spec.ch * 0.5 },
+    ];
+  }
+
   const ITEM_COLLIDERS = {
     default: { type: 'box', lx: 0, lz: 0, hw: 0.11, hd: 0.11, maxY: 0.22 },
     food_eau_bouteille: { type: 'cyl', lx: 0, lz: 0, r: 0.07, topY: 0.28 },
@@ -69,6 +83,7 @@
 
   function _defsForSpec(spec) {
     if (spec.kind === 'prefab') {
+      if (spec.prefabId?.startsWith('wreck_')) return _wreckColliderDefs(spec.prefabId);
       const list = PREFAB_COLLIDERS[spec.prefabId];
       return list == null ? [] : list;
     }
@@ -91,7 +106,11 @@
     const {
       x = 0, z = 0, baseY = 0,
       rotY = 0, scale = 1,
+      wreckTilt = 0,
+      rotZ = 0,
     } = spec;
+    const isWreck = spec.prefabId?.startsWith('wreck_');
+    const tiltZ = isWreck ? (Number(wreckTilt) || Number(rotZ) || 0) : 0;
     const cos = Math.cos(rotY);
     const sin = Math.sin(rotY);
     const out = [];
@@ -101,10 +120,12 @@
       const def = _applyLayFlat(raw, spec);
       const lx0 = (def.lx || 0) * scale;
       const lz0 = (def.lz || 0) * scale;
-      const ox = lx0 * cos - lz0 * sin;
-      const oz = lx0 * sin + lz0 * cos;
+      const hw = (def.hw || 0.1) * scale;
+      const hd = (def.hd || 0.1) * scale;
 
       if (def.type === 'cyl' || def.r != null) {
+        const ox = lx0 * cos - lz0 * sin;
+        const oz = lx0 * sin + lz0 * cos;
         out.push({
           x: x + ox,
           z: z + oz,
@@ -115,13 +136,36 @@
         continue;
       }
 
+      if (isWreck) {
+        out.push({
+          type: 'box',
+          cx: x,
+          cz: z,
+          lx: lx0,
+          lz: lz0,
+          hw,
+          hd,
+          rotY,
+          rotZ: tiltZ,
+          baseY,
+          maxY: def.maxY != null ? baseY + def.maxY * scale : undefined,
+          minY: def.minY != null ? baseY + def.minY * scale : undefined,
+          decorId: spec.decorId,
+          wreckPart: true,
+        });
+        continue;
+      }
+
+      const ox = lx0 * cos - lz0 * sin;
+      const oz = lx0 * sin + lz0 * cos;
       out.push({
         type: 'box',
         cx: x + ox,
         cz: z + oz,
-        hw: (def.hw || 0.1) * scale,
-        hd: (def.hd || 0.1) * scale,
+        hw,
+        hd,
         rotY,
+        baseY,
         maxY: def.maxY != null ? baseY + def.maxY * scale : undefined,
         minY: def.minY != null ? baseY + def.minY * scale : undefined,
         decorId: spec.decorId,
@@ -139,4 +183,5 @@
   ZS.listPrefabColliderIds = listPrefabColliderIds;
   ZS.DECOR_PREFAB_COLLIDERS = PREFAB_COLLIDERS;
   ZS.DECOR_ITEM_COLLIDERS = ITEM_COLLIDERS;
+  ZS.WRECK_BODY = WRECK_BODY;
 }());

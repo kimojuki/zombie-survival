@@ -19,6 +19,7 @@
 | RN traversante est→ouest | `proc_roads.js` → `town_main` (asphalte **8,4 m**, 2 voies, ligne jaune) |
 | Autoroute grande ville | `proc_roads.js` → `city_highway` (12 m, `(-104,-9)` → `(-20,-122)`) |
 | Rondins lisière | prefab `spawn_border_log` (seed serveur, RCON, collision) |
+| Épaves route | prefabs `wreck_sedan` / `wreck_pickup` (seed + RCON, textures procédurales) |
 | Texture sentier | `textures/camp/trail_forest.png` |
 | Texture asphalte | `/img/road_asphalt.png` (`B.M.road`) |
 
@@ -27,7 +28,7 @@
 | ID | Fichier | Statut |
 |----|---------|--------|
 | Secteurs S02–S05 (bâtiments) | `sector_*.js` | ⏸ non chargés |
-| Véhicules épaves | `vehicles.js` | ⏸ non chargé |
+| Véhicules épaves | `vehicle_prefabs.js` + seed `road-wrecks.mjs` | ✅ prefabs RCON |
 
 ### Arêtes actives (RoadNetwork)
 
@@ -58,12 +59,14 @@ buildMeshes()               — asphalte, ligne jaune, barrières, jonction sent
 - Rails alignés en **3D** entre deux poteaux (`Quaternion.setFromUnitVectors`).
 - **Gaps** près des jonctions sentier→route (`_barrierGaps`, rayon 7,5 m).
 
-### Véhicules (`public/js/vehicles.js`)
+### Véhicules (`vehicle_prefabs.js` + `packages/shared/src/road-wrecks.mjs`)
 
-- **Source unique** pour les carcasses abandonnées (plus de `B.car()` éparpillé dans les secteurs).
-- Placement via `RoadNetwork.sampleAlong(roadId, t)` + offset latéral (`side`, `lane`).
-- Variantes : inclinaison, roues manquantes, carrosserie calcinée (`B.carcass()` dans `buildings.js`).
-- Tableau `WRECKS` : ~10 épaves sur `town_main`, `spawn_trail`, `city_highway`.
+- Prefabs **`wreck_sedan`** / **`wreck_pickup`** — textures peinture procédurale (`vehicle_textures.js` : rust, olive, navy, beige, burnt).
+- Seed serveur : 8 épaves le long de `town_main` et `city_highway` (file d'attente apocalypse près du spawn).
+- RCON : `decoradd prefab wreck_sedan x z rotY 1 rust 0.15 2` — variant, tilt, roues, sink optionnels.
+- Collisions : `decor_colliders.js` (box, sautables).
+
+Legacy `vehicles.js` : stub vide (remplacé par prefabs décor).
 
 ---
 
@@ -128,7 +131,7 @@ ZS.RoadNetwork.nearestPointOnRoad(roadPts, x, z)
 | **2** | Grille rues S02/S03 dans RoadNetwork | ⏳ |
 | **3** | Patches jonction multi-arêtes | ⏳ |
 | **4** | Routes S05 militaire | ⏳ |
-| **5** | Carcasses le long des routes (`vehicles.js`) | ⏳ **prochaine session** |
+| **5** | Carcasses le long des routes (`vehicle_prefabs.js`) | ✅ |
 
 ---
 
@@ -141,4 +144,4 @@ ZS.RoadNetwork.nearestPointOnRoad(roadPts, x, z)
 5. `town_main` — **8,4 m**, 2 voies, **ligne jaune centrale** continue, barrières
 6. `city_highway` — branche vers grande ville (12 m), barrières
 7. Pas d'arbres sur les routes (`isNearRoad`)
-8. *(Prochain)* Carcasses sur épaules — `vehicles.js` à réactiver
+8. Épaves `wreck_*` sur `town_main` près du spawn — textures rouille / calcinées, sync multijoueur

@@ -60,6 +60,33 @@ test('border log prefab has oriented box collider', () => {
   assert.equal(cols[0].rotY, 0.5);
 });
 
+test('wreck colliders match body + cabin compound boxes', () => {
+  const ZS = loadDecorColliders();
+  const baseY = -7.25;
+  const cols = ZS.buildDecorColliders({
+    kind: 'prefab',
+    prefabId: 'wreck_sedan',
+    x: -18,
+    z: -37,
+    baseY,
+    rotY: -1.1,
+    rotZ: 0.12,
+    scale: 1,
+    wreckTilt: 0.12,
+    decorId: 'decor_wreck',
+  });
+  assert.equal(cols.length, 2);
+  assert.equal(cols[0].cx, -18);
+  assert.equal(cols[0].cz, -37);
+  assert.equal(cols[0].lx, 0);
+  assert.equal(cols[0].rotZ, 0.12);
+  assert.equal(cols[0].hw, 0.89);
+  assert.equal(cols[0].hd, 2.05);
+  assert.equal(cols[1].lz, -0.18);
+  assert.ok(cols[0].maxY > baseY + 0.9);
+  assert.ok(cols[1].maxY > cols[0].maxY);
+});
+
 test('unknown item type falls back to default collider', () => {
   const ZS = loadDecorColliders();
   const cols = ZS.buildDecorColliders({

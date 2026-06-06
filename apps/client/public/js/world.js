@@ -1060,9 +1060,76 @@
 
   // Hauteur max montable d'un bond (JUMP_V=8, GRAVITY=22 → ~1.45 m)
   const MAX_STAND_STEP = 1.55;
+  const _dcE = new THREE.Euler(0, 0, 0, 'XYZ');
+  const _dcQ = new THREE.Quaternion();
+  const _dcV = new THREE.Vector3();
+
+  /** Monde → espace local décor (rotY + rotZ inclinaison épaves). */
+  function decorWorldToLocal(px, py, pz, col) {
+    _dcV.set(px - col.cx, py - (col.baseY ?? 0), pz - col.cz);
+    if (col.rotZ) {
+      _dcE.set(0, col.rotY || 0, col.rotZ || 0);
+      _dcQ.setFromEuler(_dcE).invert();
+      _dcV.applyQuaternion(_dcQ);
+    } else if (col.rotY) {
+      const c = Math.cos(-col.rotY);
+      const s = Math.sin(-col.rotY);
+      const x = _dcV.x;
+      const z = _dcV.z;
+      _dcV.x = x * c - z * s;
+      _dcV.z = x * s + z * c;
+    }
+    return { lx: _dcV.x, ly: _dcV.y, lz: _dcV.z };
+  }
+
+  function decorLocalToWorld(lx, ly, lz, col) {
+    _dcV.set(lx, ly, lz);
+    if (col.rotZ) {
+      _dcE.set(0, col.rotY || 0, col.rotZ || 0);
+      _dcQ.setFromEuler(_dcE);
+      _dcV.applyQuaternion(_dcQ);
+    } else if (col.rotY) {
+      const c = Math.cos(col.rotY);
+      const s = Math.sin(col.rotY);
+      const x = _dcV.x;
+      const z = _dcV.z;
+      _dcV.x = x * c - z * s;
+      _dcV.z = x * s + z * c;
+    }
+    return { x: col.cx + _dcV.x, z: col.cz + _dcV.z };
+  }
+
+  function overBoxFootprint(px, pz, margin, col) {
+    const { lx, lz } = decorWorldToLocal(px, col.baseY ?? 0, pz, col);
+    const bx = lx - (col.lx || 0);
+    const bz = lz - (col.lz || 0);
+    return Math.abs(bx) <= col.hw + margin && Math.abs(bz) <= col.hd + margin;
+  }
+
+  function resolveDecorBoxCollision(col, px, pz, feetY, playerR) {
+    if (col.maxY !== undefined && feetY >= col.maxY - 0.05) return null;
+    if (col.decorId && col.baseY != null && feetY < col.baseY - 0.35) return null;
+    if (col.minY !== undefined && feetY < col.minY - 0.05) return null;
+
+    const local = decorWorldToLocal(px, feetY, pz, col);
+    const bx = local.lx - (col.lx || 0);
+    const bz = local.lz - (col.lz || 0);
+    const clampBX = Math.max(-col.hw, Math.min(col.hw, bx));
+    const clampBZ = Math.max(-col.hd, Math.min(col.hd, bz));
+    const wdx = bx - clampBX;
+    const wdz = bz - clampBZ;
+    const dist = Math.hypot(wdx, wdz);
+    if (dist >= playerR || dist <= 0.001) return null;
+
+    const pen = playerR - dist;
+    const outLX = bx + (wdx / dist) * pen + (col.lx || 0);
+    const outLZ = bz + (wdz / dist) * pen + (col.lz || 0);
+    return decorLocalToWorld(outLX, local.ly, outLZ, col);
+  }
 
   function overColliderFootprint(px, pz, margin, col) {
     if (col.type === 'box' || col.cx !== undefined) {
+      if (col.lx != null || col.rotZ) return overBoxFootprint(px, pz, margin, col);
       const dx = px - col.cx;
       const dz = pz - col.cz;
       let lx, lz;
@@ -1116,6 +1183,8 @@
   ZS.getStandHeight         = getStandHeight;
   ZS.overColliderFootprint  = overColliderFootprint;
   ZS.shouldSkipDecorSideCollision = shouldSkipDecorSideCollision;
+  ZS.resolveDecorBoxCollision = resolveDecorBoxCollision;
+  ZS.decorWorldToLocal      = decorWorldToLocal;
   ZS.chopTree          = chopTree;
   ZS.registerFireLight     = registerFireLight;
   ZS.registerBillboards    = registerBillboards;

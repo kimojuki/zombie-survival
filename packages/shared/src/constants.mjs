@@ -7,6 +7,12 @@ export const SOCKET_EVENTS = Object.freeze({
   PLAYER_LEAVE: 'player-leave',
   PLAYER_UPDATE: 'player-update',
   PLAYERS_ONLINE: 'players-online',
+  ZOMBIE_TICK: 'zombie-tick',
+  ZOMBIE_SPAWN: 'zombie-spawn',
+  ZOMBIE_HIT: 'zombie-hit',
+  ZOMBIE_DIE: 'zombie-die',
+  TAKE_DAMAGE: 'take-damage',
+  GAME_INIT: 'game-init',
 });
 
 export const ROUTES = Object.freeze({

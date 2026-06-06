@@ -43,12 +43,17 @@
       rotY: d.rotY || 0,
       rotZ: d.rotZ || 0,
       scale: Number.isFinite(d.scale) ? d.scale : 1,
-      grounded: true,
+      grounded: !d.prefabId?.startsWith('wreck_'),
       groundLift: Number.isFinite(d.y) ? d.y : 0,
       layFlat: !!d.layFlat,
       offsetX: d.offsetX || 0,
       offsetY: d.offsetY || 0,
       offsetZ: d.offsetZ || 0,
+      wreckVariant: d.wreckVariant,
+      wreckBurnt: !!d.wreckBurnt,
+      wreckTilt: Number.isFinite(d.wreckTilt) ? d.wreckTilt : (Number.isFinite(d.rotZ) ? d.rotZ : 0),
+      wreckWheels: Number.isFinite(d.wreckWheels) ? d.wreckWheels : undefined,
+      wreckSink: Number.isFinite(d.wreckSink) ? d.wreckSink : 0,
     };
     const onRoot = (root) => {
       if (!root) return;
@@ -246,7 +251,7 @@
       el._hideT = setTimeout(() => { el.style.opacity = '0'; }, 6000);
     });
     socket.on('zombie-spawn', (z)   => ZS.Zombies.spawn(z));
-    socket.on('zombie-hit',   (d)   => ZS.Zombies.hit(d.id, d.health));
+    socket.on('zombie-hit',   (d)   => ZS.Zombies.hit(d.id, d.health, d.maxHealth));
     socket.on('zombie-die',   (id)  => ZS.Zombies.die(id));
 
     socket.on('structure-spawn', (d) => ZS.Inventory.spawnStructure(d));

@@ -87,6 +87,10 @@ async function main() {
   results.push(await expectOk('nospawn on', 'nospawn on'));
   results.push(await expectOk('clearzombies', 'clearzombies'));
   results.push(await expectOk('spawnzombies 3', 'spawnzombies 3', (t) => t.includes('3')));
+  results.push(await expectOk('zombieprefabs', 'zombieprefabs', (t) => t.includes('zombie_walker')));
+  results.push(await expectOk('spawnzombie runner', 'spawnzombie zombie_runner 1', (t) => t.includes('zombie_runner')));
+  results.push(await expectOk('zombielist', 'zombielist', (t) => t.includes('zombie_')));
+  results.push(await expectOk('killzombie nearest', 'killzombie nearest', (t) => t.includes('supprimé') || t.includes('Zombie')));
   results.push(await expectOk('zombies on', 'zombies on'));
   results.push(await expectOk('nospawn off', 'nospawn off'));
 
@@ -96,13 +100,32 @@ async function main() {
 
   // ── Décor / prefabs ──
   results.push(await expectOk('decorprefabs', 'decorprefabs', (t) => t.includes('spawn_campfire')));
+  results.push(await expectOk('decorprefabs wreck', 'decorprefabs wreck', (t) => t.includes('wreck_sedan')));
   results.push(await expectOk('decorprefabs filter', 'decorprefabs stump', (t) => t.includes('spawn_stump')));
   results.push(await expectOk('decorlist seed', 'decorlist', (t) => t.includes('decor_')));
 
   results.push(await expectOk(
-    'decoradd prefab',
+    'decoradd wreck',
+    'decoradd prefab wreck_sedan 12 -8 0.5 1 rust 0.12 2',
+    (t) => t.includes('wreck_sedan') && t.includes('decor_'),
+  ));
+
+  results.push(await expectOk(
+    'decoradd prefab spawn_lantern',
     'decoradd prefab spawn_lantern 12 -8 0.5 1.2',
     (t) => t.includes('spawn_lantern') && t.includes('decor_'),
+  ));
+
+  results.push(await expectOk(
+    'decorremove wreck nearest',
+    'decorremove decor_92',
+    (t) => t.includes('decor_92') || t.includes('wreck_sedan'),
+  ));
+
+  results.push(await expectOk(
+    'decorseed wrecks idle',
+    'decorseed wrecks',
+    (t) => t.includes('déjà') || t.includes('présentes') || t.includes('ajoutée'),
   ));
 
   results.push(await expectOk(

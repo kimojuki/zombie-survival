@@ -13,7 +13,11 @@
     return _createHumanoidRig({ name: 'playerRig', local: !!opts.local });
   }
 
-  function createZombieModel() {
+  function createZombieModel(prefabId) {
+    if (ZS.ZombiePrefabs?.build) {
+      const built = ZS.ZombiePrefabs.build(prefabId || 'zombie_walker');
+      if (built) return built;
+    }
     const g = _createHumanoidRig({
       name: 'zombieRig',
       skin: 0x6daf6d,
@@ -23,6 +27,8 @@
     });
     const r = g.userData.rig;
     r.leftShoulder.rotation.x = r.rightShoulder.rotation.x = Math.PI / 2.5;
+    g.userData.prefabId = 'zombie_walker';
+    g.userData.healthBarY = 2.4;
     return g;
   }
 
@@ -1593,6 +1599,7 @@
   window.ZS = window.ZS || {};
   ZS.createPlayerModel = createPlayerModel;
   ZS.createZombieModel = createZombieModel;
+  ZS.createHumanoidRig = _createHumanoidRig;
   ZS.createFPSArms     = createFPSArms;
   ZS.updateHandItem    = updateHandItem;
   ZS.setRemoteHandItem = setRemoteHandItem;

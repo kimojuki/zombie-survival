@@ -745,41 +745,10 @@
 
       if (col.type === 'box') {
         if (ZS.shouldSkipDecorSideCollision?.(col, feetY, p.y, p.velocityY, newX, newZ, PLAYER_R)) continue;
-        // Sauter par-dessus si les pieds dépassent le sommet de l'obstacle
-        if (col.maxY !== undefined && feetY >= col.maxY - 0.05) continue;
-        // Mur d'étage / parapet : solide seulement si les pieds sont assez hauts.
-        if (col.minY !== undefined && feetY < col.minY - 0.05) continue;
-
-        const dxW = newX - col.cx;
-        const dzW = newZ - col.cz;
-        let lx, lz;
-        if (col.rotY) {
-          const c = Math.cos(-col.rotY);
-          const s = Math.sin(-col.rotY);
-          lx = dxW * c - dzW * s;
-          lz = dxW * s + dzW * c;
-        } else {
-          lx = dxW;
-          lz = dzW;
-        }
-        const clampLX = Math.max(-col.hw, Math.min(col.hw, lx));
-        const clampLZ = Math.max(-col.hd, Math.min(col.hd, lz));
-        const wdx = lx - clampLX;
-        const wdz = lz - clampLZ;
-        const dist = Math.hypot(wdx, wdz);
-        if (dist < PLAYER_R && dist > 0.001) {
-          const pen = PLAYER_R - dist;
-          const outLX = lx + (wdx / dist) * pen;
-          const outLZ = lz + (wdz / dist) * pen;
-          if (col.rotY) {
-            const c = Math.cos(col.rotY);
-            const s = Math.sin(col.rotY);
-            newX = col.cx + outLX * c - outLZ * s;
-            newZ = col.cz + outLX * s + outLZ * c;
-          } else {
-            newX = col.cx + outLX;
-            newZ = col.cz + outLZ;
-          }
+        const resolved = ZS.resolveDecorBoxCollision?.(col, newX, newZ, feetY, PLAYER_R);
+        if (resolved) {
+          newX = resolved.x;
+          newZ = resolved.z;
         }
       } else {
         if (ZS.shouldSkipDecorSideCollision?.(col, feetY, p.y, p.velocityY, newX, newZ, PLAYER_R)) continue;
@@ -795,6 +764,12 @@
           newZ = col.z + dz * scale;
         }
       }
+    }
+
+    if (ZS.Zombies.resolvePlayerCollision) {
+      const out = ZS.Zombies.resolvePlayerCollision(newX, newZ, PLAYER_R);
+      newX = out.x;
+      newZ = out.z;
     }
 
     p.x = newX;

@@ -529,6 +529,10 @@
     },
   };
 
+  function registerDecorPrefab(id, def) {
+    if (id && def) DECOR_PREFABS[id] = def;
+  }
+
   function listDecorPrefabs() {
     return Object.keys(DECOR_PREFABS);
   }
@@ -541,9 +545,16 @@
   function spawnDecorPrefab(scene, prefabId, x, y, z, opts = {}) {
     const prefab = DECOR_PREFABS[prefabId];
     if (!scene || !prefab) return null;
-    const groundedY = opts.grounded !== false
-      ? getDecorGroundHeight(x || 0, z || 0, { groundLift: opts.groundLift })
-      : (y || 0);
+    const isWreck = prefabId.startsWith('wreck_');
+    const sink = Number.isFinite(opts.wreckSink) ? opts.wreckSink : 0;
+    const groundAt = (px, pz) => (ZS.getDecorGroundHeight
+      ? ZS.getDecorGroundHeight(px, pz)
+      : (ZS.getTerrainHeight ? ZS.getTerrainHeight(px, pz) : 0));
+    const groundedY = isWreck
+      ? groundAt(x || 0, z || 0) - sink
+      : (opts.grounded !== false
+        ? getDecorGroundHeight(x || 0, z || 0, { groundLift: opts.groundLift })
+        : (y || 0));
     const root = new THREE.Group();
     root.position.set(x || 0, groundedY, z || 0);
     root.rotation.set(opts.rotX || 0, opts.rotY || 0, opts.rotZ || 0);
@@ -553,21 +564,25 @@
 
     const decorId = opts.decorId || `static_${prefabId}_${(x || 0).toFixed(1)}_${(z || 0).toFixed(1)}`;
     root.userData.decorId = decorId;
+
+    scene.add(root);
+    prefab.build(root, opts);
+
     if (opts.collide !== false) {
       _registerDecorCollision(decorId, {
         decorId,
         kind: 'prefab',
         prefabId,
-        x: x || 0,
-        z: z || 0,
-        baseY: groundedY,
-        rotY: opts.rotY || 0,
+        x: root.position.x,
+        z: root.position.z,
+        baseY: root.position.y,
+        rotY: root.rotation.y,
+        rotZ: root.rotation.z,
         scale: s,
+        wreckTilt: isWreck ? root.rotation.z : undefined,
       });
     }
 
-    scene.add(root);
-    prefab.build(root, opts);
     return root;
   }
 
@@ -875,6 +890,7 @@
   ZS.buildCampProps     = buildCampProps;
   ZS.buildSpawnCamp     = buildSpawnCamp;
   ZS.spawnDecorPrefab   = spawnDecorPrefab;
+  ZS.registerDecorPrefab = registerDecorPrefab;
   ZS.listDecorPrefabs   = listDecorPrefabs;
   ZS.getDecorGroundHeight = getDecorGroundHeight;
   ZS.getDecorSurfaceLift  = getDecorSurfaceLift;

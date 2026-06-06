@@ -152,6 +152,57 @@ test('storage chest prefab has a blocking box collider', () => {
   assert.ok(cols[0].maxY > 0.7);
 });
 
+test('build prefabs expose wall and toggled door colliders', () => {
+  const ZS = loadDecorColliders();
+  const wall = ZS.buildDecorColliders({
+    kind: 'prefab',
+    prefabId: 'build_wall_wood',
+    x: 2,
+    z: 3,
+    baseY: 2.6,
+    rotY: Math.PI / 2,
+    decorId: 'decor_wall',
+  });
+  assert.equal(wall.length, 1);
+  assert.equal(wall[0].type, 'box');
+  assert.equal(wall[0].decorId, 'decor_wall');
+  assert.ok(wall[0].minY > 1.9);
+  assert.ok(wall[0].hd >= 0.18);
+  assert.ok(wall[0].maxY > 5.1);
+
+  const closedDoor = ZS.buildDecorColliders({
+    kind: 'prefab',
+    prefabId: 'build_door_wood',
+    x: 0,
+    z: 0,
+    baseY: 0,
+    doorOpen: false,
+  });
+  const openDoor = ZS.buildDecorColliders({
+    kind: 'prefab',
+    prefabId: 'build_door_wood',
+    x: 0,
+    z: 0,
+    baseY: 0,
+    doorOpen: true,
+  });
+  assert.equal(closedDoor.length, openDoor.length + 1);
+  assert.equal(openDoor.some((c) => c.door), false);
+  assert.ok(openDoor.every((c) => c.hd >= 0.18));
+  assert.ok(closedDoor.some((c) => c.hw >= 0.85 && c.hd >= 0.12));
+
+  const stair = ZS.buildDecorColliders({
+    kind: 'prefab',
+    prefabId: 'build_stair_wood',
+    x: 0,
+    z: 0,
+    baseY: 0,
+    rotY: 0,
+  });
+  assert.equal(stair.length, 2);
+  assert.ok(stair.every((c) => c.hd >= 1.5 && c.maxY >= 2.6));
+});
+
 test('unknown item type falls back to default collider', () => {
   const ZS = loadDecorColliders();
   const cols = ZS.buildDecorColliders({

@@ -48,6 +48,57 @@ Copier dans la description de PR :
 
 ## 2026-06-06
 
+### Completed — Fix registre collisions structures fallback (2026-06-06)
+
+- **Cause racine** : `spawnStructure()` ajoutait les colliders dans le tableau retourné par `ZS.getColliders()`, qui est une copie ; les collisions disparaissaient donc immédiatement.
+- **Fix** : les structures legacy/fallback s'enregistrent maintenant via `ZS.registerDecorColliders('structure_<id>', cols)`.
+- **Sync** : après spawn structure, le client resynchronise les colliders monde vers le serveur.
+- **Cache bust** : `20260606-build-collider-registry-60`
+
+### Completed — Build collisions renforcées + portes agrandies (2026-06-06)
+
+- **Murs** : épaisseur visuelle/collision augmentée pour éviter de traverser les prefabs et le fallback `place-structure`.
+- **Portes** : ouverture standard élargie (`1.8 m`) et grande porte élargie (`2.4 m`) ; montants plus épais et colliders alignés.
+- **Escaliers** : ajout de colliders latéraux pour ne plus traverser les côtés tout en gardant la rampe praticable.
+- **Tests** : régressions ajoutées pour murs simples, murs prefab, montants de porte et côtés d'escalier.
+- **Cache bust** : `20260606-build-solid-walls-59`
+
+### Completed — Fix collisions structures build (2026-06-06)
+
+- **Bug** : les murs/portes build pouvaient être traversés si le déplacement plaçait le centre du joueur dans une box fine.
+- **Fix physique** : résolution de collision box corrigée côté client (`world.js`) et partagé serveur/zombies (`collider-resolve.mjs`) pour repousser aussi depuis l'intérieur de la box.
+- **Colliders** : murs/portes build ont une hauteur solide explicite (`maxY`) et restent synchronisés via `decorItems`.
+- **Tests** : régression ajoutée sur un mur build fin.
+- **Cache bust** : `20260606-build-collision-58`
+
+### Completed — Fix refus placement build + fallback compatible (2026-06-06)
+
+- **Bug** : `Placement refusé` pouvait apparaître quand le serveur refusait/remboursait une pose build prefab.
+- **Fix client** : fallback automatique vers `place-structure` pour les éléments build si l'ack prefab échoue, timeout, ou ancien remboursement serveur.
+- **Serveur** : validation distance build assouplie pour éviter les faux refus liés au décalage de position réseau.
+- **Cache bust** : `20260606-build-place-fallback-57`
+
+### Completed — Fix pose build prefab avec accusé serveur (2026-06-06)
+
+- **Bug** : les éléments build pouvaient afficher `+1 Plancher en Bois` parce que le serveur refusait la pose et remboursait l'item.
+- **Fix** : `place-decor-prefab` répond maintenant par callback `ok/error`; le client retire l'item seulement après confirmation.
+- **Input** : clic gauche et clic droit placent une structure tenue en main ; le menu contextuel est bloqué pendant la construction.
+- **Cache bust** : `20260606-build-place-ack-56`
+
+### Completed — Placement build au clic gauche (2026-06-06)
+
+- **PC** : quand une structure est tenue en main, le clic gauche place directement l'élément au lieu de faire une attaque.
+- **API client** : `ZS.Inventory.placeActiveStructure()` expose le placement actif à `game.js`.
+- **Cache bust** : `20260606-build-left-click-55`
+
+### Completed — Build joueur migré en prefabs (2026-06-06)
+
+- **Prefabs build** : sol, mur, escalier, porte et grande porte passent par `decorItems` (`build_floor_wood`, `build_wall_wood`, `build_stair_wood`, `build_door_wood`, `build_large_door_wood`).
+- **Placement** : les items `struct_*` gardent le snap grille/étage mais utilisent maintenant `place-decor-prefab` côté serveur.
+- **Gameplay** : sols et escaliers enregistrent toujours les surfaces/rampes praticables ; portes build utilisent l'interaction d'ouverture/fermeture existante.
+- **Compat** : `spawnStructure` reste disponible pour les anciennes structures déjà synchronisées.
+- **Cache bust** : `20260606-build-prefabs-54`
+
 ### Completed — Coffre cassable + drops contenu (2026-06-06)
 
 - **Interaction** : frapper un `storage_chest` avec poing/arme/outil l'endommage ; au 3e coup il se casse.

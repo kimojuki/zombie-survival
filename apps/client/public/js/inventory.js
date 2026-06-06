@@ -183,15 +183,20 @@
   // Grille commune (GX) + hauteur d'étage (LEVEL_H) pour aligner et empiler.
   const GX = 3.0, LEVEL_H = 2.6;
   const STRUCT = {
-    struct_mur_bois:          { kind: 'wall',  w: 3.0, h: LEVEL_H, t: 0.2 },
-    struct_porte_bois:        { kind: 'door',  w: 3.0, h: LEVEL_H, t: 0.2, gap: 1.3 },
-    struct_grande_porte_bois: { kind: 'door',  w: 3.0, h: LEVEL_H, t: 0.2, gap: 2.2 },
-    struct_plancher_bois:     { kind: 'floor', w: 3.0, h: 0.18,    t: 3.0 },
-    struct_escalier_bois:     { kind: 'stair', w: 1.8, h: LEVEL_H, t: 3.0 },
+    struct_mur_bois:          { kind: 'wall',  prefabId: 'build_wall_wood',       w: 3.0, h: LEVEL_H, t: 0.36 },
+    struct_porte_bois:        { kind: 'door',  prefabId: 'build_door_wood',       w: 3.0, h: LEVEL_H, t: 0.36, gap: 1.8 },
+    struct_grande_porte_bois: { kind: 'door',  prefabId: 'build_large_door_wood', w: 3.0, h: LEVEL_H, t: 0.36, gap: 2.4 },
+    struct_plancher_bois:     { kind: 'floor', prefabId: 'build_floor_wood',      w: 3.0, h: 0.18,    t: 3.0 },
+    struct_escalier_bois:     { kind: 'stair', prefabId: 'build_stair_wood',      w: 1.8, h: LEVEL_H, t: 3.0 },
     struct_storage_chest:     { kind: 'decorPrefab', prefabId: 'storage_chest', w: 1.2, h: 0.7, t: 0.8 },
   };
   let _ghost = null, _ghostType = null;
   let _buildLevel = 0;   // étage de construction courant (0 = sol)
+  let _placePending = false;
+  let _placePendingType = null;
+  let _placePendingTransform = null;
+  let _placePendingSpec = null;
+  let _placePendingTimer = null;
 
   function _isStructure(type) { return !!STRUCT[type]; }
 
@@ -250,6 +255,12 @@
       if (minY !== undefined) c.minY = minY;
       cols.push(c);
     };
+    const localBox = (lx, lz, halfW, halfT, maxY) => {
+      const c = { type: 'box', cx: x, cz: z, lx, lz, hw: halfW, hd: halfT, rotY, baseY };
+      if (minY !== undefined) c.minY = minY;
+      if (maxY !== undefined) c.maxY = baseY + maxY;
+      cols.push(c);
+    };
     if (s.kind === 'wall') {
       box(x, z, s.w / 2, s.t / 2);
     } else if (s.kind === 'door') {
@@ -257,8 +268,11 @@
       const ox = alongX ? off : 0, oz = alongX ? 0 : off;
       box(x - ox, z - oz, side / 2, s.t / 2);
       box(x + ox, z + oz, side / 2, s.t / 2);
+    } else if (s.kind === 'stair') {
+      localBox(-(s.w / 2 + 0.08), 0, 0.10, s.t / 2, s.h);
+      localBox( (s.w / 2 + 0.08), 0, 0.10, s.t / 2, s.h);
     }
-    // floor/stair : pas de collider bloquant (praticables via registerUpperFloor / registerRamp)
+    // floor : pas de collider bloquant (praticable via registerUpperFloor)
     return cols;
   }
 
@@ -320,32 +334,75 @@
     _ghostType = null;
   }
 
-  // Pose la structure active devant le joueur (consomme 1, sync serveur).
-  function _placeStructure() {
-    const item = _hotbar[_active];
-    if (!item || !_isStructure(item.type)) return;
-    const type = item.type;
-    const t = _placementTransform();
-    const s = STRUCT[type];
+  function _clearPlacePending() {
+    _placePending = false;
+    _placePendingType = null;
+    _placePendingTransform = null;
+    _placePendingSpec = null;
+    if (_placePendingTimer) clearTimeout(_placePendingTimer);
+    _placePendingTimer = null;
+  }
+
+  function _placeLegacyStructure(type, t, s) {
     removeItem(type, 1);
-    if (s.kind === 'decorPrefab') {
-      _socket.emit('place-decor-prefab', {
-        itemType: type,
-        prefabId: s.prefabId,
-        x: t.x,
-        y: 0,
-        z: t.z,
-        rotY: t.rotY,
-        scale: 1,
-      });
-      if (!_hotbar[_active] || !_isStructure(_hotbar[_active].type)) _removeGhost();
-      return;
-    }
     _socket.emit('place-structure', {
       type, x: t.x, y: t.baseY, z: t.z, rotY: t.rotY,
       colliders: _structureColliders(type, t.x, t.z, t.rotY, t.baseY, t.level),
     });
     if (!_hotbar[_active] || !_isStructure(_hotbar[_active].type)) _removeGhost();
+  }
+
+  function _fallbackBuildPlacement(type, t, s) {
+    if (!s || s.kind === 'decorPrefab') return false;
+    _clearPlacePending();
+    _placeLegacyStructure(type, t, s);
+    return true;
+  }
+
+  // Pose la structure active devant le joueur (consomme 1, sync serveur).
+  function _placeStructure() {
+    const item = _hotbar[_active];
+    if (_placePending || !item || !_isStructure(item.type)) return false;
+    const type = item.type;
+    const t = _placementTransform();
+    const s = STRUCT[type];
+    if (s.prefabId) {
+      _placePending = true;
+      _placePendingType = type;
+      _placePendingTransform = t;
+      _placePendingSpec = s;
+      if (_placePendingTimer) clearTimeout(_placePendingTimer);
+      _placePendingTimer = setTimeout(() => {
+        if (!_placePending || _placePendingType !== type) return;
+        if (!_fallbackBuildPlacement(type, t, s)) {
+          _clearPlacePending();
+          ZS.UI?.showNotif?.('Placement sans réponse serveur');
+        }
+      }, 2500);
+      const payload = {
+        itemType: type,
+        prefabId: s.prefabId,
+        x: t.x,
+        y: s.kind === 'decorPrefab' ? 0 : t.level * LEVEL_H,
+        z: t.z,
+        rotY: t.rotY,
+        scale: 1,
+      };
+      _socket.emit('place-decor-prefab', payload, (res) => {
+        _clearPlacePending();
+        if (!res?.ok) {
+          if (!_fallbackBuildPlacement(type, t, s)) {
+            ZS.UI?.showNotif?.(res?.error || 'Placement refusé');
+          }
+          return;
+        }
+        removeItem(type, 1);
+        if (!_hotbar[_active] || !_isStructure(_hotbar[_active].type)) _removeGhost();
+      });
+      return true;
+    }
+    _placeLegacyStructure(type, t, s);
+    return true;
   }
 
   // Construit une structure reçue du serveur (mesh + collisions + sol praticable).
@@ -361,9 +418,11 @@
     mesh.rotation.y = rotY;
     _scene.add(mesh);
 
-    const cols = (d.colliders && d.colliders.length) ? d.colliders : _structureColliders(d.type, d.x, d.z, rotY, baseY, 0);
-    const world = ZS.getColliders && ZS.getColliders();
-    if (world) for (const c of cols) world.push(c);
+    const structureColliderId = `structure_${d.id}`;
+    const cols = ((d.colliders && d.colliders.length) ? d.colliders : _structureColliders(d.type, d.x, d.z, rotY, baseY, 0))
+      .map((c) => ({ ...c, decorId: c.decorId || structureColliderId }));
+    ZS.registerDecorColliders?.(structureColliderId, cols);
+    ZS.Network?.syncWorldColliders?.();
 
     if (s.kind === 'floor') {
       ZS.registerUpperFloor?.(d.x, d.z, s.w / 2, s.t / 2, baseY + s.h);
@@ -418,6 +477,14 @@
   // ── Server pickup callback ─────────────────────────────────────────────────
 
   function receivePickup(type, qty) {
+    if (_placePending && type === _placePendingType) {
+      const placed = _fallbackBuildPlacement(_placePendingType, _placePendingTransform, _placePendingSpec);
+      if (!placed) {
+        _clearPlacePending();
+        ZS.UI?.showNotif?.('Placement refusé');
+      }
+      return;
+    }
     const n = Math.max(1, qty || 1);
     const added = addItem(type, n);
     const def = _def(type);
@@ -492,6 +559,14 @@
   }
 
   function consumeOne(type) { removeItem(type, 1); }
+
+  function placeActiveStructure() {
+    const item = _hotbar[_active];
+    const def = item ? _def(item.type) : null;
+    if (!def || def.category !== 'structure') return false;
+    _placeStructure();
+    return true;
+  }
 
   function addItem(type, qty) {
     const def = _def(type);
@@ -1297,7 +1372,7 @@
     init, tick,
     spawnWorldItem, removeWorldItem, receivePickup, spawnStructure, collectBag,
     countItem, addItem, addItemSlot, removeItem, removeStack, getStorageStacks, getStorageSlots, canAddItem, canAddStack, consumeOne,
-    getActiveItem, getWeaponAmmo, decrementAmmo, reloadWeapon, wearActiveWeapon,
+    placeActiveStructure, getActiveItem, getWeaponAmmo, decrementAmmo, reloadWeapon, wearActiveWeapon,
     getArmorValue, getMaxHealth, togglePanel, loadFromSave, loadRespawnKit, ensureStarterCaillou, clear,
   };
 }());

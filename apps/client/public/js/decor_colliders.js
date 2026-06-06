@@ -46,6 +46,24 @@
     storage_chest: [
       { type: 'box', lx: 0, lz: 0, hw: 0.58, hd: 0.36, maxY: 0.62 },
     ],
+    build_wall_wood: [
+      { type: 'box', lx: 0, lz: 0, hw: 1.50, hd: 0.18, minY: -0.6, maxY: 2.6 },
+    ],
+    build_floor_wood: [],
+    build_stair_wood: [
+      { type: 'box', lx: -0.98, lz: 0, hw: 0.10, hd: 1.50, minY: -0.6, maxY: 2.6 },
+      { type: 'box', lx: 0.98, lz: 0, hw: 0.10, hd: 1.50, minY: -0.6, maxY: 2.6 },
+    ],
+    build_door_wood: [
+      { type: 'box', lx: -1.20, lz: 0, hw: 0.30, hd: 0.18, minY: -0.6, maxY: 2.6 },
+      { type: 'box', lx: 1.20, lz: 0, hw: 0.30, hd: 0.18, minY: -0.6, maxY: 2.6 },
+      { type: 'box', lx: 0, lz: -0.16, hw: 0.85, hd: 0.12, minY: -0.6, maxY: 2.1, door: true },
+    ],
+    build_large_door_wood: [
+      { type: 'box', lx: -1.35, lz: 0, hw: 0.15, hd: 0.18, minY: -0.6, maxY: 2.6 },
+      { type: 'box', lx: 1.35, lz: 0, hw: 0.15, hd: 0.18, minY: -0.6, maxY: 2.6 },
+      { type: 'box', lx: 0, lz: -0.16, hw: 1.15, hd: 0.12, minY: -0.6, maxY: 2.1, door: true },
+    ],
     building_survivor_shack: [
       { type: 'box', lx: 0, lz: 2.04, hw: 2.64, hd: 0.11 },
       { type: 'box', lx: -2.54, lz: 0, hw: 0.11, hd: 2.08 },

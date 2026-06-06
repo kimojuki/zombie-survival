@@ -162,11 +162,12 @@ Objets visibles par tous les joueurs, synchronisés via `decorItems` au `game-in
 
 | Commande | Description |
 |----------|-------------|
-| `decorprefabs` | Liste les prefabs (`spawn_campfire`, `spawn_supply_crate`, `storage_chest`, `building_survivor_shack`, …) |
+| `decorprefabs` | Liste les prefabs (`spawn_campfire`, `spawn_supply_crate`, `storage_chest`, `build_wall_wood`, `building_survivor_shack`, …) |
 | `decoritems [filtre]` | Liste les items de jeu posables comme objet décor |
 | `decoradd prefab spawn_border_log [x z] [rotY] [scale]` | Pose un rondin de lisière (scale ≈ longueur / 0.42 m) |
 | `decoradd prefab storage_chest [here\|x z] [rotY] [scale]` | Pose un coffre prefab interactif : `E` / bouton tactile pour déposer ou reprendre des items |
 | `decoradd prefab building_survivor_shack [here\|x z] [rotY] [scale]` | Cabane — **sans x/z** = devant vous (`0 1` = rotY 0, scale 1 devant vous) |
+| `decoradd prefab build_wall_wood [here\|x z] [rotY] [scale]` | Mur build en prefab (`build_floor_wood`, `build_stair_wood`, `build_door_wood`, `build_large_door_wood` aussi disponibles) |
 | `decoradd prefab <id> [here\|x z] [rotY] [scale]` | Prefab décor/bâtiment — mots-clés position : `here`, `.`, `@`, `devant`, `ici` |
 | `decoradd prefab wreck_sedan [x z] [rotY] [scale] [variant] [tilt] [wheels] [sink]` | Épave — variants : `rust`, `olive`, `navy`, `beige`, `burnt` |
 | `decorseed wrecks` | Ajoute les épaves seed si absentes (sans redémarrer le serveur) |
@@ -177,7 +178,7 @@ Objets visibles par tous les joueurs, synchronisés via `decorItems` au `game-in
 | `decorlist` | Liste les décors actifs (id, kind, position) |
 | `decorremove <id>` | Supprime un décor par id |
 
-**Prefabs** : meshes procéduraux avec textures PNG dans `apps/client/public/textures/camp/` (`wood_planks_light.png`, `wood_planks.png`, `olive_canvas.png`). Module client : `camp_textures.js` → `ZS.CampTextures.materials()`. Le premier bâtiment est `building_survivor_shack`, avec collisions via `decor_colliders.js` et porte interactive (`E` / bouton tactile), synchronisée par Socket.io. Le prefab `storage_chest` ouvre son couvercle, affiche une grille de 27 slots et stocke ses piles dans `decorItems.storage` côté serveur. Après 3 coups de mêlée, il se casse et drop au sol son contenu + l'item `struct_storage_chest`.
+**Prefabs** : meshes procéduraux avec textures PNG dans `apps/client/public/textures/camp/` (`wood_planks_light.png`, `wood_planks.png`, `olive_canvas.png`). Module client : `camp_textures.js` → `ZS.CampTextures.materials()`. Les éléments de build joueur sont aussi des prefabs (`build_floor_wood`, `build_wall_wood`, `build_stair_wood`, `build_door_wood`, `build_large_door_wood`) synchronisés via `decorItems`. Le premier bâtiment est `building_survivor_shack`, avec collisions via `decor_colliders.js` et porte interactive (`E` / bouton tactile), synchronisée par Socket.io. Le prefab `storage_chest` ouvre son couvercle, affiche une grille de 27 slots et stocke ses piles dans `decorItems.storage` côté serveur. Après 3 coups de mêlée, il se casse et drop au sol son contenu + l'item `struct_storage_chest`.
 
 **Seed spawn** : décors camp + ~60 rondins (`spawn_border_log`) + **8 épaves** le long de `town_main` / `city_highway` (`packages/shared/src/road-wrecks.mjs`).
 

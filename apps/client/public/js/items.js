@@ -237,23 +237,23 @@
     // ── STRUCTURES ──────────────────────────────────────────────────────────
     struct_mur_bois: {
       label: 'Mur en Bois', category: 'structure', maxStack: 5,
-      icon: '🧱', color: 0xbb8844, points_structure_hp: 500,
+      icon: '🧱', color: 0xbb8844, prefabId: 'build_wall_wood', points_structure_hp: 500,
     },
     struct_porte_bois: {
       label: 'Porte en Bois', category: 'structure', maxStack: 5,
-      icon: '🚪', color: 0xaa7733, points_structure_hp: 350,
+      icon: '🚪', color: 0xaa7733, prefabId: 'build_door_wood', points_structure_hp: 350,
     },
     struct_grande_porte_bois: {
       label: 'Grande Porte', category: 'structure', maxStack: 3,
-      icon: '🚪', color: 0x996622, points_structure_hp: 800,
+      icon: '🚪', color: 0x996622, prefabId: 'build_large_door_wood', points_structure_hp: 800,
     },
     struct_plancher_bois: {
       label: 'Plancher en Bois', category: 'structure', maxStack: 5,
-      icon: '📦', color: 0xcc9955, points_structure_hp: 400,
+      icon: '📦', color: 0xcc9955, prefabId: 'build_floor_wood', points_structure_hp: 400,
     },
     struct_escalier_bois: {
       label: 'Escalier en Bois', category: 'structure', maxStack: 3,
-      icon: '🪜', color: 0xbb8833, points_structure_hp: 400,
+      icon: '🪜', color: 0xbb8833, prefabId: 'build_stair_wood', points_structure_hp: 400,
     },
     struct_storage_chest: {
       label: 'Coffre', category: 'structure', maxStack: 3,

@@ -663,6 +663,10 @@
     if (state.player.dead) return;
     const item = ZS.Inventory.getActiveItem();
     const def  = item ? ZS.ITEMS[item.type] : null;
+    if (def && def.category === 'structure') {
+      ZS.Inventory.placeActiveStructure?.();
+      return;
+    }
     if (def && (def.category === 'food' || def.category === 'medical' || def.category === 'ammo')) {
       _useHeldItem();
       return;
@@ -672,6 +676,14 @@
     // Outils offensifs (hachette, marteau, pioche…) → frappent aussi les zombies
     if (def && def.category === 'tool' && def.degats_impact) { _meleeSwing(item, def); return; }
     if (!def) _fistPunch();   // mains vides → coup de poing
+  }
+
+  function _placeHeldStructure() {
+    if (state.player.dead) return false;
+    const item = ZS.Inventory.getActiveItem();
+    const def = item ? ZS.ITEMS[item.type] : null;
+    if (!def || def.category !== 'structure') return false;
+    return !!ZS.Inventory.placeActiveStructure?.();
   }
 
   function _playSwing(kind, type) {
@@ -951,9 +963,20 @@
   };
   state.onJump   = () => { state.jumpPressed = true; };
   document.addEventListener('mousedown', (e) => {
-    if (e.button !== 0 || !pointerLocked) return;
+    if (!pointerLocked) return;
     if (_blocksPointerLock(e.target)) return;
+    if (e.button === 2) {
+      if (_placeHeldStructure()) e.preventDefault();
+      return;
+    }
+    if (e.button !== 0) return;
     attack();
+  });
+  document.addEventListener('contextmenu', (e) => {
+    if (!pointerLocked) return;
+    const item = ZS.Inventory.getActiveItem();
+    const def = item ? ZS.ITEMS[item.type] : null;
+    if (def?.category === 'structure') e.preventDefault();
   });
   document.addEventListener('keydown', (e) => {
     if (e.code === 'KeyR' && state.onReload) state.onReload();

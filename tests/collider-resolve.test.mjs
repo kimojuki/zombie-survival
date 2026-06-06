@@ -24,6 +24,39 @@ test('oriented decor box pushes agent out along rotY', () => {
   assert.ok(Math.hypot(out.x, out.z) > 0.5);
 });
 
+test('thin build wall pushes agent out when center enters box', () => {
+  const col = {
+    type: 'box',
+    cx: 0,
+    cz: 0,
+    lx: 0,
+    lz: 0,
+    hw: 1.5,
+    hd: 0.1,
+    rotY: 0,
+    baseY: 0,
+    minY: -0.6,
+    maxY: 2.6,
+    decorId: 'build_wall',
+  };
+  const out = resolveAgentAgainstCollider(col, 0, 0, 0.45, 0);
+  assert.ok(out, 'agent center inside a thin wall must be resolved');
+  assert.ok(Math.abs(out.z) >= 0.54);
+});
+
+test('simple build wall collider pushes agent out from inside', () => {
+  const col = {
+    type: 'box',
+    cx: 0,
+    cz: 0,
+    hw: 1.5,
+    hd: 0.18,
+  };
+  const out = resolveAgentAgainstCollider(col, 0, 0, 0.45, 0);
+  assert.ok(out, 'legacy structure wall must still block from inside');
+  assert.ok(Math.abs(out.z) >= 0.62 || Math.abs(out.x) >= 1.9);
+});
+
 test('wreck compound colliders block zombie radius', () => {
   const cols = [
     {

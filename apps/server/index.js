@@ -298,6 +298,11 @@ const decorPrefabs = [
   'spawn_workbench',
   'spawn_flat_stone',
   'storage_chest',
+  'build_wall_wood',
+  'build_floor_wood',
+  'build_stair_wood',
+  'build_door_wood',
+  'build_large_door_wood',
   'wreck_sedan',
   'wreck_pickup',
   'tree_oak',
@@ -306,6 +311,15 @@ const decorPrefabs = [
   'tree_dead',
   'building_survivor_shack',
 ];
+const DECOR_PREFAB_BY_ITEM = {
+  struct_storage_chest: 'storage_chest',
+  struct_mur_bois: 'build_wall_wood',
+  struct_plancher_bois: 'build_floor_wood',
+  struct_escalier_bois: 'build_stair_wood',
+  struct_porte_bois: 'build_door_wood',
+  struct_grande_porte_bois: 'build_large_door_wood',
+};
+const DOOR_PREFABS = new Set(['building_survivor_shack', 'build_door_wood', 'build_large_door_wood']);
 const STORAGE_CHEST_CAPACITY = 27;
 const STORAGE_CHEST_BREAK_HITS = 3;
 let zombieIdCounter    = 0;
@@ -1638,7 +1652,7 @@ io.on('connection', async (socket) => {
     const id = d?.id;
     if (!id || typeof id !== 'string') return;
     const item = decorItems.get(id);
-    if (!item || item.prefabId !== 'building_survivor_shack') return;
+    if (!item || !DOOR_PREFABS.has(item.prefabId)) return;
     if (Math.hypot((item.x || 0) - p.x, (item.z || 0) - p.z) > 6) return;
     item.doorOpen = !item.doorOpen;
     io.emit('decor-door-state', { id, open: !!item.doorOpen });
@@ -1738,7 +1752,7 @@ io.on('connection', async (socket) => {
     const y = Number(d.y);
     if (!isFinite(x) || !isFinite(z)) return;
     // Anti-triche léger : pose seulement à portée raisonnable du joueur
-    if (Math.hypot(x - p.x, z - p.z) > 8) return;
+    if (Math.hypot(x - p.x, z - p.z) > 16) return;
     const colliders = Array.isArray(d.colliders)
       ? d.colliders.filter(c => c && c.type === 'box' &&
           isFinite(c.cx) && isFinite(c.cz) && isFinite(c.hw) && isFinite(c.hd)).slice(0, 4)
@@ -1759,30 +1773,31 @@ io.on('connection', async (socket) => {
     });
   });
 
-  socket.on('place-decor-prefab', (d) => {
+  socket.on('place-decor-prefab', (d, cb) => {
     const itemType = String(d?.itemType || '').slice(0, 80);
     const prefabId = String(d?.prefabId || '').slice(0, 80);
-    const refund = () => {
-      if (itemType) socket.emit('item-add', { type: itemType, qty: 1 });
+    const reject = (error) => {
+      if (typeof cb === 'function') cb({ ok: false, error });
     };
-    if (itemType !== 'struct_storage_chest' || prefabId !== 'storage_chest') {
-      refund();
+    if (!itemType || DECOR_PREFAB_BY_ITEM[itemType] !== prefabId) {
+      reject('Prefab invalide');
       return;
     }
     const x = Number(d.x), z = Number(d.z), rotY = Number(d.rotY) || 0;
+    const y = Number(d.y);
     if (!isFinite(x) || !isFinite(z)) {
-      refund();
+      reject('Position invalide');
       return;
     }
-    if (Math.hypot(x - p.x, z - p.z) > 6) {
-      refund();
+    if (Math.hypot(x - p.x, z - p.z) > 16) {
+      reject('Trop loin');
       return;
     }
     const item = _makeDecorItem({
       kind: 'prefab',
-      prefabId: 'storage_chest',
+      prefabId,
       x,
-      y: 0,
+      y: Number.isFinite(y) ? Math.max(-1, Math.min(30, y)) : 0,
       z,
       rotX: 0,
       rotY,
@@ -1798,6 +1813,7 @@ io.on('connection', async (socket) => {
       decorId: item.id,
       pos: { x: +x.toFixed(1), z: +z.toFixed(1) },
     });
+    if (typeof cb === 'function') cb({ ok: true, id: item.id });
   });
 
   socket.on('inventory-sync', (slots) => {

@@ -115,7 +115,17 @@ function _resolveOrientedBox(col, px, pz, agentR, feetY, { skipJumpable = false 
   const wdx = bx - clampBX;
   const wdz = bz - clampBZ;
   const dist = Math.hypot(wdx, wdz);
-  if (dist >= agentR || dist <= 0.001) return null;
+  if (dist >= agentR) return null;
+  if (dist <= 0.001) {
+    const penX = (col.hw + agentR) - Math.abs(bx);
+    const penZ = (col.hd + agentR) - Math.abs(bz);
+    if (penX < penZ) {
+      const sx = bx < 0 ? -1 : 1;
+      return decorLocalToWorld((col.lx || 0) + sx * (col.hw + agentR), local.ly, local.lz, col);
+    }
+    const sz = bz < 0 ? -1 : 1;
+    return decorLocalToWorld(local.lx, local.ly, (col.lz || 0) + sz * (col.hd + agentR), col);
+  }
 
   const pen = agentR - dist;
   const outLX = bx + (wdx / dist) * pen + (col.lx || 0);

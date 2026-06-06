@@ -1421,7 +1421,17 @@
     const wdx = bx - clampBX;
     const wdz = bz - clampBZ;
     const dist = Math.hypot(wdx, wdz);
-    if (dist >= playerR || dist <= 0.001) return null;
+    if (dist >= playerR) return null;
+    if (dist <= 0.001) {
+      const penX = (col.hw + playerR) - Math.abs(bx);
+      const penZ = (col.hd + playerR) - Math.abs(bz);
+      if (penX < penZ) {
+        const sx = bx < 0 ? -1 : 1;
+        return decorLocalToWorld((col.lx || 0) + sx * (col.hw + playerR), local.ly, local.lz, col);
+      }
+      const sz = bz < 0 ? -1 : 1;
+      return decorLocalToWorld(local.lx, local.ly, (col.lz || 0) + sz * (col.hd + playerR), col);
+    }
 
     const pen = playerR - dist;
     const outLX = bx + (wdx / dist) * pen + (col.lx || 0);

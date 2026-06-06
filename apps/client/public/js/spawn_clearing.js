@@ -525,6 +525,69 @@
     parent.userData.storageLidPivot = lidPivot;
   }
 
+  function _buildWoodWall(parent, x, y, z) {
+    const M = _campMats();
+    const wallMat = M ? M.wood(0x9b6a3c) : new THREE.MeshLambertMaterial({ color: 0x9b6a3c });
+    const trimMat = M ? M.woodDark(0x5a371d) : new THREE.MeshLambertMaterial({ color: 0x5a371d });
+    _add(parent, new THREE.BoxGeometry(3.0, 2.6, 0.36), wallMat, x, y + 1.3, z);
+    for (let i = -1; i <= 1; i++) {
+      _add(parent, new THREE.BoxGeometry(0.12, 2.5, 0.40), trimMat, x + i * 0.9, y + 1.3, z);
+    }
+    _add(parent, new THREE.BoxGeometry(3.05, 0.16, 0.40), trimMat, x, y + 2.5, z);
+    _add(parent, new THREE.BoxGeometry(3.05, 0.14, 0.40), trimMat, x, y + 0.2, z);
+  }
+
+  function _buildWoodFloor(parent, x, y, z) {
+    const M = _campMats();
+    const plank = M ? M.woodFine(0xb5894e) : new THREE.MeshLambertMaterial({ color: 0xb5894e });
+    const trim = M ? M.woodDark(0x6a421d) : new THREE.MeshLambertMaterial({ color: 0x6a421d });
+    _add(parent, new THREE.BoxGeometry(3.0, 0.18, 3.0), plank, x, y + 0.09, z);
+    for (let i = -1; i <= 1; i++) {
+      _add(parent, new THREE.BoxGeometry(0.1, 0.2, 3.02), trim, x + i * 0.9, y + 0.11, z);
+    }
+    _add(parent, new THREE.BoxGeometry(3.02, 0.14, 0.1), trim, x, y + 0.13, z - 1.45);
+    _add(parent, new THREE.BoxGeometry(3.02, 0.14, 0.1), trim, x, y + 0.13, z + 1.45);
+  }
+
+  function _buildWoodStair(parent, x, y, z) {
+    const M = _campMats();
+    const a = M ? M.wood(0xb5894e) : new THREE.MeshLambertMaterial({ color: 0xb5894e });
+    const b = M ? M.woodDark(0x8a5a2e) : new THREE.MeshLambertMaterial({ color: 0x8a5a2e });
+    const steps = 6;
+    const stepH = 2.6 / steps;
+    const stepD = 3.0 / steps;
+    for (let i = 0; i < steps; i++) {
+      const zc = z - 1.5 + stepD * (i + 0.5);
+      _add(parent, new THREE.BoxGeometry(1.8, stepH * (i + 1), stepD), i % 2 ? b : a, x, y + stepH * (i + 1) / 2, zc);
+    }
+    _add(parent, new THREE.BoxGeometry(0.14, 2.4, 3.0), b, x - 0.97, y + 1.2, z);
+    _add(parent, new THREE.BoxGeometry(0.14, 2.4, 3.0), b, x + 0.97, y + 1.2, z);
+  }
+
+  function _buildWoodDoor(parent, x, y, z, gap) {
+    const M = _campMats();
+    const wallMat = M ? M.wood(0x9b6a3c) : new THREE.MeshLambertMaterial({ color: 0x9b6a3c });
+    const trimMat = M ? M.woodDark(0x5a371d) : new THREE.MeshLambertMaterial({ color: 0x5a371d });
+    const side = (3.0 - gap) / 2;
+    for (const sgn of [-1, 1]) {
+      _add(parent, new THREE.BoxGeometry(side, 2.6, 0.36), wallMat, x + sgn * (gap / 2 + side / 2), y + 1.3, z);
+    }
+    _add(parent, new THREE.BoxGeometry(3.0, 0.4, 0.38), wallMat, x, y + 2.4, z);
+    _add(parent, new THREE.BoxGeometry(0.16, 2.45, 0.42), trimMat, x - gap / 2, y + 1.25, z - 0.02);
+    _add(parent, new THREE.BoxGeometry(0.16, 2.45, 0.42), trimMat, x + gap / 2, y + 1.25, z - 0.02);
+    _add(parent, new THREE.BoxGeometry(gap + 0.2, 0.14, 0.42), trimMat, x, y + 2.15, z - 0.02);
+
+    const doorW = Math.max(0.9, gap - 0.1);
+    const doorPivot = new THREE.Group();
+    doorPivot.name = 'buildDoorPivot';
+    doorPivot.position.set(x - doorW / 2, y + 0.08, z - 0.11);
+    doorPivot.userData.isDoor = true;
+    parent.add(doorPivot);
+    _add(doorPivot, new THREE.BoxGeometry(doorW, 2.02, 0.12), trimMat, doorW / 2, 1.01, 0);
+    _add(doorPivot, new THREE.BoxGeometry(0.08, 0.08, 0.08), new THREE.MeshLambertMaterial({ color: 0xb99b52 }), doorW - 0.18, 1.55, -0.07);
+    parent.userData.doorPivot = doorPivot;
+  }
+
   /** Vertical marker that stays readable from far away. */
   function _buildMarkerPole(parent, x, y, z, side) {
     const M = _campMats();
@@ -679,6 +742,11 @@
     rock_outcrop: { build(root, opts) { ZS.RockWorldPrefabs?.buildOutcrop?.(root, opts); } },
     spawn_workbench: { build(root) { _buildWorkbench(root, 0, 0, 0, 0); } },
     storage_chest: { build(root) { _buildStorageChest(root, 0, 0, 0, 0); } },
+    build_wall_wood: { build(root) { _buildWoodWall(root, 0, 0, 0); }, buildKind: 'wall', w: 3.0, h: 2.6, t: 0.36 },
+    build_floor_wood: { build(root) { _buildWoodFloor(root, 0, 0, 0); }, buildKind: 'floor', w: 3.0, h: 0.18, t: 3.0 },
+    build_stair_wood: { build(root) { _buildWoodStair(root, 0, 0, 0); }, buildKind: 'stair', w: 1.8, h: 2.6, t: 3.0 },
+    build_door_wood: { build(root) { _buildWoodDoor(root, 0, 0, 0, 1.8); }, buildKind: 'door', w: 3.0, h: 2.6, t: 0.36 },
+    build_large_door_wood: { build(root) { _buildWoodDoor(root, 0, 0, 0, 2.4); }, buildKind: 'door', w: 3.0, h: 2.6, t: 0.36 },
     building_survivor_shack: { build(root) { _buildSurvivorShack(root, 0, 0, 0, 0); } },
     spawn_flat_stone: {
       build(root) {
@@ -908,6 +976,25 @@
 
     if (opts.collide !== false) {
       _registerDecorCollision(decorId, decorSpec);
+    }
+
+    if (prefab.buildKind === 'floor') {
+      ZS.registerUpperFloor?.(root.position.x, root.position.z, prefab.w / 2, prefab.t / 2, root.position.y + prefab.h);
+    } else if (prefab.buildKind === 'stair') {
+      const rotY = root.rotation.y || 0;
+      const alongZ = Math.abs(Math.cos(rotY)) > 0.5;
+      const sign = alongZ ? Math.cos(rotY) : Math.sin(rotY);
+      const lo = sign >= 0 ? root.position.y : root.position.y + prefab.h;
+      const hi = sign >= 0 ? root.position.y + prefab.h : root.position.y;
+      ZS.registerRamp?.(
+        root.position.x,
+        root.position.z,
+        alongZ ? prefab.w / 2 : prefab.t / 2,
+        alongZ ? prefab.t / 2 : prefab.w / 2,
+        lo,
+        hi,
+        alongZ ? 'z' : 'x'
+      );
     }
 
     if (prefabId.startsWith('tree_') && ZS.registerChoppableTree) {

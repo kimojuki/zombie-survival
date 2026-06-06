@@ -1203,6 +1203,21 @@ io.on('connection', async (socket) => {
     log.debug('world', 'tree felled', { player: p.username, decorId: id, prefab: item.prefabId });
   });
 
+  socket.on('decor-door-toggle', (d) => {
+    const id = d?.id;
+    if (!id || typeof id !== 'string') return;
+    const item = decorItems.get(id);
+    if (!item || item.prefabId !== 'building_survivor_shack') return;
+    if (Math.hypot((item.x || 0) - p.x, (item.z || 0) - p.z) > 6) return;
+    item.doorOpen = !item.doorOpen;
+    io.emit('decor-door-state', { id, open: !!item.doorOpen });
+    log.debug('world', 'door toggled', {
+      player: p.username,
+      decorId: id,
+      open: !!item.doorOpen,
+    });
+  });
+
   socket.on('place-structure', (d) => {
     if (!d || typeof d.type !== 'string' || !d.type.startsWith('struct_')) return;
     const x = Number(d.x), z = Number(d.z), rotY = Number(d.rotY) || 0;

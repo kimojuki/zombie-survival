@@ -48,6 +48,14 @@ Copier dans la description de PR :
 
 ## 2026-06-06
 
+### Completed — Porte interactive cabane prefab (2026-06-06)
+
+- **Prefab** : `building_survivor_shack` — porte séparée avec pivot (`survivorShackDoorPivot`) et état ouvert/fermé.
+- **Interaction** : touche `E` desktop + bouton tactile contextuel à portée.
+- **Sync** : Socket.io `decor-door-toggle` → `decor-door-state`, état persistant dans `decorItems`.
+- **Collisions** : collider de porte actif uniquement quand la porte est fermée, puis resynchronisé au serveur.
+- **Cache bust** : `20260606-shack-door-interact-30`
+
 ### Completed — Fix toit cabane (pans inclinés corrects) (2026-06-06)
 
 - **Prefab** : `building_survivor_shack` — remplace BufferGeometry cassé par 2 pans + pignons + faîtière alignés sur les murs.

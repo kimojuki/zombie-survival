@@ -87,6 +87,35 @@ test('wreck colliders match body + cabin compound boxes', () => {
   assert.ok(cols[1].maxY > cols[0].maxY);
 });
 
+test('survivor shack door collider toggles with door state', () => {
+  const ZS = loadDecorColliders();
+  const closed = ZS.buildDecorColliders({
+    kind: 'prefab',
+    prefabId: 'building_survivor_shack',
+    x: 0,
+    z: 0,
+    baseY: 0,
+    rotY: 0,
+    scale: 1,
+    decorId: 'decor_shack',
+    doorOpen: false,
+  });
+  const open = ZS.buildDecorColliders({
+    kind: 'prefab',
+    prefabId: 'building_survivor_shack',
+    x: 0,
+    z: 0,
+    baseY: 0,
+    rotY: 0,
+    scale: 1,
+    decorId: 'decor_shack',
+    doorOpen: true,
+  });
+  assert.equal(closed.length, open.length + 1);
+  assert.ok(closed.some((c) => c.cz < -2.1 && c.hw < 0.5));
+  assert.equal(open.some((c) => c.cz < -2.1 && c.hw < 0.5), false);
+});
+
 test('unknown item type falls back to default collider', () => {
   const ZS = loadDecorColliders();
   const cols = ZS.buildDecorColliders({

@@ -49,10 +49,15 @@
     return m;
   }
 
+  function _campMats() {
+    return ZS.CampTextures?.materials() || null;
+  }
+
   /** Souche assise (anneaux visibles sur le dessus) */
   function _buildStumpSeat(parent, x, y, z, r, faceAngle) {
-    const bark = new THREE.MeshLambertMaterial({ color: 0x5a3818 });
-    const ring = new THREE.MeshLambertMaterial({ color: 0xc8a878 });
+    const M = _campMats();
+    const bark = M ? M.bark() : new THREE.MeshLambertMaterial({ color: 0x5a3818 });
+    const ring = M ? M.ring() : new THREE.MeshLambertMaterial({ color: 0xc8a878 });
     _add(parent, new THREE.CylinderGeometry(r * 0.82, r, 0.38, 8), bark, x, y + 0.19, z);
     _add(parent, new THREE.CylinderGeometry(r * 0.78, r * 0.78, 0.04, 8), ring, x, y + 0.39, z);
     _add(parent, new THREE.CylinderGeometry(r * 0.22, r * 0.22, 0.025, 8),
@@ -61,8 +66,9 @@
 
   /** Pile de bois (bûches empilées en croix — très lisible) */
   function _buildLogPile(parent, x, y, z) {
-    const bark = new THREE.MeshLambertMaterial({ color: 0x4a3018 });
-    const endW = new THREE.MeshLambertMaterial({ color: 0xc4a070 });
+    const M = _campMats();
+    const bark = M ? M.bark() : new THREE.MeshLambertMaterial({ color: 0x4a3018 });
+    const endW = M ? M.endWood() : new THREE.MeshLambertMaterial({ color: 0xc4a070 });
     const logs = [
       { ox: 0, oz: 0, ry: 0, len: 0.95, r: 0.085 },
       { ox: 0.05, oz: 0.08, ry: Math.PI / 2, len: 0.88, r: 0.08 },
@@ -88,8 +94,9 @@
 
   /** Caisse en bois avec planches visibles */
   function _buildCrate(parent, x, y, z, ry) {
-    const plank = new THREE.MeshLambertMaterial({ color: 0x7a5530 });
-    const frame = new THREE.MeshLambertMaterial({ color: 0x4a3018 });
+    const M = _campMats();
+    const plank = M ? M.woodFine(0xc69158) : new THREE.MeshLambertMaterial({ color: 0x7a5530 });
+    const frame = M ? M.woodFrame() : new THREE.MeshLambertMaterial({ color: 0x4a3018 });
     const g = new THREE.Group();
     g.position.set(x, y, z);
     g.rotation.y = ry || 0;
@@ -107,19 +114,19 @@
     lid.rotation.x = -0.55;
     lid.castShadow = true;
     g.add(lid);
-    // boîte de conserve sur le côté
     _add(g, new THREE.CylinderGeometry(0.055, 0.055, 0.11, 8),
       new THREE.MeshLambertMaterial({ color: 0x8a9098 }), 0.38, 0.52, 0.15);
   }
 
   /** Sac à dos reconnaissable */
   function _buildBackpack(parent, x, y, z, ry) {
+    const M = _campMats();
     const g = new THREE.Group();
     g.position.set(x, y, z);
     g.rotation.y = ry || 0;
     parent.add(g);
-    const body = new THREE.MeshLambertMaterial({ color: 0x3d5028 });
-    const strap = new THREE.MeshLambertMaterial({ color: 0x2a3818 });
+    const body = M ? M.canvas(0x3d5028) : new THREE.MeshLambertMaterial({ color: 0x3d5028 });
+    const strap = M ? M.strap() : new THREE.MeshLambertMaterial({ color: 0x2a3818 });
     _add(g, new THREE.BoxGeometry(0.32, 0.42, 0.16), body, 0, 0.21, 0);
     _add(g, new THREE.BoxGeometry(0.28, 0.12, 0.14), body, 0, 0.44, -0.02, -0.25, 0, 0);
     for (const sx of [-0.09, 0.09]) {
@@ -130,13 +137,14 @@
 
   /** Tapis de sol + couverture roulée + oreiller */
   function _buildBedroll(parent, x, y, z, ry) {
+    const M = _campMats();
     const g = new THREE.Group();
     g.position.set(x, y, z);
     g.rotation.y = ry || 0;
     parent.add(g);
-    const mat = new THREE.MeshLambertMaterial({ color: 0x4a5838 });
-    const blanket = new THREE.MeshLambertMaterial({ color: 0x5a4030 });
-    const pillow = new THREE.MeshLambertMaterial({ color: 0x6a6050 });
+    const mat = M ? M.canvas(0x4a5838) : new THREE.MeshLambertMaterial({ color: 0x4a5838 });
+    const blanket = M ? M.canvasTight(0x5a4030) : new THREE.MeshLambertMaterial({ color: 0x5a4030 });
+    const pillow = M ? M.canvasTight(0x6a6050) : new THREE.MeshLambertMaterial({ color: 0x6a6050 });
     _add(g, new THREE.BoxGeometry(1.75, 0.05, 0.72), mat, 0, 0.025, 0);
     const roll = new THREE.Mesh(new THREE.CylinderGeometry(0.11, 0.11, 0.65, 8), blanket);
     roll.rotation.z = Math.PI / 2;
@@ -186,15 +194,16 @@
   }
 
   function _buildWorkbench(parent, x, y, z, ry) {
+    const M = _campMats();
     const g = new THREE.Group();
     g.position.set(x, y, z);
     g.rotation.y = ry || 0;
     parent.add(g);
 
-    const woodMat = new THREE.MeshLambertMaterial({ color: 0xd9a36b });
-    const darkWoodMat = new THREE.MeshLambertMaterial({ color: 0xa16b3f });
-    const toolMat = new THREE.MeshLambertMaterial({ color: 0x5f6d46 });
-    const metalMat = new THREE.MeshLambertMaterial({ color: 0x7d7f84 });
+    const woodMat = M ? M.wood(0xd9a36b) : new THREE.MeshLambertMaterial({ color: 0xd9a36b });
+    const darkWoodMat = M ? M.woodDark(0xa16b3f) : new THREE.MeshLambertMaterial({ color: 0xa16b3f });
+    const toolMat = M ? M.tool() : new THREE.MeshLambertMaterial({ color: 0x5f6d46 });
+    const metalMat = M ? M.metal() : new THREE.MeshLambertMaterial({ color: 0x7d7f84 });
 
     _add(g, new THREE.BoxGeometry(1.8, 0.1, 0.82), woodMat, 0, 0.88, 0);
     _add(g, new THREE.BoxGeometry(1.64, 0.06, 0.24), darkWoodMat, 0, 0.46, 0.2);
@@ -214,14 +223,15 @@
 
   /** Small lean-to so the camp reads as an actual shelter in wide shots. */
   function _buildLeanToShelter(parent, x, y, z, ry) {
+    const M = _campMats();
     const g = new THREE.Group();
     g.position.set(x, y, z);
     g.rotation.y = ry || 0;
     parent.add(g);
 
-    const poleMat = new THREE.MeshLambertMaterial({ color: 0x6a4a20 });
-    const clothMat = new THREE.MeshLambertMaterial({ color: 0x4b5d39 });
-    const ropeMat = new THREE.MeshLambertMaterial({ color: 0x3a2a18 });
+    const poleMat = M ? M.woodPole(0xb68753) : new THREE.MeshLambertMaterial({ color: 0x6a4a20 });
+    const clothMat = M ? M.canvas(0x4b5d39) : new THREE.MeshLambertMaterial({ color: 0x4b5d39 });
+    const ropeMat = M ? M.rope() : new THREE.MeshLambertMaterial({ color: 0x3a2a18 });
 
     for (const [px, pz] of [
       [-0.95, -0.45],
@@ -248,7 +258,7 @@
 
     const flap = new THREE.Mesh(
       new THREE.BoxGeometry(0.88, 0.62, 0.06),
-      new THREE.MeshLambertMaterial({ color: 0x5b6f47 })
+      M ? M.canvas(0x5b6f47) : new THREE.MeshLambertMaterial({ color: 0x5b6f47 })
     );
     flap.position.set(0.02, 0.86, 0.55);
     flap.rotation.x = 0.08;
@@ -258,11 +268,12 @@
 
   /** Vertical marker that stays readable from far away. */
   function _buildMarkerPole(parent, x, y, z, side) {
+    const M = _campMats();
     const g = new THREE.Group();
     g.position.set(x, y, z);
     parent.add(g);
 
-    const poleMat = new THREE.MeshLambertMaterial({ color: 0x6b4a20 });
+    const poleMat = M ? M.woodPole(0x6b4a20) : new THREE.MeshLambertMaterial({ color: 0x6b4a20 });
     const flagMat = new THREE.MeshLambertMaterial({
       color: side < 0 ? 0xd7c24a : 0xb86235,
       emissive: side < 0 ? 0x251e08 : 0x240f08,
@@ -290,8 +301,9 @@
 
   /** Lisière de rondins + pierres — jointure douce clairière / herbe */
   function buildCampGround(scene, cx, cz, baseY, B) {
-    const bark = new THREE.MeshLambertMaterial({ color: 0x4a3018 });
-    const stone = new THREE.MeshLambertMaterial({ color: 0x6a6458 });
+    const M = _campMats();
+    const bark = M ? M.bark() : new THREE.MeshLambertMaterial({ color: 0x4a3018 });
+    const stone = M ? M.stone() : new THREE.MeshLambertMaterial({ color: 0x6a6458 });
     const segs = 28;
     const gapCenter = -Math.PI / 2;
     const gapWidth = 0.62;

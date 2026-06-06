@@ -6,6 +6,7 @@
   const _texCache = new Map();
 
   function _campTexture(url, repeatX, repeatY) {
+    if (ZS.CampTextures?.load) return ZS.CampTextures.load(url, repeatX, repeatY);
     const key = `${url}|${repeatX || 1}|${repeatY || 1}`;
     if (_texCache.has(key)) return _texCache.get(key);
     const tex = _texLoader.load(url);

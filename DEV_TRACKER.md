@@ -48,6 +48,24 @@ Copier dans la description de PR :
 
 ## 2026-06-05
 
+### Completed — Textures camp bois/toile sur prefabs décor (2026-06-06)
+
+- **`camp_textures.js`** : module partagé (`wood_planks_light.png`, `wood_planks.png`, `olive_canvas.png`) — matériaux réutilisables pour tout décor camp.
+- **Prefabs** : caisses, sac, bedroll, établi, abri, poteaux, pile de bois, souches et lisière utilisent les textures bois/toile (comme `mapgen.js` avant le passage prefab).
+- **Retrait** : approche atlas `items.png` sur prefabs/décor (mauvaise piste).
+- **Fichiers** : `camp_textures.js`, `spawn_clearing.js`, `mapgen.js`, `legacy-modules.js`, `game.html`
+- **Docs** : `docs/RCON.md` (commandes décor), `docs/ARCHITECTURE.md` (prefabs + textures camp)
+- **Cache bust** : `20260606-camp-textures-01`
+
+### Completed — Textures atlas items.png sur décor et loot (2026-06-06) — annulé
+
+- **`item_textures.js`** : module atlas `items.png` (grille 12×6) avec mapping type → cellule, `makeItemSprite()` et `addItemSprite()`.
+- **Décor RCON** : `spawnDecorItem()` utilise le sprite atlas quand disponible (bouteille, conserve, hachette au spawn camp).
+- **Loot sol** : `_makePickupMesh()` affiche la texture atlas au lieu du cube/GLB procédural.
+- **Prefabs camp** : `spawn_drink_set`, `spawn_supply_crate` (conserve), `spawn_backpack` texturés via atlas.
+- **Fichiers** : `apps/client/public/js/item_textures.js`, `player.js`, `inventory.js`, `spawn_clearing.js`, `legacy-modules.js`, `game.html`
+- **Cache bust** : `20260606-item-textures-01`
+
 ### Completed â€” Refonte ciel jour/nuit (2026-06-06)
 
 - **Soleil / lune** : sprites célestes stabilisés ; direction correcte quand on tourne la caméra ; plus de dérive au déplacement.

@@ -17,6 +17,8 @@ Vue d'ensemble pour onboarding et reviews PR.
 │  vehicles.js ─ carcasses le long des routes                 │
 │  network.js ─ Socket.io sync                                │
 │  rcon.js ─ console admin UI                                 │
+│  spawn_clearing.js ─ prefabs décor camp + clairière spawn   │
+│  camp_textures.js ─ textures bois/toile (prefabs décor)     │
 │  sector_*.js ─ contenu monde par zone                       │
 └──────────────────────┬──────────────────────────────────────┘
                        │ Socket.io (JWT auth)
@@ -41,10 +43,10 @@ Vue d'ensemble pour onboarding et reviews PR.
 
 Ordre des scripts legacy (important) dans `apps/client/src/bootstrap/legacy-modules.js` :
 
-1. `noise.js` — hauteur terrain
-2. `road_network.js` — **avant** buildings
-3. `buildings.js`, `vehicles.js`, secteurs, `world.js`
-4. `rcon.js`, `chat.js`, `network.js`, `game.js`
+1. `items.js`, `noise.js`, `buildings.js`
+2. `camp_textures.js` — **avant** `mapgen.js` et `spawn_clearing.js`
+3. `mapgen.js`, `spawn_clearing.js`, `world.js`, `player.js`
+4. `network.js`, `game.js`, `inventory.js`
 
 Le premier client connecté envoie au serveur :
 - `world-colliders` — collision zombies
@@ -64,6 +66,25 @@ Le premier client connecté envoie au serveur :
 | Inventaire / survie | Client + persist | `inventory-sync`, `survival-sync` |
 | Routes / terrain | Client | Généré localement, identique pour tous |
 | Admin RCON | Serveur | Commandes via socket ou API |
+| Décor monde | Serveur | `decorItems` Map ; sync spawn/remove aux clients |
+
+### Décor camp et textures (`camp_textures.js`)
+
+Les **prefabs décor** (caisses, sacs, bedroll, établi, abri, poteaux…) sont des meshes procéduraux texturés avec les PNG du dossier `apps/client/public/textures/camp/` :
+
+| Texture | Usage |
+|---------|--------|
+| `wood_planks_light.png` | Planches, caisses, établi, bûches |
+| `wood_planks.png` | Montants / cadres bois foncé |
+| `olive_canvas.png` | Toile, sacs, couvertures |
+| `spawn_ground.png` | Patch sol clairière spawn |
+
+API client : `ZS.CampTextures.load(url, repeatX, repeatY)` et `ZS.CampTextures.materials()` (cache partagé avec `mapgen.js`).
+
+Pose in-game / admin :
+- **Prefabs** : `ZS.spawnDecorPrefab(scene, prefabId, x, y, z)` — liste via `ZS.listDecorPrefabs()`
+- **Items posés** : `ZS.spawnDecorItem(scene, type, x, y, z)` — réutilise `getItemModel()` (loot équipable ≠ prefab bois/toile)
+- **RCON** : `decoradd prefab …` / `decoradd <type> …` — voir [docs/RCON.md](RCON.md)
 
 ### Contrôles
 

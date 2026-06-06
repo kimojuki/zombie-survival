@@ -7,6 +7,7 @@ export const LEGACY_MODULES = [
   '/js/craft.js',
   '/js/noise.js',
   '/js/buildings.js',
+  '/js/camp_textures.js',
   '/js/mapgen.js',
   '/js/campfire.js',
   '/js/decor_colliders.js',

@@ -147,6 +147,24 @@ Erreurs : `403` (mauvais mot de passe), `503` (RCON non configuré ou serveur en
 | `loot regen` | Régénère le loot monde |
 | `loot clear` | Supprime le loot généré |
 
+### Décor monde (prefabs + items posés)
+
+Props visibles par tous les joueurs, synchronisés via `decorItems` au `game-init` et events Socket.io `decor-item-spawn` / `decor-item-remove`.
+
+| Commande | Description |
+|----------|-------------|
+| `decorprefabs` | Liste les prefabs camp (`spawn_campfire`, `spawn_supply_crate`, …) |
+| `decoradd prefab <id> [x z] [rotY] [scale]` | Pose un prefab décor (bois/toile texturés via `camp_textures.js`) |
+| `decoradd <type> [x z] [rotY] [scale]` | Pose un item de jeu comme prop (`food_conserves`, `tool_hachette`, …) — modèle 3D `getItemModel()` |
+| `decorlist` | Liste les décors actifs (id, kind, position) |
+| `decorremove <id>` | Supprime un décor par id |
+
+**Prefabs camp** : meshes procéduraux avec textures PNG dans `apps/client/public/textures/camp/` (`wood_planks_light.png`, `wood_planks.png`, `olive_canvas.png`). Module client : `camp_textures.js` → `ZS.CampTextures.materials()`.
+
+**Seed spawn** : 19 décors posés au boot serveur (`seedSpawnDecorItems()` dans `apps/server/index.js`).
+
+Tests automatisés : `node tools/rcon-test.mjs` (inclut `decoradd`, `decorprefabs`, etc.).
+
 ### Client local (pas envoyé au serveur)
 
 | Commande | Description |
@@ -173,10 +191,12 @@ Modifiables via commandes RCON ; broadcast `server-flags` aux clients.
 
 | Fichier | Rôle |
 |---------|------|
-| `src/rcon.js` | Registre et exécution des commandes |
-| `server.js` | Auth admin, flags, handlers socket `rcon` / `rcon-auth` |
-| `public/js/rcon.js` | UI terminal in-game |
-| `public/js/network.js` | Handlers `world-time`, `admin-tp`, `server-announce` |
+| `apps/server/src/rcon.js` | Registre et exécution des commandes |
+| `apps/server/index.js` | Auth admin, flags, handlers socket `rcon` / `rcon-auth`, seed décor spawn |
+| `apps/client/public/js/rcon.js` | UI terminal in-game |
+| `apps/client/public/js/network.js` | Handlers `world-time`, `admin-tp`, `server-announce`, sync `decorItems` |
+| `apps/client/public/js/spawn_clearing.js` | Prefabs décor camp (`spawnDecorPrefab`, `DECOR_PREFABS`) |
+| `apps/client/public/js/camp_textures.js` | Textures bois/toile partagées pour prefabs décor |
 
 ---
 
@@ -190,4 +210,7 @@ Modifiables via commandes RCON ; broadcast `server-flags` aux clients.
 - [ ] `nospawn on` — kill zombie ne respawn pas
 - [ ] `tp` — téléportation visible
 - [ ] `say` — bannière affichée
+- [ ] `decorprefabs` — liste les prefabs camp
+- [ ] `decoradd prefab spawn_supply_crate 2 -6` — caisse texturée visible pour tous
+- [ ] `decorlist` / `decorremove <id>` — gestion décor
 - [ ] API `curl` avec `X-RCON-Password`

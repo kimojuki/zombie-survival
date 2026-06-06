@@ -40,6 +40,7 @@
     decorItems.delete(id);
     ZS.removeDecorColliders?.(id);
     ZS.unregisterDecorDoor?.(id);
+    ZS.unregisterDecorStorage?.(id);
     ZS.removeChoppableTree?.(id);
     ZS.removeMinableRock?.(id);
     _syncWorldColliders();
@@ -69,6 +70,7 @@
         wreckSink: Number.isFinite(d.wreckSink) ? d.wreckSink : 0,
       treeSeed: Number.isFinite(d.treeSeed) ? d.treeSeed : undefined,
       doorOpen: !!d.doorOpen,
+      storageOpen: !!d.storageOpen,
       woodMax: Number.isFinite(d.woodMax) ? d.woodMax : undefined,
       woodRemaining: Number.isFinite(d.woodRemaining) ? d.woodRemaining : undefined,
       stoneMax: Number.isFinite(d.stoneMax) ? d.stoneMax : undefined,
@@ -325,6 +327,17 @@
       if (ZS.setDecorDoorState?.(d.id, !!d.open)) _syncWorldColliders();
       const entry = decorItems.get(d.id);
       if (entry) entry.data.doorOpen = !!d.open;
+    });
+    socket.on('storage-open', (d) => ZS.StorageUI?.open?.(d));
+    socket.on('storage-update', (d) => ZS.StorageUI?.update?.(d));
+    socket.on('storage-state', (d) => {
+      if (!d?.id) return;
+      ZS.setDecorStorageState?.(d.id, !!d.open);
+      const entry = decorItems.get(d.id);
+      if (entry) entry.data.storageOpen = !!d.open;
+    });
+    socket.on('storage-error', (d) => {
+      if (d?.message) ZS.UI?.showNotif?.(d.message);
     });
     socket.on('decor-tree-chop', (d) => {
       if (!d?.id) return;
@@ -725,11 +738,32 @@
     _socket.emit('decor-door-toggle', { id: decorId });
   }
 
+  function requestStorageOpen(decorId) {
+    if (!_socket || !decorId) return;
+    _socket.emit('storage-open', { id: decorId });
+  }
+
+  function requestStorageClose(decorId) {
+    if (!_socket || !decorId) return;
+    _socket.emit('storage-close', { id: decorId });
+  }
+
+  function requestStorageDeposit(decorId, stack) {
+    if (!_socket || !decorId || !stack?.type) return;
+    _socket.emit('storage-deposit', { id: decorId, type: stack.type, qty: stack.qty || 1 });
+  }
+
+  function requestStorageWithdraw(decorId, slot) {
+    if (!_socket || !decorId) return;
+    _socket.emit('storage-withdraw', { id: decorId, slot });
+  }
+
   window.ZS = window.ZS || {};
   ZS.Network = {
     init, tick, sendMove, sendShoot, sendRespawn, sendDied, sendSurvival, sendEquip, sendAttack,
     notifyDecorChop, notifyDecorMine, requestDecorDoorToggle, syncWorldColliders: _syncWorldColliders,
     findNearestSleeping,
     getSocket: () => _socket,
+    requestStorageOpen, requestStorageClose, requestStorageDeposit, requestStorageWithdraw,
   };
 }());

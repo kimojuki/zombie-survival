@@ -43,6 +43,9 @@
     spawn_workbench: [
       { type: 'box', lx: 0, lz: 0, hw: 0.52, hd: 0.34, maxY: 0.88 },
     ],
+    storage_chest: [
+      { type: 'box', lx: 0, lz: 0, hw: 0.58, hd: 0.36, maxY: 0.62 },
+    ],
     building_survivor_shack: [
       { type: 'box', lx: 0, lz: 2.04, hw: 2.64, hd: 0.11 },
       { type: 'box', lx: -2.54, lz: 0, hw: 0.11, hd: 2.08 },

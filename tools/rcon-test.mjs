@@ -105,6 +105,7 @@ async function main() {
   results.push(await expectOk('decorprefabs barrier', 'decorprefabs barrier', (t) => t.includes('road_barrier_post')));
   results.push(await expectOk('decorprefabs filter', 'decorprefabs stump', (t) => t.includes('spawn_stump')));
   results.push(await expectOk('decorprefabs building', 'decorprefabs building', (t) => t.includes('building_survivor_shack')));
+  results.push(await expectOk('decorprefabs storage', 'decorprefabs storage', (t) => t.includes('storage_chest')));
   results.push(await expectOk('decoritems', 'decoritems eau', (t) => t.includes('food_eau_bouteille')));
   results.push(await expectOk('decorlist seed', 'decorlist', (t) => t.includes('decor_')));
 
@@ -166,6 +167,12 @@ async function main() {
     'decoradd auto-prefab',
     'decoradd spawn_workbench 10 -9 0.2',
     (t) => t.includes('spawn_workbench'),
+  ));
+
+  results.push(await expectOk(
+    'decoradd storage_chest',
+    'decoradd prefab storage_chest 14 -10 0.2 1',
+    (t) => t.includes('storage_chest') && t.includes('decor_'),
   ));
 
   results.push(await expectOk(

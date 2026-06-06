@@ -100,6 +100,23 @@
     return false;
   }
 
+  function canAddItem(type) {
+    return _canAddItem(type);
+  }
+
+  function canAddStack(type, qty) {
+    const def = _def(type);
+    if (!def) return false;
+    let room = 0;
+    for (const arr of [_hotbar, _bag]) {
+      for (const s of arr) {
+        if (!s) room += def.maxStack;
+        else if (s.type === type) room += Math.max(0, def.maxStack - (s.qty || 1));
+      }
+    }
+    return room >= Math.max(1, qty || 1);
+  }
+
   // Caisse de butin de mort
   function _makeBagMesh() {
     const g = new THREE.Group();
@@ -397,6 +414,52 @@
     }
     _renderHotbar();
     if (_panelOpen) _renderInvPanel();
+  }
+
+  function getStorageStacks() {
+    const out = [];
+    const scan = (zone, arr) => {
+      for (let i = 0; i < arr.length; i++) {
+        const s = arr[i];
+        if (s?.type) out.push({ zone, idx: i, type: s.type, qty: s.qty || 1 });
+      }
+    };
+    scan('hotbar', _hotbar);
+    scan('bag', _bag);
+    return out;
+  }
+
+  function getStorageSlots() {
+    const out = [];
+    const scan = (zone, arr) => {
+      for (let i = 0; i < arr.length; i++) {
+        const s = arr[i];
+        out.push({
+          zone,
+          idx: i,
+          type: s?.type || null,
+          qty: s?.qty || 0,
+        });
+      }
+    };
+    scan('bag', _bag);
+    scan('hotbar', _hotbar);
+    return out;
+  }
+
+  function removeStack(zone, idx, qty) {
+    const arr = zone === 'hotbar' ? _hotbar : zone === 'bag' ? _bag : null;
+    if (!arr || idx < 0 || idx >= arr.length) return null;
+    const s = arr[idx];
+    if (!s?.type) return null;
+    const take = Math.max(1, Math.min(s.qty || 1, qty || s.qty || 1));
+    const out = { type: s.type, qty: take };
+    s.qty = (s.qty || 1) - take;
+    if (s.qty <= 0) arr[idx] = null;
+    _renderHotbar();
+    if (_panelOpen) _renderInvPanel();
+    _syncToServer();
+    return out;
   }
 
   function consumeOne(type) { removeItem(type, 1); }
@@ -1204,7 +1267,7 @@
   ZS.Inventory = {
     init, tick,
     spawnWorldItem, removeWorldItem, receivePickup, spawnStructure, collectBag,
-    countItem, addItem, addItemSlot, removeItem, consumeOne,
+    countItem, addItem, addItemSlot, removeItem, removeStack, getStorageStacks, getStorageSlots, canAddItem, canAddStack, consumeOne,
     getActiveItem, getWeaponAmmo, decrementAmmo, reloadWeapon, wearActiveWeapon,
     getArmorValue, getMaxHealth, togglePanel, loadFromSave, loadRespawnKit, ensureStarterCaillou, clear,
   };

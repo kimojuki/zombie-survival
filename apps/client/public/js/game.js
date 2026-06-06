@@ -671,6 +671,7 @@
 
   let _doorBtn = null;
   let _nearDoor = null;
+  let _nearStorage = null;
 
   function _ensureDoorButton() {
     if (_doorBtn) return _doorBtn;
@@ -703,7 +704,195 @@
     return _doorBtn;
   }
 
+  const StorageUI = (() => {
+    let panel = null;
+    let backdrop = null;
+    let state = { id: null, items: [], capacity: 0 };
+
+    function _ensurePanel() {
+      if (panel) return;
+      backdrop = document.createElement('div');
+      backdrop.style.cssText = 'display:none;position:fixed;inset:0;z-index:469;background:rgba(0,0,0,.28)';
+      backdrop.addEventListener('click', close);
+      document.body.appendChild(backdrop);
+
+      panel = document.createElement('div');
+      panel.id = 'storage-panel';
+      panel.style.cssText = [
+        'display:none',
+        'position:fixed',
+        'top:50%',
+        'left:50%',
+        'transform:translate(-50%,-50%)',
+        'z-index:470',
+        'width:min(438px,96vw)',
+        'max-height:82vh',
+        'overflow:auto',
+        'background:#c6c6c6',
+        'border:4px solid',
+        'border-color:#f6f6f6 #555 #555 #f6f6f6',
+        'border-radius:4px',
+        'padding:12px 14px 14px',
+        'color:#303030',
+        'font:13px monospace',
+        'box-shadow:0 6px 28px rgba(0,0,0,.55)',
+      ].join(';');
+      document.body.appendChild(panel);
+    }
+
+    function _itemLabel(stack) {
+      const def = ZS.ITEMS?.[stack.type];
+      return `${def?.icon || '□'} ${def?.label || stack.type} x${stack.qty || 1}`;
+    }
+
+    function _makeSlot(stack, onClick) {
+      const slot = document.createElement('button');
+      slot.type = 'button';
+      slot.title = stack?.type ? _itemLabel(stack) : '';
+      slot.style.cssText = [
+        'position:relative',
+        'width:40px',
+        'height:40px',
+        'padding:0',
+        'border:2px solid',
+        'border-color:#595959 #f5f5f5 #f5f5f5 #595959',
+        'background:#8b8b8b',
+        'box-shadow:inset 2px 2px 0 rgba(0,0,0,.35), inset -2px -2px 0 rgba(255,255,255,.35)',
+        'font:20px monospace',
+        'color:#fff',
+        'cursor:pointer',
+        'touch-action:manipulation',
+      ].join(';');
+      if (stack?.type) {
+        const icon = document.createElement('span');
+        icon.textContent = ZS.ITEMS?.[stack.type]?.icon || '?';
+        icon.style.cssText = 'position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:20px';
+        const count = document.createElement('span');
+        count.textContent = (stack.qty || 1) > 1 ? String(stack.qty || 1) : '';
+        count.style.cssText = 'position:absolute;right:3px;bottom:1px;font:bold 11px monospace;color:#fff;text-shadow:1px 1px 0 #000';
+        slot.appendChild(icon);
+        slot.appendChild(count);
+      } else {
+        slot.disabled = true;
+        slot.style.cursor = 'default';
+      }
+      if (stack?.type && onClick) slot.addEventListener('click', onClick);
+      return slot;
+    }
+
+    function _makeGrid() {
+      const grid = document.createElement('div');
+      grid.style.cssText = 'display:grid;grid-template-columns:repeat(9,40px);gap:4px;width:max-content;max-width:100%;';
+      return grid;
+    }
+
+    function _sectionTitle(text) {
+      const h = document.createElement('div');
+      h.textContent = text;
+      h.style.cssText = 'margin:10px 0 4px;color:#3b3b3b;font:16px monospace;text-shadow:1px 1px 0 #eee';
+      return h;
+    }
+
+    function render() {
+      _ensurePanel();
+      panel.replaceChildren();
+
+      const closeBtn = document.createElement('button');
+      closeBtn.type = 'button';
+      closeBtn.textContent = 'x';
+      closeBtn.style.cssText = 'position:absolute;right:8px;top:6px;width:24px;height:24px;border:2px solid #555;background:#d6d6d6;color:#222;cursor:pointer';
+      closeBtn.addEventListener('click', close);
+      panel.appendChild(closeBtn);
+
+      panel.appendChild(_sectionTitle(`Chest (${state.items.length}/${state.capacity})`));
+      const chestGrid = _makeGrid();
+      for (let i = 0; i < state.capacity; i++) {
+        const stack = state.items[i] || null;
+        chestGrid.appendChild(_makeSlot(stack, () => {
+          if (!ZS.Inventory?.canAddStack?.(stack.type, stack.qty || 1)) {
+            ZS.UI?.showNotif?.('Inventaire plein');
+            return;
+          }
+          ZS.Network.requestStorageWithdraw(state.id, i);
+        }));
+      }
+      panel.appendChild(chestGrid);
+
+      panel.appendChild(_sectionTitle('Inventory'));
+      const invSlots = ZS.Inventory?.getStorageSlots?.() || [];
+      const bagSlots = invSlots.filter((s) => s.zone === 'bag');
+      const hotbarSlots = invSlots.filter((s) => s.zone === 'hotbar');
+      const invGrid = _makeGrid();
+      const paddedBag = [...bagSlots, ...Array(Math.max(0, 27 - bagSlots.length)).fill(null)];
+      for (const slot of paddedBag) {
+        invGrid.appendChild(_makeSlot(slot, () => {
+          if (state.items.length >= state.capacity) {
+            ZS.UI?.showNotif?.('Coffre plein');
+            return;
+          }
+          const removed = ZS.Inventory.removeStack(slot.zone, slot.idx, slot.qty);
+          if (!removed) return;
+          ZS.Network.requestStorageDeposit(state.id, removed);
+        }));
+      }
+      panel.appendChild(invGrid);
+
+      const hotbarGrid = _makeGrid();
+      const paddedHotbar = [...hotbarSlots, ...Array(Math.max(0, 9 - hotbarSlots.length)).fill(null)];
+      for (const slot of paddedHotbar) {
+        hotbarGrid.appendChild(_makeSlot(slot, () => {
+          if (state.items.length >= state.capacity) {
+            ZS.UI?.showNotif?.('Coffre plein');
+            return;
+          }
+          const removed = ZS.Inventory.removeStack(slot.zone, slot.idx, slot.qty);
+          if (!removed) return;
+          ZS.Network.requestStorageDeposit(state.id, removed);
+        }));
+      }
+      panel.appendChild(hotbarGrid);
+    }
+
+    function open(data) {
+      state = {
+        id: data?.id || null,
+        items: Array.isArray(data?.items) ? data.items : [],
+        capacity: data?.capacity || 18,
+      };
+      if (state.id) ZS.setDecorStorageState?.(state.id, true);
+      _ensurePanel();
+      backdrop.style.display = 'block';
+      panel.style.display = 'block';
+      render();
+    }
+
+    function update(data) {
+      if (!panel || panel.style.display === 'none') return;
+      if (!data || data.id !== state.id) return;
+      state.items = Array.isArray(data.items) ? data.items : [];
+      state.capacity = data.capacity || state.capacity;
+      render();
+    }
+
+    function close() {
+      if (state.id) ZS.setDecorStorageState?.(state.id, false);
+      if (state.id) ZS.Network?.requestStorageClose?.(state.id);
+      if (panel) panel.style.display = 'none';
+      if (backdrop) backdrop.style.display = 'none';
+    }
+
+    return { open, update, close };
+  })();
+  window.ZS = window.ZS || {};
+  ZS.StorageUI = StorageUI;
+
   function _interactDoor() {
+    const storage = ZS.findNearestDecorStorage?.(state.player.x, state.player.z, 2.8);
+    if (storage) {
+      ZS.setDecorStorageState?.(storage.decorId, true);
+      ZS.Network.requestStorageOpen(storage.decorId);
+      return true;
+    }
     const door = ZS.findNearestDecorDoor?.(state.player.x, state.player.z, 3.2);
     if (!door) return false;
     ZS.setDecorDoorState?.(door.decorId, !door.open);
@@ -717,18 +906,22 @@
   }
 
   function _updateDoorInteractUi() {
+    const storage = ZS.findNearestDecorStorage?.(state.player.x, state.player.z, 2.8) || null;
     const door = ZS.findNearestDecorDoor?.(state.player.x, state.player.z, 3.2) || null;
-    const sleeper = (!door && !state.player.dead) ? ZS.SleepLoot?.getNearestForUi?.(state.player.x, state.player.z) : null;
-    if (!door && !sleeper && !_nearDoor) return;
+    const sleeper = (!storage && !door && !state.player.dead)
+      ? ZS.SleepLoot?.getNearestForUi?.(state.player.x, state.player.z) : null;
+    if (!storage && !door && !sleeper && !_nearDoor && !_nearStorage) return;
+    _nearStorage = storage;
     _nearDoor = door;
     const btn = _ensureDoorButton();
-    if ((!door && !sleeper) || state.player.dead || ZS.Rcon?.isOpen?.() || ZS.Chat?.isOpen?.() || ZS.SleepLoot?.isOpen?.()) {
+    if ((!storage && !door && !sleeper) || state.player.dead || ZS.Rcon?.isOpen?.() || ZS.Chat?.isOpen?.() || ZS.SleepLoot?.isOpen?.()) {
       btn.style.display = 'none';
       return;
     }
     const mobile = document.body.classList.contains('mode-mobile');
     let label;
-    if (door) label = door.open ? 'Fermer' : 'Ouvrir';
+    if (storage) label = 'Coffre';
+    else if (door) label = door.open ? 'Fermer' : 'Ouvrir';
     else label = 'Fouiller';
     btn.textContent = mobile ? label : `E — ${label}`;
     btn.style.display = 'block';

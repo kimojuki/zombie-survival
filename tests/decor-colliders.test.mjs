@@ -134,6 +134,24 @@ test('barrier rail uses segment collider between posts', () => {
   assert.equal(cols[0].r, 0.14);
 });
 
+test('storage chest prefab has a blocking box collider', () => {
+  const ZS = loadDecorColliders();
+  const cols = ZS.buildDecorColliders({
+    kind: 'prefab',
+    prefabId: 'storage_chest',
+    x: 3,
+    z: -4,
+    baseY: 0.2,
+    rotY: 0.4,
+    scale: 1,
+    decorId: 'decor_chest',
+  });
+  assert.equal(cols.length, 1);
+  assert.equal(cols[0].type, 'box');
+  assert.equal(cols[0].decorId, 'decor_chest');
+  assert.ok(cols[0].maxY > 0.7);
+});
+
 test('unknown item type falls back to default collider', () => {
   const ZS = loadDecorColliders();
   const cols = ZS.buildDecorColliders({

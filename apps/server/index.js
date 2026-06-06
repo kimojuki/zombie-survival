@@ -351,6 +351,8 @@ function flattenInv(inv) {
 
 const ROAD_WRECKS_URL = pathToFileURL(path.join(__dirname, '../../packages/shared/src/road-wrecks.mjs')).href;
 const TREE_PLACEMENTS_URL = pathToFileURL(path.join(__dirname, '../../packages/shared/src/tree-placements.mjs')).href;
+const TREE_WOOD_URL = pathToFileURL(path.join(__dirname, '../../packages/shared/src/tree-wood.mjs')).href;
+const _TREE_WOOD_FALLBACK = { tree_oak: 8, tree_pine: 10, tree_birch: 6, tree_dead: 3 };
 
 function _makeDecorItem(d) {
   const item = {
@@ -364,6 +366,10 @@ function _makeDecorItem(d) {
     createdAt: Date.now(),
     ...d,
   };
+  if (item.prefabId?.startsWith('tree_') && item.woodMax == null) {
+    item.woodMax = _TREE_WOOD_FALLBACK[item.prefabId] ?? 6;
+    if (item.woodRemaining == null) item.woodRemaining = item.woodMax;
+  }
   decorItems.set(item.id, item);
   return item;
 }
@@ -407,10 +413,12 @@ function ensureWorldTrees({ broadcast = false, reset = false } = {}) {
     const hasTrees = [...decorItems.values()].some((d) => d.prefabId?.startsWith('tree_'));
     if (hasTrees) return Promise.resolve(0);
   }
-  return import(TREE_PLACEMENTS_URL).then(({ computeTreePlacements }) => {
+  return import(TREE_PLACEMENTS_URL).then(({ computeTreePlacements }) =>
+    import(TREE_WOOD_URL).then(({ getTreeWoodMax, TREE_FALL_LINGER_MS }) => {
     const added = [];
     for (const t of computeTreePlacements()) {
-      added.push(_makeDecorItem(t));
+      const woodMax = getTreeWoodMax(t.prefabId);
+      added.push(_makeDecorItem({ ...t, woodMax, woodRemaining: woodMax }));
     }
     if (added.length) {
       log.info('seed', 'world trees added', { count: added.length });
@@ -419,7 +427,7 @@ function ensureWorldTrees({ broadcast = false, reset = false } = {}) {
       }
     }
     return added.length;
-  });
+  }));
 }
 
 function seedSpawnDecorItems() {
@@ -1191,16 +1199,56 @@ io.on('connection', async (socket) => {
     log.debug('items', 'drop', { player: p.username, type: d.type, qty, pos: { x: +drop.x.toFixed(1), z: +drop.z.toFixed(1) } });
   });
 
-  // Abattage arbre prefab — sync multijoueur (hache)
-  socket.on('decor-fell', (d) => {
+  // Récolte bois sur arbre prefab — sync multijoueur
+  socket.on('decor-chop', (d) => {
     const id = d?.id;
     if (!id || typeof id !== 'string') return;
     const item = decorItems.get(id);
     if (!item?.prefabId?.startsWith('tree_')) return;
+    if (item.falling) return;
     if (Math.hypot(item.x - p.x, item.z - p.z) > 6) return;
-    decorItems.delete(id);
-    io.emit('decor-item-remove', id);
-    log.debug('world', 'tree felled', { player: p.username, decorId: id, prefab: item.prefabId });
+
+    import(TREE_WOOD_URL).then(({ getTreeWoodMax, TREE_FALL_LINGER_MS }) => {
+      const woodMax = item.woodMax ?? getTreeWoodMax(item.prefabId);
+      item.woodMax = woodMax;
+      if (item.woodRemaining == null) item.woodRemaining = woodMax;
+
+      const yieldReq = Math.max(1, Math.min(4, Number(d.yield) || 1));
+      const woodTaken = Math.min(yieldReq, item.woodRemaining);
+      item.woodRemaining -= woodTaken;
+
+      const base = {
+        id,
+        woodTaken,
+        woodRemaining: item.woodRemaining,
+        woodMax,
+        by: p.id,
+      };
+
+      if (item.woodRemaining <= 0) {
+        item.falling = true;
+        item.fellAt = Date.now();
+        socket.broadcast.emit('decor-tree-fell', {
+          ...base,
+          fallDirX: Number(d.dirX) || 0,
+          fallDirZ: Number(d.dirZ) || 1,
+        });
+        setTimeout(() => {
+          if (decorItems.has(id)) {
+            decorItems.delete(id);
+            io.emit('decor-item-remove', id);
+          }
+        }, TREE_FALL_LINGER_MS);
+      } else {
+        socket.broadcast.emit('decor-tree-chop', base);
+      }
+      log.debug('world', 'tree chop', {
+        player: p.username,
+        decorId: id,
+        woodTaken,
+        woodRemaining: item.woodRemaining,
+      });
+    });
   });
 
   socket.on('decor-door-toggle', (d) => {

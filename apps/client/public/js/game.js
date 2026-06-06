@@ -540,17 +540,11 @@
     return def.type_recolte === 'Bois' && def.degats_impact > 0;
   }
 
-  function _chopDamage(type, def) {
+  function _chopWoodYield(type, def) {
     if (type === 'tool_hachette') return 2;
     if (type === 'wpn_hache_combat') return 1;
     if (type === 'tool_caillou') return 1;
-    return Math.max(1, Math.floor((def?.efficacite_recolte || 1) * 0.5));
-  }
-
-  function _woodYield(type, def) {
-    if (def?.bois_par_arbre != null) return def.bois_par_arbre;
-    if (type === 'tool_hachette' || type === 'wpn_hache_combat') return 3;
-    return 2;
+    return Math.max(1, Math.floor((def?.efficacite_recolte || 1) * 0.8));
   }
 
   function _meleeSwing(item, def) {
@@ -562,23 +556,32 @@
     raycaster.setFromCamera(screenCenter, camera);
     const dir = raycaster.ray.direction;
     const range = def.portee_metre || 1.2;
-
-    // Bruit de coup — plus marqué si un zombie est à portée (impact), sinon léger.
     const cam = _cameraWorldPos();
-    const hitDist = ZS.Zombies.nearestDist(cam.x, cam.z);
-    ZS.Audio.melee(hitDist < range + 0.8 ? 1.0 : 0.45);
 
-    // Outils / armes : abattre un arbre devant soi
+    // Outils / armes : récolter du bois sur un arbre devant soi
     if (_canHarvestWood(item.type, def) && ZS.chopTree) {
       const chop = ZS.chopTree(
         cam.x, cam.z, dir.x, dir.z,
         Math.max(range + 1.2, 2.4),
-        _chopDamage(item.type, def),
+        _chopWoodYield(item.type, def),
       );
-      if (chop && chop.felled) {
-        ZS.Inventory.addItem('res_bois_brut', _woodYield(item.type, def));
-        ZS.UI.showNotif('Arbre abattu : +' + _woodYield(item.type, def) + ' Bois brut');
+      if (chop?.hit) {
+        ZS.Audio.chopWood(1.0);
+        if (chop.woodTaken > 0) {
+          ZS.Inventory.addItem('res_bois_brut', chop.woodTaken);
+          ZS.UI.showNotif('+' + chop.woodTaken + ' Bois brut');
+        }
+        if (chop.felled) ZS.UI.showNotif('Arbre abattu');
+        if (chop.decorId) {
+          ZS.Network.notifyDecorChop(chop.decorId, chop.woodTaken, dir.x, dir.z);
+        }
+      } else {
+        const hitDist = ZS.Zombies.nearestDist(cam.x, cam.z);
+        ZS.Audio.melee(hitDist < range + 0.8 ? 1.0 : 0.45);
       }
+    } else {
+      const hitDist = ZS.Zombies.nearestDist(cam.x, cam.z);
+      ZS.Audio.melee(hitDist < range + 0.8 ? 1.0 : 0.45);
     }
 
     // Frappe les zombies dans la portée (rayon latéral large = coup de mêlée balayant)
@@ -746,6 +749,7 @@
     ZS.tickArmAnim(fpsArms, dt);
     ZS.setShadowCenter(state.player.x, state.player.z);
     ZS.tickDayNight(dt);
+    ZS.tickTreeFalls?.(dt);
     const camPos = _cameraWorldPos();
     const camX = camPos.x, camZ = camPos.z;
     if (Math.hypot(camX - _bbCamX, camZ - _bbCamZ) > 0.2) {

@@ -56,6 +56,21 @@ Copier dans la description de PR :
 - **Collisions** : collider de porte actif uniquement quand la porte est fermée, puis resynchronisé au serveur.
 - **Cache bust** : `20260606-shack-door-interact-30`
 
+### Completed — Fix anim bras coupe arbre (2026-06-06)
+
+- **Cause** : `addItem` → `_renderHotbar` → `setHandItem` réinitialisait l'anim FPS à chaque `+1 Bois`.
+- **Fix** : `updateHandItem` ignore le re-equip si le type en main est déjà le même.
+- **Cache bust** : `20260606-tree-chop-anim-33`
+
+### Completed — Récolte bois progressive + chute d'arbre (2026-06-06)
+
+- **Stock bois** : chaque prefab arbre (`tree_oak` 8, `tree_pine` 10, `tree_birch` 6, `tree_dead` 3) — extrait coup par coup.
+- **Gameplay** : `+N Bois brut` à chaque impact ; arbre tombe vers l'avant quand stock épuisé ; tronc disparaît après 90 s.
+- **Audio** : `chopWood()` (impact bois) + `treeFall()` (impact au sol) — plus le bruit mêlée zombie sur arbre.
+- **Sync** : socket `decor-chop` / `decor-tree-chop` / `decor-tree-fell` (remplace `decor-fell`).
+- **Shared** : `packages/shared/src/tree-wood.mjs` + tests.
+- **Cache bust** : `20260606-tree-wood-chop-32`
+
 ### Completed — Caillou centré entre les deux mains (2026-06-06)
 
 - **FPS** : pivot `sharedItem` — rocher placé au milieu des deux paumes (plus ancré main droite).

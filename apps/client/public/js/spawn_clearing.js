@@ -748,7 +748,11 @@
     }
 
     if (prefabId.startsWith('tree_') && ZS.registerChoppableTree) {
-      ZS.registerChoppableTree(scene, root, root.position.x, root.position.z, decorId);
+      ZS.registerChoppableTree(scene, root, root.position.x, root.position.z, decorId, {
+        prefabId,
+        woodMax: opts.woodMax,
+        woodRemaining: opts.woodRemaining,
+      });
     }
 
     return root;

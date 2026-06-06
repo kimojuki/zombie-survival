@@ -722,46 +722,137 @@
 
   // ── Arbres améliorés ─────────────────────────────────────────────────────────
 
-  // Registre des arbres abattables (pour l'abattage à la hache).
+  const TREE_WOOD_MAX = {
+    tree_oak: 8, tree_pine: 10, tree_birch: 6, tree_dead: 3,
+  };
+  const TREE_FALL_LINGER_MS = 90_000;
+  const TREE_FALL_ANIM_SEC = 1.15;
+
+  // Registre des arbres abattables (récolte progressive de bois).
   const _trees = [];
-  function _registerTree(scene, group, x, z, collider, decorId) {
-    _trees.push({ scene, group, x, z, collider, decorId: decorId || null, hp: 5, maxHp: 5, alive: true });
+
+  function _woodMaxFor(prefabId) {
+    return TREE_WOOD_MAX[prefabId] ?? 6;
   }
 
-  function registerChoppableTree(scene, group, x, z, decorId) {
-    return _registerTree(scene, group, x, z, { decorId }, decorId);
+  function _findTreeByDecorId(decorId) {
+    if (!decorId) return null;
+    return _trees.find((t) => t.decorId === decorId) || null;
   }
 
-  // Abat l'arbre le plus proche devant (ox,oz) dans la direction (dirX,dirZ).
-  // Renvoie { hit, felled, x, z } ou null si aucun arbre à portée.
-  function chopTree(ox, oz, dirX, dirZ, range, damage) {
+  function _registerTree(scene, group, x, z, collider, decorId, opts = {}) {
+    const prefabId = opts.prefabId || group.userData.prefabId || 'tree_oak';
+    const woodMax = opts.woodMax ?? _woodMaxFor(prefabId);
+    const woodRemaining = Number.isFinite(opts.woodRemaining) ? opts.woodRemaining : woodMax;
+    _trees.push({
+      scene, group, x, z, collider, decorId: decorId || null,
+      prefabId, woodMax, woodRemaining,
+      state: 'standing',
+      shakeT: 0,
+      fallAnim: null,
+      fallTimer: null,
+    });
+  }
+
+  function registerChoppableTree(scene, group, x, z, decorId, opts = {}) {
+    return _registerTree(scene, group, x, z, { decorId }, decorId, opts);
+  }
+
+  function removeChoppableTree(decorId) {
+    const idx = _trees.findIndex((t) => t.decorId === decorId);
+    if (idx < 0) return;
+    const t = _trees[idx];
+    if (t.fallTimer) clearTimeout(t.fallTimer);
+    t.state = 'gone';
+    _trees.splice(idx, 1);
+  }
+
+  function _shakeTree(tree) {
+    tree.shakeT = 0.12;
+  }
+
+  function _startTreeFall(tree, dirX, dirZ) {
+    if (!tree || tree.state !== 'standing') return;
+    tree.state = 'falling';
+    const len = Math.hypot(dirX, dirZ) || 1;
+    const fallYaw = Math.atan2(dirX / len, dirZ / len);
+    tree.group.rotation.order = 'YXZ';
+    tree.fallAnim = {
+      t: 0,
+      dur: TREE_FALL_ANIM_SEC,
+      fallYaw,
+      impactPlayed: false,
+    };
+    if (tree.decorId) ZS.removeDecorColliders?.(tree.decorId);
+    if (tree.fallTimer) clearTimeout(tree.fallTimer);
+    tree.fallTimer = setTimeout(() => {
+      if (tree.scene && tree.group?.parent) tree.scene.remove(tree.group);
+      const idx = _trees.indexOf(tree);
+      if (idx >= 0) _trees.splice(idx, 1);
+    }, TREE_FALL_LINGER_MS);
+  }
+
+  function applyRemoteTreeChop(decorId, woodRemaining) {
+    const tree = _findTreeByDecorId(decorId);
+    if (!tree || tree.state !== 'standing') return;
+    if (Number.isFinite(woodRemaining)) tree.woodRemaining = woodRemaining;
+    _shakeTree(tree);
+  }
+
+  function applyRemoteTreeFell(decorId, dirX, dirZ) {
+    const tree = _findTreeByDecorId(decorId);
+    if (!tree || tree.state !== 'standing') return;
+    _startTreeFall(tree, dirX, dirZ);
+  }
+
+  function tickTreeFalls(dt) {
+    for (const tree of _trees) {
+      if (tree.shakeT > 0) {
+        tree.shakeT = Math.max(0, tree.shakeT - dt);
+        const s = tree.shakeT > 0 ? (Math.random() - 0.5) * 0.06 * (tree.shakeT / 0.12) : 0;
+        tree.group.position.x = tree.x + s;
+      }
+      if (tree.state !== 'falling' || !tree.fallAnim) continue;
+      tree.fallAnim.t += dt;
+      const p = Math.min(1, tree.fallAnim.t / tree.fallAnim.dur);
+      const ease = p * p;
+      tree.group.rotation.y = tree.fallAnim.fallYaw;
+      tree.group.rotation.x = ease * (Math.PI * 0.46);
+      if (p >= 1 && !tree.fallAnim.impactPlayed) {
+        tree.fallAnim.impactPlayed = true;
+        ZS.Audio?.treeFall?.(0.9);
+      }
+    }
+  }
+
+  // Coupe l'arbre le plus proche devant (ox,oz) — extrait du bois à chaque coup.
+  function chopTree(ox, oz, dirX, dirZ, range, woodYield) {
     const len = Math.hypot(dirX, dirZ) || 1;
     const nx = dirX / len, nz = dirZ / len;
     let best = null, bestT = Infinity;
     for (const t of _trees) {
-      if (!t.alive) continue;
-      const proj = (t.x - ox) * nx + (t.z - oz) * nz;          // distance le long du regard
+      if (t.state !== 'standing') continue;
+      const proj = (t.x - ox) * nx + (t.z - oz) * nz;
       if (proj < 0 || proj > range) continue;
       const perp = Math.hypot(ox + nx * proj - t.x, oz + nz * proj - t.z);
       if (perp < 1.4 && proj < bestT) { bestT = proj; best = t; }
     }
     if (!best) return null;
-    best.hp -= (damage || 1);
-    if (best.hp > 0) {
-      best.group.position.x += (Math.random() - 0.5) * 0.05;   // petite secousse
-      return { hit: true, felled: false, x: best.x, z: best.z };
-    }
-    best.alive = false;
-    if (best.scene) best.scene.remove(best.group);
-    if (best.collider) {
-      const ci = _colliders.indexOf(best.collider);
-      if (ci >= 0) _colliders.splice(ci, 1);
-    }
-    if (best.decorId) {
-      ZS.removeDecorColliders?.(best.decorId);
-      ZS.Network?.notifyDecorFelled?.(best.decorId);
-    }
-    return { hit: true, felled: true, x: best.x, z: best.z, decorId: best.decorId || null };
+    const yieldAmt = Math.max(1, woodYield || 1);
+    const woodTaken = Math.min(yieldAmt, best.woodRemaining);
+    best.woodRemaining -= woodTaken;
+    _shakeTree(best);
+    const felled = best.woodRemaining <= 0;
+    if (felled) _startTreeFall(best, dirX, dirZ);
+    return {
+      hit: true,
+      felled,
+      woodTaken,
+      woodRemaining: best.woodRemaining,
+      x: best.x,
+      z: best.z,
+      decorId: best.decorId || null,
+    };
   }
 
   function spawnTrees(scene, count) {
@@ -1197,6 +1288,10 @@
   ZS.decorWorldToLocal      = decorWorldToLocal;
   ZS.chopTree              = chopTree;
   ZS.registerChoppableTree = registerChoppableTree;
+  ZS.removeChoppableTree   = removeChoppableTree;
+  ZS.applyRemoteTreeChop   = applyRemoteTreeChop;
+  ZS.applyRemoteTreeFell   = applyRemoteTreeFell;
+  ZS.tickTreeFalls         = tickTreeFalls;
   ZS.registerFireLight     = registerFireLight;
   ZS.registerBillboards    = registerBillboards;
   ZS.updateBillboards      = updateBillboards;

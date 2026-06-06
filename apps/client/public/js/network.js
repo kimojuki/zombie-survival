@@ -38,6 +38,7 @@
     decorItems.delete(id);
     ZS.removeDecorColliders?.(id);
     ZS.unregisterDecorDoor?.(id);
+    ZS.removeChoppableTree?.(id);
     _syncWorldColliders();
   }
 
@@ -63,6 +64,8 @@
       wreckSink: Number.isFinite(d.wreckSink) ? d.wreckSink : 0,
       treeSeed: Number.isFinite(d.treeSeed) ? d.treeSeed : undefined,
       doorOpen: !!d.doorOpen,
+      woodMax: Number.isFinite(d.woodMax) ? d.woodMax : undefined,
+      woodRemaining: Number.isFinite(d.woodRemaining) ? d.woodRemaining : undefined,
     };
     const onRoot = (root) => {
       if (!root) return;
@@ -279,6 +282,14 @@
       if (ZS.setDecorDoorState?.(d.id, !!d.open)) _syncWorldColliders();
       const entry = decorItems.get(d.id);
       if (entry) entry.data.doorOpen = !!d.open;
+    });
+    socket.on('decor-tree-chop', (d) => {
+      if (!d?.id) return;
+      ZS.applyRemoteTreeChop?.(d.id, d.woodRemaining);
+    });
+    socket.on('decor-tree-fell', (d) => {
+      if (!d?.id) return;
+      ZS.applyRemoteTreeFell?.(d.id, d.fallDirX, d.fallDirZ);
     });
     socket.on('item-spawn',  (d)  => ZS.Inventory.spawnWorldItem(d));
     socket.on('item-remove', (id) => ZS.Inventory.removeWorldItem(id));
@@ -568,9 +579,14 @@
     return sprite;
   }
 
-  function notifyDecorFelled(decorId) {
+  function notifyDecorChop(decorId, woodTaken, dirX, dirZ) {
     if (!_socket || !decorId) return;
-    _socket.emit('decor-fell', { id: decorId });
+    _socket.emit('decor-chop', {
+      id: decorId,
+      yield: woodTaken,
+      dirX,
+      dirZ,
+    });
   }
 
   function requestDecorDoorToggle(decorId) {
@@ -579,5 +595,8 @@
   }
 
   window.ZS = window.ZS || {};
-  ZS.Network = { init, tick, sendMove, sendShoot, sendRespawn, sendDied, sendSurvival, sendEquip, sendAttack, notifyDecorFelled, requestDecorDoorToggle };
+  ZS.Network = {
+    init, tick, sendMove, sendShoot, sendRespawn, sendDied, sendSurvival, sendEquip, sendAttack,
+    notifyDecorChop, requestDecorDoorToggle,
+  };
 }());

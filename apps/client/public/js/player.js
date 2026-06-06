@@ -1146,6 +1146,9 @@
   // ── Mise à jour de l'item en main ─────────────────────────────────────────
 
   function updateHandItem(fpsGroup, type) {
+    // Re-render hotbar (ex. stack +1 bois) ne doit pas annuler une anim de frappe en cours.
+    if (type === fpsGroup.userData.gripType) return;
+
     const parts = _getRigParts(fpsGroup);
     const rArm = parts.rArm;
     const grip = getGrip(type);

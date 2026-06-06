@@ -277,6 +277,60 @@
     o.start(t); o.stop(t + 0.2);
   }
 
+  // ── Coup sur bois (hache / caillou sur arbre) ───────────────────────────────
+  function chopWood(vol, pan) {
+    if (!ctx || _muted) return;
+    const v = (vol == null ? 1 : vol);
+    const t = ctx.currentTime;
+    const out = _panNode(pan);
+
+    const src = _noiseSource(); src.loop = false;
+    const bp = ctx.createBiquadFilter();
+    bp.type = 'bandpass'; bp.frequency.value = 420; bp.Q.value = 1.4;
+    const g = ctx.createGain();
+    g.gain.setValueAtTime(0.85 * v, t);
+    g.gain.exponentialRampToValueAtTime(0.001, t + 0.14);
+    src.connect(bp); bp.connect(g); g.connect(out);
+    src.start(t); src.stop(t + 0.16);
+
+    const o = ctx.createOscillator();
+    o.type = 'triangle';
+    o.frequency.setValueAtTime(180, t);
+    o.frequency.exponentialRampToValueAtTime(70, t + 0.12);
+    const og = ctx.createGain();
+    og.gain.setValueAtTime(0.55 * v, t);
+    og.gain.exponentialRampToValueAtTime(0.001, t + 0.16);
+    o.connect(og); og.connect(out);
+    o.start(t); o.stop(t + 0.18);
+  }
+
+  // ── Chute d'arbre au sol ────────────────────────────────────────────────────
+  function treeFall(vol, pan) {
+    if (!ctx || _muted) return;
+    const v = (vol == null ? 1 : vol);
+    const t = ctx.currentTime;
+    const out = _panNode(pan);
+
+    const src = _noiseSource(); src.loop = false;
+    const lp = ctx.createBiquadFilter();
+    lp.type = 'lowpass'; lp.frequency.value = 280;
+    const g = ctx.createGain();
+    g.gain.setValueAtTime(1.1 * v, t);
+    g.gain.exponentialRampToValueAtTime(0.001, t + 0.55);
+    src.connect(lp); lp.connect(g); g.connect(out);
+    src.start(t); src.stop(t + 0.58);
+
+    const o = ctx.createOscillator();
+    o.type = 'sine';
+    o.frequency.setValueAtTime(95, t);
+    o.frequency.exponentialRampToValueAtTime(32, t + 0.45);
+    const og = ctx.createGain();
+    og.gain.setValueAtTime(0.95 * v, t);
+    og.gain.exponentialRampToValueAtTime(0.001, t + 0.5);
+    o.connect(og); og.connect(out);
+    o.start(t); o.stop(t + 0.52);
+  }
+
   // ── Coup de mêlée : impact mat (whack) ──────────────────────────────────────
   function melee(vol, pan) {
     if (!ctx || _muted) return;
@@ -373,5 +427,5 @@
   function toggleMute() { setMuted(!_muted); }
 
   window.ZS = window.ZS || {};
-  ZS.Audio = { init, gunshot, melee, zombieGroan, setMuted, toggleMute };
+  ZS.Audio = { init, gunshot, melee, chopWood, treeFall, zombieGroan, setMuted, toggleMute };
 }());

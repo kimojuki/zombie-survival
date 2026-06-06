@@ -178,6 +178,13 @@
     res_corde:         { label: 'Corde',         category: 'resource', maxStack: 50,  icon: '🪢', color: 0xbb9944 },
 
     // ── OUTILS ──────────────────────────────────────────────────────────────
+    tool_caillou: {
+      label: 'Caillou', category: 'tool', maxStack: 1,
+      icon: '🪨', color: 0x9a9588,
+      type_recolte: 'Bois', efficacite_recolte: 0.5, durabilite_max: 80,
+      degats_impact: 10, portee_metre: 1.85, cadence_attaque: 0.52, recul_metre: 0.6,
+      bois_par_arbre: 2,
+    },
     tool_marteau: {
       label: 'Marteau', category: 'tool', maxStack: 1,
       icon: '🔨', color: 0x884422,
@@ -188,7 +195,8 @@
       label: 'Hachette', category: 'tool', maxStack: 1,
       icon: '🪓', color: 0x664422,
       type_recolte: 'Bois', efficacite_recolte: 2.5, durabilite_max: 120,
-      degats_impact: 22, portee_metre: 2.8, cadence_attaque: 0.6,   // sert aussi d'arme
+      degats_impact: 22, portee_metre: 2.8, cadence_attaque: 0.6,
+      bois_par_arbre: 3,
     },
     tool_pioche: {
       label: 'Pioche', category: 'tool', maxStack: 1,

@@ -46,6 +46,10 @@
     ],
     spawn_flat_stone: [],
     spawn_drink_set: [],
+    tree_oak: [{ type: 'cyl', lx: 0, lz: 0, r: 0.55 }],
+    tree_pine: [{ type: 'cyl', lx: 0, lz: 0, r: 0.52 }],
+    tree_birch: [{ type: 'cyl', lx: 0, lz: 0, r: 0.50 }],
+    tree_dead: [{ type: 'cyl', lx: 0, lz: 0, r: 0.25 }],
   };
 
   /** Dimensions épaves — miroir de vehicle_prefabs.js BODY (carrosserie + habitacle). */
@@ -68,6 +72,7 @@
     food_conserves: { type: 'cyl', lx: 0, lz: 0, r: 0.09, topY: 0.12 },
     food_haricots_boite: { type: 'cyl', lx: 0, lz: 0, r: 0.09, topY: 0.12 },
     food_soupe_conserve: { type: 'cyl', lx: 0, lz: 0, r: 0.08, topY: 0.14 },
+    tool_caillou: { type: 'cyl', lx: 0, lz: 0, r: 0.09, topY: 0.14 },
     food_pain: { type: 'box', lx: 0, lz: 0, hw: 0.14, hd: 0.10, maxY: 0.10 },
     tool_hachette: { type: 'box', lx: 0, lz: 0, hw: 0.16, hd: 0.07, maxY: 0.08, layFlat: true },
     tool_pioche: { type: 'box', lx: 0, lz: 0, hw: 0.18, hd: 0.07, maxY: 0.08, layFlat: true },

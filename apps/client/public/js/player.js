@@ -383,6 +383,11 @@
       item: { x: 0, y: -0.05, z: -0.21, rx: 0.24, ry: 0.05, rz: 0.01 },
       anim: { melee: { style: 'swing_down', swingX: 0.58, swingZ: 0.30, dur: 0.34 } },
     }),
+    tool_caillou: _grip({
+      item: { x: 0.02, y: 0.02, z: -0.06, rx: 0.08, ry: 0.12, rz: 0.06 },
+      rArm: { style: 'grip', mcRotX: -4 },
+      anim: { melee: { style: 'swing_overhead', swingX: 0.62, swingZ: 0.18, dur: 0.32 } },
+    }),
     tool_hachette: _grip({
       item: { x: 0.54, y: -0.78, z: 0.22, rx: 0.06, ry: 0.88, rz: -0.52 },
       anim: { melee: { style: 'swing_down', swingX: 0.54, swingZ: 0.28, dur: 0.30 } },
@@ -810,6 +815,7 @@
   }
 
   function _fit(type) {
+    if (type === 'tool_caillou') return 1.35;
     if (type === 'wpn_pistolet' || type === 'pistol') return 0.52;
     if (type === 'wpn_fusil_chasse')                  return 1.20;
     if (type === 'wpn_barre_fer' || type === 'wpn_lance_artisanale') return 1.15;
@@ -981,6 +987,13 @@
         scale: s,
         layFlat: !!opts.layFlat,
       });
+    }
+
+    if (type === 'tool_caillou' && ZS.RockPrefab?.buildGroundRock) {
+      const wrap = new THREE.Group();
+      ZS.RockPrefab.buildGroundRock(wrap, { rockSeed: opts.rockSeed, decorId });
+      root.add(wrap);
+      return Promise.resolve(root);
     }
 
     return getItemModel(type).then((model) => {
@@ -1223,6 +1236,7 @@
       case 'wpn_batte_cloutee':             return _bat();
       // ── Outils ───────────────────────────────────────────────────────────
       case 'tool_marteau':                  return _hammer();
+      case 'tool_caillou':                  return _rock();
       case 'tool_hachette':                 return _axe(0x775522);
       case 'tool_pioche':                   return _pickaxe();
       case 'tool_torche':                   return _lighter();
@@ -1366,6 +1380,16 @@
     addBox(g, m(0x555555), 0.18,  0.075, 0.058, 0,  0.19, 0);
     addBox(g, m(0x777777), 0.032, 0.032, 0.08,  0.10, 0.16, 0.06);      // panne
     return _setGripPoint(g, 0, -0.04, 0);
+  }
+
+  function _rock() {
+    const g = new THREE.Group();
+    if (ZS.RockPrefab?.buildHandRock) {
+      ZS.RockPrefab.buildHandRock(g, { rockSeed: 1337 });
+    } else {
+      addBox(g, m(0x9a9588), 0.10, 0.08, 0.12, 0, 0, 0);
+    }
+    return _setGripPoint(g, 0, 0, 0);
   }
 
   function _pickaxe() {

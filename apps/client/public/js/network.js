@@ -26,12 +26,18 @@
     if (typeof n === 'number' && ZS.UI?.setOnlineCount) ZS.UI.setOnlineCount(n);
   }
 
+  function _syncWorldColliders() {
+    if (!_socket || !ZS.getColliders) return;
+    _socket.emit('world-colliders', ZS.getColliders());
+  }
+
   function _removeDecorItem(id) {
     const entry = decorItems.get(id);
     if (!entry) return;
     if (entry.root?.parent) entry.root.parent.remove(entry.root);
     decorItems.delete(id);
     ZS.removeDecorColliders?.(id);
+    _syncWorldColliders();
   }
 
   function _spawnDecorItem(d) {
@@ -54,6 +60,7 @@
       wreckTilt: Number.isFinite(d.wreckTilt) ? d.wreckTilt : (Number.isFinite(d.rotZ) ? d.rotZ : 0),
       wreckWheels: Number.isFinite(d.wreckWheels) ? d.wreckWheels : undefined,
       wreckSink: Number.isFinite(d.wreckSink) ? d.wreckSink : 0,
+      treeSeed: Number.isFinite(d.treeSeed) ? d.treeSeed : undefined,
     };
     const onRoot = (root) => {
       if (!root) return;
@@ -63,10 +70,14 @@
     if (d.kind === 'prefab') {
       if (!d.prefabId || !ZS.spawnDecorPrefab) return;
       onRoot(ZS.spawnDecorPrefab(_scene, d.prefabId, d.x, d.y, d.z, commonOpts));
+      _syncWorldColliders();
       return;
     }
     if (!d.type || !ZS.spawnDecorItem) return;
-    ZS.spawnDecorItem(_scene, d.type, d.x, d.y, d.z, commonOpts).then(onRoot);
+    ZS.spawnDecorItem(_scene, d.type, d.x, d.y, d.z, commonOpts).then((root) => {
+      onRoot(root);
+      _syncWorldColliders();
+    });
   }
 
   function init(socket, scene, state) {
@@ -137,10 +148,14 @@
       }
       for (const item of (data.items || [])) ZS.Inventory.spawnWorldItem(item);
       for (const decor of (data.decorItems || [])) _spawnDecorItem(decor);
+      _syncWorldColliders();
       for (const st of (data.structures || [])) ZS.Inventory.spawnStructure(st);
       // Restore saved inventory (hotbar + sac + équipement). Tableau vide / absent
       // = nouveau joueur → on garde les objets de test + sac par défaut.
-      if (data.inventory) ZS.Inventory.loadFromSave(data.inventory);
+      if (data.inventory) {
+        ZS.Inventory.loadFromSave(data.inventory);
+        ZS.Inventory.ensureStarterCaillou?.();
+      }
       if (data.survival)  ZS.Survival.loadFromSave(data.survival);
       if (typeof data.onlineCount === 'number') _setOnlineCount(data.onlineCount);
       else _setOnlineCount(remotePlayers.size + 1);
@@ -276,7 +291,11 @@
         state.camera.yaw = spawn.rotY || 0;
       }
       // loadFromSave remplace entièrement hotbar/sac/équipement → kit de départ.
-      if (d.inventory) ZS.Inventory.loadFromSave(d.inventory);
+      if (d.inventory && ZS.Inventory.loadRespawnKit) {
+        ZS.Inventory.loadRespawnKit(d.inventory);
+      } else if (d.inventory) {
+        ZS.Inventory.loadFromSave(d.inventory, { fullReset: true });
+      }
       if (d.survival)  ZS.Survival.loadFromSave(d.survival);
     });
 
@@ -522,6 +541,11 @@
     return sprite;
   }
 
+  function notifyDecorFelled(decorId) {
+    if (!_socket || !decorId) return;
+    _socket.emit('decor-fell', { id: decorId });
+  }
+
   window.ZS = window.ZS || {};
-  ZS.Network = { init, tick, sendMove, sendShoot, sendRespawn, sendDied, sendSurvival, sendEquip, sendAttack };
+  ZS.Network = { init, tick, sendMove, sendShoot, sendRespawn, sendDied, sendSurvival, sendEquip, sendAttack, notifyDecorFelled };
 }());

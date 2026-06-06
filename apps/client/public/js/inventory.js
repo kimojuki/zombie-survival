@@ -514,7 +514,7 @@
 
   // Accepte l'ancien format (tableau = hotbar seule) ou le nouveau
   // { hotbar, bag, equip }. Restaure intégralement les 3 zones.
-  function loadFromSave(data) {
+  function loadFromSave(data, opts = {}) {
     if (!data) return;
     const isArr = Array.isArray(data);
     const hotbar = isArr ? data : data.hotbar;
@@ -522,13 +522,12 @@
     const equip  = isArr ? null : data.equip;
 
     if (Array.isArray(hotbar)) {
-      if (hotbar.length === 0 && !equip && !bag) return;   // rien à restaurer
+      if (hotbar.length === 0 && !equip && !bag) return;
       for (let i = 0; i < HOTBAR_SIZE; i++) _hotbar[i] = hotbar[i] || null;
     }
     if (equip && typeof equip === 'object') {
       for (const k of ['Tête', 'Torso', 'Mains', 'Dos']) _equip[k] = equip[k] || null;
     }
-    // Restaure le sac en conservant les positions, ajusté à la capacité du sac équipé.
     const cap  = _bagCapacity();
     const next = Array(cap).fill(null);
     const overflow = [];
@@ -543,11 +542,51 @@
 
     if (_hotbar[0] && _hotbar[0].type === 'pistol' && _hotbar[0].ammo == null) _hotbar[0].ammo = 30;
 
+    _initToolDurability(_hotbar[0]);
+
+    if (opts.fullReset) _setActiveSlot(0);
+
     _renderHotbar();
     if (_panelOpen) _renderInvPanel();
-    ZS.setHandItem?.(_hotbar[_active]?.type || null);
-    ZS.UI?.setWeaponUI?.(_hotbar[_active]?.type || null);
-    _syncArmor(false);   // règle la vie max selon l'armure restaurée (sans bonus)
+    if (!opts.fullReset) {
+      ZS.setHandItem?.(_hotbar[_active]?.type || null);
+      ZS.UI?.setWeaponUI?.(_hotbar[_active]?.type || null);
+    }
+    _syncArmor(false);
+  }
+
+  const STARTER_CAILLOU = { type: 'tool_caillou', qty: 1, durability: 80 };
+
+  function _initToolDurability(slot) {
+    if (!slot?.type || slot.durability != null) return;
+    const max = _def(slot.type)?.durabilite_max;
+    if (max != null && max !== Infinity) slot.durability = max;
+  }
+
+  /** Kit de départ si inventaire vide (1re connexion ou vieille sauvegarde). */
+  function ensureStarterCaillou() {
+    const hasAny = _hotbar.some((s) => s && s.type)
+      || _bag.some((s) => s && s.type)
+      || Object.values(_equip).some((s) => s && s.type);
+    if (hasAny) return false;
+    _hotbar[0] = { ...STARTER_CAILLOU };
+    _setActiveSlot(0);
+    _syncToServer();
+    return true;
+  }
+
+  /** Respawn : restaure le kit serveur + caillou slot 1 + main. */
+  function loadRespawnKit(data) {
+    loadFromSave(data, { fullReset: true });
+    let changed = false;
+    if (!_hotbar[0] || _hotbar[0].type !== 'tool_caillou') {
+      _hotbar[0] = { ...STARTER_CAILLOU };
+      changed = true;
+    }
+    _initToolDurability(_hotbar[0]);
+    if (changed) _renderHotbar();
+    _setActiveSlot(0);
+    _syncToServer();
   }
 
   function clear() {
@@ -1115,7 +1154,14 @@
     );
     g.add(placeholder);
 
-    // Modèle 3D réel (GLB ou procédural) — même rendu que l'item en main
+    // Modèle 3D réel (GLB ou procédural) — caillou posé au sol
+    if (type === 'tool_caillou' && ZS.RockPrefab?.buildGroundRock) {
+      g.remove(placeholder);
+      const rock = new THREE.Group();
+      ZS.RockPrefab.buildGroundRock(rock, { rockSeed: 90210 });
+      g.add(rock);
+      return g;
+    }
     if (ZS.getItemModel) {
       ZS.getItemModel(type).then((obj) => {
         g.remove(placeholder);
@@ -1131,6 +1177,6 @@
     spawnWorldItem, removeWorldItem, receivePickup, spawnStructure, collectBag,
     countItem, addItem, removeItem, consumeOne,
     getActiveItem, getWeaponAmmo, decrementAmmo, reloadWeapon, wearActiveWeapon,
-    getArmorValue, getMaxHealth, togglePanel, loadFromSave, clear,
+    getArmorValue, getMaxHealth, togglePanel, loadFromSave, loadRespawnKit, ensureStarterCaillou, clear,
   };
 }());

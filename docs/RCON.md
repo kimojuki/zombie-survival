@@ -121,6 +121,8 @@ Erreurs : `403` (mauvais mot de passe), `503` (RCON non configuré ou serveur en
 | `zombies on` / `zombies off` | Active/désactive l'IA (freeze si off) |
 | `nospawn on` / `nospawn off` | Bloque/active le respawn après un kill |
 | `clearzombies` | Supprime tous les zombies |
+| `zombieseed` | Complète la population jusqu'à 70 (prefabs par secteur) |
+| `zombieseed reset` | Vide puis repeuple (horde spawn + zones) |
 | `spawnzombies 10` | Ajoute N zombies aléatoires (max 200, prefabs pondérés) |
 | `zombieprefabs` | Liste les archétypes (`walker`, `runner`, `brute`) |
 | `spawnzombie zombie_runner 3` | Spawn 3 runners près de vous |
@@ -165,6 +167,8 @@ Props visibles par tous les joueurs, synchronisés via `decorItems` au `game-ini
 | `decoradd prefab wreck_sedan [x z] [rotY] [scale] [variant] [tilt] [wheels] [sink]` | Épave — variants : `rust`, `olive`, `navy`, `beige`, `burnt` |
 | `decorseed wrecks` | Ajoute les épaves seed si absentes (sans redémarrer le serveur) |
 | `decorseed wrecks reset` | Supprime toutes les épaves seed et les replace aux positions du gabarit |
+| `decorseed trees` | Ajoute les arbres prefab forêt si absents (~63) |
+| `decorseed trees reset` | Supprime les arbres seed et les replace |
 | `decoradd <type> [x z] [rotY] [scale]` | Pose un item de jeu comme prop (`food_conserves`, `tool_hachette`, …) — modèle 3D `getItemModel()` |
 | `decorlist` | Liste les décors actifs (id, kind, position) |
 | `decorremove <id>` | Supprime un décor par id |

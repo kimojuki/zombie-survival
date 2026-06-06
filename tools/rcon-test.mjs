@@ -101,6 +101,7 @@ async function main() {
   // ── Décor / prefabs ──
   results.push(await expectOk('decorprefabs', 'decorprefabs', (t) => t.includes('spawn_campfire')));
   results.push(await expectOk('decorprefabs wreck', 'decorprefabs wreck', (t) => t.includes('wreck_sedan')));
+  results.push(await expectOk('decorprefabs tree', 'decorprefabs tree', (t) => t.includes('tree_oak')));
   results.push(await expectOk('decorprefabs filter', 'decorprefabs stump', (t) => t.includes('spawn_stump')));
   results.push(await expectOk('decorlist seed', 'decorlist', (t) => t.includes('decor_')));
 
@@ -126,6 +127,24 @@ async function main() {
     'decorseed wrecks idle',
     'decorseed wrecks',
     (t) => t.includes('déjà') || t.includes('présentes') || t.includes('ajoutée'),
+  ));
+
+  results.push(await expectOk(
+    'decorseed trees idle',
+    'decorseed trees',
+    (t) => t.includes('déjà') || t.includes('présents') || t.includes('ajouté'),
+  ));
+
+  results.push(await expectOk(
+    'decoradd tree_oak',
+    'decoradd prefab tree_oak 8 -12 0.3 1.1',
+    (t) => t.includes('tree_oak') && t.includes('decor_'),
+  ));
+
+  results.push(await expectOk(
+    'decoradd tool_caillou',
+    'decoradd item tool_caillou 9 -11 0 1',
+    (t) => t.includes('tool_caillou') && t.includes('decor_'),
   ));
 
   results.push(await expectOk(

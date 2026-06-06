@@ -724,8 +724,12 @@
 
   // Registre des arbres abattables (pour l'abattage à la hache).
   const _trees = [];
-  function _registerTree(scene, group, x, z, collider) {
-    _trees.push({ scene, group, x, z, collider, hp: 5, maxHp: 5, alive: true });
+  function _registerTree(scene, group, x, z, collider, decorId) {
+    _trees.push({ scene, group, x, z, collider, decorId: decorId || null, hp: 5, maxHp: 5, alive: true });
+  }
+
+  function registerChoppableTree(scene, group, x, z, decorId) {
+    return _registerTree(scene, group, x, z, { decorId }, decorId);
   }
 
   // Abat l'arbre le plus proche devant (ox,oz) dans la direction (dirX,dirZ).
@@ -749,9 +753,15 @@
     }
     best.alive = false;
     if (best.scene) best.scene.remove(best.group);
-    const ci = _colliders.indexOf(best.collider);
-    if (ci >= 0) _colliders.splice(ci, 1);
-    return { hit: true, felled: true, x: best.x, z: best.z };
+    if (best.collider) {
+      const ci = _colliders.indexOf(best.collider);
+      if (ci >= 0) _colliders.splice(ci, 1);
+    }
+    if (best.decorId) {
+      ZS.removeDecorColliders?.(best.decorId);
+      ZS.Network?.notifyDecorFelled?.(best.decorId);
+    }
+    return { hit: true, felled: true, x: best.x, z: best.z, decorId: best.decorId || null };
   }
 
   function spawnTrees(scene, count) {
@@ -1185,7 +1195,8 @@
   ZS.shouldSkipDecorSideCollision = shouldSkipDecorSideCollision;
   ZS.resolveDecorBoxCollision = resolveDecorBoxCollision;
   ZS.decorWorldToLocal      = decorWorldToLocal;
-  ZS.chopTree          = chopTree;
+  ZS.chopTree              = chopTree;
+  ZS.registerChoppableTree = registerChoppableTree;
   ZS.registerFireLight     = registerFireLight;
   ZS.registerBillboards    = registerBillboards;
   ZS.updateBillboards      = updateBillboards;

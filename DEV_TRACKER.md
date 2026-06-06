@@ -48,6 +48,30 @@ Copier dans la description de PR :
 
 ## 2026-06-05
 
+### Completed — Item starter `tool_caillou` (2026-06-06)
+
+- **Item** : caillou de départ (hotbar slot 1) — mêlée basique + récolte bois sur arbres prefab.
+- **Visuels** : `rock_textures.js` + `rock_prefab.js` (main + sol jeté / decor RCON).
+- **Gameplay** : 10 dmg zombie, 1 dmg/coup arbre, +2 bois à l'abattage, durabilité 80 ; PC (clic) + mobile (bouton tir).
+- **Serveur** : `STARTING_ITEMS`, `ensureStarterRock()` si inventaire vide, loot pool.
+- **Cache bust** : `20260606-tool-caillou-23`
+
+### Completed — Arbres prefab RCON + seed forêt (2026-06-06)
+
+- **Prefabs** : `tree_oak`, `tree_pine`, `tree_birch`, `tree_dead` — `tree_prefabs.js` (atlas écorce/feuillage, `treeSeed` déterministe).
+- **Seed** : ~63 arbres forêt via `packages/shared/src/tree-placements.mjs` ; `ensureWorldTrees()` au boot.
+- **RCON** : `decorprefabs tree`, `decoradd prefab tree_oak …`, `decorseed trees` / `decorseed trees reset`.
+- **Gameplay** : abattage hache sync multijoueur (`decor-fell`) ; colliders cylindriques ; secteur forêt sans spawn procédural local.
+- **Cache bust** : `20260606-tree-prefabs-22`
+
+### Completed — Population zombie + collisions décors (2026-06-06)
+
+- **Peuplement** : `ensureZombiePopulation()` — complète jusqu'à 70 zombies (plus de skip si 1 seul en mémoire) ; horde de 18 autour du spawn forêt (35–110 m) ; prefabs pondérés par secteur (`pickZombiePrefabForZone`).
+- **Maintien** : top-up automatique toutes les 2 min si kills ; RCON `zombieseed` / `zombieseed reset`.
+- **Collisions zombie ↔ décors** : `packages/shared/src/collider-resolve.mjs` (box orientées rotY/rotZ, épaves composées) ; serveur utilise `collideRadius` par prefab.
+- **Sync colliders** : client renvoie `world-colliders` après spawn décors (game-init + decor-item-spawn/remove) ; serveur fusionne la couche `decorId`.
+- **Cache bust** : `20260606-zombie-populate-21`
+
 ### Completed — Zombies prefab RCON + combat (2026-06-06)
 
 - **Shared** : `packages/shared/src/zombie-prefabs.mjs` — `zombie_walker`, `zombie_runner`, `zombie_brute` (HP, dégâts, vitesse, detectRange, hitRadius).

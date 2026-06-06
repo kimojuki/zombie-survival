@@ -276,6 +276,14 @@ function createRcon(ctx) {
     );
   });
 
+  register('zombieseed', 'Peuple le serveur jusqu\'à la cible — zombieseed [reset]', async (args) => {
+    const reset = (args[1] || '').toLowerCase() === 'reset';
+    await ctx.loadZombiePrefabs?.();
+    const r = await ctx.ensureZombiePopulation?.({ reset });
+    if (!r) return fail('ensureZombiePopulation indisponible');
+    return ok(`Zombies: ${r.total} actifs (${r.added} ajouté(s)${reset ? ', reset' : ''})`);
+  });
+
   register('killzombie', 'Supprime un zombie — killzombie <id|nearest>', (args, meta) => {
     const q = (args[1] || 'nearest').toLowerCase();
     let target = null;
@@ -504,6 +512,9 @@ function createRcon(ctx) {
       if (Number.isFinite(wheels)) item.wreckWheels = wheels;
       if (Number.isFinite(sink)) item.wreckSink = sink;
     }
+    if (kind === 'prefab' && String(ref).startsWith('tree_')) {
+      item.treeSeed = Math.floor(Math.random() * 0xffffff);
+    }
     ctx.decorItems.set(item.id, item);
     broadcastDecorSpawn(item);
     return ok(`Décor posé ${item.id}: ${(item.prefabId || item.type)} @ (${x.toFixed(1)}, ${z.toFixed(1)}) scale=${item.scale.toFixed(2)}`);
@@ -525,14 +536,22 @@ function createRcon(ctx) {
     return ok('=== Prefabs décor ===', ...list.map((id) => `  ${id}`));
   });
 
-  register('decorseed', 'Seed décor manquant — decorseed wrecks [reset]', async (args) => {
+  register('decorseed', 'Seed décor manquant — decorseed wrecks|trees [reset]', async (args) => {
     const kind = (args[1] || '').toLowerCase();
-    if (kind !== 'wrecks') return fail('Usage: decorseed wrecks [reset]');
-    if (!ctx.ensureRoadWrecks) return fail('ensureRoadWrecks indisponible');
     const reset = (args[2] || '').toLowerCase() === 'reset';
-    const n = await ctx.ensureRoadWrecks({ broadcast: true, reset });
-    if (!n && !reset) return ok('Épaves déjà présentes — rien à ajouter.');
-    return ok(`${n} épave(s) routière(s) ${reset ? 'repositionnée(s)' : 'ajoutée(s)'} et synchronisée(s).`);
+    if (kind === 'wrecks') {
+      if (!ctx.ensureRoadWrecks) return fail('ensureRoadWrecks indisponible');
+      const n = await ctx.ensureRoadWrecks({ broadcast: true, reset });
+      if (!n && !reset) return ok('Épaves déjà présentes — rien à ajouter.');
+      return ok(`${n} épave(s) routière(s) ${reset ? 'repositionnée(s)' : 'ajoutée(s)'} et synchronisée(s).`);
+    }
+    if (kind === 'trees') {
+      if (!ctx.ensureWorldTrees) return fail('ensureWorldTrees indisponible');
+      const n = await ctx.ensureWorldTrees({ broadcast: true, reset });
+      if (!n && !reset) return ok('Arbres déjà présents — rien à ajouter.');
+      return ok(`${n} arbre(s) prefab ${reset ? 'repositionné(s)' : 'ajouté(s)'} et synchronisé(s).`);
+    }
+    return fail('Usage: decorseed wrecks|trees [reset]');
   });
 
   register('decorremove', 'Retire un décor decorremove <id|nearest>', (args, meta) => {

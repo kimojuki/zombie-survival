@@ -583,6 +583,10 @@
       });
     }
 
+    if (prefabId.startsWith('tree_') && ZS.registerChoppableTree) {
+      ZS.registerChoppableTree(scene, root, root.position.x, root.position.z, decorId);
+    }
+
     return root;
   }
 

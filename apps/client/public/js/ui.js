@@ -145,6 +145,7 @@
     const cat = type ? ZS.ITEMS?.[type]?.category : null;
     let icon = '👊';
     if (cat === 'firearm') icon = '🔫';
+    else if (type === 'tool_caillou') icon = '🪨';
     else if (type === 'wpn_hache_combat' || type === 'tool_hachette') icon = '🪓';
     else if (cat === 'melee') icon = '🗡️';
     else if (cat === 'tool') icon = '🛠️';

@@ -295,6 +295,10 @@ const decorPrefabs = [
   'spawn_flat_stone',
   'wreck_sedan',
   'wreck_pickup',
+  'tree_oak',
+  'tree_pine',
+  'tree_birch',
+  'tree_dead',
 ];
 let zombieIdCounter    = 0;
 let itemIdCounter      = 0;
@@ -305,10 +309,25 @@ let worldWaterZones    = [];
 const FOREST_SPAWN     = { x: 0.4, y: 1, z: 7, rotY: 0 };   // Procedural spawn approach
 const DEFAULT_SURVIVAL = { faim: 80, soif: 80, infection: 0, saignement: false };
 const STARTING_ITEMS   = {
-  hotbar: [null, null, null, null, null, null],   // inventaire vide
+  hotbar: [{ type: 'tool_caillou', qty: 1, durability: 80 }, null, null, null, null, null],
   bag: [],
-  equip: { 'Tête': null, 'Torso': null, 'Mains': null, 'Dos': null },  // aucun sac
+  equip: { 'Tête': null, 'Torso': null, 'Mains': null, 'Dos': null },
 };
+
+function ensureStarterRock(p) {
+  const inv = p.inv;
+  if (!inv || typeof inv !== 'object') return false;
+  const hotbar = Array.isArray(inv.hotbar) ? inv.hotbar : [];
+  const bag = inv.bag || [];
+  const equip = inv.equip || {};
+  const hasAny = hotbar.some((s) => s && s.type)
+    || bag.some((s) => s && s.type)
+    || Object.values(equip).some((s) => s && s.type);
+  if (hasAny) return false;
+  inv.hotbar = [{ type: 'tool_caillou', qty: 1, durability: 80 }, null, null, null, null, null];
+  inv.bag = inv.bag || [];
+  return true;
+}
 const STARTING_SAVE = JSON.stringify({ ...STARTING_ITEMS, survival: DEFAULT_SURVIVAL });
 const DEATH_BAG_MS  = 30 * 60 * 1000; // butin de mort : 30 min puis disparition
 
@@ -330,6 +349,7 @@ function flattenInv(inv) {
 }
 
 const ROAD_WRECKS_URL = pathToFileURL(path.join(__dirname, '../../packages/shared/src/road-wrecks.mjs')).href;
+const TREE_PLACEMENTS_URL = pathToFileURL(path.join(__dirname, '../../packages/shared/src/tree-placements.mjs')).href;
 
 function _makeDecorItem(d) {
   const item = {
@@ -366,6 +386,33 @@ function ensureRoadWrecks({ broadcast = false, reset = false } = {}) {
     }
     if (added.length) {
       log.info('seed', 'road wrecks added', { count: added.length });
+      if (broadcast && rcon?.broadcastDecorSpawn) {
+        for (const item of added) rcon.broadcastDecorSpawn(item);
+      }
+    }
+    return added.length;
+  });
+}
+
+/** Ajoute les arbres prefab forêt si absents (boot ou RCON decorseed trees). */
+function ensureWorldTrees({ broadcast = false, reset = false } = {}) {
+  if (reset) {
+    for (const [id, d] of decorItems) {
+      if (!d.prefabId?.startsWith('tree_')) continue;
+      decorItems.delete(id);
+      if (broadcast && rcon?.broadcastDecorRemove) rcon.broadcastDecorRemove(id);
+    }
+  } else {
+    const hasTrees = [...decorItems.values()].some((d) => d.prefabId?.startsWith('tree_'));
+    if (hasTrees) return Promise.resolve(0);
+  }
+  return import(TREE_PLACEMENTS_URL).then(({ computeTreePlacements }) => {
+    const added = [];
+    for (const t of computeTreePlacements()) {
+      added.push(_makeDecorItem(t));
+    }
+    if (added.length) {
+      log.info('seed', 'world trees added', { count: added.length });
       if (broadcast && rcon?.broadcastDecorSpawn) {
         for (const item of added) rcon.broadcastDecorSpawn(item);
       }
@@ -420,42 +467,49 @@ function seedSpawnDecorItems() {
 let worldColliders = [];
 const structureColliders = []; // murs/portes construits par les joueurs
 const ZOMBIE_R = 0.5;
+/** Horde de départ autour de la clairière (forêt) — visible en explorant le spawn. */
+const ZOMBIE_SPAWN_RING = { count: 18, rMin: 35, rMax: 110 };
 
-function resolveZombieCollision(nx, nz) {
-  for (const list of [worldColliders, structureColliders]) {
-  for (const c of list) {
+function resolveZombieCollision(nx, nz, agentR = ZOMBIE_R) {
+  const all = worldColliders.concat(structureColliders);
+  if (_colliderResolve?.resolveAgentCollision) {
+    return _colliderResolve.resolveAgentCollision(nx, nz, all, agentR, 0, { skipJumpable: false });
+  }
+  for (const c of all) {
     if (c.type === 'box') {
       const clampX = Math.max(c.cx - c.hw, Math.min(c.cx + c.hw, nx));
       const clampZ = Math.max(c.cz - c.hd, Math.min(c.cz + c.hd, nz));
-      const dx = nx - clampX, dz = nz - clampZ;
+      const dx = nx - clampX;
+      const dz = nz - clampZ;
       const dist = Math.hypot(dx, dz);
       if (dist > 0.0001) {
-        if (dist < ZOMBIE_R) {
-          const pen = ZOMBIE_R - dist;
+        if (dist < agentR) {
+          const pen = agentR - dist;
           nx += (dx / dist) * pen;
           nz += (dz / dist) * pen;
         }
       } else {
-        // Centre à l'intérieur de la boîte → on ressort par le bord le plus proche
-        const l = nx - (c.cx - c.hw), r = (c.cx + c.hw) - nx;
-        const t = nz - (c.cz - c.hd), b = (c.cz + c.hd) - nz;
+        const l = nx - (c.cx - c.hw);
+        const r = (c.cx + c.hw) - nx;
+        const t = nz - (c.cz - c.hd);
+        const b = (c.cz + c.hd) - nz;
         const m = Math.min(l, r, t, b);
-        if      (m === l) nx = c.cx - c.hw - ZOMBIE_R;
-        else if (m === r) nx = c.cx + c.hw + ZOMBIE_R;
-        else if (m === t) nz = c.cz - c.hd - ZOMBIE_R;
-        else              nz = c.cz + c.hd + ZOMBIE_R;
+        if      (m === l) nx = c.cx - c.hw - agentR;
+        else if (m === r) nx = c.cx + c.hw + agentR;
+        else if (m === t) nz = c.cz - c.hd - agentR;
+        else              nz = c.cz + c.hd + agentR;
       }
-    } else {
-      const dx = nx - c.x, dz = nz - c.z;
+    } else if (c.x !== undefined) {
+      const dx = nx - c.x;
+      const dz = nz - c.z;
       const dist = Math.hypot(dx, dz);
-      const min = ZOMBIE_R + (c.r || 0.3);
+      const min = agentR + (c.r || 0.3);
       if (dist < min && dist > 0.0001) {
         const scale = min / dist;
         nx = c.x + dx * scale;
         nz = c.z + dz * scale;
       }
     }
-  }
   }
   return [nx, nz];
 }
@@ -540,7 +594,7 @@ const ALL_ITEMS = [
   'eq_petit_sac', 'eq_sac_moyen', 'eq_casque', 'eq_gilet_protection', 'eq_gants',
   'res_bois_brut', 'res_planche', 'res_ferraille', 'res_metal', 'res_clous',
   'res_ruban_adhesif', 'res_chiffon', 'res_corde',
-  'tool_marteau', 'tool_hachette', 'tool_pioche',
+  'tool_marteau', 'tool_hachette', 'tool_pioche', 'tool_caillou',
 ];
 
 function _randInt(min, max) { return min + Math.floor(Math.random() * (max - min + 1)); }
@@ -630,16 +684,23 @@ const WANDER_TURN_MIN = 2;
 const WANDER_TURN_MAX = 5;
 
 const ZOMBIE_PREFABS_URL = pathToFileURL(path.join(__dirname, '../../packages/shared/src/zombie-prefabs.mjs')).href;
+const COLLIDER_RESOLVE_URL = pathToFileURL(path.join(__dirname, '../../packages/shared/src/collider-resolve.mjs')).href;
 let _zombiePrefabs = null;
+let _colliderResolve = null;
 
 async function loadZombiePrefabs() {
   if (!_zombiePrefabs) _zombiePrefabs = await import(ZOMBIE_PREFABS_URL);
   return _zombiePrefabs;
 }
 
+async function loadColliderResolve() {
+  if (!_colliderResolve) _colliderResolve = await import(COLLIDER_RESOLVE_URL);
+  return _colliderResolve;
+}
+
 function makeZombie(opts = {}) {
   const zp = _zombiePrefabs;
-  const prefabId = opts.prefabId || (zp ? zp.pickZombiePrefab() : 'zombie_walker');
+  let prefabId = opts.prefabId || null;
   const id = ++zombieIdCounter;
   let x;
   let z;
@@ -652,7 +713,11 @@ function makeZombie(opts = {}) {
     const dist = Math.sqrt(Math.random()) * zone.r;
     x = zone.cx + Math.cos(ang) * dist;
     z = zone.cz + Math.sin(ang) * dist;
+    if (!prefabId && zp?.pickZombiePrefabForZone) {
+      prefabId = zp.pickZombiePrefabForZone(zone.name);
+    }
   }
+  if (!prefabId) prefabId = zp ? zp.pickZombiePrefab() : 'zombie_walker';
   if (zp?.buildZombieEntity) {
     return zp.buildZombieEntity(prefabId, { x, z }, id);
   }
@@ -679,14 +744,47 @@ function makeZombie(opts = {}) {
   };
 }
 
-async function seedInitialZombies() {
+async function ensureZombiePopulation(opts = {}) {
   await loadZombiePrefabs();
-  if (zombies.size > 0) return;
-  for (let i = 0; i < ZOMBIE_COUNT; i++) {
+  await loadColliderResolve();
+  const target = ZOMBIE_COUNT;
+  const reset = !!opts.reset;
+
+  if (reset) {
+    const ids = [...zombies.keys()];
+    zombies.clear();
+    for (const id of ids) io.emit('zombie-die', id);
+  } else if (zombies.size >= target) {
+    return { added: 0, total: zombies.size };
+  }
+
+  let added = 0;
+
+  if (zombies.size === 0) {
+    const zp = _zombiePrefabs;
+    for (let i = 0; i < ZOMBIE_SPAWN_RING.count; i++) {
+      const ang = Math.random() * Math.PI * 2;
+      const dist = ZOMBIE_SPAWN_RING.rMin + Math.random() * (ZOMBIE_SPAWN_RING.rMax - ZOMBIE_SPAWN_RING.rMin);
+      const prefabId = zp?.pickZombiePrefabForZone?.('forest') || 'zombie_walker';
+      const z = makeZombie({
+        prefabId,
+        x: FOREST_SPAWN.x + Math.cos(ang) * dist,
+        z: FOREST_SPAWN.z + Math.sin(ang) * dist,
+      });
+      zombies.set(z.id, z);
+      added++;
+    }
+  }
+
+  while (zombies.size < target) {
     const z = makeZombie();
     zombies.set(z.id, z);
+    added++;
+    if (players.size > 0) io.emit('zombie-spawn', z);
   }
-  log.info('boot', 'zombies seeded', { count: zombies.size });
+
+  log.info('boot', 'zombies populated', { added, total: zombies.size, target });
+  return { added, total: zombies.size };
 }
 
 rcon = createRcon({
@@ -705,6 +803,7 @@ rcon = createRcon({
   setWorldTime,
   makeZombie,
   loadZombiePrefabs,
+  ensureZombiePopulation,
   listZombiePrefabs: () => (_zombiePrefabs ? _zombiePrefabs.listZombiePrefabIds() : []),
   getZombiePrefab: (id) => (_zombiePrefabs ? _zombiePrefabs.getZombiePrefab(id) : null),
   savePlayerState,
@@ -713,6 +812,7 @@ rcon = createRcon({
   clearLoot,
   makeDecorItemId: () => `decor_${decorSeq++}`,
   ensureRoadWrecks,
+  ensureWorldTrees,
   itemTypes: ALL_ITEMS,
   log,
 });
@@ -755,8 +855,10 @@ setInterval(() => {
       z.angle = ang;
       // Déplacement + collision murs/objets (glisse le long, entre par les portes)
       const waterMul = getWaterSlowFactor(z.x, z.z);
+      const zR = z.collideRadius || ZOMBIE_R;
       const chase = resolveZombieCollision(z.x + Math.cos(ang) * z.speed * waterMul * DT,
-                                           z.z + Math.sin(ang) * z.speed * waterMul * DT);
+                                           z.z + Math.sin(ang) * z.speed * waterMul * DT,
+                                           zR);
       z.x = chase[0];
       z.z = chase[1];
       // Attaque avec cadence : un coup toutes ZOMBIE_ATTACK_CD s, dégâts modérés.
@@ -788,7 +890,8 @@ setInterval(() => {
       const waterMul = getWaterSlowFactor(z.x, z.z);
       const wx = Math.max(-WORLD_RADIUS, Math.min(WORLD_RADIUS, z.x + Math.cos(z.wanderAngle) * z.speed * WANDER_SPEED * waterMul * DT));
       const wz = Math.max(-WORLD_RADIUS, Math.min(WORLD_RADIUS, z.z + Math.sin(z.wanderAngle) * z.speed * WANDER_SPEED * waterMul * DT));
-      const wander = resolveZombieCollision(wx, wz);
+      const zR = z.collideRadius || ZOMBIE_R;
+      const wander = resolveZombieCollision(wx, wz, zR);
       z.x = wander[0];
       z.z = wander[1];
     }
@@ -797,6 +900,12 @@ setInterval(() => {
   io.emit('zombie-tick', { zombies: Array.from(zombies.values()), time: _worldTime });
   if (_tickStart) log.tickSummary(zombies, players, Date.now() - _tickStart);
 }, 100);
+
+// Maintient la population si des kills ont réduit le nombre sous la cible
+setInterval(() => {
+  if (!serverFlags.zombieSpawn || zombies.size >= ZOMBIE_COUNT) return;
+  ensureZombiePopulation().catch((err) => log.error('ensureZombiePopulation periodic failed', err));
+}, 120000);
 
 if (log.PLAYER_SNAPSHOT_MS > 0) {
   setInterval(() => log.playerSnapshot(players), log.PLAYER_SNAPSHOT_MS);
@@ -864,6 +973,7 @@ io.on('connection', async (socket) => {
     invincible: true
   };
   setTimeout(() => { if (players.has(socket.id)) p.invincible = false; }, 5000);
+  if (ensureStarterRock(p)) p.dirty = true;
   players.set(socket.id, p);
   log.info('socket', 'connect', {
     username: p.username,
@@ -899,10 +1009,22 @@ io.on('connection', async (socket) => {
 
   // Le premier client transmet la géométrie de collision (murs, arbres, etc.).
   socket.on('world-colliders', (cols) => {
-    if (worldColliders.length === 0 && Array.isArray(cols)) {
-      // On exclut les murs d'étage / parapets (minY) : ils ne concernent pas le sol.
-      worldColliders = cols.filter(c => c && c.minY === undefined);
-      log.info('world', 'colliders loaded', { count: worldColliders.length, from: p.username });
+    if (!Array.isArray(cols)) return;
+    const terrain = cols.filter((c) => c && c.minY === undefined && !c.decorId);
+    const decor = cols.filter((c) => c && c.decorId);
+    if (worldColliders.length === 0) {
+      worldColliders = terrain;
+      log.info('world', 'colliders loaded', { terrain: terrain.length, from: p.username });
+    } else {
+      worldColliders = worldColliders.filter((c) => !c.decorId);
+    }
+    if (decor.length) {
+      worldColliders = worldColliders.concat(decor);
+      log.info('world', 'decor colliders merged', {
+        decor: decor.length,
+        total: worldColliders.length,
+        from: p.username,
+      });
     }
   });
 
@@ -1012,7 +1134,8 @@ io.on('connection', async (socket) => {
         // respectant les collisions (murs/objets). Diffusé au prochain zombie-tick.
         const kb = Math.max(0, Math.min(3, Number(d.kb) || 0));
         if (kb > 0) {
-          const pushed = resolveZombieCollision(hit.x + nx * kb, hit.z + nz * kb);
+          const zR = hit.collideRadius || ZOMBIE_R;
+          const pushed = resolveZombieCollision(hit.x + nx * kb, hit.z + nz * kb, zR);
           hit.x = pushed[0];
           hit.z = pushed[1];
         }
@@ -1065,6 +1188,18 @@ io.on('connection', async (socket) => {
     items.set(id, drop);
     io.emit('item-spawn', drop);
     log.debug('items', 'drop', { player: p.username, type: d.type, qty, pos: { x: +drop.x.toFixed(1), z: +drop.z.toFixed(1) } });
+  });
+
+  // Abattage arbre prefab — sync multijoueur (hache)
+  socket.on('decor-fell', (d) => {
+    const id = d?.id;
+    if (!id || typeof id !== 'string') return;
+    const item = decorItems.get(id);
+    if (!item?.prefabId?.startsWith('tree_')) return;
+    if (Math.hypot(item.x - p.x, item.z - p.z) > 6) return;
+    decorItems.delete(id);
+    io.emit('decor-item-remove', id);
+    log.debug('world', 'tree felled', { player: p.username, decorId: id, prefab: item.prefabId });
   });
 
   socket.on('place-structure', (d) => {
@@ -1134,14 +1269,15 @@ io.on('connection', async (socket) => {
   socket.on('respawn', () => {
     p.health = 100;
     p.invincible = true;
-    p.inv = JSON.parse(JSON.stringify(STARTING_ITEMS));   // kit de départ (comme 1re connexion)
+    const kit = JSON.parse(JSON.stringify(STARTING_ITEMS));
+    p.inv = kit;
     p.survival = { ...DEFAULT_SURVIVAL };
     p.x = FOREST_SPAWN.x; p.y = FOREST_SPAWN.y; p.z = FOREST_SPAWN.z; p.rotY = FOREST_SPAWN.rotY;
     p.dirty = true;
     setTimeout(() => { if (players.has(socket.id)) p.invincible = false; }, 3000);
     socket.emit('take-damage', { health: 100 });
-    socket.emit('respawn-at', { spawn: FOREST_SPAWN, inventory: STARTING_ITEMS, survival: DEFAULT_SURVIVAL });
-    log.info('death', 'respawn', { player: p.username, spawn: FOREST_SPAWN });
+    socket.emit('respawn-at', { spawn: FOREST_SPAWN, inventory: kit, survival: { ...DEFAULT_SURVIVAL } });
+    log.info('death', 'respawn', { player: p.username, spawn: FOREST_SPAWN, kit: 'tool_caillou' });
   });
 
   // ── Chat joueurs ────────────────────────────────────────────────────────────
@@ -1251,12 +1387,14 @@ async function resetAllPlayersOnce() {
   }
 }
 
-seedInitialZombies()
-  .catch((err) => log.error('seedInitialZombies failed', err))
+ensureZombiePopulation()
+  .catch((err) => log.error('ensureZombiePopulation failed', err))
   .then(() => seedSpawnDecorItems())
   .catch((err) => log.error('seedSpawnDecorItems failed', err))
   .then(() => ensureRoadWrecks())
   .catch((err) => log.error('ensureRoadWrecks failed', err))
+  .then(() => ensureWorldTrees())
+  .catch((err) => log.error('ensureWorldTrees failed', err))
   .finally(() => {
     server.listen(PORT, HOST, () => {
       serverReady = true;

@@ -55,8 +55,7 @@
     _buildUtilityPoles(scene, B);
     _buildTreeStumps(scene, B);
     _buildRiver(scene);
-    _spawnForestTrees(scene);
-    _spawnDeadTrees(scene);
+    // Arbres : prefabs seed serveur (decorseed trees) — plus de spawn procédural local
   }
 
   // ── Zone de spawn ─────────────────────────────────────────────────────────────
@@ -483,24 +482,7 @@
   }
 
   // ── Végétation dense ─────────────────────────────────────────────────────────
-
-  function _spawnForestTrees(scene) {
-    const noSpawn = [
-      [SPAWN_CX, SPAWN_CZ, 22],
-      [-20,   33, 24],
-      [-60,  -70, 14],
-      [-80,   42, 14],
-      [ 82, -100, 20],
-      [FOREST_HUB[0], FOREST_HUB[1], 10],
-      [TOWN_JUNCTION[0], TOWN_JUNCTION[1], 8],
-    ];
-    ZS.spawnTreesAt(scene, SPAWN_CX, SPAWN_CZ, 55, 130, 0.55, noSpawn);
-  }
-
-  function _spawnDeadTrees(scene) {
-    ZS.spawnDeadTreesAt(scene,  32, -55, 4, 12);
-    ZS.spawnDeadTreesAt(scene, -40,  60, 4, 12);
-  }
+  // Arbres prefab : seed serveur (ensureWorldTrees / RCON decorseed trees)
 
   // ── Poteaux électriques le long de la route principale ───────────────────────
 

@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { APP_NAME, ROUTES, SOCKET_EVENTS } from '../packages/shared/src/constants.mjs';
 import { computeRoadWreckPlacements, ROAD_WRECK_TEMPLATES } from '../packages/shared/src/road-wrecks.mjs';
 
-import { buildZombieEntity, getZombiePrefab, listZombiePrefabIds, pickZombiePrefab } from '../packages/shared/src/zombie-prefabs.mjs';
+import { buildZombieEntity, getZombiePrefab, listZombiePrefabIds, pickZombiePrefab, pickZombiePrefabForZone } from '../packages/shared/src/zombie-prefabs.mjs';
 
 test('shared constants expose stable app contracts', () => {
   assert.equal(APP_NAME, 'Zombie Survival');
@@ -25,6 +25,15 @@ test('zombie prefabs build entities with combat stats', () => {
   assert.ok(brute.hitRadius > 0);
   assert.ok(brute.collideRadius > 0);
   for (let i = 0; i < 20; i++) assert.ok(ids.includes(pickZombiePrefab()));
+});
+
+test('zombie prefabs vary by zone weights', () => {
+  const military = new Set();
+  for (let i = 0; i < 40; i++) military.add(pickZombiePrefabForZone('military'));
+  assert.ok(military.has('zombie_brute'));
+  const forest = new Set();
+  for (let i = 0; i < 40; i++) forest.add(pickZombiePrefabForZone('forest'));
+  assert.ok(forest.has('zombie_walker'));
 });
 
 test('road wreck placements are spread along the route', () => {

@@ -530,6 +530,25 @@
                          FIST.degats_impact, FIST.portee_metre, 1.4, 0.5);
   }
 
+  function _canHarvestWood(type, def) {
+    if (!def) return false;
+    if (type === 'wpn_hache_combat' || type === 'tool_hachette') return true;
+    return def.type_recolte === 'Bois' && def.degats_impact > 0;
+  }
+
+  function _chopDamage(type, def) {
+    if (type === 'tool_hachette') return 2;
+    if (type === 'wpn_hache_combat') return 1;
+    if (type === 'tool_caillou') return 1;
+    return Math.max(1, Math.floor((def?.efficacite_recolte || 1) * 0.5));
+  }
+
+  function _woodYield(type, def) {
+    if (def?.bois_par_arbre != null) return def.bois_par_arbre;
+    if (type === 'tool_hachette' || type === 'wpn_hache_combat') return 3;
+    return 2;
+  }
+
   function _meleeSwing(item, def) {
     const n = _now();
     if (n - _lastAttack < (def.cadence_attaque || 0.5)) return;
@@ -545,13 +564,16 @@
     const hitDist = ZS.Zombies.nearestDist(cam.x, cam.z);
     ZS.Audio.melee(hitDist < range + 0.8 ? 1.0 : 0.45);
 
-    // Hache : tenter d'abattre un arbre devant soi
-    if ((item.type === 'wpn_hache_combat' || item.type === 'tool_hachette') && ZS.chopTree) {
-      const dmg  = item.type === 'tool_hachette' ? 2 : 1;
-      const chop = ZS.chopTree(cam.x, cam.z, dir.x, dir.z, Math.max(range + 1.2, 2.6), dmg);
+    // Outils / armes : abattre un arbre devant soi
+    if (_canHarvestWood(item.type, def) && ZS.chopTree) {
+      const chop = ZS.chopTree(
+        cam.x, cam.z, dir.x, dir.z,
+        Math.max(range + 1.2, 2.4),
+        _chopDamage(item.type, def),
+      );
       if (chop && chop.felled) {
-        ZS.Inventory.addItem('res_bois_brut', 3);
-        ZS.UI.showNotif('Arbre abattu : +3 Bois brut');
+        ZS.Inventory.addItem('res_bois_brut', _woodYield(item.type, def));
+        ZS.UI.showNotif('Arbre abattu : +' + _woodYield(item.type, def) + ' Bois brut');
       }
     }
 

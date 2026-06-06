@@ -8,8 +8,8 @@ Vue d'ensemble pour onboarding et reviews PR.
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│  Navigateur (public/)                                       │
-│  game.html → scripts ZS.* (ordre fixe, CACHE_BUST)         │
+│  Navigateur (apps/client)                                  │
+│  game.html → Vite + scripts ZS.* legacy                    │
 │                                                             │
 │  game.js ── boucle render + input                           │
 │  world.js ─ terrain, jour/nuit, végétation                  │
@@ -22,24 +22,24 @@ Vue d'ensemble pour onboarding et reviews PR.
                        │ Socket.io (JWT auth)
                        │ REST /api/auth/*
 ┌──────────────────────▼──────────────────────────────────────┐
-│  server.js                                                    │
+│  apps/server/index.js                                        │
 │  • players, zombies, items, structures (Maps en mémoire)   │
 │  • Zombie AI tick 100ms + jour/nuit partagé                  │
 │  • Loot bâtiments, butins de mort, structures joueurs        │
-│  • RCON (src/rcon.js)                                        │
+│  • RCON (apps/server/src/rcon.js)                            │
 └──────────────────────┬──────────────────────────────────────┘
                        │
 ┌──────────────────────▼──────────────────────────────────────┐
-│  src/db.js — SQLite (dev) ou MySQL/MariaDB (prod)            │
+│  apps/server/src/db.js — SQLite dev ou MySQL/MariaDB prod    │
 │  Table players : position, health, kills, inventory JSON     │
 └─────────────────────────────────────────────────────────────┘
 ```
 
 ---
 
-## Chargement client (`game.html`)
+## Chargement client (`apps/client/game.html`)
 
-Ordre des scripts (important) :
+Ordre des scripts legacy (important) dans `apps/client/src/bootstrap/legacy-modules.js` :
 
 1. `noise.js` — hauteur terrain
 2. `road_network.js` — **avant** buildings
@@ -88,7 +88,7 @@ Le premier client connecté envoie au serveur :
 
 Après envoi sur PC, le **pointer lock** reprend automatiquement.
 
-**Serveur** : rate limit 800 ms par joueur. **`GET /api/health`** expose `"chat": true` si le handler est actif — **redémarrer Node** (`pm2 restart zombie`) après toute modif de `server.js`.
+**Serveur** : rate limit 800 ms par joueur. **`GET /api/health`** expose `"chat": true` si le handler est actif — **redémarrer Node** (`pm2 restart zombie`) après toute modif de `apps/server/index.js`.
 
 Anti-doublon client : ignore l’écho serveur via `senderId` (socket.id), pas via le pseudo.
 

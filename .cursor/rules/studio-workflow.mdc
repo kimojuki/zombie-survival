@@ -1,0 +1,15 @@
+---
+description: Studio workflow and architecture rules for Zombie Survival
+alwaysApply: true
+---
+
+# Zombie Survival Studio Workflow
+
+- Work from `dev` or `feature/*`; `master` is production.
+- Do not merge or deploy to production unless explicitly requested.
+- Keep local secrets and data out of Git: `.env`, `.env.*`, `database/*.sqlite*`, `notes-local/`.
+- Update `DEV_TRACKER.md` every work session.
+- Use `apps/server` for server code, `apps/client` for browser code, `packages/shared` for shared constants/contracts, `infra` for deployment/runtime files, and `tools` for local automation.
+- Preserve `/api/health`, auth routes, Socket.io event names and local SQLite compatibility when restructuring server code.
+- Keep the legacy `window.ZS` facade until the client migration is complete.
+- Run or document `npm run lint`, `npm test`, `npm run build`, and smoke/manual checks before preparing a PR.

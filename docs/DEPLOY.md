@@ -63,7 +63,7 @@ crontab -e
 */2 * * * * ZOMBIE_APP_DIR=/home/clients/VOTRE_ID/sites/jeu.zombieOfficel.ch/zombie-survival /bin/bash /home/clients/VOTRE_ID/sites/jeu.zombieOfficel.ch/zombie-survival/scripts/git-watch-deploy.sh >> $HOME/logs/zombie-deploy-cron.log 2>&1
 ```
 
-**Workflow dev :** `git push origin master` → sous 2 min, le serveur sync + `pm2 restart zombie` **sans intervention**.
+**Workflow dev :** `feature/* -> dev -> master`. Le serveur de prod ne suit que `master`; `dev` doit passer CI, smoke tests et validation manuelle avant merge prod.
 
 ### 4. Vérifier que le cron tourne
 
@@ -114,6 +114,72 @@ Le webhook n'agit que sur la branche `master` (ou `ZOMBIE_DEPLOY_BRANCH`).
 | `ZOMBIE_PM2_NAME` | `zombie` | Nom process pm2 |
 | `ZOMBIE_DEPLOY_BRANCH` | `master` | Branche suivie |
 | `ZOMBIE_DEPLOY_LOG_DIR` | `~/logs` | Logs déploiement |
+| `TRUST_PROXY` | `true` derrière proxy | Express (Infomaniak **ou** cloudflared) |
+
+## Environnements
+
+| URL | Rôle | Backend |
+|-----|------|---------|
+| `http://localhost:3000` | Dev direct (PC) | Node local |
+| `https://survival.badom.ch` | **Dev partagé** (tunnel) | cloudflared → `127.0.0.1:3000` |
+| `https://3k51myccypp.preview.infomaniak.website` | **Prod / preview** | Infomaniak (pm2 + Apache) |
+
+Ne pas mélanger les sessions : le JWT de la preview Infomaniak **≠** celui du serveur local. Se reconnecter sur chaque URL.
+
+---
+
+## Dev local via cloudflared (`survival.badom.ch`)
+
+Symptômes : `[world] build` OK, puis chargement infini, `socket.io polling 400`, WebSocket fermé.
+
+### Checklist
+
+1. Serveur local actif : `npm run dev:server` (écoute `0.0.0.0:3000`).
+2. Dans `.env` local : `TRUST_PROXY=true` (headers `X-Forwarded-*` du tunnel).
+3. Tunnel actif : `cloudflared tunnel run …` pointant vers `http://127.0.0.1:3000`.
+4. Config tunnel : voir [`infra/cloudflared.config.example.yml`](../infra/cloudflared.config.example.yml) — `disableChunkedEncoding: true` aide souvent Socket.io.
+5. Se **connecter sur** `https://survival.badom.ch` (pas réutiliser un token obtenu sur la preview Infomaniak).
+
+Commande rapide (sans fichier config, test) :
+
+```bash
+cloudflared tunnel --url http://127.0.0.1:3000
+```
+
+(Pour un hostname fixe `survival.badom.ch`, utiliser un tunnel nommé + ingress YAML.)
+
+---
+
+## Prod Infomaniak (`3k51myccypp.preview.infomaniak.website`)
+
+`localhost` ou le tunnel dev peuvent fonctionner, mais la **preview** échoue si Apache ne proxifie pas les **WebSockets**.
+
+Symptômes navigateur :
+- `WebSocket connection to 'wss://…/socket.io/' failed`
+- `socket.io/… polling … 400`
+- chargement infini après `[world] build`
+
+### Correctif Infomaniak (Apache)
+
+1. Copier [`infra/htaccess.socketio.example`](../infra/htaccess.socketio.example) vers la **racine web** du domaine (`.htaccess`).
+2. Remplacer `3000` par le port Node réel (`PORT` dans `.env` prod ou Manager Infomaniak).
+3. Redémarrer l'app Node (`pm2 restart zombie`).
+
+Le bloc `RewriteCond … websocket` est **obligatoire** — sans lui, seul HTTP passe et Socket.io casse.
+
+### Erreur 401 sur `/api/auth/me`
+
+Le JWT a été émis par **un autre environnement** (login preview Infomaniak vs tunnel dev vs localhost).
+
+→ Menu ☰ → déconnexion, ou vider le stockage du site, puis **se reconnecter sur l’URL utilisée**.
+
+## Structure Runtime
+
+- Entrypoint serveur : `apps/server/index.js`
+- Wrapper compatible : `server.js`
+- Config PM2 : `infra/ecosystem.config.cjs`
+- Client build : `npm run build` génère `build/client`
+- Serveur intégré : sert `apps/client/dist` si présent, sinon `apps/client/public` + HTML de `apps/client`
 
 ---
 

@@ -1,5 +1,7 @@
 node_modules/
 .env
+.env.*
+!.env.example
 *.log
 .inventory_reset_done
 .inventory_reset_v2_done
@@ -7,6 +9,14 @@ node_modules/
 .inventory_reset_v4_done
 database/*.sqlite
 database/*.sqlite-*
+apps/server/database/*.sqlite
+apps/server/database/*.sqlite-*
 notes-local/
+coverage/
+playwright-report/
+test-results/
+apps/client/dist/
+build/
+.vite/
 
 graphify-out/

@@ -22,7 +22,7 @@ Chaque feature ou refonte doit laisser une trace pour l'équipe :
 | Routes / terrain / spawn | **docs/ROAD_NETWORK.md** |
 | Archi client/serveur | **docs/ARCHITECTURE.md** |
 | Onboarding / setup | **README.md** |
-| Changement JS client | **game.html** → incrémenter `CACHE_BUST` |
+| Changement JS client | **apps/client/game.html** → incrémenter `CACHE_BUST` |
 
 Index complet : [README.md](README.md#documentation-à-lire-avant-un-push--review)
 
@@ -40,11 +40,79 @@ Copier dans la description de PR :
 
 ## Workflow
 
-- After every code change, restart the local dev server so the game is testable at `http://localhost:3000`.
-- Prefer `npm run dev` (nodemon) for auto-reload during sessions; otherwise kill port 3000 and restart.
+- After every server change, restart the local dev server so the game is testable at `http://localhost:3000`.
+- Prefer `npm run dev:server` (nodemon) for auto-reload and `npm run dev:client` for Vite client work.
 - Local SQLite (`better-sqlite3`) requires **Node 20** on this machine — use `nvm use 20` or run:
-  `& "$env:LOCALAPPDATA\nvm\v20.19.4\node.exe" server.js`
+  `& "$env:LOCALAPPDATA\nvm\v20.19.4\node.exe" apps/server/index.js`
 - **Ctrl+F5** dans le navigateur après changement JS (cache bust)
+
+## 2026-06-05
+
+### Completed â€” Refonte ciel jour/nuit (2026-06-06)
+
+- **Soleil / lune** : sprites célestes stabilisés ; direction correcte quand on tourne la caméra ; plus de dérive au déplacement.
+- **Profondeur** : `depthTest: true` conservé pour éviter le rendu au premier plan devant arbres, murs et toits.
+- **Étoiles** : ajout d’un champ d’étoiles nocturne sur `skyRoot`, recentré sur la caméra en translation uniquement, sans suivre sa rotation comme un HUD.
+- **Nuages** : refonte de `spawnClouds()` vers une couche céleste sur `skyRoot` avec dérive lente en azimut, teinte et opacité pilotées par `sunY`.
+- **Pièges évités** : pas d’objets célestes au-delà de `camera.far`, pas de `depthTest: false`, pas de parentage caméra pour les couches qui doivent rester “dans le monde”.
+- **Fichiers** : `apps/client/public/js/world.js`, `apps/client/game.html`
+- **Cache bust** : `20260606-sky-12`
+
+### Completed â€” Spawn camp ground texture (2026-06-06)
+
+- **Skill** : usage de `imagegen` pour produire une texture de sol dédiée au campement.
+- **Asset** : ajout de `apps/client/public/textures/camp/spawn_ground.png`.
+- **Spawn** : `apps/client/public/js/spawn_clearing.js` utilise maintenant cette texture sur le patch de sol de la clairière.
+- **Objectif** : remplacer le rendu “terre plate horrible” par une terre tassée plus crédible et plus lisible pour la refonte du spawn.
+- **Cache bust** : `20260606-spawn-02`
+
+### Completed â€” Réutilisation items en décor + RCON décors (2026-06-06)
+
+- **Helper client** : ajout de `ZS.spawnDecorItem()` dans `apps/client/public/js/player.js` pour poser un item existant comme prop de décor à partir de son `type`.
+- **Réutilisation** : même pipeline de modèle que pickup / item en main (`ZS.getItemModel`) — un item peut servir de loot, d’équipement visuel et de décoration.
+- **Spawn** : validation du flux dans `apps/client/public/js/spawn_clearing.js` avec bouteille, conserve et hachette posées comme décor.
+- **RCON** : ajout de `decoradd`, `decorlist`, `decorremove` dans `apps/server/src/rcon.js`.
+- **Sync réseau** : `decorItems` envoyés au `game-init` + events `decor-item-spawn` / `decor-item-remove` dans `apps/client/public/js/network.js`.
+- **Cache bust** : `20260606-items-decor-02`
+- **Prefabs décor** : ajout de `ZS.spawnDecorPrefab()` / `ZS.listDecorPrefabs()` dans `apps/client/public/js/spawn_clearing.js`.
+- **Spawn** : le camp du spawn repose maintenant sur des prefabs décor réutilisables, plus sur des meshes posés en dur dans `buildCampLayout()`.
+- **RCON** : `decoradd` accepte aussi `decoradd prefab <id> ...` et `decorprefabs` liste les prefabs disponibles.
+- **Sync réseau** : `apps/client/public/js/network.js` gère maintenant les décors `item` et `prefab`.
+- **Cache bust** : `20260606-items-decor-04`
+
+### Completed — Collisions décors prefab / item (2026-06-06)
+
+- **`decor_colliders.js`** : hitboxes par prefab et type d'item ; rotY + scale.
+- **`world.js`** : colliders décor fusionnés dans `getColliders()`.
+- **`game.js`** : collision box avec rotation Y.
+- **Cache bust** : `20260606-decor-collide-01`
+
+### Completed — Plateformes décor (saut + station debout) (2026-06-06)
+
+- **`getStandHeight()`** : le sol effectif inclut le dessus des décors (caisses, souches…) si saut possible (~1,55 m).
+- **`shouldSkipDecorSideCollision()`** : plus de glissement latéral pendant l'atterrissage sur un prop.
+- **Cache bust** : `20260606-decor-stand-01`
+
+### Completed
+
+- Started the studio restructure on `dev` and kept `master` documented as production only.
+- Moved server runtime to `apps/server/index.js` with root `server.js` compatibility wrapper.
+- Moved browser app to `apps/client`, legacy scripts/assets to `apps/client/public`, and previews to the Vite client root.
+- Added `packages/shared`, `infra`, `tools/visual-tests`, `.github`, `.cursor/rules`, `docs/adr` and `design`.
+- Added Vite, ESLint, Prettier, EditorConfig, Playwright dependency, CI workflow, Dependabot, smoke tests and shared constants.
+- Added `CONTRIBUTING.md`, `SECURITY.md`, `CHANGELOG.md`, PR/issue templates and studio workflow AI rules.
+- Added ADRs for branch strategy, Vite, the temporary `window.ZS` facade, client/server separation and skins/rigs strategy.
+
+### Validation Notes
+
+- Full validation is tracked in the restructuring task and must include `npm run lint`, `npm test`, `npm run build`, `npm run test:smoke` and visual checks where possible.
+
+### Fix post-restructuration — jeu local
+
+- **Symptôme** : `EPERM: operation not permitted, stat 'public/game.html'` au lancement.
+- **Cause** : ancien serveur Node encore actif (servait `public/`) + dossier `public/` corrompu/inaccessible après migration Windows.
+- **Correctif** : routes explicites vers `apps/client` (`index.html`, `game.html`, previews), assets depuis `apps/client/public`, modules bootstrap via `/src`, build prod seulement si `NODE_ENV=production` ou `USE_CLIENT_BUILD=true`.
+- **Action dev** : redémarrer le serveur (`npm run dev:server` ou `npm start`) puis ouvrir `http://localhost:3000`.
 
 ## Local-only Files
 
@@ -197,6 +265,21 @@ These are intentionally ignored by Git for local development.
 - **Cron** : doc chemin Infomaniak complet + `ZOMBIE_APP_DIR`.
 - **Ne pas** `git config` sur le serveur — stratégie pull intégrée au script.
 
+### Completed — Bras FPS style Minecraft + anims par objet (2026-06-06)
+
+- **Rig articulé** : épaule → coude → poignet → paume (cubes distincts, pouce) ; objet sur `itemPivot` devant la paume (plus fusionné).
+- **Anims par style** : `swing_down` (hache/pioche), `swing_side` (couteau/machette), `swing_overhead` (batte), `thrust`/`stab` (lance/couteau), `drink`/`bite`/`bandage`/`inject`/`apply` (consommables).
+- **GRIPS** retunés : pose coin bas-droite type Minecraft, offsets objet plus loin de la main.
+- **Cache bust** : `20260606q`
+
+### Completed — Fix bras FPS + utilisation clic gauche (2026-06-06)
+
+- **Rig** : `itemHolder` attaché à la main du bras droit (`itemPivot` pour l’objet) — main et objet cohérents.
+- **GRIPS** retunés : poses épaule + offset local objet (nourriture en paume, armes à feu deux mains).
+- **Anim `use`** : boire/manger/soigner (montée vers la bouche).
+- **PC clic gauche** : consomme nourriture/médical et recharge munitions (comme le bouton Utiliser mobile).
+- **Cache bust** : `20260606p`
+
 ### Completed — Refactor bras FPS + animations (2026-06-06)
 
 - **`public/js/player.js`** : table **GRIPS** (`GRIP_CATEGORIES` + `GRIP_TYPES`) — poses item/bras par catégorie et overrides par type ; `getGrip(type)` source de vérité FPS + 3e personne.
@@ -254,6 +337,50 @@ These are intentionally ignored by Git for local development.
 - **UI** : coin haut-gauche PC, bas-gauche mobile ; libère pointer lock à l'ouverture.
 - **Fix PC Entrée** : envoi sans vider le champ ; echo optimiste ; capture clavier anti-conflit.
 - **Cache bust** : `20260606f`
+
+### Completed — Branche dev + rig joueur articulé procédural (2026-06-06)
+
+- **Git** : création/push de la branche `dev` (`origin/dev`) pour isoler les tests avant merge futur vers `master`.
+- **Rig** : remplacement du modèle joueur “membres blocs simples” par un squelette procédural hiérarchique (`hips/spine/chest/head`, épaules/coudes/poignets/mains, hanches/genoux/chevilles).
+- **FPS** : remplacement du bras FPS isolé par une chaîne articulée épaule → coude → poignet → main, avec `itemHolder` sous la main droite.
+- **Objets** : attache locale et distante unifiée sur le holder de main ; compat réseau conservée via `limbs.rArm` et `rig.rightItemHolder`.
+- **Skins** : ajout de `skinSlots` par partie du corps + `ZS.applyHumanoidPalette()` pour préparer skins/palettes sans réécrire le rig.
+- **Tests visuels** : Chromium multi-états (`arm-empty`, bouteille, use, hachette, melee, pistolet, reload).
+- **Cache bust** : `20260606z`
+
+### Completed — Fix pose bras MC (applySwingOffset + bras -Z) (2026-06-06)
+
+- **Cause** : Euler calibrés `(0.68, 0.26, -0.06)` + bras `-Y` → bande diagonale fine, main au centre, invisible après bug matrice.
+- **Fix** : `HeldItemRenderer.applySwingOffset` via `Matrix4` (repos = translate `0.56,-0.52,-0.72` seul) ; géométrie bras vers **-Z** (arc FPP MC) ; items sur `itemPivot` avec `_MC_ITEM_HOLD` adapté.
+- **Outil** : `scripts/capture-fps-arm.mjs` + `public/arm-preview.html` → screenshots Chromium dans `notes-local/screenshots/`.
+- **Cache bust** : `20260606x`
+
+### Completed — Fix transform bras MC (matrices vanilla) (2026-06-06)
+
+- **Cause** : Euler `(-100°, 45°, -65°)` incorrect — bras penché vers la gauche / main au centre écran.
+- **Fix** : pile `Matrix4` comme `ItemInHandRenderer` — `translate(0.56,-0.52,-0.72)` puis `rot Y45° Z-15° X-35°`, swing `applySwingOffset`, consommables `applyEatOrDrinkTransformation`.
+- **Géométrie** : bras HumanoidModel 0.25×0.75×0.25, pivot épaule, pend `-Y`.
+- **Cache bust** : `20260606u`
+
+### Completed — Bras FPS style Minecraft (2026-06-06)
+
+- **Refonte** : un seul bloc bras (4×12×4 Steve) + manche bleu, pivot `HeldItemRenderer` `(0.56, -0.52, -0.72)` rot `(-100°, 45°, -65°)`.
+- **Anims MC** : swing `sqrt(sin)` attaque, consommation montée vers bouche (`pow` easing), plus de rig articulé 3 segments.
+- **Cache bust** : `20260606t`
+
+### Completed — Bras FPS articulé + anims consommables (2026-06-06)
+
+- **Repos en V** : `_REST_EMPTY` / `_REST_HOLD` / `_REST_AIM` — épaule, coude, poignet pliés (plus de bras tendu vers l'avant).
+- **Mains nues** : `hideUpper` masque le haut du bras, ne laisse qu'une mini épaule alignée au corps.
+- **Boire / manger** : objet levé vers la bouche (`liftY`/`liftZ`, `tiltX` positif), pas vers le sol ; joints poignet/coude synchronisés.
+- **Mêlée** : hache/outils — frappe vers l'avant (`swing_down` + thrust coude/poignet).
+- **Cache bust** : `20260606s`
+
+### Completed — Fix bras FPS invisibles (2026-06-06)
+
+- **Cause** : rig bras construit le long de **-Y** (pendant vers le bas) + position épaule trop basse → géométrie hors champ caméra ; `_applyGripPose` sortait avant de positionner `rArm` si `itemHolder` introuvable.
+- **Fix** : rig Minecraft orienté **-Z** (avant), position épaule `[0.26, -0.30, -0.38]`, référence `rArm.userData.itemHolder`, pose bras appliquée même sans objet en main.
+- **Cache bust** : `20260606r`
 
 ### Completed — Contrôles PC / pointer lock (2026-06-06)
 

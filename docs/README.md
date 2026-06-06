@@ -10,15 +10,17 @@ Index pour l'équipe — à maintenir à jour à chaque push.
 | [RCON.md](RCON.md) | Console admin in-game, API, commandes, flags |
 | [ROAD_NETWORK.md](ROAD_NETWORK.md) | Routes, sentiers, terrain, spawn |
 | [DEPLOY.md](DEPLOY.md) | Prod Infomaniak, cron / webhook auto-deploy |
+| [adr/](adr/) | Décisions d'architecture |
 
 ## Ailleurs dans le repo
 
 | Document | Sujet |
 |----------|-------|
 | [../README.md](../README.md) | Démarrage rapide, structure, checklist push |
+| [../CONTRIBUTING.md](../CONTRIBUTING.md) | Workflow `feature/* -> dev -> master` |
 | [../DEV_TRACKER.md](../DEV_TRACKER.md) | Journal de dev + règles obligatoires |
 | [../.env.example](../.env.example) | Variables d'environnement |
-| [../worlDesign/](../worlDesign/) | Design monde, items, secteurs (game design) |
+| [../design/](../design/) | Design monde, items, secteurs |
 
 ## Règle d'équipe
 

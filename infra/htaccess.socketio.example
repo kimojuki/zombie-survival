@@ -1,0 +1,17 @@
+# Infomaniak — proxy HTTP + WebSocket vers l'app Node (Socket.io)
+# Copier vers la racine web du domaine (.htaccess) et adapter le port Node.
+#
+# Le port doit correspondre à celui de l'app (variable PORT / Manager Infomaniak).
+
+RewriteEngine On
+
+# WebSocket upgrade (obligatoire pour Socket.io en HTTPS)
+RewriteCond %{HTTP:Upgrade} websocket [NC]
+RewriteCond %{HTTP:Connection} upgrade [NC]
+RewriteRule ^/?(.*) "ws://127.0.0.1:3000/$1" [P,L]
+
+# Toutes les requêtes HTTP vers Node
+RewriteRule ^(.*)$ http://127.0.0.1:3000/$1 [P,L]
+
+# pingInterval (25s) + pingTimeout (60s) côté serveur — marge proxy
+ProxyTimeout 120

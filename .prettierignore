@@ -1,0 +1,7 @@
+node_modules/
+apps/client/dist/
+database/
+notes-local/
+package-lock.json
+*.sqlite
+*.sqlite-*

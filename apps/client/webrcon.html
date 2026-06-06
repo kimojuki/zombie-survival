@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>WebRCON</title>
+  <style>
+    :root {
+      --bg: #0e1713;
+      --panel: #16231d;
+      --panel-2: #203129;
+      --text: #e7f1ea;
+      --muted: #94a79b;
+      --accent: #9fdf7a;
+      --accent-2: #d8b45f;
+      --err: #ff7d7d;
+      --ok: #8fe388;
+      --border: rgba(255,255,255,0.08);
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: Consolas, "SFMono-Regular", Menlo, monospace;
+      background:
+        radial-gradient(circle at top, rgba(159,223,122,0.12), transparent 30%),
+        linear-gradient(180deg, #101a15, #0a100d 60%);
+      color: var(--text);
+      min-height: 100vh;
+    }
+    .wrap {
+      width: min(1100px, calc(100vw - 32px));
+      margin: 24px auto;
+    }
+    .hero, .panel {
+      background: linear-gradient(180deg, rgba(32,49,41,0.95), rgba(22,35,29,0.98));
+      border: 1px solid var(--border);
+      border-radius: 18px;
+      box-shadow: 0 20px 60px rgba(0,0,0,0.35);
+    }
+    .hero {
+      padding: 20px 22px;
+      margin-bottom: 16px;
+    }
+    h1 {
+      margin: 0 0 8px;
+      font-size: 28px;
+      letter-spacing: 0.04em;
+    }
+    .sub, .meta { color: var(--muted); }
+    .meta { font-size: 13px; margin-top: 8px; }
+    .panel { padding: 16px; }
+    .toolbar {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 12px;
+      align-items: center;
+      margin-bottom: 12px;
+    }
+    .quick {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+    button, input {
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      font: inherit;
+    }
+    button {
+      background: var(--panel-2);
+      color: var(--text);
+      padding: 10px 14px;
+      cursor: pointer;
+    }
+    button:hover { border-color: rgba(159,223,122,0.45); }
+    button.primary {
+      background: linear-gradient(180deg, #9fdf7a, #7db95b);
+      color: #102010;
+      font-weight: 700;
+    }
+    .cmd-row {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 10px;
+      margin-bottom: 12px;
+    }
+    #cmd {
+      width: 100%;
+      padding: 12px 14px;
+      background: #0d1511;
+      color: var(--text);
+    }
+    #log {
+      min-height: 420px;
+      max-height: 65vh;
+      overflow: auto;
+      background: #0b110e;
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 14px;
+      white-space: pre-wrap;
+    }
+    .line { margin: 0 0 8px; }
+    .dim { color: var(--muted); }
+    .ok { color: var(--ok); }
+    .err { color: var(--err); }
+    .cmd { color: var(--accent-2); }
+    .hidden { display: none; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <section class="hero">
+      <h1>WebRCON</h1>
+      <div class="sub">Console admin hors jeu pour piloter le serveur via session web.</div>
+      <div class="meta" id="meta">Vérification de session…</div>
+    </section>
+
+    <section class="panel">
+      <div class="toolbar">
+        <div class="quick">
+          <button data-cmd="status">status</button>
+          <button data-cmd="players">players</button>
+          <button data-cmd="decorlist">decorlist</button>
+          <button data-cmd="decorprefabs">decorprefabs</button>
+          <button data-cmd="help decor">help decor</button>
+        </div>
+        <button id="clear" type="button">clear</button>
+      </div>
+      <div class="cmd-row">
+        <input id="cmd" type="text" placeholder="Ex: decoradd prefab spawn_supply_crate" autocomplete="off" spellcheck="false">
+        <button id="run" class="primary" type="button">Exécuter</button>
+      </div>
+      <div id="log"></div>
+    </section>
+  </div>
+
+  <script>
+    const els = {
+      meta: document.getElementById('meta'),
+      cmd: document.getElementById('cmd'),
+      run: document.getElementById('run'),
+      log: document.getElementById('log'),
+      clear: document.getElementById('clear'),
+    };
+
+    let token = localStorage.getItem('zombie_token') || '';
+    let me = null;
+
+    function print(text, cls = '') {
+      const line = document.createElement('div');
+      line.className = 'line' + (cls ? ' ' + cls : '');
+      line.textContent = text;
+      els.log.appendChild(line);
+      els.log.scrollTop = els.log.scrollHeight;
+    }
+
+    async function whoAmI() {
+      if (!token) throw new Error('Aucune session trouvée. Connectez-vous d’abord.');
+      const res = await fetch('/api/auth/me', {
+        headers: { Authorization: 'Bearer ' + token },
+        cache: 'no-store',
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || 'Session invalide');
+      if (!data.isAdmin) throw new Error('Compte non admin RCON');
+      return data;
+    }
+
+    async function exec(cmd) {
+      const trimmed = String(cmd || '').trim();
+      if (!trimmed) return;
+      print('> ' + trimmed, 'cmd');
+      const res = await fetch('/api/rcon/session', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: 'Bearer ' + token,
+        },
+        body: JSON.stringify({ cmd: trimmed }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || data.ok === false) {
+        const msg = data.error || (data.lines && data.lines.join('\n')) || 'Erreur RCON';
+        print(msg, 'err');
+        return;
+      }
+      const lines = data.lines || ['OK'];
+      for (const line of lines) print(line, 'ok');
+    }
+
+    async function init() {
+      try {
+        me = await whoAmI();
+        els.meta.textContent = `Session admin: ${me.username}`;
+        print(`Admin: ${me.username}`, 'ok');
+        print('Commandes rapides prêtes. Tapez "help" si besoin.', 'dim');
+        els.cmd.focus();
+      } catch (err) {
+        els.meta.textContent = 'Accès refusé';
+        print(err.message || String(err), 'err');
+        els.run.disabled = true;
+        els.cmd.disabled = true;
+      }
+    }
+
+    els.run.addEventListener('click', () => exec(els.cmd.value).then(() => { els.cmd.value = ''; }));
+    els.cmd.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        exec(els.cmd.value).then(() => { els.cmd.value = ''; });
+      }
+    });
+    els.clear.addEventListener('click', () => { els.log.innerHTML = ''; });
+    document.querySelectorAll('[data-cmd]').forEach((btn) => {
+      btn.addEventListener('click', () => exec(btn.dataset.cmd));
+    });
+
+    init();
+  </script>
+</body>
+</html>

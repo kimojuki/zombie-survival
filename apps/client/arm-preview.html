@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <title>FPS Arm Preview</title>
+  <style>
+    html, body { margin: 0; background: #2a3344; overflow: hidden; }
+    canvas { display: block; width: 100vw; height: 100vh; }
+  </style>
+  <script type="importmap">
+  {
+    "imports": {
+      "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+      "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+    }
+  }
+  </script>
+</head>
+<body>
+<script type="module">
+  import * as THREE from 'three';
+  import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+  window.THREE = THREE;
+  window.GLTFLoader = GLTFLoader;
+
+  const params = new URLSearchParams(location.search);
+  const itemType = params.get('item') || '';
+  const animType = params.get('anim') || '';
+
+  await new Promise((res, rej) => {
+    const s1 = document.createElement('script');
+    s1.src = '/js/items.js?v=preview';
+    s1.onload = () => {
+      const s2 = document.createElement('script');
+      s2.src = '/js/player.js?v=20260607c';
+      s2.onload = res;
+      s2.onerror = rej;
+      document.body.appendChild(s2);
+    };
+    s1.onerror = rej;
+    document.body.appendChild(s1);
+  });
+
+  const scene = new THREE.Scene();
+  scene.background = new THREE.Color(0x87ceeb);
+  scene.fog = new THREE.Fog(0x87ceeb, 40, 120);
+
+  const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 200);
+  camera.rotation.order = 'YXZ';
+  scene.add(camera);
+
+  const ground = new THREE.Mesh(
+    new THREE.PlaneGeometry(80, 80),
+    new THREE.MeshLambertMaterial({ color: 0x5a8f3c })
+  );
+  ground.rotation.x = -Math.PI / 2;
+  ground.position.y = 0;
+  scene.add(ground);
+
+  const light = new THREE.DirectionalLight(0xffffff, 1.1);
+  light.position.set(5, 10, 3);
+  scene.add(light);
+  scene.add(new THREE.AmbientLight(0xffffff, 0.55));
+
+  const fpsArms = ZS.createFPSArms();
+  camera.add(fpsArms);
+  ZS.updateHandItem(fpsArms, itemType || null);
+  if (animType) ZS.triggerArmAnim(fpsArms, animType, itemType || null, { dur: 2.0 });
+  window.__ARM_DEBUG = { camera, fpsArms, scene };
+
+  camera.position.set(0, 1.62, 0);
+  camera.rotation.y = 0.15;
+  camera.rotation.x = -0.05;
+
+  const renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true });
+  renderer.setPixelRatio(1);
+  renderer.setSize(1280, 720);
+  document.body.appendChild(renderer.domElement);
+
+  let frames = 0;
+  function loop() {
+    requestAnimationFrame(loop);
+    ZS.tickFPSArms(fpsArms, 1 / 60, { moving: false, speed: 0 });
+    ZS.tickArmAnim(fpsArms, 1 / 60);
+    renderer.render(scene, camera);
+    frames++;
+    if (frames === 30) window.__ARM_PREVIEW_READY__ = true;
+  }
+  loop();
+</script>
+</body>
+</html>

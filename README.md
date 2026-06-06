@@ -9,10 +9,11 @@ git clone <repo>
 cd zombie-survival
 npm install
 cp .env.example .env    # puis éditer .env (voir ci-dessous)
-npm run dev             # ou npm start
+npm run dev:server      # API + Socket.io sur http://localhost:3000
+npm run dev:client      # client Vite sur http://localhost:5173
 ```
 
-Ouvrir **http://localhost:3000** → créer un compte → jouer.
+Ouvrir **http://localhost:3000** pour le serveur intégré, **https://survival.badom.ch** via cloudflared (dev tunnel), ou **http://localhost:5173** pour le client Vite seul.
 
 ### `.env` minimal (dev local)
 
@@ -42,26 +43,30 @@ ADMIN_USERS=votre_username
 | Document | Contenu |
 |----------|---------|
 | [DEV_TRACKER.md](DEV_TRACKER.md) | Journal de dev, règles Git, checklist PR |
+| [CONTRIBUTING.md](CONTRIBUTING.md) | Workflow `feature/* -> dev -> master`, Definition of Done |
+| [SECURITY.md](SECURITY.md) | Secrets, données locales, signalement sécurité |
 | [docs/RCON.md](docs/RCON.md) | Console admin in-game + API |
 | [docs/DEPLOY.md](docs/DEPLOY.md) | Prod Infomaniak, auto-deploy (cron / webhook) |
 | [docs/ROAD_NETWORK.md](docs/ROAD_NETWORK.md) | Architecture routes/sentiers (2026-06) |
 | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | Vue d'ensemble client/serveur |
 | [.env.example](.env.example) | Variables d'environnement commentées |
-| [worlDesign/](worlDesign/) | Design monde, secteurs, items |
+| [design/](design/) | Design monde cible ; migration depuis `worlDesign/` |
 
 ---
 
 ## Structure du projet
 
 ```
-server.js              # Serveur Express + Socket.io + zombies + RCON
-src/
-  db.js                # SQLite (dev) / MySQL (prod)
-  rcon.js              # Commandes admin serveur
-  logger.js            # Logs structurés
-public/
-  game.html            # Point d'entrée jeu (CACHE_BUST ici)
-  js/
+apps/
+  server/
+    index.js           # Serveur Express + Socket.io + zombies + RCON
+    src/
+      db.js            # SQLite (dev) / MySQL (prod)
+      rcon.js          # Commandes admin serveur
+      logger.js        # Logs structurés
+  client/
+    game.html          # Point d'entrée jeu legacy (CACHE_BUST ici)
+    public/js/
     game.js            # Boucle principale
     world.js           # Terrain, jour/nuit, végétation
     road_network.js    # Graphe routier (source de vérité)
@@ -71,6 +76,9 @@ public/
     rcon.js            # Console admin in-game
     chat.js            # Chat multijoueur
     network.js         # Sync multijoueur
+packages/shared/       # Constantes et contrats partagés
+infra/                 # PM2 / déploiement
+tools/visual-tests/    # Captures Playwright
 ```
 
 ---
@@ -81,8 +89,8 @@ public/
 2. Si nouvelle feature config → mettre à jour **`.env.example`**
 3. Si feature admin / API → mettre à jour **`docs/RCON.md`**
 4. Si routes/terrain → mettre à jour **`docs/ROAD_NETWORK.md`**
-5. Incrémenter **`CACHE_BUST`** dans `public/game.html` après changement JS client
-6. Redémarrer le serveur Node après modif **`server.js`** (`pm2 restart zombie` en prod) — obligatoire pour le chat et les nouveaux handlers Socket.io
+5. Incrémenter **`CACHE_BUST`** dans `apps/client/game.html` après changement JS client legacy
+6. Redémarrer le serveur Node après modif **`apps/server/index.js`** (`pm2 restart zombie` en prod) — obligatoire pour le chat et les nouveaux handlers Socket.io
 7. Vérifier `GET /api/health` → `"chat": true` si vous touchez au chat
 
 ---
@@ -91,8 +99,14 @@ public/
 
 | Commande | Description |
 |----------|-------------|
-| `npm start` | Lance `server.js` |
-| `npm run dev` | Nodemon (reload auto) |
+| `npm start` | Lance `apps/server/index.js` |
+| `npm run dev:server` | Nodemon serveur |
+| `npm run dev:client` | Client Vite |
+| `npm run lint` | ESLint |
+| `npm test` | Tests Node |
+| `npm run build` | Build Vite client |
+| `npm run test:smoke` | Smoke `/api/health` |
+| `npm run test:visual` | Captures Playwright FPS arm |
 
 ## Endpoints utiles
 
@@ -112,3 +126,5 @@ public/
 - Lister les fichiers clés modifiés et les tests manuels effectués
 - Ne pas inclure : `.env`, bases SQLite locales, `notes-local/`
 - Référencer les docs mises à jour dans la description PR
+- Workflow obligatoire : `feature/* -> dev -> master`
+- `master` reste production ; pas de merge sans checks verts et validation sur `dev`

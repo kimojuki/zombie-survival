@@ -1,0 +1,18 @@
+# Cloudflare Tunnel — dev local via https://survival.badom.ch
+# Doc : docs/DEPLOY.md (section « Dev local via cloudflared »)
+#
+# 1. cloudflared tunnel create zombie-dev
+# 2. DNS CNAME survival.badom.ch → <tunnel-id>.cfargotunnel.com
+# 3. Copier ce fichier → ~/.cloudflared/config.yml (adapter credentials + hostname)
+# 4. npm run dev:server  puis  cloudflared tunnel run zombie-dev
+
+tunnel: zombie-dev
+credentials-file: C:/Users/YOU/.cloudflared/<tunnel-id>.json
+
+ingress:
+  - hostname: survival.badom.ch
+    service: http://127.0.0.1:3000
+    originRequest:
+      connectTimeout: 30s
+      disableChunkedEncoding: true
+  - service: http_status:404

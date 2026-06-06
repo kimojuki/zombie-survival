@@ -6,17 +6,22 @@ This file provides guidance to Claude Code (claude.ai/code) when working on this
 
 **Zombie Survival** — mobile-first 3D FPS open-world multiplayer zombie game (French UI).
 
-- **Client:** Three.js (CDN), vanilla JS modules under `public/js/` (namespace `ZS.*`)
-- **Server:** Node.js + Express + Socket.io (`server.js`)
+- **Client:** Three.js (CDN), Vite app under `apps/client` with legacy `window.ZS` scripts in `apps/client/public/js`
+- **Server:** Node.js + Express + Socket.io (`apps/server/index.js`)
 - **Database:** SQLite for local dev (`DB_CLIENT=sqlite`), MySQL/MariaDB for production
-- **Design docs:** `worlDesign/` (world sectors, items, roads)
+- **Design docs:** `design/` target, legacy docs may still exist under `worlDesign/` during migration
 
 ## Commands
 
 ```bash
 npm install
-npm start          # http://localhost:3000
-npm run dev        # nodemon
+npm start          # server: http://localhost:3000
+npm run dev:server # nodemon server
+npm run dev:client # Vite client: http://localhost:5173
+npm run lint
+npm test
+npm run build
+npm run test:smoke
 ```
 
 Copy `.env.example` → `.env` for local development.
@@ -27,7 +32,7 @@ Copy `.env.example` → `.env` for local development.
 |-----|----------------|
 | `DEV_TRACKER.md` | **Always** — every work session |
 | `README.md` | Setup, onboarding changes |
-| `docs/DEPLOY.md` | Prod deploy, pm2, cron, webhook |
+| `CONTRIBUTING.md` | Workflow, Definition of Done |
 | `docs/DEPLOY.md` | Prod deploy, pm2, cron, webhook |
 | `docs/ARCHITECTURE.md` | Client/server flow, chat, sync |
 | `docs/RCON.md` | Admin commands, flags, API |
@@ -38,17 +43,14 @@ Copy `.env.example` → `.env` for local development.
 
 | File | Role |
 |------|------|
-| `server.js` | Auth, zombie AI, loot, multiplayer sync, RCON hooks |
-| `src/rcon.js` | Admin command registry |
-| `public/js/game.js` | Main loop, movement, shooting |
-| `public/js/world.js` | Terrain, day/night, vegetation, water |
-| `public/js/road_network.js` | **Road graph** — single source of truth (flatten + mesh + queries) |
-| `public/js/buildings.js` | Building utils, sector registry → RoadNetwork |
-| `public/js/sector_*.js` | World sectors (forest, town, maincity, military) |
-| `public/js/rcon.js` | In-game admin console UI |
-| `public/js/chat.js` | Multiplayer chat (discrete feed + input) |
-| `public/js/network.js` | Socket.io client sync |
-| `src/db.js` | Dual SQLite/MySQL data layer |
+| `apps/server/index.js` | Auth, zombie AI, loot, multiplayer sync, RCON hooks |
+| `apps/server/src/rcon.js` | Admin command registry |
+| `apps/server/src/db.js` | Dual SQLite/MySQL data layer |
+| `apps/client/game.html` | Legacy game HTML shell (`CACHE_BUST` here) |
+| `apps/client/public/js/game.js` | Main loop, movement, shooting |
+| `apps/client/public/js/world.js` | Terrain, day/night, vegetation, water |
+| `apps/client/public/js/road_network.js` | **Road graph** — single source of truth |
+| `packages/shared/src/constants.mjs` | Shared route/event constants |
 | `DEV_TRACKER.md` | **Keep updated** with every local work session |
 
 ## Conventions
@@ -57,8 +59,10 @@ Copy `.env.example` → `.env` for local development.
 - Build order: `resolve → flatten → terrain → buildAll → buildMeshes` (see `world.js`)
 - Loot buildings: `registerLoot(category, cx, cz, w, d)`
 - First connected client sends colliders, water zones, loot buildings to server
-- Increment `CACHE_BUST` in `game.html` after client JS changes
+- Increment `CACHE_BUST` in `apps/client/game.html` after legacy client JS changes
 - Do not commit `.env`, `database/*.sqlite`, or `notes-local/`
+- Branch flow: `feature/* -> dev -> master`; never merge `dev` to `master` without green checks and validation.
+- Keep `server.js` as a compatibility wrapper only; new server work belongs under `apps/server`.
 
 ## MCP
 

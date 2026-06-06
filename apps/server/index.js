@@ -293,6 +293,7 @@ const decorPrefabs = [
   'spawn_stone',
   'spawn_workbench',
   'spawn_flat_stone',
+  'storage_chest',
   'wreck_sedan',
   'wreck_pickup',
   'tree_oak',
@@ -301,6 +302,7 @@ const decorPrefabs = [
   'tree_dead',
   'building_survivor_shack',
 ];
+const STORAGE_CHEST_CAPACITY = 27;
 let zombieIdCounter    = 0;
 let itemIdCounter      = 0;
 let structureIdCounter = 0;
@@ -349,6 +351,21 @@ function flattenInv(inv) {
   return out;
 }
 
+function _storagePayload(item) {
+  if (!item || item.prefabId !== 'storage_chest') return null;
+  if (!Array.isArray(item.storage)) item.storage = [];
+  return {
+    id: item.id,
+    items: item.storage.map((s) => ({ type: s.type, qty: s.qty || 1 })),
+    capacity: STORAGE_CHEST_CAPACITY,
+  };
+}
+
+function _emitStorageUpdate(item) {
+  const payload = _storagePayload(item);
+  if (payload) io.emit('storage-update', payload);
+}
+
 const ROAD_WRECKS_URL = pathToFileURL(path.join(__dirname, '../../packages/shared/src/road-wrecks.mjs')).href;
 const TREE_PLACEMENTS_URL = pathToFileURL(path.join(__dirname, '../../packages/shared/src/tree-placements.mjs')).href;
 const TREE_WOOD_URL = pathToFileURL(path.join(__dirname, '../../packages/shared/src/tree-wood.mjs')).href;
@@ -366,6 +383,10 @@ function _makeDecorItem(d) {
     createdAt: Date.now(),
     ...d,
   };
+  if (item.prefabId === 'storage_chest' && !Array.isArray(item.storage)) {
+    item.storage = [];
+    item.storageOpen = !!item.storageOpen;
+  }
   if (item.prefabId?.startsWith('tree_') && item.woodMax == null) {
     item.woodMax = _TREE_WOOD_FALLBACK[item.prefabId] ?? 6;
     if (item.woodRemaining == null) item.woodRemaining = item.woodMax;
@@ -1264,6 +1285,61 @@ io.on('connection', async (socket) => {
       decorId: id,
       open: !!item.doorOpen,
     });
+  });
+
+  function _getNearbyStorage(id) {
+    if (!id || typeof id !== 'string') return null;
+    const item = decorItems.get(id);
+    if (!item || item.prefabId !== 'storage_chest') return null;
+    if (Math.hypot((item.x || 0) - p.x, (item.z || 0) - p.z) > 5) return null;
+    if (!Array.isArray(item.storage)) item.storage = [];
+    return item;
+  }
+
+  socket.on('storage-open', (d) => {
+    const item = _getNearbyStorage(d?.id);
+    if (!item) return;
+    item.storageOpen = true;
+    io.emit('storage-state', { id: item.id, open: true });
+    socket.emit('storage-open', _storagePayload(item));
+  });
+
+  socket.on('storage-close', (d) => {
+    const item = _getNearbyStorage(d?.id);
+    if (!item) return;
+    item.storageOpen = false;
+    io.emit('storage-state', { id: item.id, open: false });
+  });
+
+  socket.on('storage-deposit', (d) => {
+    const item = _getNearbyStorage(d?.id);
+    const type = String(d?.type || '').slice(0, 60);
+    const qty = Math.max(1, Math.min(999, Number(d?.qty) || 1));
+    const refund = () => socket.emit('item-add', { type, qty });
+    if (!item || !type) {
+      if (type) refund();
+      return;
+    }
+    if (item.storage.length >= STORAGE_CHEST_CAPACITY) {
+      refund();
+      socket.emit('storage-error', { message: 'Coffre plein' });
+      return;
+    }
+    item.storage.push({ type, qty });
+    _emitStorageUpdate(item);
+    log.debug('storage', 'deposit', { player: p.username, decorId: item.id, type, qty });
+  });
+
+  socket.on('storage-withdraw', (d) => {
+    const item = _getNearbyStorage(d?.id);
+    if (!item) return;
+    const slot = Math.max(0, Math.floor(Number(d?.slot) || 0));
+    const stack = item.storage[slot];
+    if (!stack?.type) return;
+    item.storage.splice(slot, 1);
+    socket.emit('item-add', { type: stack.type, qty: stack.qty || 1 });
+    _emitStorageUpdate(item);
+    log.debug('storage', 'withdraw', { player: p.username, decorId: item.id, type: stack.type, qty: stack.qty || 1 });
   });
 
   socket.on('place-structure', (d) => {

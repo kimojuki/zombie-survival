@@ -48,6 +48,27 @@ Copier dans la description de PR :
 
 ## 2026-06-06
 
+### Completed — Fix animation coffre immédiate (2026-06-06)
+
+- **UX** : le couvercle du `storage_chest` démarre l'animation dès l'interaction locale, avant confirmation serveur.
+- **Anim** : vitesse dédiée au couvercle (`CHEST_ANIM_SPEED`) et fermeture locale immédiate à la fermeture du panneau.
+- **Cache bust** : `20260606-storage-chest-lid-39`
+
+### Completed — Coffre : couvercle animé + UI slots (2026-06-06)
+
+- **Animation** : `storage_chest` a maintenant un couvercle séparé avec pivot arrière ; ouverture/fermeture synchronisée par `storage-state`.
+- **UI** : panneau façon coffre Minecraft — grille 3×9 pour le coffre, inventaire 3×9 et hotbar en slots carrés.
+- **Capacité** : coffre porté à 27 piles pour correspondre à la grille.
+- **Cache bust** : `20260606-storage-chest-slots-38`
+
+### Completed — Coffre prefab avec stockage d'items (2026-06-06)
+
+- **Prefab** : `storage_chest` — coffre procédural bois/métal, listable/posable/supprimable via RCON (`decorprefabs`, `decoradd`, `decorremove`).
+- **Gameplay** : interaction `E` / bouton tactile à portée ; panneau coffre avec dépôt depuis hotbar/sac et retrait vers inventaire.
+- **Sync** : Socket.io `storage-open`, `storage-deposit`, `storage-withdraw`, `storage-update` ; contenu stocké dans `decorItems.storage` côté serveur.
+- **Collisions/tests** : collider dédié `storage_chest` + couverture `decor-colliders` et RCON.
+- **Cache bust** : `20260606-storage-chest-37`
+
 ### Completed — Fix porte cabane : interaction + taille + anim + son (2026-06-06)
 
 - **Bug** : `doorPivot` sur le groupe enfant → jamais enregistré dans `DECOR_DOORS` (E / bouton mobile inopérants).

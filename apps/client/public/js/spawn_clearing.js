@@ -488,6 +488,41 @@
     parent.userData.doorPivot = doorPivot;
   }
 
+  function _buildStorageChest(parent, x, y, z, ry) {
+    const M = _campMats();
+    const g = new THREE.Group();
+    g.position.set(x, y, z);
+    g.rotation.y = ry || 0;
+    parent.add(g);
+
+    const plank = M ? M.woodFine(0xb47a42) : new THREE.MeshLambertMaterial({ color: 0x8a5a2e });
+    const frame = M ? M.woodDark(0x4a2b13) : new THREE.MeshLambertMaterial({ color: 0x4a2b13 });
+    const metal = new THREE.MeshLambertMaterial({ color: 0x5d6268 });
+    _add(g, new THREE.BoxGeometry(1.15, 0.48, 0.72), plank, 0, 0.24, 0);
+    _add(g, new THREE.BoxGeometry(0.98, 0.36, 0.54), new THREE.MeshLambertMaterial({ color: 0x3d2510 }), 0, 0.38, 0);
+    _add(g, new THREE.BoxGeometry(1.20, 0.08, 0.78), frame, 0, 0.52, 0);
+    _add(g, new THREE.BoxGeometry(0.98, 0.08, 0.56), new THREE.MeshLambertMaterial({ color: 0x2a1a0c }), 0, 0.57, 0);
+    _add(g, new THREE.BoxGeometry(1.25, 0.06, 0.08), frame, 0, 0.31, -0.39);
+    _add(g, new THREE.BoxGeometry(1.25, 0.06, 0.08), frame, 0, 0.31, 0.39);
+    for (const sx of [-0.58, 0.58]) {
+      _add(g, new THREE.BoxGeometry(0.08, 0.58, 0.78), frame, sx, 0.29, 0);
+    }
+
+    const lidPivot = new THREE.Group();
+    lidPivot.name = 'storageChestLidPivot';
+    lidPivot.position.set(0, 0.58, 0.39);
+    g.add(lidPivot);
+    _add(lidPivot, new THREE.BoxGeometry(1.15, 0.14, 0.72), plank, 0, 0, -0.36);
+    _add(lidPivot, new THREE.BoxGeometry(1.23, 0.08, 0.80), frame, 0, 0.02, -0.36);
+    _add(lidPivot, new THREE.BoxGeometry(0.24, 0.14, 0.10), metal, 0, 0.02, -0.77);
+    _add(lidPivot, new THREE.BoxGeometry(0.10, 0.12, 0.08), metal, 0, -0.10, -0.82);
+
+    g.userData.isStorage = true;
+    g.userData.storageLidPivot = lidPivot;
+    parent.userData.isStorage = true;
+    parent.userData.storageLidPivot = lidPivot;
+  }
+
   /** Vertical marker that stays readable from far away. */
   function _buildMarkerPole(parent, x, y, z, side) {
     const M = _campMats();
@@ -614,8 +649,11 @@
   }
 
   const DECOR_DOORS = new Map();
+  const DECOR_STORAGES = new Map();
   const DOOR_OPEN_ANGLE = -Math.PI * 0.52;
+  const CHEST_OPEN_ANGLE = Math.PI * 0.62;
   const DOOR_ANIM_SPEED = 3.2;
+  const CHEST_ANIM_SPEED = 2.4;
 
   const DECOR_PREFABS = {
     spawn_campfire: {
@@ -636,6 +674,7 @@
     spawn_lantern: { build(root) { _buildLantern(root, 0, 0, 0); } },
     spawn_stone: { build(root) { _buildStone(root, 0, 0, 0, 0.16, 0); } },
     spawn_workbench: { build(root) { _buildWorkbench(root, 0, 0, 0, 0); } },
+    storage_chest: { build(root) { _buildStorageChest(root, 0, 0, 0, 0); } },
     building_survivor_shack: { build(root) { _buildSurvivorShack(root, 0, 0, 0, 0); } },
     spawn_flat_stone: {
       build(root) {
@@ -701,6 +740,24 @@
       entry.openAngle = angle;
       entry.pivot.rotation.y = angle;
     }
+    for (const entry of DECOR_STORAGES.values()) {
+      if (!entry?.lidPivot?.parent) continue;
+      const target = entry.targetOpen ? CHEST_OPEN_ANGLE : 0;
+      let angle = Number.isFinite(entry.openAngle) ? entry.openAngle : entry.lidPivot.rotation.x;
+      const delta = target - angle;
+      if (Math.abs(delta) < 0.008) {
+        if (angle !== target) {
+          angle = target;
+          entry.openAngle = target;
+          entry.lidPivot.rotation.x = target;
+        }
+        continue;
+      }
+      const step = Math.sign(delta) * Math.min(Math.abs(delta), CHEST_ANIM_SPEED * dt);
+      angle += step;
+      entry.openAngle = angle;
+      entry.lidPivot.rotation.x = angle;
+    }
   }
 
   function setDecorDoorState(decorId, open, opts = {}) {
@@ -711,6 +768,25 @@
 
   function unregisterDecorDoor(decorId) {
     DECOR_DOORS.delete(decorId);
+  }
+
+  function unregisterDecorStorage(decorId) {
+    DECOR_STORAGES.delete(decorId);
+  }
+
+  function setDecorStorageState(decorId, open, opts = {}) {
+    const entry = DECOR_STORAGES.get(decorId);
+    if (!entry || !entry.root.parent) return false;
+    const wantOpen = !!open;
+    entry.open = wantOpen;
+    entry.targetOpen = wantOpen;
+    entry.root.userData.storageOpen = wantOpen;
+    if (entry.root.userData.decorSpec) entry.root.userData.decorSpec.storageOpen = wantOpen;
+    if (opts.instant && entry.lidPivot) {
+      entry.openAngle = wantOpen ? CHEST_OPEN_ANGLE : 0;
+      entry.lidPivot.rotation.x = entry.openAngle;
+    }
+    return true;
   }
 
   function findNearestDecorDoor(x, z, maxDist = 3.2) {
@@ -724,6 +800,17 @@
       if (!best || dist < best.dist) {
         best = { decorId, open: !!entry.open, dist, prefabId: entry.root.userData.prefabId };
       }
+    }
+    return best;
+  }
+
+  function findNearestDecorStorage(x, z, maxDist = 2.6) {
+    let best = null;
+    for (const [decorId, entry] of DECOR_STORAGES) {
+      if (!entry.root.parent) continue;
+      const dist = Math.hypot(entry.root.position.x - x, entry.root.position.z - z);
+      if (dist > maxDist) continue;
+      if (!best || dist < best.dist) best = { decorId, dist, prefabId: entry.root.userData.prefabId };
     }
     return best;
   }
@@ -780,6 +867,17 @@
       };
       DECOR_DOORS.set(decorId, entry);
       _setDoorVisual(entry, !!opts.doorOpen, { instant: true });
+    }
+    if (root.userData.isStorage) {
+      const entry = {
+        root,
+        lidPivot: root.userData.storageLidPivot || null,
+        open: !!opts.storageOpen,
+        targetOpen: !!opts.storageOpen,
+        openAngle: 0,
+      };
+      DECOR_STORAGES.set(decorId, entry);
+      setDecorStorageState(decorId, !!opts.storageOpen, { instant: true });
     }
 
     if (opts.collide !== false) {
@@ -1106,6 +1204,9 @@
   ZS.findNearestDecorDoor = findNearestDecorDoor;
   ZS.setDecorDoorState    = setDecorDoorState;
   ZS.unregisterDecorDoor  = unregisterDecorDoor;
+  ZS.findNearestDecorStorage = findNearestDecorStorage;
+  ZS.setDecorStorageState    = setDecorStorageState;
+  ZS.unregisterDecorStorage  = unregisterDecorStorage;
   ZS.tickDecorDoors       = tickDecorDoors;
   ZS.getDecorGroundHeight = getDecorGroundHeight;
   ZS.getDecorSurfaceLift  = getDecorSurfaceLift;

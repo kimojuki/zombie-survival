@@ -103,6 +103,8 @@ async function main() {
   results.push(await expectOk('decorprefabs wreck', 'decorprefabs wreck', (t) => t.includes('wreck_sedan')));
   results.push(await expectOk('decorprefabs tree', 'decorprefabs tree', (t) => t.includes('tree_oak')));
   results.push(await expectOk('decorprefabs filter', 'decorprefabs stump', (t) => t.includes('spawn_stump')));
+  results.push(await expectOk('decorprefabs building', 'decorprefabs building', (t) => t.includes('building_survivor_shack')));
+  results.push(await expectOk('decoritems', 'decoritems eau', (t) => t.includes('food_eau_bouteille')));
   results.push(await expectOk('decorlist seed', 'decorlist', (t) => t.includes('decor_')));
 
   results.push(await expectOk(
@@ -159,17 +161,29 @@ async function main() {
     (t) => t.includes('spawn_workbench'),
   ));
 
+  const buildingAdd = await rcon('decoradd prefab building_survivor_shack 16 -12 0.35 1');
+  const buildingAddText = (buildingAdd.lines || []).join('\n');
+  const addedBuildingId = buildingAddText.match(/(decor_\d+)/)?.[1];
+  if (
+    buildingAdd.status === 200
+    && buildingAdd.ok
+    && addedBuildingId
+    && buildingAddText.includes('building_survivor_shack')
+  ) {
+    results.push(pass('decoradd building prefab', buildingAdd.lines[0]?.slice(0, 80)));
+  } else {
+    results.push(fail('decoradd building prefab', buildingAdd.error || buildingAddText.slice(0, 120)));
+  }
+
   const listAfter = await rcon('decorlist');
   const listText = (listAfter.lines || []).join('\n');
-  const addedId = listText.match(/decor_\d+.*spawn_lantern/)?.[0]?.split(/\s+/)[0]
-    || listText.match(/(decor_\d+)/)?.[1];
 
-  results.push(await expectOk('decorlist after add', 'decorlist', (t) => t.includes('spawn_lantern')));
+  results.push(await expectOk('decorlist after add', 'decorlist', (t) => t.includes('spawn_lantern') && t.includes('building_survivor_shack')));
 
-  if (addedId) {
-    results.push(await expectOk('decorremove by id', `decorremove ${addedId}`, (t) => t.includes(addedId)));
+  if (addedBuildingId && listText.includes(addedBuildingId)) {
+    results.push(await expectOk('decorremove placed building by id', `decorremove ${addedBuildingId}`, (t) => t.includes(addedBuildingId)));
   } else {
-    results.push(fail('decorremove by id', 'id lantern introuvable dans decorlist'));
+    results.push(fail('decorremove placed building by id', 'id bâtiment introuvable dans decorlist'));
   }
 
   // ── Erreurs attendues ──

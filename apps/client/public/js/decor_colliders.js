@@ -37,6 +37,13 @@
     spawn_workbench: [
       { type: 'box', lx: 0, lz: 0, hw: 0.52, hd: 0.34, maxY: 0.88 },
     ],
+    building_survivor_shack: [
+      { type: 'box', lx: 0, lz: 2.04, hw: 2.64, hd: 0.11 },
+      { type: 'box', lx: -2.54, lz: 0, hw: 0.11, hd: 2.08 },
+      { type: 'box', lx: 2.54, lz: 0, hw: 0.11, hd: 2.08 },
+      { type: 'box', lx: -1.61, lz: -2.04, hw: 0.99, hd: 0.11 },
+      { type: 'box', lx: 1.61, lz: -2.04, hw: 0.99, hd: 0.11 },
+    ],
     // Poteaux de signalisation camp (4 m) — cylindre pleine hauteur, non montable
     spawn_marker_left: [
       { type: 'cyl', lx: 0, lz: 0, r: 0.14 },

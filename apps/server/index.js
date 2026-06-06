@@ -299,6 +299,7 @@ const decorPrefabs = [
   'tree_pine',
   'tree_birch',
   'tree_dead',
+  'building_survivor_shack',
 ];
 let zombieIdCounter    = 0;
 let itemIdCounter      = 0;

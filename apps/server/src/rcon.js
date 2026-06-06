@@ -554,6 +554,15 @@ function createRcon(ctx) {
     return fail('Usage: decorseed wrecks|trees [reset]');
   });
 
+  register('decoritems', 'Liste les items posables comme décor [filtre]', (args) => {
+    const filter = (args[1] || '').toLowerCase();
+    const list = listItemTypes()
+      .filter((id) => !filter || id.includes(filter))
+      .sort((a, b) => a.localeCompare(b));
+    if (!list.length) return ok('Aucun item décor trouvé.');
+    return ok('=== Items décor posables ===', ...list.map((id) => `  ${id}`));
+  });
+
   register('decorremove', 'Retire un décor decorremove <id|nearest>', (args, meta) => {
     const q = (args[1] || 'nearest').toLowerCase();
     let target = null;

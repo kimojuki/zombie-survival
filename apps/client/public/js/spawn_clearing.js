@@ -377,6 +377,72 @@
     g.add(flap);
   }
 
+  /** Premier prefab bâtiment RCON : cabane simple, procédurale et réutilisable. */
+  function _buildSurvivorShack(parent, x, y, z, ry) {
+    const M = _campMats();
+    const g = new THREE.Group();
+    g.position.set(x, y, z);
+    g.rotation.y = ry || 0;
+    parent.add(g);
+
+    const wallMat = M ? M.wood(0x9b6a3c) : new THREE.MeshLambertMaterial({ color: 0x9b6a3c });
+    const trimMat = M ? M.woodDark(0x5a371d) : new THREE.MeshLambertMaterial({ color: 0x5a371d });
+    const roofMat = new THREE.MeshLambertMaterial({ color: 0x30353a });
+    const floorMat = M ? M.woodFine(0x8a5f35) : new THREE.MeshLambertMaterial({ color: 0x8a5f35 });
+    const clothMat = M ? M.canvas(0x4b5d39) : new THREE.MeshLambertMaterial({ color: 0x4b5d39 });
+
+    _add(g, new THREE.BoxGeometry(5.25, 0.12, 4.25), floorMat, 0, 0.06, 0);
+
+    // Murs, avec ouverture de porte côté -Z.
+    _add(g, new THREE.BoxGeometry(5.25, 2.55, 0.18), wallMat, 0, 1.32, 2.04);
+    _add(g, new THREE.BoxGeometry(0.18, 2.55, 4.15), wallMat, -2.54, 1.32, 0);
+    _add(g, new THREE.BoxGeometry(0.18, 2.55, 4.15), wallMat, 2.54, 1.32, 0);
+    _add(g, new THREE.BoxGeometry(1.98, 2.55, 0.18), wallMat, -1.61, 1.32, -2.04);
+    _add(g, new THREE.BoxGeometry(1.98, 2.55, 0.18), wallMat, 1.61, 1.32, -2.04);
+    _add(g, new THREE.BoxGeometry(1.28, 0.42, 0.2), trimMat, 0, 2.36, -2.04);
+
+    // Renforts lisibles sur les murs.
+    for (const sx of [-2.64, 2.64]) {
+      for (const pz of [-1.2, 0, 1.2]) {
+        _add(g, new THREE.BoxGeometry(0.08, 2.62, 0.09), trimMat, sx, 1.34, pz);
+      }
+    }
+    for (const px of [-1.9, 0, 1.9]) {
+      _add(g, new THREE.BoxGeometry(0.09, 2.62, 0.08), trimMat, px, 1.34, 2.16);
+    }
+    _add(g, new THREE.BoxGeometry(0.1, 2.2, 0.08), trimMat, -2.05, 1.16, -2.16);
+    _add(g, new THREE.BoxGeometry(0.1, 2.2, 0.08), trimMat, 2.05, 1.16, -2.16);
+
+    const door = new THREE.Mesh(new THREE.BoxGeometry(0.92, 1.82, 0.12), trimMat);
+    door.position.set(0.68, 0.98, -2.22);
+    door.rotation.y = -0.55;
+    door.castShadow = door.receiveShadow = true;
+    g.add(door);
+
+    const windowMat = new THREE.MeshLambertMaterial({
+      color: 0x93b7c4,
+      emissive: 0x0b1a20,
+      emissiveIntensity: 0.18,
+    });
+    _add(g, new THREE.BoxGeometry(0.74, 0.55, 0.08), windowMat, -2.64, 1.55, 0.62);
+    _add(g, new THREE.BoxGeometry(0.74, 0.08, 0.11), trimMat, -2.66, 1.86, 0.62);
+    _add(g, new THREE.BoxGeometry(0.74, 0.08, 0.11), trimMat, -2.66, 1.24, 0.62);
+    _add(g, new THREE.BoxGeometry(0.08, 0.62, 0.11), trimMat, -2.66, 1.55, 0.62);
+
+    const roofA = new THREE.Mesh(new THREE.BoxGeometry(5.8, 0.18, 2.65), roofMat);
+    roofA.position.set(0, 2.95, -0.72);
+    roofA.rotation.x = 0.42;
+    roofA.castShadow = roofA.receiveShadow = true;
+    g.add(roofA);
+    const roofB = roofA.clone();
+    roofB.position.z = 0.72;
+    roofB.rotation.x = -0.42;
+    g.add(roofB);
+    _add(g, new THREE.BoxGeometry(5.9, 0.18, 0.18), trimMat, 0, 3.45, 0);
+
+    _add(g, new THREE.BoxGeometry(1.2, 0.08, 0.54), clothMat, -1.15, 0.08, -2.62, 0, 0.12, 0);
+  }
+
   /** Vertical marker that stays readable from far away. */
   function _buildMarkerPole(parent, x, y, z, side) {
     const M = _campMats();
@@ -521,6 +587,7 @@
     spawn_lantern: { build(root) { _buildLantern(root, 0, 0, 0); } },
     spawn_stone: { build(root) { _buildStone(root, 0, 0, 0, 0.16, 0); } },
     spawn_workbench: { build(root) { _buildWorkbench(root, 0, 0, 0, 0); } },
+    building_survivor_shack: { build(root) { _buildSurvivorShack(root, 0, 0, 0, 0); } },
     spawn_flat_stone: {
       build(root) {
         _add(root, new THREE.BoxGeometry(0.28, 0.06, 0.22),

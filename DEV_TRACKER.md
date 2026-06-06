@@ -48,11 +48,19 @@ Copier dans la description de PR :
 
 ## 2026-06-06
 
+### Completed — Merge origin/dev toit cabane + caillou (2026-06-06)
+
+- **Merge** : commit collègue `4d639bb` (toit `building_survivor_shack`) + caillou two-hand/thrust + decoradd devant joueur.
+- **Cache bust** : `20260606-merge-dev-28`
+
+### Completed — Fix toit cabane prefab RCON (2026-06-06) — Georges
+
+- **Prefab** : `building_survivor_shack` — toit refait en géométrie pignon dédiée au lieu de deux plaques inclinées inversées.
+
 ### Completed — Caillou : pose écartée + frappe deux mains (2026-06-06)
 
 - **Idle** : bras écartés, coudes/poignets inclinés — une main de chaque côté du caillou.
 - **Melee** : anim `thrust_forward` — les deux bras poussent le rocher vers l'avant.
-- **Cache bust** : `20260606-tool-caillou-thrust-27`
 
 ### Completed — decoradd devant le joueur (2026-06-06)
 
@@ -64,7 +72,6 @@ Copier dans la description de PR :
 
 - **FPS** : grip `tool_caillou` en `twoHanded` — bras gauche visible, caillou centré entre les paumes.
 - **Prefab** : `buildHandRock` élargi/aplatie, point de prise au centre.
-- **Cache bust** : `20260606-tool-caillou-twohand-26`
 
 ### Completed — Merge `origin/dev` + intégration locale (2026-06-06)
 

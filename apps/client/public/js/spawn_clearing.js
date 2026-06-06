@@ -128,9 +128,21 @@
    */
   function getDecorGroundHeight(x, z, opts) {
     opts = opts || {};
-    const base = ZS.getTerrainHeight ? ZS.getTerrainHeight(x, z) : 0;
-    const surface = opts.layer === 'terrain' ? 0 : getDecorSurfaceLift(x, z);
     const lift = Number.isFinite(opts.groundLift) ? opts.groundLift : 0;
+    // Construction du mesh camp (pas encore dans la scène) — formule analytique.
+    if (opts.layer === 'camp') {
+      const base = ZS.getVisibleTerrainHeight
+        ? ZS.getVisibleTerrainHeight(x, z)
+        : (ZS.getTerrainHeight ? ZS.getTerrainHeight(x, z) : 0);
+      return base + getDecorSurfaceLift(x, z) + lift;
+    }
+    if (ZS.raycastGroundHeight) {
+      return ZS.raycastGroundHeight(x, z) + lift;
+    }
+    const base = ZS.getVisibleTerrainHeight
+      ? ZS.getVisibleTerrainHeight(x, z)
+      : (ZS.getTerrainHeight ? ZS.getTerrainHeight(x, z) : 0);
+    const surface = opts.layer === 'terrain' ? 0 : getDecorSurfaceLift(x, z);
     return base + surface + lift;
   }
 
@@ -690,6 +702,7 @@
     ground.renderOrder = 3;
     ground.receiveShadow = true;
     scene.add(ground);
+    ZS.registerGroundMesh?.(ground);
 
     const arcLen = _ellipseArcLength(ringRx, ringRz, arcStart, arcStart + arcSpan);
     const logCount = Math.max(16, Math.round(arcLen / 0.42));
@@ -907,23 +920,111 @@
     return best;
   }
 
+  /** Plus bas vertex du visuel en coordonnées monde (respecte rotY / scale). */
+  function _rockWorldBoundsY(root) {
+    if (!root) return null;
+    root.updateMatrixWorld(true);
+    const vis = root.userData.boulderVisual || root;
+    let minY = Infinity;
+    let maxY = -Infinity;
+    const v = new THREE.Vector3();
+    vis.traverse((o) => {
+      if (!o.isMesh || !o.geometry?.attributes?.position) return;
+      const pos = o.geometry.attributes.position;
+      for (let i = 0; i < pos.count; i++) {
+        v.fromBufferAttribute(pos, i);
+        v.applyMatrix4(o.matrixWorld);
+        if (v.y < minY) minY = v.y;
+        if (v.y > maxY) maxY = v.y;
+      }
+    });
+    if (!Number.isFinite(minY)) return null;
+    return { minY, maxY: Number.isFinite(maxY) ? maxY : minY };
+  }
+
+  /** Enfoncement réaliste : ~18 % hauteur, entre 12 et 40 cm selon taille. */
+  function _rockEmbedDepth(root) {
+    const b = _rockWorldBoundsY(root);
+    if (!b) return 0.14;
+    const h = Math.max(0.2, b.maxY - b.minY);
+    return Math.max(0.12, Math.min(0.40, h * 0.18));
+  }
+
+  function _sampleRockSurfaceY(x, z, root) {
+    const s = root?.scale?.x || 1;
+    const footprint = 0.35 + 0.45 * s;
+    const pts = [[x, z]];
+    if (footprint > 0.2) {
+      pts.push([x + footprint, z], [x - footprint, z], [x, z + footprint], [x, z - footprint]);
+    }
+    let minH = Infinity;
+    for (const [px, pz] of pts) {
+      const h = getDecorGroundHeight(px, pz);
+      if (h < minH) minH = h;
+    }
+    return Number.isFinite(minH) ? minH : getDecorGroundHeight(x, z);
+  }
+
+  /** Ancre le bas réel (vertices monde) sur la surface décor, légèrement enfoncé. */
+  let _deferRockSnap = false;
+
+  function setDeferRockSnap(on) {
+    _deferRockSnap = !!on;
+  }
+
+  function _snapMinableRockToGround(root, x, z) {
+    if (!root) return;
+    const vis = root.userData.boulderVisual;
+    if (vis) vis.position.set(0, 0, 0);
+    const surface = _sampleRockSurfaceY(x || 0, z || 0, root);
+    root.position.y = surface;
+    const bounds = _rockWorldBoundsY(root);
+    if (bounds != null) {
+      const embed = _rockEmbedDepth(root);
+      root.position.y += surface - bounds.minY - embed;
+    }
+    if (root.userData.decorSpec) {
+      root.userData.decorSpec.baseY = root.position.y;
+      _refreshDecorCollision(root);
+    }
+  }
+
+  function resnapMinableRock(root) {
+    if (!root?.userData?.prefabId) return;
+    const pid = root.userData.prefabId;
+    if (pid !== 'spawn_stone' && !pid.startsWith('rock_')) return;
+    _snapMinableRockToGround(root, root.position.x, root.position.z);
+  }
+
+  function resnapAllMinableRocks(scene) {
+    if (!scene) return;
+    scene.traverse((o) => {
+      if (!o.userData?.boulderVisual || !o.userData?.decorId) return;
+      resnapMinableRock(o);
+    });
+  }
+
   function spawnDecorPrefab(scene, prefabId, x, y, z, opts = {}) {
     const prefab = DECOR_PREFABS[prefabId];
     if (!scene || !prefab) return null;
     const isWreck = prefabId.startsWith('wreck_');
+    const isMinableRock = prefabId === 'spawn_stone' || prefabId.startsWith('rock_');
     const sink = Number.isFinite(opts.wreckSink) ? opts.wreckSink : 0;
+    const s = Number.isFinite(opts.scale) ? opts.scale : 1;
     const groundAt = (px, pz) => (ZS.getDecorGroundHeight
       ? ZS.getDecorGroundHeight(px, pz)
       : (ZS.getTerrainHeight ? ZS.getTerrainHeight(px, pz) : 0));
+    let groundLift = Number.isFinite(opts.groundLift) ? opts.groundLift : null;
+    if (isMinableRock && groundLift == null) groundLift = 0;
+    if (groundLift == null) groundLift = 0;
     const groundedY = isWreck
       ? groundAt(x || 0, z || 0) - sink
       : (opts.grounded !== false
-        ? getDecorGroundHeight(x || 0, z || 0, { groundLift: opts.groundLift })
+        ? getDecorGroundHeight(x || 0, z || 0, { groundLift })
         : (y || 0));
     const root = new THREE.Group();
     root.position.set(x || 0, groundedY, z || 0);
     root.rotation.set(opts.rotX || 0, opts.rotY || 0, opts.rotZ || 0);
-    const s = Number.isFinite(opts.scale) ? opts.scale : 1;
     root.scale.setScalar(s);
     root.userData.prefabId = prefabId;
     root.userData.collide = opts.collide !== false;
@@ -974,7 +1075,7 @@
       setDecorStorageState(decorId, !!opts.storageOpen, { instant: true });
     }
 
-    if (opts.collide !== false) {
+    if (opts.collide !== false && !isMinableRock) {
       _registerDecorCollision(decorId, decorSpec);
     }
 
@@ -1007,8 +1108,7 @@
       });
     }
 
-    const minableRock = prefabId === 'spawn_stone' || prefabId.startsWith('rock_');
-    if (minableRock && ZS.registerMinableRock) {
+    if (isMinableRock && ZS.registerMinableRock) {
       ZS.registerMinableRock(scene, root, root.position.x, root.position.z, decorId, {
         prefabId,
         stoneMax: opts.stoneMax,
@@ -1016,6 +1116,8 @@
         baseScale: s,
       });
     }
+
+    if (isMinableRock && !_deferRockSnap) _snapMinableRockToGround(root, x, z);
 
     return root;
   }
@@ -1336,6 +1438,9 @@
   ZS.tickDecorDoors       = tickDecorDoors;
   ZS.getDecorGroundHeight = getDecorGroundHeight;
   ZS.getDecorSurfaceLift  = getDecorSurfaceLift;
+  ZS.resnapMinableRock    = resnapMinableRock;
+  ZS.resnapAllMinableRocks = resnapAllMinableRocks;
+  ZS.setDeferRockSnap = setDeferRockSnap;
   ZS.CAMP_GROUND_LIFT     = CAMP_GROUND_LIFT;
   ZS.TRAIL_SURFACE_LIFT   = TRAIL_SURFACE_LIFT;
 }());

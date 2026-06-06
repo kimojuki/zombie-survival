@@ -1239,15 +1239,19 @@
     _sel = null;
     p.style.display = _panelOpen ? 'block' : 'none';
     if (_invBackdrop) _invBackdrop.style.display = _panelOpen ? 'block' : 'none';
-    if (_panelOpen) _renderInvPanel();
+    if (_panelOpen) {
+      _renderInvPanel();
+      ZS.onUiPanelOpen?.();
+    } else {
+      ZS.onUiPanelClose?.();
+    }
   }
 
   // ── Bindings ───────────────────────────────────────────────────────────────
 
   function _bindKeys() {
     document.addEventListener('keydown', (e) => {
-      if (window.ZS?.Rcon?.isOpen?.()) return;
-      if (window.ZS?.Chat?.isOpen?.()) return;
+      if (ZS.shortcutsBlocked?.(e) || ZS.Chat?.isOpen?.() || ZS.Rcon?.isOpen?.()) return;
       const digit = parseInt(e.key);
       if (digit >= 1 && digit <= 6) _setActiveSlot(digit - 1);
       if (e.code === 'KeyE') { if (!grabNearest()) _useActiveItem(); }

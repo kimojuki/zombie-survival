@@ -640,7 +640,7 @@ function createRcon(ctx) {
       const world = await ctx.ensureWorldRocks({ broadcast: true, reset });
       const n = camp + world;
       if (!n && !reset) return ok('Rochers déjà présents — rien à ajouter.');
-      return ok(`${n} rocher(s) minable(s) ${reset ? 'repositionné(s)' : 'ajouté(s)'} et synchronisé(s).`);
+      return ok(`${n} rocher(s) minable(s) ${reset ? 'repositionné(s)' : 'ajouté(s)'} (camp: ${camp}, monde: ${world}).`);
     }
     return fail('Usage: decorseed wrecks|trees|barriers|rocks [reset]');
   });

@@ -8,6 +8,7 @@
   <meta name="mobile-web-app-capable" content="yes">
   <title>Zombie Survival</title>
   <link rel="stylesheet" href="/css/style.css">
+  <script src="/js/loading.js?v=20260606-merge-build-ui-75"></script>
 </head>
 <body>
 
@@ -23,6 +24,12 @@
   <div class="connecting-inner">
     <div class="connecting-spinner" aria-hidden="true"></div>
     <p id="connecting-msg">Connexion au serveur…</p>
+    <div class="connecting-progress-wrap" aria-hidden="true">
+      <div class="connecting-progress-track">
+        <div id="connecting-progress-bar" class="connecting-progress-bar"></div>
+      </div>
+      <span id="connecting-progress-pct" class="connecting-progress-pct">0%</span>
+    </div>
     <small id="connecting-detail"></small>
   </div>
 </div>
@@ -104,7 +111,7 @@
 <button id="jump-btn">⬆</button>
 <button id="shoot-btn">🔫</button>
 <button id="reload-btn" title="Recharger [R]" style="display:none">⟳</button>
-<button id="craft-btn" title="Artisanat [C]">⚒</button>
+<button id="craft-btn" title="Artisanat [Q]">⚒</button>
 <button id="inv-btn"   title="Inventaire [I]" onclick="ZS.Inventory.togglePanel()">🎒</button>
 <button id="map-btn"   title="Carte [M]"      onclick="ZS.Map.toggleMap()">🗺️</button>
 
@@ -157,13 +164,36 @@
   // une copie mutable pour pouvoir y attacher GLTFLoader.
   window.THREE = { ...THREE, GLTFLoader };
 
-  function setConnectingMsg(msg, detail) {
+  function setConnectingMsg(msg, detail, pct) {
+    const api = window.__zsLoading || window.ZS?.Loading;
+    if (api?.setProgress && typeof pct === 'number') {
+      api.setProgress(pct, msg, detail);
+      return;
+    }
     const m = document.getElementById('connecting-msg');
     const d = document.getElementById('connecting-detail');
+    const bar = document.getElementById('connecting-progress-bar');
+    const pEl = document.getElementById('connecting-progress-pct');
     if (m) m.textContent = msg || '';
     if (d) d.textContent = detail || '';
+    if (typeof pct === 'number') {
+      if (bar) bar.style.width = `${Math.round(pct)}%`;
+      if (pEl) pEl.textContent = `${Math.round(pct)}%`;
+    }
     document.getElementById('connecting-screen').style.display = 'flex';
   }
+
+  const BOOT_LABELS = {
+    starting: 'Démarrage du serveur…',
+    zombies: 'Population zombie…',
+    spawn_decor: 'Camp de spawn…',
+    road_wrecks: 'Épaves routières…',
+    road_barriers: 'Barrières routières…',
+    camp_rocks: 'Rochers du camp…',
+    world_rocks: 'Rochers du monde…',
+    world_trees: 'Forêt…',
+    listening: 'Ouverture du port…',
+  };
 
   async function waitForServer() {
     let attempt = 0;
@@ -173,36 +203,53 @@
       try {
         const r = await fetch('/api/health', { cache: 'no-store' });
         if (r.status === 404) {
-          setConnectingMsg('Chargement du jeu…', 'Serveur sans endpoint health — chargement direct');
+          setConnectingMsg('Chargement du jeu…', 'Serveur sans endpoint health — chargement direct', 12);
           return;
         }
         const data = await r.json().catch(() => ({}));
         if (data.ready) {
-          setConnectingMsg('Chargement du jeu…', '');
+          setConnectingMsg('Chargement du jeu…', 'Serveur prêt', 12);
           return;
         }
+        const boot = data.boot || {};
+        const phase = boot.phase || 'starting';
+        const bootPct = Number.isFinite(boot.progress) ? boot.progress : 0;
+        const progress = Math.min(11, bootPct);
         setConnectingMsg(
-          'Serveur en cours de démarrage…',
-          `Patientez (${attempt}/${maxAttempts})…`
+          BOOT_LABELS[phase] || 'Serveur en cours de démarrage…',
+          `Initialisation (${attempt}/${maxAttempts})…`,
+          progress,
         );
       } catch {
         setConnectingMsg(
           'Serveur indisponible…',
-          `Vérifiez que Node.js tourne sur le port 3000 (${attempt}/${maxAttempts})`
+          `Vérifiez que Node.js tourne sur le port 3000 (${attempt}/${maxAttempts})`,
+          Math.min(8, attempt),
         );
       }
       await new Promise((resolve) => setTimeout(resolve, 1000));
     }
-    setConnectingMsg('Chargement du jeu…', 'Délai dépassé — tentative de connexion quand même');
+    setConnectingMsg('Chargement du jeu…', 'Délai dépassé — tentative de connexion quand même', 12);
   }
 
-  const CACHE_BUST = '20260606-build-collider-registry-60';
+  const CACHE_BUST = '20260606-merge-build-ui-75';
   // Attendre le serveur, puis charger les scripts legacy via le manifeste Vite.
   (async () => {
+    setConnectingMsg('Connexion au serveur…', 'Vérification de l\'état du serveur', 0);
     await waitForServer();
     const { LEGACY_MODULES } = await import('/src/bootstrap/legacy-modules.js');
-    const modules = LEGACY_MODULES;
-    for (const src of modules) {
+    const modules = LEGACY_MODULES.filter((src) => !src.includes('loading.js'));
+    const scriptMin = 12;
+    const scriptMax = 22;
+    for (let i = 0; i < modules.length; i++) {
+      const src = modules[i];
+      const local = (i + 1) / modules.length;
+      const pct = scriptMin + (scriptMax - scriptMin) * local;
+      setConnectingMsg(
+        'Chargement des modules…',
+        `${i + 1} / ${modules.length}`,
+        pct,
+      );
       await new Promise((resolve, reject) => {
         const s = document.createElement('script');
         s.src = src + (src.includes('?') ? '&' : '?') + 'v=' + CACHE_BUST;
@@ -211,6 +258,7 @@
         document.body.appendChild(s);
       });
     }
+    window.ZS?.Loading?.setPhase?.('scripts', 1, 'Modules chargés', '');
   })().catch(err => {
     console.error(err);
     setConnectingMsg('Erreur de chargement', err.message || String(err));

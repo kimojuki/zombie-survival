@@ -5,22 +5,35 @@
   // id -> { mesh, targetX, targetY, targetZ, targetRotY, moveSpeed, animTime }
   const remotePlayers = new Map();
   const sleepingBodies = new Map(); // playerId -> { mesh, x, z, username, playerId }
-  let _spawnReady = false; // false jusqu'à game-init (évite d'écraser la DB au spawn par défaut)
+  let _spawnReady = false; // false jusqu'à sync complète (game-init + décor rendu)
   const decorItems = new Map();
   let _scene, _state, _socket;
   const _DOWN = (typeof THREE !== 'undefined') ? new THREE.Vector3(0, -1, 0) : null;
 
-  function _connecting(show, msg, detail) {
-    const screen = document.getElementById('connecting-screen');
-    const m = document.getElementById('connecting-msg');
-    const d = document.getElementById('connecting-detail');
-    if (!screen) return;
+  function _loading() {
+    return window.ZS?.Loading || window.__zsLoading || null;
+  }
+
+  function _connecting(show, msg, detail, phaseKey, local01) {
+    const L = _loading();
     if (show) {
-      screen.style.display = 'flex';
-      if (m && msg) m.textContent = msg;
-      if (d) d.textContent = detail || '';
+      if (L?.setPhase && phaseKey != null && local01 != null) {
+        L.setPhase(phaseKey, local01, msg, detail);
+      } else if (L?.show) {
+        L.show(msg, detail);
+      } else {
+        const screen = document.getElementById('connecting-screen');
+        const m = document.getElementById('connecting-msg');
+        const d = document.getElementById('connecting-detail');
+        if (screen) screen.style.display = 'flex';
+        if (m && msg) m.textContent = msg;
+        if (d) d.textContent = detail || '';
+      }
+    } else if (L?.hide) {
+      L.hide();
     } else {
-      screen.style.display = 'none';
+      const screen = document.getElementById('connecting-screen');
+      if (screen) screen.style.display = 'none';
     }
   }
 
@@ -28,9 +41,32 @@
     if (typeof n === 'number' && ZS.UI?.setOnlineCount) ZS.UI.setOnlineCount(n);
   }
 
-  function _syncWorldColliders() {
+  let _colliderSyncDepth = 0;
+  let _colliderSyncTimer = null;
+
+  function _syncWorldColliders(force = false) {
     if (!_socket || !ZS.getColliders) return;
-    _socket.emit('world-colliders', ZS.getColliders());
+    if (_colliderSyncDepth > 0 && !force) return;
+    if (force) {
+      clearTimeout(_colliderSyncTimer);
+      _colliderSyncTimer = null;
+      _socket.emit('world-colliders', ZS.getColliders());
+      return;
+    }
+    if (_colliderSyncTimer) return;
+    _colliderSyncTimer = setTimeout(() => {
+      _colliderSyncTimer = null;
+      if (_socket) _socket.emit('world-colliders', ZS.getColliders());
+    }, 150);
+  }
+
+  function _beginColliderBatch() {
+    _colliderSyncDepth++;
+  }
+
+  function _endColliderBatch() {
+    _colliderSyncDepth = Math.max(0, _colliderSyncDepth - 1);
+    if (_colliderSyncDepth === 0) _syncWorldColliders(true);
   }
 
   function _removeDecorItem(id) {
@@ -44,14 +80,40 @@
     ZS.unregisterDecorStorage?.(id);
     ZS.removeChoppableTree?.(id);
     ZS.removeMinableRock?.(id);
-    _syncWorldColliders();
+    if (_colliderSyncDepth === 0) _syncWorldColliders();
+  }
+
+  function _countSpawnedWorldRocks() {
+    let n = 0;
+    decorItems.forEach(({ data }) => {
+      if (data?.prefabId?.startsWith('rock_') && !data?.anchorId) n++;
+    });
+    return n;
+  }
+
+  async function _resyncWorldRocksFromApi() {
+    try {
+      const res = await fetch('/api/world/decor-rocks');
+      if (!res.ok) return 0;
+      const json = await res.json();
+      let added = 0;
+      for (const decor of (json.items || [])) {
+        if (decorItems.has(decor.id)) continue;
+        await _spawnDecorItem(decor);
+        added++;
+      }
+      return added;
+    } catch (_) {
+      return 0;
+    }
   }
 
   function _spawnDecorItem(d) {
-    if (!d?.id || !_scene) return;
+    if (!d?.id || !_scene) return Promise.resolve(null);
     // Glissières posées localement au build RN (road_network + barrier_prefabs).
-    if (d.prefabId?.startsWith('road_barrier_')) return;
+    if (d.prefabId?.startsWith('road_barrier_')) return Promise.resolve(null);
     _removeDecorItem(d.id);
+    const isPrefab = d.kind === 'prefab' || (d.prefabId && !d.type);
     const commonOpts = {
       decorId: d.id,
       rotX: d.rotX || 0,
@@ -59,7 +121,7 @@
       rotZ: d.rotZ || 0,
       scale: Number.isFinite(d.scale) ? d.scale : 1,
       grounded: !d.prefabId?.startsWith('wreck_'),
-      groundLift: Number.isFinite(d.y) ? d.y : 0,
+      groundLift: Number.isFinite(d.groundLift) ? d.groundLift : undefined,
       layFlat: !!d.layFlat,
       offsetX: d.offsetX || 0,
       offsetY: d.offsetY || 0,
@@ -86,18 +148,139 @@
       if (!root) return;
       root.userData.decorId = d.id;
       decorItems.set(d.id, { root, data: d });
+      if (_colliderSyncDepth === 0) _syncWorldColliders();
     };
-    if (d.kind === 'prefab') {
-      if (!d.prefabId || !ZS.spawnDecorPrefab) return;
-      onRoot(ZS.spawnDecorPrefab(_scene, d.prefabId, d.x, d.y, d.z, commonOpts));
-      _syncWorldColliders();
-      return;
-    }
-    if (!d.type || !ZS.spawnDecorItem) return;
-    ZS.spawnDecorItem(_scene, d.type, d.x, d.y, d.z, commonOpts).then((root) => {
+    if (isPrefab) {
+      if (!d.prefabId || !ZS.spawnDecorPrefab) return Promise.resolve(null);
+      const root = ZS.spawnDecorPrefab(_scene, d.prefabId, d.x, d.y, d.z, commonOpts);
       onRoot(root);
-      _syncWorldColliders();
+      return Promise.resolve(root);
+    }
+    if (!d.type || !ZS.spawnDecorItem) return Promise.resolve(null);
+    return ZS.spawnDecorItem(_scene, d.type, d.x, d.y, d.z, commonOpts).then((root) => {
+      onRoot(root);
+      return root;
     });
+  }
+
+  async function _spawnDecorBatch(list, onProgress) {
+    const CHUNK = 64;
+    const pending = [];
+    for (let i = 0; i < list.length; i++) {
+      pending.push(_spawnDecorItem(list[i]));
+      const flush = pending.length >= CHUNK || i === list.length - 1;
+      if (!flush) continue;
+      await Promise.all(pending);
+      pending.length = 0;
+      if (onProgress) onProgress(i + 1, list.length);
+      await new Promise((r) => requestAnimationFrame(r));
+    }
+  }
+
+  async function _finalizeGameInit(data) {
+    const L = _loading();
+    L?.setPhase?.('sync', 0.05, 'Synchronisation…', 'Préparation de la partie');
+
+    if (data.isAdmin || data.rconEnabled) {
+      localStorage.setItem('zombie_is_admin', '1');
+    } else {
+      localStorage.setItem('zombie_is_admin', '0');
+    }
+    if (data.username) localStorage.setItem('zombie_username', data.username);
+    if (ZS.Chat?.setUsername) ZS.Chat.setUsername(data.username);
+    if (ZS.Chat?.setSelfId) ZS.Chat.setSelfId(data.selfId);
+    if (ZS.Chat?.setServerReady) ZS.Chat.setServerReady(data.features?.chat !== false);
+    if (ZS.Rcon?.refreshMenu) ZS.Rcon.refreshMenu();
+    _state.selfId = data.selfId;
+    const spawn = data.spawn || ZS.SpawnZone?.spawn || null;
+    if (spawn) {
+      _state.player.x   = spawn.x;
+      _state.player.z   = spawn.z;
+      _state.camera.yaw = spawn.rotY || 0;
+      _state.player.y   = ((ZS.getDecorGroundHeight
+        ? ZS.getDecorGroundHeight(spawn.x, spawn.z)
+        : (ZS.getTerrainHeight ? ZS.getTerrainHeight(spawn.x, spawn.z) : _state.player.y - 1.7))) + 1.7;
+      if (ZS._camera) {
+        ZS._camera.position.set(_state.player.x, _state.player.y, _state.player.z);
+        ZS._camera.rotation.y = _state.camera.yaw;
+      }
+      if (ZS._localAvatar) {
+        ZS._localAvatar.position.set(_state.player.x, _state.player.y - 1.7, _state.player.z);
+        ZS._localAvatar.rotation.y = _state.camera.yaw;
+      }
+      localStorage.setItem('zombie_spawn', JSON.stringify(spawn));
+    }
+    if (typeof data.worldTime === 'number') ZS.setWorldTime(data.worldTime);
+    if (ZS.Rcon) ZS.Rcon.init(_socket, data);
+    ZS.Zombies.syncAll(data.zombies);
+    remotePlayers.forEach(({ mesh }) => _scene.remove(mesh));
+    remotePlayers.clear();
+    for (const p of data.players) {
+      if (p.id === _state.selfId) continue;
+      _addRemotePlayer(p);
+    }
+    sleepingBodies.forEach(({ mesh }) => _scene.remove(mesh));
+    sleepingBodies.clear();
+    for (const s of (data.sleeping || [])) _addSleepingBody(s);
+
+    const decorList = (data.decorItems || []).filter(
+      (d) => !d.prefabId?.startsWith('road_barrier_'),
+    );
+    const itemList = data.items || [];
+    const structList = data.structures || [];
+    const syncTotal = decorList.length + itemList.length + structList.length + 2;
+
+    for (const item of itemList) {
+      ZS.Inventory.spawnWorldItem(item);
+    }
+
+    ZS.setDeferRockSnap?.(true);
+    _beginColliderBatch();
+    await _spawnDecorBatch(decorList, (n, total) => {
+      const done = itemList.length + n;
+      const t = syncTotal > 0 ? done / syncTotal : 1;
+      L?.setPhase?.('sync', t, 'Synchronisation…', `${done} / ${syncTotal} objets`);
+    });
+    ZS.setDeferRockSnap?.(false);
+    ZS.resnapAllMinableRocks?.(_scene);
+    _endColliderBatch();
+
+    L?.setPhase?.('sync', 0.95, 'Synchronisation…', 'Rochers ancrés');
+
+    const worldRockCount = decorList.filter(
+      (d) => d.prefabId?.startsWith('rock_') && !d.anchorId,
+    ).length;
+    const spawnedRocks = _countSpawnedWorldRocks();
+    if (worldRockCount > 0 && spawnedRocks === 0) {
+      _beginColliderBatch();
+      const n = await _resyncWorldRocksFromApi();
+      ZS.resnapAllMinableRocks?.(_scene);
+      _endColliderBatch();
+      if (n > 0) console.info('[decor] rochers resync API:', n);
+    }
+
+    for (const st of structList) ZS.Inventory.spawnStructure(st);
+
+    if (data.inventory) {
+      ZS.Inventory.loadFromSave(data.inventory);
+      ZS.Inventory.ensureStarterCaillou?.();
+    }
+    if (data.survival) ZS.Survival.loadFromSave(data.survival);
+    if (typeof data.onlineCount === 'number') _setOnlineCount(data.onlineCount);
+    else _setOnlineCount(remotePlayers.size + 1);
+
+    L?.setPhase?.('finalize', 0.5, 'Finalisation…', 'Envoi des collisions');
+    _syncWorldColliders(true);
+    await new Promise((r) => requestAnimationFrame(r));
+    await new Promise((r) => requestAnimationFrame(r));
+
+    L?.setPhase?.('finalize', 0.85, 'Finalisation…', 'Préparation du combat');
+    _syncPlayerPosToServer();
+    _spawnReady = true;
+    if (_socket) _socket.emit('request-zombie-sync');
+
+    L?.setPhase?.('finalize', 1, 'Prêt', '');
+    _connecting(false);
   }
 
   function init(socket, scene, state) {
@@ -105,7 +288,7 @@
     _scene  = scene;
     _state  = state;
 
-    _connecting(true, 'Connexion au serveur…', 'Authentification en cours');
+    _connecting(true, 'Connexion au serveur…', 'Authentification en cours', 'socket', 0);
 
     socket.on('connect', () => {
       _spawnReady = false;
@@ -118,7 +301,7 @@
       ZS.clearDecorColliders?.();
       _lastEquip = undefined;
       _setOnlineCount(0);
-      _connecting(true, 'Connexion établie', 'Chargement de votre partie…');
+      _connecting(true, 'Connexion établie', 'Chargement de votre partie…', 'socket', 0.35);
     });
 
     socket.on('connect_error', (err) => {
@@ -129,71 +312,28 @@
         window.location.href = '/';
         return;
       }
-      _connecting(true, 'Serveur indisponible', msg || 'Nouvelle tentative automatique…');
+      _connecting(true, 'Serveur indisponible', msg || 'Nouvelle tentative automatique…', 'socket', 0.1);
     });
 
     socket.on('disconnect', (reason) => {
       if (reason === 'io client disconnect') return;
-      _connecting(true, 'Connexion perdue', 'Reconnexion en cours…');
+      _spawnReady = false;
+      _loading()?.reset?.();
+      _connecting(true, 'Connexion perdue', 'Reconnexion en cours…', 'socket', 0.1);
     });
 
     socket.on('game-init', (data) => {
-      _connecting(false);
-      if (data.isAdmin || data.rconEnabled) {
-        localStorage.setItem('zombie_is_admin', '1');
-      } else {
-        localStorage.setItem('zombie_is_admin', '0');
-      }
-      if (data.username) localStorage.setItem('zombie_username', data.username);
-      if (ZS.Chat?.setUsername) ZS.Chat.setUsername(data.username);
-      if (ZS.Chat?.setSelfId) ZS.Chat.setSelfId(data.selfId);
-      if (ZS.Chat?.setServerReady) ZS.Chat.setServerReady(data.features?.chat !== false);
-      if (ZS.Rcon?.refreshMenu) ZS.Rcon.refreshMenu();
-      state.selfId = data.selfId;
-      const spawn = data.spawn || ZS.SpawnZone?.spawn || null;
-      if (spawn) {
-        state.player.x   = spawn.x;
-        state.player.z   = spawn.z;
-        state.camera.yaw = spawn.rotY || 0;
-        state.player.y   = ((ZS.getDecorGroundHeight
-          ? ZS.getDecorGroundHeight(spawn.x, spawn.z)
-          : (ZS.getTerrainHeight ? ZS.getTerrainHeight(spawn.x, spawn.z) : state.player.y - 1.7))) + 1.7;
-        if (ZS._camera) {
-          ZS._camera.position.set(state.player.x, state.player.y, state.player.z);
-          ZS._camera.rotation.y = state.camera.yaw;
-        }
-        if (ZS._localAvatar) {
-          ZS._localAvatar.position.set(state.player.x, state.player.y - 1.7, state.player.z);
-          ZS._localAvatar.rotation.y = state.camera.yaw;
-        }
-        localStorage.setItem('zombie_spawn', JSON.stringify(spawn));
-      }
-      if (typeof data.worldTime === 'number') ZS.setWorldTime(data.worldTime);
-      if (ZS.Rcon) ZS.Rcon.init(socket, data);
-      ZS.Zombies.syncAll(data.zombies);
-      remotePlayers.forEach(({ mesh }) => _scene.remove(mesh));
-      remotePlayers.clear();
-      for (const p of data.players) {
-        if (p.id === state.selfId) continue;
-        _addRemotePlayer(p);
-      }
-      sleepingBodies.forEach(({ mesh }) => _scene.remove(mesh));
-      sleepingBodies.clear();
-      for (const s of (data.sleeping || [])) _addSleepingBody(s);
-      for (const item of (data.items || [])) ZS.Inventory.spawnWorldItem(item);
-      for (const decor of (data.decorItems || [])) _spawnDecorItem(decor);
-      _syncWorldColliders();
-      for (const st of (data.structures || [])) ZS.Inventory.spawnStructure(st);
-      // Restore saved inventory (hotbar + sac + équipement). Tableau vide / absent
-      // = nouveau joueur → on garde les objets de test + sac par défaut.
-      if (data.inventory) {
-        ZS.Inventory.loadFromSave(data.inventory);
-        ZS.Inventory.ensureStarterCaillou?.();
-      }
-      if (data.survival)  ZS.Survival.loadFromSave(data.survival);
-      if (typeof data.onlineCount === 'number') _setOnlineCount(data.onlineCount);
-      else _setOnlineCount(remotePlayers.size + 1);
-      _spawnReady = true;
+      _connecting(true, 'Synchronisation…', 'Réception des données serveur', 'sync', 0);
+      _finalizeGameInit(data).catch((err) => {
+        console.error('[network] game-init failed', err);
+        _spawnReady = true;
+        _syncPlayerPosToServer();
+        _connecting(false);
+      });
+    });
+
+    socket.on('zombies-snapshot', (arr) => {
+      if (Array.isArray(arr)) ZS.Zombies.syncAll(arr);
     });
 
     socket.on('players-online', (d) => {
@@ -400,9 +540,11 @@
       else ZS.Survival?.reset?.();
       ZS.UI.setHealth(100);
       ZS.UI.hideDeath();
+      _syncPlayerPosToServer();
     });
 
     socket.on('take-damage', (d) => {
+      if (!_spawnReady) return;
       const maxHp = ZS.Inventory?.getMaxHealth?.() || 100;
       let dmg;
       if (typeof d.dmg === 'number') {
@@ -560,15 +702,22 @@
   }
 
   let _lastSent = 0;
-  function sendMove(x, y, z, rotY) {
+  function sendMove(x, y, z, rotY, force) {
     if (!_spawnReady || !_socket) return;
     const now = Date.now();
-    if (now - _lastSent < 50) return; // 20 Hz max
+    if (!force && now - _lastSent < 50) return; // 20 Hz max
     _lastSent = now;
     _socket.emit('move', { x, y, z, rotY });
   }
 
+  function _syncPlayerPosToServer() {
+    if (!_state?.player) return;
+    const p = _state.player;
+    sendMove(p.x, p.y, p.z, p.rotY ?? _state.camera?.yaw ?? 0, true);
+  }
+
   function sendShoot(ox, oz, dx, dz, dmg, range, radius, kb) {
+    if (!_spawnReady || !_socket) return;
     _socket.emit('shoot', { ox, oz, dx, dz, dmg, range, radius, kb: kb || 0 });
   }
 
@@ -770,6 +919,7 @@
     notifyDecorChop, notifyDecorMine, requestDecorDoorToggle, syncWorldColliders: _syncWorldColliders,
     findNearestSleeping,
     getSocket: () => _socket,
+    isSpawnReady: () => _spawnReady,
     requestStorageOpen, requestStorageClose, requestStorageDeposit, requestStorageWithdraw, requestStorageHit,
   };
 }());

@@ -49,6 +49,11 @@
   function _blockedSpawn(x, z) { return _inRiver(x, z) || _onRoad(x, z); }
 
   let _terrainMesh = null;
+  const _groundMeshes = [];
+  const _terrainRay = new THREE.Raycaster();
+  const _terrainRayOrigin = new THREE.Vector3();
+  const _terrainRayDir = new THREE.Vector3(0, -1, 0);
+  const _tmpV = new THREE.Vector3();
 
   // ── Keyframes ciel jour/nuit ──────────────────────────────────────────────────
   const _KEYS = [
@@ -580,6 +585,48 @@
     mesh.receiveShadow = true;
     scene.add(mesh);
     _terrainMesh = mesh;
+    registerGroundMesh(mesh);
+  }
+
+  function registerGroundMesh(mesh) {
+    if (!mesh || _groundMeshes.includes(mesh)) return;
+    _groundMeshes.push(mesh);
+  }
+
+  /** Hauteur analytique identique au mesh terrain (inclut -0.14 clairière). */
+  function getVisibleTerrainHeight(x, z) {
+    if (!Number.isFinite(x) || !Number.isFinite(z)) return 0;
+    let h = ZS.getTerrainHeight ? ZS.getTerrainHeight(x, z) : 0;
+    if (ZS.isInClearingDisc?.(x, z, 0.12)) h -= 0.14;
+    return h;
+  }
+
+  /** Hauteur réelle du mesh terrain (raycast vertical). */
+  function raycastTerrainHeight(x, z) {
+    if (!Number.isFinite(x) || !Number.isFinite(z)) return 0;
+    if (!_terrainMesh) return getVisibleTerrainHeight(x, z);
+    _terrainRayOrigin.set(x, 500, z);
+    _terrainRay.set(_terrainRayOrigin, _terrainRayDir);
+    const hits = _terrainRay.intersectObject(_terrainMesh, false);
+    if (hits.length) return hits[0].point.y;
+    return getVisibleTerrainHeight(x, z);
+  }
+
+  /** Surface la plus haute sous (x,z) — terrain, sol camp, sentier, etc. */
+  function raycastGroundHeight(x, z) {
+    if (!Number.isFinite(x) || !Number.isFinite(z)) return 0;
+    _terrainRayOrigin.set(x, 500, z);
+    _terrainRay.set(_terrainRayOrigin, _terrainRayDir);
+    let topY = null;
+    for (const mesh of _groundMeshes) {
+      if (!mesh?.isMesh) continue;
+      const hits = _terrainRay.intersectObject(mesh, false);
+      if (!hits.length) continue;
+      const y = hits[0].point.y;
+      if (topY === null || y > topY) topY = y;
+    }
+    if (topY !== null) return topY;
+    return raycastTerrainHeight(x, z);
   }
 
   // ── PRNG déterministe ────────────────────────────────────────────────────────
@@ -1329,6 +1376,10 @@
 
   window.ZS = window.ZS || {};
   ZS.buildWorld        = buildWorld;
+  ZS.registerGroundMesh      = registerGroundMesh;
+  ZS.getVisibleTerrainHeight = getVisibleTerrainHeight;
+  ZS.raycastTerrainHeight    = raycastTerrainHeight;
+  ZS.raycastGroundHeight     = raycastGroundHeight;
   ZS.tickDayNight      = tickDayNight;
   ZS.setWorldTime      = setWorldTime;
   ZS.setShadowCenter   = setShadowCenter;

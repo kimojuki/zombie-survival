@@ -119,6 +119,7 @@
     }
     _open = true;
     document.body.classList.add('chat-open');
+    ZS.clearMovementKeys?.();
     if (document.pointerLockElement) document.exitPointerLock();
     row.hidden = false;
     input.value = '';
@@ -187,6 +188,7 @@
   }
 
   function _onInputKey(e) {
+    e.stopPropagation();
     if (e.key === 'Enter') {
       e.preventDefault();
       e.stopImmediatePropagation();
@@ -279,9 +281,20 @@
 
   }
 
+  function shortcutsBlocked(e) {
+    if (_open || document.body.classList.contains('chat-open')) return true;
+    const ae = document.activeElement;
+    if (ae?.id === 'chat-input') return true;
+    if (e?.target?.id === 'chat-input') return true;
+    if (e?.target?.closest?.('#chat-input-row')) return true;
+    return false;
+  }
+
   window.ZS = window.ZS || {};
+  ZS.shortcutsBlocked = shortcutsBlocked;
   ZS.Chat = {
     init, open, close, toggle, send, onMessage, setUsername, setSelfId, setServerReady,
     isOpen: () => _open,
+    shortcutsBlocked,
   };
 }());

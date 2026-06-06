@@ -11,6 +11,8 @@
   const token = localStorage.getItem('zombie_token');
   if (!token) { window.location.href = '/'; return; }
 
+  window.ZS?.Loading?.setPhase?.('auth', 0, 'Vérification du compte…', '');
+
   try {
     const authRes = await fetch('/api/auth/me', {
       headers: { Authorization: 'Bearer ' + token },
@@ -21,8 +23,10 @@
       window.location.href = '/';
       return;
     }
+    window.ZS?.Loading?.setPhase?.('auth', 1, 'Compte vérifié', '');
   } catch {
     // Tunnel/serveur en cours de démarrage — on laisse Socket.io retenter.
+    window.ZS?.Loading?.setPhase?.('auth', 0.5, 'Compte…', 'Serveur lent — connexion directe');
   }
 
   // ── State ─────────────────────────────────────────────────────────────────
@@ -111,9 +115,11 @@
   }
 
   // ── Build world ───────────────────────────────────────────────────────────
+  window.ZS?.Loading?.setPhase?.('world', 0, 'Construction du monde…', 'Terrain et routes');
   const _tWorld = performance.now();
   ZS.buildWorld(scene);
   console.log('[world] build', Math.round(performance.now() - _tWorld), 'ms');
+  window.ZS?.Loading?.setPhase?.('world', 0.72, 'Construction du monde…', 'Végétation et camp');
 
   // Lumières ponctuelles — collectées une fois (évite scene.traverse chaque frame)
   const _pointLights = [];
@@ -155,6 +161,7 @@
   camera.rotation.x = state.camera.pitch;
 
   // ── Socket.io ─────────────────────────────────────────────────────────────
+  window.ZS?.Loading?.setPhase?.('world', 1, 'Monde prêt', 'Connexion multijoueur…');
   const socket = io({
     auth: { token },
     transports: ['polling', 'websocket'],
@@ -374,7 +381,7 @@
   }
 
   document.addEventListener('keydown', (e) => {
-    if (ZS.Chat?.isOpen?.()) return;
+    if (ZS.shortcutsBlocked?.(e) || ZS.Chat?.isOpen?.()) return;
     if (ZS.Rcon?.isOpen?.()) {
       if (_rconTyping(e)) return;
       if (e.code === 'Backquote' || e.code === 'F2' || e.code === 'Escape') {
@@ -396,10 +403,17 @@
     state.keys[e.code] = true;
   });
   document.addEventListener('keyup', (e) => {
-    if (ZS.Chat?.isOpen?.()) return;
+    if (ZS.shortcutsBlocked?.(e) || ZS.Chat?.isOpen?.()) return;
     if (ZS.Rcon?.isOpen?.() || _rconTyping(e)) return;
     state.keys[e.code] = false;
   });
+
+  function _clearMovementKeys() {
+    for (const k of Object.keys(state.keys)) delete state.keys[k];
+    state.input.moveX = 0;
+    state.input.moveZ = 0;
+  }
+  ZS.clearMovementKeys = _clearMovementKeys;
 
   // ── Input: desktop pointer lock ───────────────────────────────────────────
   let pointerLocked = false;
@@ -419,12 +433,42 @@
     if (canvas) canvas.style.cursor = pointerLocked ? 'none' : 'crosshair';
   }
 
+  function _uiPanelOpen() {
+    const inv = document.getElementById('inv-panel');
+    if (inv && inv.style.display === 'block') return true;
+    const craft = document.getElementById('craft-panel');
+    if (craft && craft.style.display === 'flex') return true;
+    const map = document.getElementById('map-overlay');
+    if (map && map.style.display === 'flex') return true;
+    return false;
+  }
+
+  function _onUiPanelOpen() {
+    if (_isMobile) return;
+    if (document.pointerLockElement) document.exitPointerLock();
+  }
+
+  function _onUiPanelClose() {
+    if (_isMobile) return;
+    if (ZS.Rcon?.isOpen?.()) return;
+    if (ZS.Chat?.isOpen?.()) return;
+    if (_uiPanelOpen()) return;
+    const conn = document.getElementById('connecting-screen');
+    if (conn && conn.style.display === 'flex') return;
+    if (ZS.Loading?.isActive?.()) return;
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => _requestPointerLock());
+    });
+  }
+
   function _requestPointerLock() {
     if (_isMobile || pointerLocked) return;
     if (ZS.Rcon?.isOpen?.()) return;
     if (ZS.Chat?.isOpen?.() || document.body.classList.contains('chat-open')) return;
+    if (_uiPanelOpen()) return;
     const conn = document.getElementById('connecting-screen');
     if (conn && conn.style.display === 'flex') return;
+    if (ZS.Loading?.isActive?.()) return;
     canvas.requestPointerLock();
   }
 
@@ -453,6 +497,8 @@
   });
   _syncPointerLockUi();
   ZS.requestPointerLock = _requestPointerLock;
+  ZS.onUiPanelOpen = _onUiPanelOpen;
+  ZS.onUiPanelClose = _onUiPanelClose;
 
   document.addEventListener('mousemove', (e) => {
     if (!pointerLocked) return;
@@ -661,6 +707,7 @@
 
   function attack() {
     if (state.player.dead) return;
+    if (ZS.Loading?.isActive?.() || !ZS.Network?.isSpawnReady?.()) return;
     const item = ZS.Inventory.getActiveItem();
     const def  = item ? ZS.ITEMS[item.type] : null;
     if (def && def.category === 'structure') {
@@ -979,6 +1026,7 @@
     if (def?.category === 'structure') e.preventDefault();
   });
   document.addEventListener('keydown', (e) => {
+    if (ZS.shortcutsBlocked?.(e) || ZS.Chat?.isOpen?.()) return;
     if (e.code === 'KeyR' && state.onReload) state.onReload();
   });
 
@@ -1021,7 +1069,7 @@
     const dt = Math.min((timestamp - state.lastTime) / 1000, 0.05);
     state.lastTime = timestamp;
 
-    if (!state.player.dead) {
+    if (!state.player.dead && !ZS.Loading?.isActive?.() && ZS.Network?.isSpawnReady?.()) {
       updateMovement(dt);
       _updateWaterEffect(state.player.x, state.player.z, state.player.y);
     }

@@ -852,7 +852,27 @@ body.mode-mobile.chat-open.chat-keyboard #chat-log {
   max-width: 22rem; padding: 1.5rem; text-align: center;
 }
 .connecting-inner p { margin: 0; font-weight: 600; color: #eee; }
-.connecting-inner small { color: #888; font-size: 0.85rem; line-height: 1.4; }
+.connecting-inner small { color: #888; font-size: 0.85rem; line-height: 1.4; min-height: 1.2em; }
+.connecting-progress-wrap {
+  display: flex; align-items: center; gap: 0.65rem;
+  width: min(18rem, 88vw); margin-top: 0.15rem;
+}
+.connecting-progress-track {
+  flex: 1; height: 0.45rem; border-radius: 999px;
+  background: #2a2a2a; overflow: hidden;
+  border: 1px solid #444;
+}
+.connecting-progress-bar {
+  height: 100%; width: 0%;
+  background: linear-gradient(90deg, #c74 0%, #e85 100%);
+  border-radius: inherit;
+  transition: width 0.25s ease-out;
+}
+.connecting-progress-pct {
+  font-size: 0.8rem; font-weight: 700; color: #e85;
+  min-width: 2.5rem; text-align: right; font-variant-numeric: tabular-nums;
+}
+#connecting-screen.connecting-fade-out { opacity: 0; transition: opacity 0.32s ease; }
 .connecting-spinner {
   width: 2.25rem; height: 2.25rem;
   border: 3px solid #333; border-top-color: #e85;

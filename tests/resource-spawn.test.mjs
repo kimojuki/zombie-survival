@@ -2,12 +2,17 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
   isSpawnPointClear,
+  isRockSpawnClear,
   decorSpawnRadius,
   findRandomTreeSpawn,
   findRandomRockSpawn,
+  seedWorldRockPlacements,
   countStandingTrees,
   countWorldRocks,
+  REGEN_CONFIG,
 } from '../packages/shared/src/resource-spawn.mjs';
+import { computeTreePlacements } from '../packages/shared/src/tree-placements.mjs';
+import { isInCampFootprint } from '../packages/shared/src/rock-placements.mjs';
 
 test('spawn point rejects overlap with decor', () => {
   const decors = [{ prefabId: 'rock_boulder', x: 10, z: 10, growthPhase: 4 }];
@@ -44,4 +49,20 @@ test('count helpers filter correctly', () => {
   ];
   assert.equal(countStandingTrees(decors), 1);
   assert.equal(countWorldRocks(decors), 1);
+});
+
+test('seed world rocks fills map without decor overlap', () => {
+  const trees = computeTreePlacements().map((t) => ({ ...t }));
+  const rocks = seedWorldRockPlacements(trees, { target: 30, seed: 42 });
+  assert.ok(rocks.length >= 20, `expected many rocks, got ${rocks.length}`);
+  for (const r of rocks) {
+    assert.ok(isRockSpawnClear(r.x, r.z, trees, { minGap: 2.8 }));
+    assert.ok(r.scale >= 1.4);
+  }
+});
+
+test('seed world rocks respect building exclusions', () => {
+  const rocks = seedWorldRockPlacements([], { target: 40, seed: 99 });
+  const inCamp = rocks.filter((r) => isInCampFootprint(r.x, r.z, 2));
+  assert.equal(inCamp.length, 0);
 });

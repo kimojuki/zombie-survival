@@ -149,6 +149,12 @@ const players         = new Map();
 const sleepingPlayers = new Map(); // playerId → corps endormi (déco)
 const SLEEP_LOOT_RADIUS = 3.5;
 let serverReady  = false;
+const bootStatus = { phase: 'starting', progress: 0 };
+
+function _setBoot(phase, progress) {
+  bootStatus.phase = phase;
+  bootStatus.progress = Math.max(0, Math.min(13, Math.round(progress)));
+}
 
 function _emitPlayersOnline() {
   io.emit('players-online', { count: players.size });
@@ -158,7 +164,12 @@ function _emitPlayersOnline() {
 
 app.get('/api/health', (req, res) => {
   if (!serverReady) {
-    return res.status(503).json({ ok: false, ready: false, status: 'starting' });
+    return res.status(503).json({
+      ok: false,
+      ready: false,
+      status: 'starting',
+      boot: { ...bootStatus },
+    });
   }
   res.json({
     ok: true,
@@ -168,7 +179,17 @@ app.get('/api/health', (req, res) => {
     rcon: !!(RCON_PASSWORD || ADMIN_USERS.size),
     chat: true,
     commit: GIT_COMMIT,
+    decor: _decorStats(),
   });
+});
+
+/** Rochers monde synchronisables (debug + resync client). */
+app.get('/api/world/decor-rocks', (req, res) => {
+  if (!serverReady) return res.status(503).json({ ok: false, ready: false });
+  const items = Array.from(decorItems.values()).filter(
+    (d) => d.kind === 'prefab' && _isMinableRockPrefab(d.prefabId) && !d.anchorId,
+  );
+  res.json({ ok: true, count: items.length, items });
 });
 
 // Console RCON externe (scripts, curl) — header X-RCON-Password ou body.password
@@ -552,6 +573,16 @@ function _isMinableRockPrefab(prefabId) {
   return prefabId === 'spawn_stone' || prefabId?.startsWith('rock_');
 }
 
+function _decorStats() {
+  const list = Array.from(decorItems.values());
+  return {
+    total: list.length,
+    trees: list.filter((d) => d.prefabId?.startsWith('tree_')).length,
+    worldRocks: list.filter((d) => _isMinableRockPrefab(d.prefabId) && !d.anchorId).length,
+    campRocks: list.filter((d) => _isMinableRockPrefab(d.prefabId) && d.anchorId).length,
+  };
+}
+
 function _makeDecorItem(d) {
   const item = {
     id: `decor_${decorSeq++}`,
@@ -564,6 +595,10 @@ function _makeDecorItem(d) {
     createdAt: Date.now(),
     ...d,
   };
+  if (!item.kind) {
+    if (item.prefabId) item.kind = 'prefab';
+    else if (item.type) item.kind = 'item';
+  }
   if (item.prefabId === 'storage_chest' && !Array.isArray(item.storage)) {
     item.storage = [];
     item.storageOpen = !!item.storageOpen;
@@ -662,28 +697,34 @@ function ensureWorldTrees({ broadcast = false, reset = false } = {}) {
   }));
 }
 
-/** Rochers fixes au spawn — ré-injectés si absents (boot ou RCON decorseed rocks). */
+/** Rochers fixes au spawn — ré-injectés à chaque boot (ancres stables). */
 function ensureCampRocks({ broadcast = false, reset = false } = {}) {
-  if (reset) {
-    for (const [id, d] of decorItems) {
-      if (!d.anchorId) continue;
-      if (!_isMinableRockPrefab(d.prefabId)) continue;
-      decorItems.delete(id);
-      if (broadcast && rcon?.broadcastDecorRemove) rcon.broadcastDecorRemove(id);
-    }
+  for (const [id, d] of decorItems) {
+    if (!d.anchorId) continue;
+    if (!_isMinableRockPrefab(d.prefabId)) continue;
+    decorItems.delete(id);
+    if (broadcast && rcon?.broadcastDecorRemove) rcon.broadcastDecorRemove(id);
   }
   return import(ROCK_PLACEMENTS_URL).then(({ computeCampRockAnchors }) =>
-    import(ROCK_STONE_URL).then(({ getRockStoneMax }) => {
+    import(ROCK_STONE_URL).then(({ getRockStoneMax }) =>
+      import(pathToFileURL(path.join(__dirname, '../../packages/shared/src/resource-spawn.mjs')).href)
+        .then(({ isRockAnchorClear }) => {
+      const occupied = Array.from(decorItems.values());
       const added = [];
       for (const r of computeCampRockAnchors()) {
-        const exists = [...decorItems.values()].some((d) =>
-          d.anchorId === r.anchorId
-          || (_isMinableRockPrefab(d.prefabId)
-            && Math.hypot((d.x || 0) - r.x, (d.z || 0) - r.z) < 1.2),
-        );
-        if (exists) continue;
+        const scale = Number.isFinite(r.scale) ? r.scale : 1.4;
+        if (!isRockAnchorClear(r.x, r.z, occupied, { minGap: 2.8, rockScale: scale })) {
+          log.warn('seed', 'camp rock anchor skipped (overlap)', {
+            anchorId: r.anchorId,
+            x: r.x,
+            z: r.z,
+          });
+          continue;
+        }
         const stoneMax = getRockStoneMax(r.prefabId);
-        added.push(_makeDecorItem({ ...r, stoneMax, stoneRemaining: stoneMax }));
+        const item = _makeDecorItem({ ...r, stoneMax, stoneRemaining: stoneMax });
+        occupied.push(item);
+        added.push(item);
       }
       if (added.length) {
         log.info('seed', 'camp rocks added', { count: added.length });
@@ -692,37 +733,60 @@ function ensureCampRocks({ broadcast = false, reset = false } = {}) {
         }
       }
       return added.length;
-    }));
+    })));
 }
 
-/** Ajoute les rochers minables si absents (boot ou RCON decorseed rocks). */
-function ensureWorldRocks({ broadcast = false, reset = false } = {}) {
-  if (reset) {
+/** Ajoute les rochers minables (boot ou RCON decorseed rocks). */
+function ensureWorldRocks({ broadcast = false, reset = false, force = false } = {}) {
+  if (reset || force) {
     for (const [id, d] of decorItems) {
-      if (!d.zoneId) continue;
+      if (d.anchorId) continue;
       if (!_isMinableRockPrefab(d.prefabId)) continue;
       decorItems.delete(id);
       if (broadcast && rcon?.broadcastDecorRemove) rcon.broadcastDecorRemove(id);
     }
-  } else {
-    const hasWorldRocks = [...decorItems.values()].some((d) => d.zoneId);
-    if (hasWorldRocks) return Promise.resolve(0);
   }
-  return import(ROCK_PLACEMENTS_URL).then(({ computeRockPlacements }) =>
-    import(ROCK_STONE_URL).then(({ getRockStoneMax }) => {
-      const added = [];
-      for (const r of computeRockPlacements()) {
-        const stoneMax = getRockStoneMax(r.prefabId);
-        added.push(_makeDecorItem({ ...r, stoneMax, stoneRemaining: stoneMax }));
-      }
-      if (added.length) {
-        log.info('seed', 'world rocks added', { count: added.length });
-        if (broadcast && rcon?.broadcastDecorSpawn) {
-          for (const item of added) rcon.broadcastDecorSpawn(item);
+  const resourceSpawnUrl = pathToFileURL(
+    path.join(__dirname, '../../packages/shared/src/resource-spawn.mjs'),
+  ).href;
+  return import(ROCK_PLACEMENTS_URL).then(({ rockPlacementKey }) =>
+    import(ROCK_STONE_URL).then(({ getRockStoneMax }) =>
+      import(resourceSpawnUrl).then(({ seedWorldRockPlacements, countWorldRocks, REGEN_CONFIG }) => {
+        const occupied = Array.from(decorItems.values());
+        const existing = countWorldRocks(occupied);
+        const need = (reset || force)
+          ? REGEN_CONFIG.rockTargetWorld
+          : Math.max(0, REGEN_CONFIG.rockTargetWorld - existing);
+        if (need <= 0) return 0;
+        const existingKeys = new Set(
+          occupied
+            .filter((d) => _isMinableRockPrefab(d.prefabId) && !d.anchorId)
+            .map((d) => rockPlacementKey(d)),
+        );
+        const added = [];
+        for (const r of seedWorldRockPlacements(occupied, { target: need })) {
+          const key = rockPlacementKey(r);
+          if (existingKeys.has(key)) continue;
+          const stoneMax = getRockStoneMax(r.prefabId);
+          const item = _makeDecorItem({ ...r, stoneMax, stoneRemaining: stoneMax });
+          existingKeys.add(key);
+          occupied.push(item);
+          added.push(item);
         }
-      }
-      return added.length;
-    }));
+        if (added.length) {
+          log.info('seed', 'world rocks added', { count: added.length, target: REGEN_CONFIG.rockTargetWorld });
+          if (broadcast && rcon?.broadcastDecorSpawn) {
+            for (const item of added) rcon.broadcastDecorSpawn(item);
+          }
+        } else if (need > 0) {
+          log.error('seed', 'world rocks FAILED — 0 placement', {
+            need,
+            occupied: occupied.length,
+            existing,
+          });
+        }
+        return added.length;
+      })));
 }
 
 function seedSpawnDecorItems() {
@@ -1186,11 +1250,12 @@ setInterval(() => {
                                            zR);
       z.x = chase[0];
       z.z = chase[1];
-      // Attaque avec cadence : un coup toutes ZOMBIE_ATTACK_CD s, dégâts modérés.
+      // Attaque avec cadence : distance recalculée après le déplacement du tick.
       z.attackTimer = Math.max(0, (z.attackTimer || 0) - DT);
       const zDmg = z.damage || ZOMBIE_DMG;
       const zCd = z.attackCd || ZOMBIE_ATTACK_CD;
-      if (nearestDist < 1.5 && !nearestP.invincible && z.attackTimer <= 0) {
+      const hitDist = Math.hypot(nearestP.x - z.x, nearestP.z - z.z);
+      if (hitDist < 1.5 && !nearestP.invincible && nearestP.posSynced && z.attackTimer <= 0) {
         z.attackTimer = zCd;
         nearestP.health = Math.max(0, nearestP.health - zDmg);
         io.to(nearestP.socketId).emit('take-damage', { dmg: zDmg });
@@ -1310,6 +1375,7 @@ io.on('connection', async (socket) => {
     equipped: restore?.equipped ?? null,
     dirty: true,
     invincible: true,
+    posSynced: false,
     connectedAt: Date.now(),
     anchorX: 0,
     anchorY: 0,
@@ -1365,6 +1431,7 @@ io.on('connection', async (socket) => {
   _emitPlayersOnline();
 
   // Le premier client transmet la géométrie de collision (murs, arbres, etc.).
+  let _lastDecorColliderCount = 0;
   socket.on('world-colliders', (cols) => {
     if (!Array.isArray(cols)) return;
     const terrain = cols.filter((c) => c && c.minY === undefined && !c.decorId);
@@ -1377,11 +1444,14 @@ io.on('connection', async (socket) => {
     }
     if (decor.length) {
       worldColliders = worldColliders.concat(decor);
-      log.info('world', 'decor colliders merged', {
-        decor: decor.length,
-        total: worldColliders.length,
-        from: p.username,
-      });
+      if (decor.length !== _lastDecorColliderCount) {
+        _lastDecorColliderCount = decor.length;
+        log.info('world', 'decor colliders merged', {
+          decor: decor.length,
+          total: worldColliders.length,
+          from: p.username,
+        });
+      }
     }
   });
 
@@ -1408,13 +1478,8 @@ io.on('connection', async (socket) => {
 
   socket.on('move', (d) => {
     if (!d || !Number.isFinite(d.x) || !Number.isFinite(d.z)) return;
-    const age = Date.now() - (p.connectedAt || 0);
-    if (age < 4000) {
-      const nearSpawn = Math.hypot(d.x - FOREST_SPAWN.x, d.z - FOREST_SPAWN.z) < 4;
-      const anchorFar = Math.hypot(p.anchorX - FOREST_SPAWN.x, p.anchorZ - FOREST_SPAWN.z) > 10;
-      if (nearSpawn && anchorFar) return;
-    }
     p.x = d.x; p.y = d.y; p.z = d.z; p.rotY = d.rotY; p.dirty = true;
+    p.posSynced = true;
     socket.broadcast.emit('player-move', { id: socket.id, x: d.x, y: d.y, z: d.z, rotY: d.rotY });
     if (log.isTrace()) {
       log.throttled(`move:${p.username}`, 1000, () => {
@@ -1437,6 +1502,10 @@ io.on('connection', async (socket) => {
     socket.broadcast.emit('player-attack', { id: socket.id, kind });
   });
 
+  socket.on('request-zombie-sync', () => {
+    socket.emit('zombies-snapshot', Array.from(zombies.values()));
+  });
+
   socket.on('shoot', (d) => {
     const len = Math.hypot(d.dx, d.dz);
     if (len < 0.001) return;
@@ -1447,13 +1516,26 @@ io.on('connection', async (socket) => {
     const range  = Math.max(0.5, Math.min(120, Number(d.range)  || 80));
     const radius = Math.max(0.4, Math.min(2.0, Number(d.radius) || 0.8));
 
+    let ox = Number(d.ox);
+    let oz = Number(d.oz);
+    if (!Number.isFinite(ox)) ox = p.x;
+    if (!Number.isFinite(oz)) oz = p.z;
+    // Mêlée : origine = position serveur (évite les miss pendant la sync client).
+    if (range <= 3.5) {
+      ox = p.x;
+      oz = p.z;
+    } else if (Math.hypot(ox - p.x, oz - p.z) > 8) {
+      ox = p.x;
+      oz = p.z;
+    }
+
     let hit = null, minT = Infinity;
     zombies.forEach((z) => {
-      const tx = z.x - d.ox, tz = z.z - d.oz;
+      const tx = z.x - ox, tz = z.z - oz;
       const t = tx * nx + tz * nz;
       if (t < 0 || t > range) return;
       const hitR = z.hitRadius || radius;
-      if (Math.hypot(d.ox + nx * t - z.x, d.oz + nz * t - z.z) < hitR && t < minT) {
+      if (Math.hypot(ox + nx * t - z.x, oz + nz * t - z.z) < hitR && t < minT) {
         minT = t; hit = z;
       }
     });
@@ -1861,6 +1943,7 @@ io.on('connection', async (socket) => {
     p.inv = kit;
     p.survival = { ...DEFAULT_SURVIVAL };
     p.x = FOREST_SPAWN.x; p.y = FOREST_SPAWN.y; p.z = FOREST_SPAWN.z; p.rotY = FOREST_SPAWN.rotY;
+    p.posSynced = false;
     p.dirty = true;
     setTimeout(() => { if (players.has(socket.id)) p.invincible = false; }, 3000);
     socket.emit('take-damage', { health: 100 });
@@ -2072,19 +2155,21 @@ async function resetAllPlayersOnce() {
 
 ensureZombiePopulation()
   .catch((err) => log.error('ensureZombiePopulation failed', err))
-  .then(() => seedSpawnDecorItems())
+  .then(() => { _setBoot('zombies', 2); return seedSpawnDecorItems(); })
   .catch((err) => log.error('seedSpawnDecorItems failed', err))
-  .then(() => ensureRoadWrecks())
+  .then(() => { _setBoot('spawn_decor', 4); return ensureRoadWrecks(); })
   .catch((err) => log.error('ensureRoadWrecks failed', err))
-  .then(() => ensureRoadBarriers())
+  .then(() => { _setBoot('road_wrecks', 6); return ensureRoadBarriers(); })
   .catch((err) => log.error('ensureRoadBarriers failed', err))
-  .then(() => ensureWorldTrees())
-  .catch((err) => log.error('ensureWorldTrees failed', err))
-  .then(() => ensureCampRocks())
+  .then(() => { _setBoot('road_barriers', 8); return ensureCampRocks(); })
   .catch((err) => log.error('ensureCampRocks failed', err))
-  .then(() => ensureWorldRocks())
+  .then(() => { _setBoot('camp_rocks', 10); return ensureWorldRocks({ force: true }); })
   .catch((err) => log.error('ensureWorldRocks failed', err))
+  .then(() => { _setBoot('world_rocks', 11); return ensureWorldTrees(); })
+  .catch((err) => log.error('ensureWorldTrees failed', err))
+  .then(() => { _setBoot('world_trees', 12); })
   .finally(() => {
+    _setBoot('listening', 13);
     server.listen(PORT, HOST, () => {
       serverReady = true;
       log.info('boot', 'server started', {
@@ -2099,6 +2184,7 @@ ensureZombiePopulation()
         zombies: ZOMBIE_COUNT,
         rcon: !!(RCON_PASSWORD || ADMIN_USERS.size),
         admins: ADMIN_USERS.size,
+        decor: _decorStats(),
       });
       resetAllPlayersOnce().then(() => log.info('boot', 'player reset check done'));
     }).on('error', (err) => {

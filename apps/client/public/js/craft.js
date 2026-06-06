@@ -28,9 +28,24 @@
   let _backdrop = null;
   let _visible  = false;
 
+  function _onKeyDown(e) {
+    if (ZS.shortcutsBlocked?.(e) || ZS.Chat?.isOpen?.() || ZS.Rcon?.isOpen?.()) return;
+    const t = e.target;
+    if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable)) return;
+    if (e.code === 'Escape' && _visible) {
+      e.preventDefault();
+      toggle();
+      return;
+    }
+    if (e.code !== 'KeyQ') return;
+    if (e.repeat) return;
+    e.preventDefault();
+    toggle();
+  }
+
   function init() {
     _buildPanel();
-    document.addEventListener('keydown', (e) => { if (e.code === 'KeyC') toggle(); });
+    document.addEventListener('keydown', _onKeyDown);
     const btn = document.getElementById('craft-btn');
     if (btn) btn.addEventListener('click', toggle);
   }
@@ -39,7 +54,12 @@
     _visible = !_visible;
     _panel.style.display    = _visible ? 'flex' : 'none';
     _backdrop.style.display = _visible ? 'block' : 'none';
-    if (_visible) _render();
+    if (_visible) {
+      _render();
+      ZS.onUiPanelOpen?.();
+    } else {
+      ZS.onUiPanelClose?.();
+    }
   }
 
   function _buildPanel() {

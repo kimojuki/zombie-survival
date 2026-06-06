@@ -82,17 +82,31 @@
     _open = true;
     document.getElementById('map-overlay').style.display = 'flex';
     _draw();
+    ZS.onUiPanelOpen?.();
   }
   function _close() {
     _open = false;
     document.getElementById('map-overlay').style.display = 'none';
+    ZS.onUiPanelClose?.();
+  }
+
+  function _onKeyDown(e) {
+    if (ZS.shortcutsBlocked?.(e) || ZS.Chat?.isOpen?.() || ZS.Rcon?.isOpen?.()) return;
+    const t = e.target;
+    if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable)) return;
+    if (e.code === 'Escape' && _open) {
+      e.preventDefault();
+      _close();
+      return;
+    }
+    if (e.code !== 'KeyM') return;
+    if (e.repeat) return;
+    e.preventDefault();
+    toggleMap();
   }
 
   function _bindKeys() {
-    document.addEventListener('keydown', e => {
-      if (e.code === 'KeyM')          toggleMap();
-      if (e.code === 'Escape' && _open) _close();
-    });
+    document.addEventListener('keydown', _onKeyDown);
     const closeBtn = document.getElementById('map-close-btn');
     if (closeBtn) {
       closeBtn.addEventListener('click', _close);

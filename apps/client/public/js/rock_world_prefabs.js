@@ -17,6 +17,12 @@
     return ZS.RockPrefab?.seedFromOpts?.(opts) || 1;
   }
 
+  /** @deprecated — le snap final utilise les vertices monde (spawn_clearing.js). */
+  function settleVisualBottom(visual, embed = 0.02) {
+    if (!visual) return;
+    visual.position.y = 0;
+  }
+
   /** Gros rocher minable — plusieurs morceaux fusionnés. */
   function buildBoulder(root, opts = {}) {
     const seed = _seedFromOpts(opts);
@@ -26,13 +32,13 @@
     const mat = ZS.RockTextures?.getRockMaterial?.(seed, 0x8a8578)
       || new THREE.MeshLambertMaterial({ color: 0x7a7468 });
     const chunks = 3 + Math.floor(rng() * 3);
-    const baseR = 0.52 + (opts.boulderScale || 0) * 0.08;
+    const baseR = 0.62 + (opts.boulderScale || 0) * 0.08;
     for (let i = 0; i < chunks; i++) {
       const r = baseR * (0.55 + rng() * 0.55);
       const mesh = new THREE.Mesh(new THREE.DodecahedronGeometry(r, 0), mat);
       mesh.position.set(
         (rng() - 0.5) * baseR * 1.6,
-        r * (0.35 + rng() * 0.35),
+        r * (0.12 + rng() * 0.22),
         (rng() - 0.5) * baseR * 1.6,
       );
       mesh.scale.set(1.1 + rng() * 0.35, 0.72 + rng() * 0.28, 1.05 + rng() * 0.3);
@@ -55,7 +61,7 @@
     visual.name = 'boulderVisual';
     const mat = ZS.RockTextures?.getRockMaterial?.(seed, 0x9a9588)
       || new THREE.MeshLambertMaterial({ color: 0x6e6a60 });
-    const baseR = 0.28 + rng() * 0.12;
+    const baseR = 0.34 + rng() * 0.14;
     for (let i = 0; i < 4; i++) {
       const r = baseR * (0.65 + rng() * 0.5);
       const mesh = new THREE.Mesh(new THREE.DodecahedronGeometry(r, 0), mat);
@@ -77,5 +83,5 @@
   }
 
   window.ZS = window.ZS || {};
-  ZS.RockWorldPrefabs = { buildBoulder, buildOutcrop };
+  ZS.RockWorldPrefabs = { buildBoulder, buildOutcrop, settleVisualBottom };
 }());

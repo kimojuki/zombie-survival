@@ -1,7 +1,7 @@
 /** Repousse progressive arbres / rochers — emplacements valides sans chevauchement décor. */
 
 import { TREE_ZONES, TREE_EXCLUSIONS, SPAWN_TRAIL_PTS } from './tree-placements.mjs';
-import { ROCK_ZONES } from './rock-placements.mjs';
+import { ROCK_ZONES, ROCK_EXCLUSIONS, isInCampFootprint } from './rock-placements.mjs';
 import { getTreeScale } from './tree-growth.mjs';
 
 export const REGEN_CONFIG = Object.freeze({
@@ -12,11 +12,11 @@ export const REGEN_CONFIG = Object.freeze({
   /** Arbres debout ciblés (seed + repousse). */
   treeTargetStanding: 72,
   /** Rochers monde (hors ancres camp fixes). */
-  rockTargetWorld: 18,
+  rockTargetWorld: 65,
   spawnAttempts: 48,
   minClearance: 2.4,
   minTreeGap: 3.6,
-  minRockGap: 3.0,
+  minRockGap: 3.4,
 });
 
 const TREE_PREFABS = ['tree_oak', 'tree_pine', 'tree_birch'];
@@ -58,6 +58,39 @@ function _inExclusion(x, z) {
   return false;
 }
 
+function _inRockExclusion(x, z) {
+  for (const e of ROCK_EXCLUSIONS) {
+    if (Math.hypot(x - e.cx, z - e.cz) < e.r) return true;
+  }
+  return false;
+}
+
+/** Emplacement rocher regen / monde. */
+export function isRockSpawnClear(x, z, decors, { minGap = REGEN_CONFIG.minRockGap, rockScale = 1.4 } = {}) {
+  if (Math.hypot(x, z) < 3.5) return false;
+  if (isInCampFootprint(x, z, 2.2 + rockScale * 0.55)) return false;
+  if (_inRockExclusion(x, z)) return false;
+  if (_nearTrail(x, z, 1.15 + rockScale * 0.12)) return false;
+  return _rockClearOfDecors(x, z, decors, minGap, rockScale);
+}
+
+/** Ancres camp fixes — hors clairière, sans chevaucher props (pas d'exclusion r=20). */
+export function isRockAnchorClear(x, z, decors, { minGap = 2.8, rockScale = 1.4 } = {}) {
+  if (isInCampFootprint(x, z, 2.0 + rockScale * 0.55)) return false;
+  if (_nearTrail(x, z, 1.0 + rockScale * 0.1)) return false;
+  return _rockClearOfDecors(x, z, decors, minGap, rockScale);
+}
+
+function _rockClearOfDecors(x, z, decors, minGap, rockScale) {
+  const selfR = 0.85 + 1.05 * rockScale;
+  for (const d of decors) {
+    if (d.falling) continue;
+    const r = decorSpawnRadius(d) + selfR + minGap;
+    if (Math.hypot(x - (d.x || 0), z - (d.z || 0)) < r) return false;
+  }
+  return true;
+}
+
 /** Rayon d'exclusion XZ autour d'un décor existant. */
 export function decorSpawnRadius(decor) {
   const pid = decor?.prefabId || decor?.type || '';
@@ -65,9 +98,25 @@ export function decorSpawnRadius(decor) {
     const phase = decor.growthPhase ?? 4;
     return 1.2 + 1.6 * getTreeScale(phase);
   }
-  if (pid.startsWith('rock_') || pid === 'spawn_stone') return 1.35;
+  if (pid.startsWith('rock_') || pid === 'spawn_stone') {
+    const s = Number.isFinite(decor.scale) ? decor.scale : 1;
+    return 0.85 + 1.05 * s;
+  }
+  if (pid === 'spawn_border_log') {
+    const s = Number.isFinite(decor.scale) ? decor.scale : 1;
+    return 0.35 + 0.28 * s;
+  }
+  if (pid === 'spawn_stump_seat') {
+    const s = Number.isFinite(decor.scale) ? decor.scale : 1;
+    return 0.85 + 0.55 * s;
+  }
   if (pid.startsWith('building_')) return 5.5;
-  if (pid.startsWith('spawn_')) return 1.8;
+  if (pid === 'spawn_lean_to') return 2.6;
+  if (pid.startsWith('spawn_marker')) return 1.35;
+  if (pid.startsWith('spawn_')) {
+    const s = Number.isFinite(decor.scale) ? decor.scale : 1;
+    return 1.5 + 0.45 * s;
+  }
   if (pid.startsWith('wreck_')) return 3.2;
   if (pid.startsWith('road_barrier')) return 0.6;
   return 1.3;
@@ -126,7 +175,7 @@ export function findRandomTreeSpawn(decors, seed = Date.now()) {
 /** @returns {object|null} placement rocher regen (taille adulte) ou null */
 export function findRandomRockSpawn(decors, seed = Date.now()) {
   const rng = _mulberry32((seed + 7919) >>> 0);
-  const zones = ROCK_ZONES.filter((z) => z.id !== 'spawn_ring');
+  const zones = ROCK_ZONES;
   if (!zones.length) return null;
   for (let attempt = 0; attempt < REGEN_CONFIG.spawnAttempts; attempt++) {
     const zone = zones[Math.floor(rng() * zones.length)];
@@ -134,21 +183,63 @@ export function findRandomRockSpawn(decors, seed = Date.now()) {
     const dist = rng() * zone.radius;
     const x = zone.cx + Math.cos(ang) * dist;
     const z = zone.cz + Math.sin(ang) * dist;
-    if (_nearTrail(x, z, 1.0)) continue;
-    if (!isSpawnPointClear(x, z, decors, { minGap: REGEN_CONFIG.minRockGap })) continue;
+    const scale = 1.4 + rng() * 0.85;
+    if (!isRockSpawnClear(x, z, decors, { minGap: REGEN_CONFIG.minRockGap, rockScale: scale })) continue;
     return {
       kind: 'prefab',
       prefabId: _pickRockPrefab(rng),
       x,
       z,
       rotY: rng() * Math.PI * 2,
-      scale: 0.9 + rng() * 0.4,
+      scale,
       rockSeed: Math.floor(rng() * 0xffffff),
       zoneId: 'regen_rock',
       regen: true,
     };
   }
   return null;
+}
+
+/**
+ * Seed monde : cherche des emplacements libres zone par zone (déterministe).
+ * @returns {Array<object>} placements à ajouter (max `target`)
+ */
+export function seedWorldRockPlacements(decors, {
+  target = REGEN_CONFIG.rockTargetWorld,
+  minGap = REGEN_CONFIG.minRockGap,
+  seed = 890001,
+} = {}) {
+  if (target <= 0) return [];
+  const occupied = [...decors];
+  const rng = _mulberry32(seed >>> 0);
+  const zones = ROCK_ZONES;
+  const out = [];
+  let attempts = 0;
+  const maxAttempts = Math.max(target * 140, 800);
+  while (out.length < target && attempts < maxAttempts) {
+    attempts++;
+    const zone = zones[Math.floor(rng() * zones.length)];
+    const slotRng = _mulberry32((zone.seed || 1) + attempts * 997 + out.length * 31);
+    const ang = slotRng() * Math.PI * 2;
+    const dist = slotRng() * zone.radius;
+    const x = zone.cx + Math.cos(ang) * dist;
+    const z = zone.cz + Math.sin(ang) * dist;
+    const scale = 1.4 + slotRng() * 0.85;
+    if (!isRockSpawnClear(x, z, occupied, { minGap, rockScale: scale })) continue;
+    const placement = {
+      kind: 'prefab',
+      prefabId: _pickRockPrefab(slotRng),
+      x,
+      z,
+      rotY: slotRng() * Math.PI * 2,
+      scale,
+      rockSeed: Math.floor(slotRng() * 0xffffff),
+      zoneId: zone.id,
+    };
+    out.push(placement);
+    occupied.push(placement);
+  }
+  return out;
 }
 
 export function countStandingTrees(decors) {

@@ -222,6 +222,7 @@
     mesh.renderOrder = 2;
     mesh.receiveShadow = true;
     scene.add(mesh);
+    ZS.registerGroundMesh?.(mesh);
     return mesh;
   }
 

@@ -48,6 +48,14 @@ Copier dans la description de PR :
 
 ## 2026-06-06
 
+### Completed — Merge dev Georges (construction + coffre) + UI PC local (2026-06-06)
+
+- **Remote** : `e90d2f0` coffre craftable/cassable + `2a61d0d` prefabs build/collisions (Georges).
+- **Local fusionné** : barre chargement, sync spawn, rochers snap, chat/raccourcis PC, craft Q, inv/carte mode souris.
+- **Conflits résolus** : `game.html`, `network.js` (`isSpawnReady` + storage API), `spawn_clearing.js` (`hitDecorStorage` + snap rochers).
+- **Tests** : 50/50 verts.
+- **Cache bust** : `20260606-merge-build-ui-75`
+
 ### Completed — Fix registre collisions structures fallback (2026-06-06)
 
 - **Cause racine** : `spawnStructure()` ajoutait les colliders dans le tableau retourné par `ZS.getColliders()`, qui est une copie ; les collisions disparaissaient donc immédiatement.
@@ -126,6 +134,131 @@ Copier dans la description de PR :
 - **Prefab** : `storage_chest` — interaction E / bouton, panneau slots 3×9, sync `storage-*` Socket.io.
 - **Anim** : couvercle animé (`storage-state`), ouverture locale immédiate.
 - Voir aussi sections persistance / sommeil / regen ci-dessous.
+
+### Completed — Rochers monde + visuel (2026-06-06)
+
+- **Seed** : `ensureWorldRocks()` ajoute rocher par rocher (clé `zoneId+rockSeed`) avec test `isSpawnPointClear` — plus de skip global si un seul regen existe.
+- **Carte** : zones forêt, ville, main city, militaire (`ROCK_ZONES` + `ROCK_EXCLUSIONS` bâtiments).
+- **Visuel** : boulders/outcrops plus gros, `groundLift` auto pour ne plus être enfoncés ; camp anchors agrandis.
+- **RCON** : `decorseed rocks reset` pour forcer le re-seed.
+- **Cache bust** : `20260606-rock-world-map-54`
+
+### Completed — Rochers ancrés au sol (snap bbox) (2026-06-06)
+
+- **Fix lévitation** : suppression du double `groundLift` + relevé visuel ; `_snapMinableRockToGround()` aligne le bas du mesh sur la surface après spawn.
+- **Cache bust** : `20260606-rock-ground-snap-58`
+
+### Completed — Rochers : hauteur mesh terrain (raycast) (2026-06-06)
+
+- **Cause résiduelle** : `getDecorGroundHeight()` utilisait `getTerrainHeight()` brut sans le `-0.14` clairière appliqué au mesh terrain → rochers ~14 cm au-dessus du sol visible.
+- **Fix** : `getVisibleTerrainHeight()` + `raycastTerrainHeight()` sur `_terrainMesh` ; `getDecorGroundHeight()` et snap utilisent cette hauteur ; bbox snap sur `boulderVisual` uniquement.
+- **Cache bust** : `20260606-rock-ground-snap-59`
+
+### Completed — Rochers : alignement visuel local + raycast sol (2026-06-06)
+
+- **Cause** : `Box3.setFromObject()` sous-estimait le bas des dodeca (lévitation ~30 % hauteur rocher) ; surface décor parfois au-dessus du mesh terrain seul (camp / sentier).
+- **Fix** : `_alignRockVisualToGround()` (bbox serrée en espace local root) ; `raycastGroundHeight()` sur terrain + sol camp + sentier ; re-snap après `game-init`.
+- **Cache bust** : `20260606-rock-ground-snap-60`
+
+### Completed — Rochers : bbox 8 coins (meshes inclinés) (2026-06-06)
+
+- **Cause** : bbox snap ne prenait que 4 coins (y=min) — chunks dodeca inclinés → bas réel plus bas, lévitation persistante.
+- **Fix** : 8 coins AABB par mesh ; cache bust `20260606-rock-ground-snap-61`.
+
+### Completed — Fix zombies frappent à distance + rochers au sol (2026-06-06)
+
+- **Zombies** : dégâts ignorés côté client avant `game-init` ; sync position forcée après spawn ; serveur n'attaque qu'après 1er `move` (`posSynced`) ; garde anti-spawn spawn retirée ; distance recalculée après chase.
+- **Rochers** : `settleVisualBottom()` sur vertices réels dans `rock_world_prefabs.js` ; re-snap frame suivante.
+- **Cache bust** : `20260606-rock-zombie-sync-62`
+
+### Completed — Rochers : snap vertices monde + rotY (2026-06-06)
+
+- **Cause** : `root.position.y = surface` sans mesurer le bas réel du mesh ; offset local `visual.position.y` invalide avec `rotY` aléatoire → lévitation ~1–3× hauteur rocher (visible sur capture).
+- **Fix** : `_rockWorldMinY()` parcourt tous les vertices en coords monde ; ajuste `root.position.y` pour coller au sol ; snap après `registerMinableRock`.
+- **Cache bust** : `20260606-rock-world-vertices-63`
+
+### Completed — Rochers enfoncés dans le sol (2026-06-06)
+
+- **Visuel** : enfoncement ~12 % de la hauteur du mesh (7–28 cm selon taille) pour un affleurement réaliste.
+- **Cache bust** : `20260606-rock-embed-64`
+
+### Completed — Rochers plus enfoncés (2026-06-06)
+
+- **Visuel** : enfoncement porté à ~18 % hauteur (12–40 cm).
+- **Cache bust** : `20260606-rock-embed-65`
+
+### Completed — Rochers : pas de spawn sur props (2026-06-06)
+
+- **Cause** : ancres camp dans la clairière ; rayon décor rocher trop petit vs scale ; rondins de lisière comptés comme props de 2,1 m.
+- **Fix** : ancres déplacées hors ellipse camp ; `isRockAnchorClear` / `isRockSpawnClear` avec rayon scale ; rayons props affinés (`spawn_border_log`, souches) ; validation boot serveur (`ensureCampRocks` skip si overlap).
+- **Ancres** : spawn path `(22, 6)`, trail `(-9, 2)`, est `(16, -5)`, ouest `(-11.5, -9)`.
+- **Cache bust** : `20260606-rock-clearance-66` (client) — **redémarrer le serveur** pour re-seed.
+
+### Completed — Écran de chargement fiable + % (2026-06-06)
+
+- **`loading.js`** : barre de progression 0–100 %, phases (serveur, scripts, auth, monde, socket, sync, finalisation).
+- **Serveur** : `/api/health` expose `boot.phase` + `boot.progress` pendant le seed (zombies → décor → rochers → arbres).
+- **Client** : l'écran reste jusqu'à `game-init` + spawn décor par lots + resnap rochers + colliders ; mouvement bloqué tant que `!isSpawnReady`.
+- **Cache bust** : `20260606-loading-screen-70`
+
+### Completed — Touche Q → panneau craft PC (2026-06-06)
+
+- **Client** : `KeyQ` ouvre/ferme l'artisanat (remplace `C`) ; ignoré si chat/RCON/champ texte actif.
+- **Cache bust** : `20260606-craft-key-q-71`
+
+### Completed — Inventaire / craft → mode souris PC (2026-06-06)
+
+- **Ouverture** : libère le pointer lock (curseur visible).
+- **Fermeture** : reprend le mode jeu automatiquement si aucun autre panneau ouvert.
+- **Cache bust** : `20260606-ui-mouse-mode-72`
+
+### Completed — Chat PC : raccourcis coupés (2026-06-06)
+
+- **`ZS.Chat.shortcutsBlocked`** + `stopPropagation` sur l'input ; inventaire, craft, carte, reload ignorés pendant la saisie.
+- **Cache bust** : `20260606-chat-shortcuts-73`
+
+### Completed — Carte PC touche M (2026-06-06)
+
+- **`KeyM`** ouvre/ferme la carte tactique ; **Échap** ferme ; ignoré si chat/RCON/champ texte actif.
+- **Mode souris** : libère le pointer lock à l'ouverture, reprend le jeu à la fermeture (comme inventaire/craft).
+- **Cache bust** : `20260606-map-key-m-74`
+
+### Completed — Fix barre 24 % + combat au spawn (2026-06-06)
+
+- **Barre** : `loading.js` en `<head>` ; phases réétalonnées 0–100 % ; sync décor monte jusqu'à ~92 %.
+- **Combat** : resync zombies (`request-zombie-sync`) avant `_spawnReady` ; mêlée serveur depuis `p.x/p.z` ; coups bloqués avant sync complète.
+- **Fix** : `_syncPlayerPosToServer` utilisait `state` au lieu de `_state` ; resync zombies non bloquante.
+- **Perf sync** : colliders envoyés 1× en fin de batch (plus ~200× par objet) ; snap rochers différé ; barrières RN ignorées côté client.
+- **Cache bust** : `20260606-loading-screen-70`
+
+### Completed — Fix rochers monde force boot + resync API (2026-06-06)
+
+- **Serveur** : `ensureWorldRocks({ force: true })` à chaque boot (purge + re-seed 65 rochers) ; `kind: 'prefab'` garanti sur tous les décors.
+- **API** : `GET /api/world/decor-rocks` pour resync client si game-init incomplet.
+- **Client** : spawn prefab même sans `kind` ; resync API automatique si 0 rocher rendu.
+- **Cache bust** : `20260606-rock-world-fix-57`
+
+### Completed — Fix rochers monde + diagnostic (2026-06-06)
+
+- **Cause racine** : ancien `ensureWorldRocks()` voyait les `zoneId` des **arbres** et ne seedait jamais les rochers carte.
+- **Fix serveur** : `seedWorldRockPlacements()` (~65 rochers, emplacements libres) ; boot **rochers avant arbres**.
+- **Diagnostic** : `/api/health` → `decor.worldRocks` ; console `[decor] rochers monde synchronisés: N` ; RCON `decorseed rocks reset`.
+- **Visuel monde** : meshes rochers plus visibles (`rock_world_prefabs.js` uniquement — caillou main intact).
+- **Cache bust** : `20260606-rock-world-fix-56`
+
+### Completed — Rochers monde + visuel camp (2026-06-06)
+
+- **Seed monde** : `seedWorldRockPlacements()` cherche des emplacements libres (65 cibles, 11 zones forêt/ville/militaire) au lieu de positions fixes bloquées par les arbres.
+- **Visuel** : rochers plus gros, relevés au-dessus du sol (`groundLift` proportionnel à l’échelle) ; camp re-seed à chaque boot.
+- **Exclusions** : `isRockSpawnClear()` — pas de rocher sur bâtiments / camp / sentier / autres décors.
+- **Cache bust** : `20260606-rock-world-map-55`
+
+### Completed — Fix rochers monde jamais seedés (2026-06-06)
+
+- **Cause** : `ensureWorldRocks()` testait `zoneId` sur tous les décors — les arbres ont aussi un `zoneId`, donc les rochers monde n'étaient jamais ajoutés au boot.
+- **Fix** : ne compter que les prefabs minables (`rock_*`, `spawn_stone`) avec `zoneId` et sans `anchorId` ; reset idem.
+- **Camp** : `ensureCampRocks()` ne déduplique plus par proximité (évite faux positifs) ; `spawn_stone` visible sur le sentier (`starter_spawn_path`).
+- **Cache bust** : `20260606-rock-spawn-fix-53`
 
 ### Completed — Repousse arbres (croissance) + rochers aléatoires (2026-06-06)
 

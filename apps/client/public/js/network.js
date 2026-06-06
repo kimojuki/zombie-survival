@@ -37,6 +37,7 @@
     if (entry.root?.parent) entry.root.parent.remove(entry.root);
     decorItems.delete(id);
     ZS.removeDecorColliders?.(id);
+    ZS.unregisterDecorDoor?.(id);
     _syncWorldColliders();
   }
 
@@ -61,6 +62,7 @@
       wreckWheels: Number.isFinite(d.wreckWheels) ? d.wreckWheels : undefined,
       wreckSink: Number.isFinite(d.wreckSink) ? d.wreckSink : 0,
       treeSeed: Number.isFinite(d.treeSeed) ? d.treeSeed : undefined,
+      doorOpen: !!d.doorOpen,
     };
     const onRoot = (root) => {
       if (!root) return;
@@ -272,6 +274,12 @@
     socket.on('structure-spawn', (d) => ZS.Inventory.spawnStructure(d));
     socket.on('decor-item-spawn', (d) => _spawnDecorItem(d));
     socket.on('decor-item-remove', (id) => _removeDecorItem(id));
+    socket.on('decor-door-state', (d) => {
+      if (!d?.id) return;
+      if (ZS.setDecorDoorState?.(d.id, !!d.open)) _syncWorldColliders();
+      const entry = decorItems.get(d.id);
+      if (entry) entry.data.doorOpen = !!d.open;
+    });
     socket.on('item-spawn',  (d)  => ZS.Inventory.spawnWorldItem(d));
     socket.on('item-remove', (id) => ZS.Inventory.removeWorldItem(id));
     socket.on('item-add',    (d)  => ZS.Inventory.receivePickup(d.type, d.qty));
@@ -565,6 +573,11 @@
     _socket.emit('decor-fell', { id: decorId });
   }
 
+  function requestDecorDoorToggle(decorId) {
+    if (!_socket || !decorId) return;
+    _socket.emit('decor-door-toggle', { id: decorId });
+  }
+
   window.ZS = window.ZS || {};
-  ZS.Network = { init, tick, sendMove, sendShoot, sendRespawn, sendDied, sendSurvival, sendEquip, sendAttack, notifyDecorFelled };
+  ZS.Network = { init, tick, sendMove, sendShoot, sendRespawn, sendDied, sendSurvival, sendEquip, sendAttack, notifyDecorFelled, requestDecorDoorToggle };
 }());

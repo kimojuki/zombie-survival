@@ -388,6 +388,10 @@
       }
       return;
     }
+    if (e.code === 'KeyE') {
+      if (_interactDoor()) e.preventDefault();
+      return;
+    }
     state.keys[e.code] = true;
   });
   document.addEventListener('keyup', (e) => {
@@ -623,6 +627,61 @@
     ZS.Network.sendAttack(kind === 'punch' ? 'melee' : kind);
   }
 
+  let _doorBtn = null;
+  let _nearDoor = null;
+
+  function _ensureDoorButton() {
+    if (_doorBtn) return _doorBtn;
+    _doorBtn = document.createElement('button');
+    _doorBtn.id = 'door-interact-btn';
+    _doorBtn.type = 'button';
+    _doorBtn.style.cssText = [
+      'display:none',
+      'position:fixed',
+      'right:92px',
+      'bottom:132px',
+      'z-index:120',
+      'min-width:96px',
+      'min-height:42px',
+      'border:2px solid rgba(230,210,150,.85)',
+      'border-radius:10px',
+      'background:rgba(25,18,10,.78)',
+      'color:#f3e3b0',
+      'font:bold 13px system-ui,sans-serif',
+      'box-shadow:0 4px 14px rgba(0,0,0,.35)',
+      'touch-action:manipulation',
+    ].join(';');
+    const fire = (e) => {
+      if (e) e.preventDefault();
+      _interactDoor();
+    };
+    _doorBtn.addEventListener('click', fire);
+    _doorBtn.addEventListener('touchstart', fire, { passive: false });
+    document.body.appendChild(_doorBtn);
+    return _doorBtn;
+  }
+
+  function _interactDoor() {
+    const door = ZS.findNearestDecorDoor?.(state.player.x, state.player.z, 2.5);
+    if (!door) return false;
+    ZS.Network.requestDecorDoorToggle(door.decorId);
+    return true;
+  }
+
+  function _updateDoorInteractUi() {
+    const door = ZS.findNearestDecorDoor?.(state.player.x, state.player.z, 2.5) || null;
+    if (!door && !_nearDoor) return;
+    _nearDoor = door;
+    const btn = _ensureDoorButton();
+    if (!door || state.player.dead || ZS.Rcon?.isOpen?.() || ZS.Chat?.isOpen?.()) {
+      btn.style.display = 'none';
+      return;
+    }
+    const action = door.open ? 'Fermer' : 'Ouvrir';
+    btn.textContent = document.body.classList.contains('mode-mobile') ? action : `E ${action}`;
+    btn.style.display = 'block';
+  }
+
   state.onShoot  = attack;
   state.onReload = () => {
     const item = ZS.Inventory.getActiveItem();
@@ -698,6 +757,7 @@
     ZS.Inventory.tick(dt);
     ZS.Survival.tick(dt);
     ZS.Map.tick();
+    _updateDoorInteractUi();
     _cullLights();
 
     if (++_shadowTick >= _SHADOW_INTERVAL) { _shadowTick = 0; renderer.shadowMap.needsUpdate = true; }

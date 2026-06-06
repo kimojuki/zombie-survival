@@ -413,11 +413,18 @@
     _add(g, new THREE.BoxGeometry(0.1, 2.2, 0.08), trimMat, -2.05, 1.16, -2.16);
     _add(g, new THREE.BoxGeometry(0.1, 2.2, 0.08), trimMat, 2.05, 1.16, -2.16);
 
+    const doorPivot = new THREE.Group();
+    doorPivot.name = 'survivorShackDoorPivot';
+    doorPivot.position.set(-0.46, 0.08, -2.18);
+    doorPivot.userData.isDoor = true;
+    g.add(doorPivot);
     const door = new THREE.Mesh(new THREE.BoxGeometry(0.92, 1.82, 0.12), trimMat);
-    door.position.set(0.68, 0.98, -2.22);
-    door.rotation.y = -0.55;
+    door.name = 'survivorShackDoor';
+    door.position.set(0.46, 0.91, 0);
     door.castShadow = door.receiveShadow = true;
-    g.add(door);
+    doorPivot.add(door);
+    const handleMat = new THREE.MeshLambertMaterial({ color: 0xb99b52 });
+    _add(doorPivot, new THREE.BoxGeometry(0.08, 0.08, 0.08), handleMat, 0.82, 0.96, -0.08);
 
     const windowMat = new THREE.MeshLambertMaterial({
       color: 0x93b7c4,
@@ -471,6 +478,8 @@
     }
 
     _add(g, new THREE.BoxGeometry(1.2, 0.08, 0.54), clothMat, -1.15, 0.08, -2.62, 0, 0.12, 0);
+
+    g.userData.doorPivot = doorPivot;
   }
 
   /** Vertical marker that stays readable from far away. */
@@ -598,6 +607,8 @@
 
   }
 
+  const DECOR_DOORS = new Map();
+
   const DECOR_PREFABS = {
     spawn_campfire: {
       build(root) {
@@ -639,6 +650,47 @@
     ZS.registerDecorColliders(decorId, ZS.buildDecorColliders(spec));
   }
 
+  function _refreshDecorCollision(root) {
+    if (!root?.userData?.decorSpec) return;
+    if (root.userData.collide === false) return;
+    _registerDecorCollision(root.userData.decorSpec.decorId, root.userData.decorSpec);
+  }
+
+  function _setDoorVisual(entry, open) {
+    if (!entry?.pivot) return false;
+    entry.open = !!open;
+    entry.root.userData.doorOpen = entry.open;
+    entry.root.userData.decorSpec.doorOpen = entry.open;
+    entry.pivot.rotation.y = entry.open ? -Math.PI / 2 : 0;
+    _refreshDecorCollision(entry.root);
+    return true;
+  }
+
+  function setDecorDoorState(decorId, open) {
+    const entry = DECOR_DOORS.get(decorId);
+    if (!entry || !entry.root.parent) return false;
+    return _setDoorVisual(entry, !!open);
+  }
+
+  function unregisterDecorDoor(decorId) {
+    DECOR_DOORS.delete(decorId);
+  }
+
+  function findNearestDecorDoor(x, z, maxDist = 2.4) {
+    let best = null;
+    const pos = new THREE.Vector3();
+    for (const [decorId, entry] of DECOR_DOORS) {
+      if (!entry.root.parent || !entry.pivot) continue;
+      entry.pivot.getWorldPosition(pos);
+      const dist = Math.hypot(pos.x - x, pos.z - z);
+      if (dist > maxDist) continue;
+      if (!best || dist < best.dist) {
+        best = { decorId, open: !!entry.open, dist, prefabId: entry.root.userData.prefabId };
+      }
+    }
+    return best;
+  }
+
   function spawnDecorPrefab(scene, prefabId, x, y, z, opts = {}) {
     const prefab = DECOR_PREFABS[prefabId];
     if (!scene || !prefab) return null;
@@ -658,6 +710,7 @@
     const s = Number.isFinite(opts.scale) ? opts.scale : 1;
     root.scale.setScalar(s);
     root.userData.prefabId = prefabId;
+    root.userData.collide = opts.collide !== false;
 
     const decorId = opts.decorId || `static_${prefabId}_${(x || 0).toFixed(1)}_${(z || 0).toFixed(1)}`;
     root.userData.decorId = decorId;
@@ -665,8 +718,7 @@
     scene.add(root);
     prefab.build(root, opts);
 
-    if (opts.collide !== false) {
-      _registerDecorCollision(decorId, {
+    const decorSpec = {
         decorId,
         kind: 'prefab',
         prefabId,
@@ -677,7 +729,22 @@
         rotZ: root.rotation.z,
         scale: s,
         wreckTilt: isWreck ? root.rotation.z : undefined,
-      });
+        doorOpen: !!opts.doorOpen,
+      };
+    root.userData.decorSpec = decorSpec;
+
+    if (root.userData.doorPivot) {
+      const entry = {
+        root,
+        pivot: root.userData.doorPivot,
+        open: !!opts.doorOpen,
+      };
+      DECOR_DOORS.set(decorId, entry);
+      _setDoorVisual(entry, !!opts.doorOpen);
+    }
+
+    if (opts.collide !== false) {
+      _registerDecorCollision(decorId, decorSpec);
     }
 
     if (prefabId.startsWith('tree_') && ZS.registerChoppableTree) {
@@ -993,6 +1060,9 @@
   ZS.spawnDecorPrefab   = spawnDecorPrefab;
   ZS.registerDecorPrefab = registerDecorPrefab;
   ZS.listDecorPrefabs   = listDecorPrefabs;
+  ZS.findNearestDecorDoor = findNearestDecorDoor;
+  ZS.setDecorDoorState    = setDecorDoorState;
+  ZS.unregisterDecorDoor  = unregisterDecorDoor;
   ZS.getDecorGroundHeight = getDecorGroundHeight;
   ZS.getDecorSurfaceLift  = getDecorSurfaceLift;
   ZS.CAMP_GROUND_LIFT     = CAMP_GROUND_LIFT;

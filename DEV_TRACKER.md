@@ -46,6 +46,16 @@ Copier dans la description de PR :
   `& "$env:LOCALAPPDATA\nvm\v20.19.4\node.exe" apps/server/index.js`
 - **Ctrl+F5** dans le navigateur après changement JS (cache bust)
 
+## 2026-06-06
+
+### Completed — RCON prefab bâtiment + listing items (2026-06-06)
+
+- **Prefab bâtiment** : `building_survivor_shack` ajouté côté client (`spawn_clearing.js`) avec collisions dédiées (`decor_colliders.js`).
+- **RCON objets** : `decoradd prefab building_survivor_shack ...`, `decorlist`, `decorremove` couvrent maintenant le premier bâtiment ; `decoritems [filtre]` liste les items posables.
+- **Tests** : `tools/rcon-test.mjs` couvre `decorprefabs building`, `decoritems`, placement item, placement prefab et placement bâtiment.
+- **Docs** : `docs/RCON.md` mis à jour.
+- **Cache bust** : `20260606-rcon-prefab-building-01`
+
 ## 2026-06-05
 
 ### Completed — Zombies prefab RCON + combat (2026-06-06)

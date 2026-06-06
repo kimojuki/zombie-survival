@@ -153,15 +153,17 @@ Erreurs : `403` (mauvais mot de passe), `503` (RCON non configuré ou serveur en
 | `loot regen` | Régénère le loot monde |
 | `loot clear` | Supprime le loot généré |
 
-### Décor monde (prefabs + items posés)
+### Objets monde (prefabs + items posés)
 
-Props visibles par tous les joueurs, synchronisés via `decorItems` au `game-init` et events Socket.io `decor-item-spawn` / `decor-item-remove`.
+Objets visibles par tous les joueurs, synchronisés via `decorItems` au `game-init` et events Socket.io `decor-item-spawn` / `decor-item-remove`. Tout objet posé durablement passe par un prefab (`kind=prefab`) ou un item de jeu posé comme décor (`kind=item`).
 
 | Commande | Description |
 |----------|-------------|
-| `decorprefabs` | Liste les prefabs camp (`spawn_campfire`, `spawn_supply_crate`, …) |
+| `decorprefabs` | Liste les prefabs (`spawn_campfire`, `spawn_supply_crate`, `building_survivor_shack`, …) |
+| `decoritems [filtre]` | Liste les items de jeu posables comme objet décor |
 | `decoradd prefab spawn_border_log [x z] [rotY] [scale]` | Pose un rondin de lisière (scale ≈ longueur / 0.42 m) |
-| `decoradd prefab <id> [x z] [rotY] [scale]` | Pose un prefab décor (camp, épaves, …) |
+| `decoradd prefab building_survivor_shack [x z] [rotY] [scale]` | Pose le premier bâtiment prefab RCON |
+| `decoradd prefab <id> [x z] [rotY] [scale]` | Pose un prefab décor/bâtiment (camp, épaves, cabanes, …) |
 | `decoradd prefab wreck_sedan [x z] [rotY] [scale] [variant] [tilt] [wheels] [sink]` | Épave — variants : `rust`, `olive`, `navy`, `beige`, `burnt` |
 | `decorseed wrecks` | Ajoute les épaves seed si absentes (sans redémarrer le serveur) |
 | `decorseed wrecks reset` | Supprime toutes les épaves seed et les replace aux positions du gabarit |
@@ -169,7 +171,7 @@ Props visibles par tous les joueurs, synchronisés via `decorItems` au `game-ini
 | `decorlist` | Liste les décors actifs (id, kind, position) |
 | `decorremove <id>` | Supprime un décor par id |
 
-**Prefabs camp** : meshes procéduraux avec textures PNG dans `apps/client/public/textures/camp/` (`wood_planks_light.png`, `wood_planks.png`, `olive_canvas.png`). Module client : `camp_textures.js` → `ZS.CampTextures.materials()`.
+**Prefabs** : meshes procéduraux avec textures PNG dans `apps/client/public/textures/camp/` (`wood_planks_light.png`, `wood_planks.png`, `olive_canvas.png`). Module client : `camp_textures.js` → `ZS.CampTextures.materials()`. Le premier bâtiment est `building_survivor_shack`, avec collisions via `decor_colliders.js`.
 
 **Seed spawn** : décors camp + ~60 rondins (`spawn_border_log`) + **8 épaves** le long de `town_main` / `city_highway` (`packages/shared/src/road-wrecks.mjs`).
 
@@ -222,7 +224,9 @@ Modifiables via commandes RCON ; broadcast `server-flags` aux clients.
 - [ ] `nospawn on` — kill zombie ne respawn pas
 - [ ] `tp` — téléportation visible
 - [ ] `say` — bannière affichée
-- [ ] `decorprefabs` — liste les prefabs camp
+- [ ] `decorprefabs` — liste les prefabs, dont `building_survivor_shack`
+- [ ] `decoritems eau` — liste les items posables filtrés
 - [ ] `decoradd prefab spawn_supply_crate 2 -6` — caisse texturée visible pour tous
+- [ ] `decoradd prefab building_survivor_shack 16 -12 0.35 1` — cabane visible/collisionnée
 - [ ] `decorlist` / `decorremove <id>` — gestion décor
 - [ ] API `curl` avec `X-RCON-Password`

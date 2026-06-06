@@ -295,6 +295,7 @@ const decorPrefabs = [
   'spawn_flat_stone',
   'wreck_sedan',
   'wreck_pickup',
+  'building_survivor_shack',
 ];
 let zombieIdCounter    = 0;
 let itemIdCounter      = 0;

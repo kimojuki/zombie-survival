@@ -521,6 +521,14 @@
 
   // Coup de poing à mains nues (aucune arme en main)
   const FIST = { degats_impact: 8, portee_metre: 1.6, cadence_attaque: 0.5 };
+  function _hitStorageWithMelee(cam, dir, range) {
+    const hit = ZS.hitDecorStorage?.(cam.x, cam.z, dir.x, dir.z, Math.max(range + 1.4, 3.2));
+    if (!hit?.decorId) return false;
+    ZS.Audio.chopWood?.(0.85);
+    ZS.Network.requestStorageHit?.(hit.decorId);
+    return true;
+  }
+
   function _fistPunch() {
     const n = _now();
     if (n - _lastAttack < FIST.cadence_attaque) return;
@@ -531,6 +539,7 @@
     const cam = _cameraWorldPos();
     const hitDist = ZS.Zombies.nearestDist(cam.x, cam.z);
     ZS.Audio.melee(hitDist < FIST.portee_metre + 0.8 ? 0.9 : 0.4);
+    _hitStorageWithMelee(cam, dir, FIST.portee_metre);
     ZS.Network.sendShoot(cam.x, cam.z, dir.x, dir.z,
                          FIST.degats_impact, FIST.portee_metre, 1.4, 0.5);
   }
@@ -622,6 +631,7 @@
       const hitDist = ZS.Zombies.nearestDist(cam.x, cam.z);
       ZS.Audio.melee(hitDist < range + 0.8 ? 1.0 : 0.45);
     }
+    _hitStorageWithMelee(cam, dir, range);
 
     // Frappe les zombies dans la portée (rayon latéral large = coup de mêlée balayant)
     // + recul : un coup au corps à corps repousse le zombie en arrière.
@@ -881,7 +891,11 @@
       if (backdrop) backdrop.style.display = 'none';
     }
 
-    return { open, update, close };
+    function closeIf(decorId) {
+      if (decorId && decorId === state.id) close();
+    }
+
+    return { open, update, close, closeIf };
   })();
   window.ZS = window.ZS || {};
   ZS.StorageUI = StorageUI;

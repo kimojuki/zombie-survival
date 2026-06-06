@@ -255,6 +255,10 @@
       label: 'Escalier en Bois', category: 'structure', maxStack: 3,
       icon: '🪜', color: 0xbb8833, points_structure_hp: 400,
     },
+    struct_storage_chest: {
+      label: 'Coffre', category: 'structure', maxStack: 3,
+      icon: '📦', color: 0xb47a42, prefabId: 'storage_chest', points_structure_hp: 250,
+    },
 
     // ── LEGACY (compat sauvegardes existantes) ───────────────────────────────
     pistol: {

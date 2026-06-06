@@ -819,6 +819,26 @@
     return best;
   }
 
+  function hitDecorStorage(ox, oz, dx, dz, maxDist = 2.4) {
+    const len = Math.hypot(dx, dz) || 1;
+    const nx = dx / len;
+    const nz = dz / len;
+    let best = null;
+    for (const [decorId, entry] of DECOR_STORAGES) {
+      if (!entry.root.parent) continue;
+      const vx = entry.root.position.x - ox;
+      const vz = entry.root.position.z - oz;
+      const forward = vx * nx + vz * nz;
+      if (forward < 0 || forward > maxDist) continue;
+      const lateral = Math.abs(vx * nz - vz * nx);
+      if (lateral > 1.05) continue;
+      if (!best || forward < best.dist) {
+        best = { decorId, dist: forward, prefabId: entry.root.userData.prefabId };
+      }
+    }
+    return best;
+  }
+
   function spawnDecorPrefab(scene, prefabId, x, y, z, opts = {}) {
     const prefab = DECOR_PREFABS[prefabId];
     if (!scene || !prefab) return null;
@@ -1223,6 +1243,7 @@
   ZS.setDecorDoorState    = setDecorDoorState;
   ZS.unregisterDecorDoor  = unregisterDecorDoor;
   ZS.findNearestDecorStorage = findNearestDecorStorage;
+  ZS.hitDecorStorage        = hitDecorStorage;
   ZS.setDecorStorageState    = setDecorStorageState;
   ZS.unregisterDecorStorage  = unregisterDecorStorage;
   ZS.tickDecorDoors       = tickDecorDoors;

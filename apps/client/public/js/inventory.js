@@ -188,6 +188,7 @@
     struct_grande_porte_bois: { kind: 'door',  w: 3.0, h: LEVEL_H, t: 0.2, gap: 2.2 },
     struct_plancher_bois:     { kind: 'floor', w: 3.0, h: 0.18,    t: 3.0 },
     struct_escalier_bois:     { kind: 'stair', w: 1.8, h: LEVEL_H, t: 3.0 },
+    struct_storage_chest:     { kind: 'decorPrefab', prefabId: 'storage_chest', w: 1.2, h: 0.7, t: 0.8 },
   };
   let _ghost = null, _ghostType = null;
   let _buildLevel = 0;   // étage de construction courant (0 = sol)
@@ -225,6 +226,12 @@
         const zc = -s.t / 2 + sd * (i + 0.5);
         _addBox(g, i % 2 ? _WOOD2 : _WOOD, s.w, sh * (i + 1), sd, 0, sh * (i + 1) / 2, zc);
       }
+    } else if (s.kind === 'decorPrefab' && s.prefabId === 'storage_chest') {
+      _addBox(g, _WOOD, 1.15, 0.48, 0.72, 0, 0.24, 0);
+      _addBox(g, _WOOD2, 1.22, 0.12, 0.80, 0, 0.56, 0);
+      _addBox(g, _WOOD2, 0.08, 0.58, 0.78, -0.58, 0.29, 0);
+      _addBox(g, _WOOD2, 0.08, 0.58, 0.78, 0.58, 0.29, 0);
+      _addBox(g, new THREE.MeshLambertMaterial({ color: 0x5d6268 }), 0.18, 0.16, 0.08, 0, 0.32, -0.42);
     }
     return g;
   }
@@ -262,6 +269,14 @@
     let z = p.z - Math.cos(yaw) * 3.2;
     const rotY = Math.round(yaw / (Math.PI / 2)) * (Math.PI / 2);
     const s = _isStructure(_hotbar[_active]?.type) ? STRUCT[_hotbar[_active].type] : null;
+    if (s?.kind === 'decorPrefab') {
+      x = p.x - Math.sin(yaw) * 2.6;
+      z = p.z - Math.cos(yaw) * 2.6;
+      const baseY = ZS.getDecorGroundHeight
+        ? ZS.getDecorGroundHeight(x, z)
+        : (ZS.getTerrainHeight ? ZS.getTerrainHeight(x, z) : 0);
+      return { x, z, rotY: yaw, baseY, level: 0 };
+    }
     const snap = (v) => Math.round(v / GX) * GX;
     const edge = (v) => Math.round((v - GX / 2) / GX) * GX + GX / 2;
     if (s) {
@@ -311,7 +326,21 @@
     if (!item || !_isStructure(item.type)) return;
     const type = item.type;
     const t = _placementTransform();
+    const s = STRUCT[type];
     removeItem(type, 1);
+    if (s.kind === 'decorPrefab') {
+      _socket.emit('place-decor-prefab', {
+        itemType: type,
+        prefabId: s.prefabId,
+        x: t.x,
+        y: 0,
+        z: t.z,
+        rotY: t.rotY,
+        scale: 1,
+      });
+      if (!_hotbar[_active] || !_isStructure(_hotbar[_active].type)) _removeGhost();
+      return;
+    }
     _socket.emit('place-structure', {
       type, x: t.x, y: t.baseY, z: t.z, rotY: t.rotY,
       colliders: _structureColliders(type, t.x, t.z, t.rotY, t.baseY, t.level),

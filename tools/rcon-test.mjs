@@ -107,6 +107,7 @@ async function main() {
   results.push(await expectOk('decorprefabs building', 'decorprefabs building', (t) => t.includes('building_survivor_shack')));
   results.push(await expectOk('decorprefabs storage', 'decorprefabs storage', (t) => t.includes('storage_chest')));
   results.push(await expectOk('decoritems', 'decoritems eau', (t) => t.includes('food_eau_bouteille')));
+  results.push(await expectOk('decoritems chest item', 'decoritems chest', (t) => t.includes('struct_storage_chest')));
   results.push(await expectOk('decorlist seed', 'decorlist', (t) => t.includes('decor_')));
 
   results.push(await expectOk(

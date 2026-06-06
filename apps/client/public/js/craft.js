@@ -21,6 +21,7 @@
     { result: 'struct_grande_porte_bois', qty: 1, ingredients: { res_planche: 10, res_clous: 20, res_ferraille: 4 } },
     { result: 'struct_plancher_bois',  qty: 1, ingredients: { res_planche: 5, res_clous: 10 } },
     { result: 'struct_escalier_bois',  qty: 1, ingredients: { res_planche: 8, res_clous: 16 } },
+    { result: 'struct_storage_chest',  qty: 1, ingredients: { res_planche: 8, res_clous: 12, res_ferraille: 2 } },
   ];
 
   let _panel    = null;

@@ -143,6 +143,7 @@ Erreurs : `403` (mauvais mot de passe), `503` (RCON non configuré ou serveur en
 | `kill bob` | Tue un joueur |
 | `god on` / `god off` | Invincibilité |
 | `give alice food_conserves 5` | Donne un objet (types = `ZS.ITEMS` dans `items.js`) |
+| `give kimojuki struct_storage_chest 1` | Donne un coffre portable : sélectionner en hotbar puis **Utiliser/Placer** pour poser le prefab |
 | `kick bob` | Déconnecte un joueur |
 
 ### Monde & serveur
@@ -176,7 +177,7 @@ Objets visibles par tous les joueurs, synchronisés via `decorItems` au `game-in
 | `decorlist` | Liste les décors actifs (id, kind, position) |
 | `decorremove <id>` | Supprime un décor par id |
 
-**Prefabs** : meshes procéduraux avec textures PNG dans `apps/client/public/textures/camp/` (`wood_planks_light.png`, `wood_planks.png`, `olive_canvas.png`). Module client : `camp_textures.js` → `ZS.CampTextures.materials()`. Le premier bâtiment est `building_survivor_shack`, avec collisions via `decor_colliders.js` et porte interactive (`E` / bouton tactile), synchronisée par Socket.io. Le prefab `storage_chest` ouvre son couvercle, affiche une grille de 27 slots et stocke ses piles dans `decorItems.storage` côté serveur.
+**Prefabs** : meshes procéduraux avec textures PNG dans `apps/client/public/textures/camp/` (`wood_planks_light.png`, `wood_planks.png`, `olive_canvas.png`). Module client : `camp_textures.js` → `ZS.CampTextures.materials()`. Le premier bâtiment est `building_survivor_shack`, avec collisions via `decor_colliders.js` et porte interactive (`E` / bouton tactile), synchronisée par Socket.io. Le prefab `storage_chest` ouvre son couvercle, affiche une grille de 27 slots et stocke ses piles dans `decorItems.storage` côté serveur. Après 3 coups de mêlée, il se casse et drop au sol son contenu + l'item `struct_storage_chest`.
 
 **Seed spawn** : décors camp + ~60 rondins (`spawn_border_log`) + **8 épaves** le long de `town_main` / `city_highway` (`packages/shared/src/road-wrecks.mjs`).
 

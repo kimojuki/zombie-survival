@@ -48,6 +48,28 @@ Copier dans la description de PR :
 
 ## 2026-06-06
 
+### Completed — Coffre cassable + drops contenu (2026-06-06)
+
+- **Interaction** : frapper un `storage_chest` avec poing/arme/outil l'endommage ; au 3e coup il se casse.
+- **Détection** : hit melee assoupli (portée/cône) pour que le coffre proche soit fiable à toucher.
+- **Drops** : le serveur supprime le prefab et fait tomber au sol le contenu du coffre + `struct_storage_chest`.
+- **Serveur** : Socket.io `storage-hit`, compteur `breakHits` autoritaire côté `decorItems`.
+- **Cache bust** : `20260606-storage-chest-hit-53`
+
+### Completed — Craft du coffre portable (2026-06-06)
+
+- **Recette** : `struct_storage_chest` craftable depuis le panneau artisanat avec `8 Planche`, `12 Clous`, `2 Ferraille`.
+- **Gameplay** : les joueurs peuvent fabriquer un coffre, le mettre en hotbar, puis le poser comme prefab `storage_chest`.
+- **Cache bust** : `20260606-storage-chest-craft-41`
+
+### Completed — Coffre portable plaçable depuis l'inventaire (2026-06-06)
+
+- **Item** : `struct_storage_chest` ajouté à `ZS.ITEMS` (catégorie `structure`, hotbar/inventaire).
+- **Placement joueur** : sélection hotbar → bouton **Placer** ; aperçu coffre devant le joueur puis création serveur du prefab `storage_chest`.
+- **Serveur** : Socket.io `place-decor-prefab` validé côté serveur, avec remboursement de l'item si placement refusé.
+- **RCON test** : `give kimojuki struct_storage_chest 1` pour tester localement.
+- **Cache bust** : `20260606-storage-chest-item-40`
+
 ### Completed — Coffre prefab + stockage (Georges, merge dev)
 
 - **Prefab** : `storage_chest` — interaction E / bouton, panneau slots 3×9, sync `storage-*` Socket.io.

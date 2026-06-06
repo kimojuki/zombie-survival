@@ -38,6 +38,7 @@
     if (!entry) return;
     if (entry.root?.parent) entry.root.parent.remove(entry.root);
     decorItems.delete(id);
+    ZS.StorageUI?.closeIf?.(id);
     ZS.removeDecorColliders?.(id);
     ZS.unregisterDecorDoor?.(id);
     ZS.unregisterDecorStorage?.(id);
@@ -758,12 +759,17 @@
     _socket.emit('storage-withdraw', { id: decorId, slot });
   }
 
+  function requestStorageHit(decorId) {
+    if (!_socket || !decorId) return;
+    _socket.emit('storage-hit', { id: decorId });
+  }
+
   window.ZS = window.ZS || {};
   ZS.Network = {
     init, tick, sendMove, sendShoot, sendRespawn, sendDied, sendSurvival, sendEquip, sendAttack,
     notifyDecorChop, notifyDecorMine, requestDecorDoorToggle, syncWorldColliders: _syncWorldColliders,
     findNearestSleeping,
     getSocket: () => _socket,
-    requestStorageOpen, requestStorageClose, requestStorageDeposit, requestStorageWithdraw,
+    requestStorageOpen, requestStorageClose, requestStorageDeposit, requestStorageWithdraw, requestStorageHit,
   };
 }());

@@ -307,6 +307,7 @@ const decorPrefabs = [
   'building_survivor_shack',
 ];
 const STORAGE_CHEST_CAPACITY = 27;
+const STORAGE_CHEST_BREAK_HITS = 3;
 let zombieIdCounter    = 0;
 let itemIdCounter      = 0;
 let structureIdCounter = 0;
@@ -496,6 +497,15 @@ function _storagePayload(item) {
 function _emitStorageUpdate(item) {
   const payload = _storagePayload(item);
   if (payload) io.emit('storage-update', payload);
+}
+
+function _spawnWorldDrop(type, qty, x, z) {
+  if (!type) return null;
+  const id = ++itemIdCounter;
+  const drop = { id, type, qty: Math.max(1, Math.min(999, Number(qty) || 1)), x, z };
+  items.set(id, drop);
+  io.emit('item-spawn', drop);
+  return drop;
 }
 
 const ROAD_WRECKS_URL = pathToFileURL(path.join(__dirname, '../../packages/shared/src/road-wrecks.mjs')).href;
@@ -873,6 +883,7 @@ const ALL_ITEMS = [
   'res_ruban_adhesif', 'res_chiffon', 'res_corde',
   'tool_marteau', 'tool_hachette', 'tool_hache_pierre', 'tool_pioche', 'tool_pioche_pierre', 'tool_caillou',
   'wpn_lance_bois', 'wpn_lance_pierre',
+  'struct_storage_chest',
 ];
 
 function _randInt(min, max) { return min + Math.floor(Math.random() * (max - min + 1)); }
@@ -1693,6 +1704,34 @@ io.on('connection', async (socket) => {
     log.debug('storage', 'withdraw', { player: p.username, decorId: item.id, type: stack.type, qty: stack.qty || 1 });
   });
 
+  socket.on('storage-hit', (d) => {
+    const item = _getNearbyStorage(d?.id);
+    if (!item) return;
+    item.breakHits = Math.max(0, Number(item.breakHits) || 0) + 1;
+    if (item.breakHits < STORAGE_CHEST_BREAK_HITS) {
+      socket.emit('storage-error', { message: `Coffre endommagé (${item.breakHits}/${STORAGE_CHEST_BREAK_HITS})` });
+      return;
+    }
+    decorItems.delete(item.id);
+    io.emit('decor-item-remove', item.id);
+    const baseX = Number(item.x) || p.x;
+    const baseZ = Number(item.z) || p.z;
+    const drops = [...(item.storage || []), { type: 'struct_storage_chest', qty: 1 }];
+    drops.forEach((stack, idx) => {
+      const a = (idx / Math.max(1, drops.length)) * Math.PI * 2;
+      const r = 0.45 + (idx % 3) * 0.18;
+      _spawnWorldDrop(stack.type, stack.qty || 1, baseX + Math.cos(a) * r, baseZ + Math.sin(a) * r);
+    });
+    item.storage = [];
+    socket.emit('storage-error', { message: 'Coffre cassé' });
+    log.info('storage', 'break chest', {
+      player: p.username,
+      decorId: item.id,
+      drops: drops.length,
+      pos: { x: +(item.x || 0).toFixed(1), z: +(item.z || 0).toFixed(1) },
+    });
+  });
+
   socket.on('place-structure', (d) => {
     if (!d || typeof d.type !== 'string' || !d.type.startsWith('struct_')) return;
     const x = Number(d.x), z = Number(d.z), rotY = Number(d.rotY) || 0;
@@ -1717,6 +1756,47 @@ io.on('connection', async (socket) => {
       type: d.type,
       pos: { x: +x.toFixed(1), z: +z.toFixed(1) },
       colliders: colliders.length,
+    });
+  });
+
+  socket.on('place-decor-prefab', (d) => {
+    const itemType = String(d?.itemType || '').slice(0, 80);
+    const prefabId = String(d?.prefabId || '').slice(0, 80);
+    const refund = () => {
+      if (itemType) socket.emit('item-add', { type: itemType, qty: 1 });
+    };
+    if (itemType !== 'struct_storage_chest' || prefabId !== 'storage_chest') {
+      refund();
+      return;
+    }
+    const x = Number(d.x), z = Number(d.z), rotY = Number(d.rotY) || 0;
+    if (!isFinite(x) || !isFinite(z)) {
+      refund();
+      return;
+    }
+    if (Math.hypot(x - p.x, z - p.z) > 6) {
+      refund();
+      return;
+    }
+    const item = _makeDecorItem({
+      kind: 'prefab',
+      prefabId: 'storage_chest',
+      x,
+      y: 0,
+      z,
+      rotX: 0,
+      rotY,
+      rotZ: 0,
+      scale: 1,
+      createdBy: p.username,
+      createdAt: Date.now(),
+    });
+    io.emit('decor-item-spawn', item);
+    log.info('build', 'decor prefab placed', {
+      player: p.username,
+      prefabId: item.prefabId,
+      decorId: item.id,
+      pos: { x: +x.toFixed(1), z: +z.toFixed(1) },
     });
   });
 

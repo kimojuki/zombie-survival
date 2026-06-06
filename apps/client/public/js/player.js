@@ -207,9 +207,14 @@
     return out;
   }
 
+  const _TMP_HAND_A = new THREE.Vector3();
+  const _TMP_HAND_B = new THREE.Vector3();
+  const _TMP_HAND_M = new THREE.Vector3();
+
   function _grip(partial) {
     return {
       twoHanded: !!partial.twoHanded,
+      sharedItem: !!partial.sharedItem,
       item: partial.item || null,
       rArm: partial.rArm,
       lArm: partial.lArm ?? null,
@@ -385,15 +390,16 @@
     }),
     tool_caillou: _grip({
       twoHanded: true,
-      item: { x: -0.12, y: 0.05, z: -0.10, rx: 0.06, ry: 0, rz: 0.02 },
+      sharedItem: true,
+      item: { x: 0, y: 0.01, z: -0.03, rx: 0.06, ry: 0, rz: 0.02 },
       rArm: {
-        style: 'grip', mcRotX: -16, mcRotY: -20,
-        mcPostX: 0.08, mcPostZ: -0.04,
+        style: 'grip', mcRotX: -16, mcRotY: -18,
+        mcPostX: 0.06, mcPostZ: -0.04,
         mcElbowZ: -12, mcWristY: -18,
       },
       lArm: {
-        style: 'grip', mcRotX: -16, mcRotY: 20,
-        mcPostX: -0.08, mcPostY: 0.01, mcPostZ: -0.06,
+        style: 'grip', mcRotX: -16, mcRotY: 18,
+        mcPostX: -0.06, mcPostY: 0.01, mcPostZ: -0.06,
         mcElbowZ: 12, mcWristY: 18,
       },
       remote: { rArmRot: [0.58, 0, -0.28], handHolder: [0, -0.66, -0.10], lArmMode: 'aimAtHand' },
@@ -530,6 +536,46 @@
     return pivot;
   }
 
+  function _getCenterItemHolder(fpsGroup) {
+    let h = fpsGroup.getObjectByName('centerItemHolder');
+    if (!h) {
+      h = new THREE.Group();
+      h.name = 'centerItemHolder';
+      fpsGroup.add(h);
+      _getItemPivot(h);
+    }
+    return h;
+  }
+
+  /** Pivot item au milieu des deux mains FPS (caillou two-hand). */
+  function _syncSharedItemHolder(fpsGroup, parts, grip, io) {
+    const rHand = parts.rArm?.userData?.chain?.hand;
+    const lHand = parts.lArm?.userData?.chain?.hand;
+    if (!rHand || !lHand || !grip?.item) return null;
+    rHand.updateWorldMatrix(true, false);
+    lHand.updateWorldMatrix(true, false);
+    rHand.getWorldPosition(_TMP_HAND_A);
+    lHand.getWorldPosition(_TMP_HAND_B);
+    _TMP_HAND_M.addVectors(_TMP_HAND_A, _TMP_HAND_B).multiplyScalar(0.5);
+    fpsGroup.updateWorldMatrix(true, false);
+    fpsGroup.worldToLocal(_TMP_HAND_M);
+    const center = _getCenterItemHolder(fpsGroup);
+    center.position.set(
+      _TMP_HAND_M.x + (grip.item.x || 0) + (io.x || 0),
+      _TMP_HAND_M.y + (grip.item.y || 0) + (io.y || 0),
+      _TMP_HAND_M.z + (grip.item.z || 0) + (io.z || 0),
+    );
+    const pivot = _getItemPivot(center);
+    pivot.position.set(_ITEM_HAND.x, _ITEM_HAND.y, _ITEM_HAND.z);
+    pivot.rotation.order = 'YXZ';
+    pivot.rotation.set(
+      _MC_ITEM_HOLD.x + (grip.item.rx || 0) + (io.rx || 0),
+      _MC_ITEM_HOLD.y + (grip.item.ry || 0) + (io.ry || 0),
+      _MC_ITEM_HOLD.z + (grip.item.rz || 0) + (io.rz || 0));
+    center.visible = true;
+    return center;
+  }
+
   function getGrip(type) {
     if (!type) return GRIP_EMPTY;
     const cat = ZS.ITEMS?.[type]?.category || '';
@@ -538,6 +584,7 @@
     if (!over) return base;
     const g = _grip({
       twoHanded: over.twoHanded ?? base.twoHanded,
+      sharedItem: over.sharedItem ?? base.sharedItem,
       item: over.item ? { ...(base.item || {}), ...over.item } : base.item,
       rArm: over.rArm ? { ...base.rArm, ...over.rArm } : base.rArm,
       lArm: over.lArm !== undefined ? over.lArm : base.lArm,
@@ -629,8 +676,32 @@
     };
     _applyFPSArmChain(rArm.userData.chain, 'right', grip, mcOpts);
 
+    if (grip.twoHanded && grip.lArm) {
+      lArm.visible = true;
+      const la = grip.lArm;
+      _applyFPSArmChain(lArm.userData.chain, 'left', { rArm: la }, {
+        equip: offsets.equip || 0,
+        swing: offsets.swing || 0,
+        useT: offsets.useT,
+        dx: (lo.x || 0) + (la.mcPostX || 0),
+        dy: (lo.y || 0) + (la.mcPostY || 0),
+        dz: (lo.z || 0) + (la.mcPostZ || 0),
+        shoulderRx: lo.shoulderRx || 0,
+        elbowRx: lo.elbowRx || 0,
+        wristRx: lo.wristRx || 0,
+      });
+    } else {
+      lArm.visible = false;
+    }
+
     const holder = parts.rightHolder || rArm.userData.itemHolder || rArm.getObjectByName('itemHolder');
-    if (holder) {
+    if (grip.sharedItem && grip.twoHanded && grip.item) {
+      _syncSharedItemHolder(fpsGroup, parts, grip, io);
+      if (holder) {
+        holder.visible = true;
+        _getItemPivot(holder).visible = false;
+      }
+    } else if (holder) {
       const palm = _palmOffset(rp.style);
       holder.position.set(palm.x, palm.y, palm.z);
       holder.rotation.set(0, 0, 0);
@@ -652,24 +723,8 @@
         holder.visible = true;
         pivot.visible = false;
       }
-    }
-
-    if (grip.twoHanded && grip.lArm) {
-      lArm.visible = true;
-      const la = grip.lArm;
-      _applyFPSArmChain(lArm.userData.chain, 'left', { rArm: la }, {
-        equip: offsets.equip || 0,
-        swing: offsets.swing || 0,
-        useT: offsets.useT,
-        dx: (lo.x || 0) + (la.mcPostX || 0),
-        dy: (lo.y || 0) + (la.mcPostY || 0),
-        dz: (lo.z || 0) + (la.mcPostZ || 0),
-        shoulderRx: lo.shoulderRx || 0,
-        elbowRx: lo.elbowRx || 0,
-        wristRx: lo.wristRx || 0,
-      });
-    } else {
-      lArm.visible = false;
+      const center = fpsGroup.getObjectByName('centerItemHolder');
+      if (center) center.visible = false;
     }
   }
 
@@ -1093,13 +1148,16 @@
   function updateHandItem(fpsGroup, type) {
     const parts = _getRigParts(fpsGroup);
     const rArm = parts.rArm;
-    const holder = parts.rightHolder || rArm?.userData.itemHolder || rArm?.getObjectByName('itemHolder');
+    const grip = getGrip(type);
+    const holder = (grip.sharedItem && grip.twoHanded)
+      ? _getCenterItemHolder(fpsGroup)
+      : (parts.rightHolder || rArm?.userData.itemHolder || rArm?.getObjectByName('itemHolder'));
     if (!holder) return;
     const pivot = _getItemPivot(holder);
     while (pivot.children.length) pivot.remove(pivot.children[0]);
     holder.userData.type = type || null;
-
-    const grip = getGrip(type);
+    const rightPivot = parts.rightHolder && _getItemPivot(parts.rightHolder);
+    if (rightPivot && holder !== parts.rightHolder) rightPivot.visible = false;
     if (grip.glbOffset && grip.item) {
       const g = grip.glbOffset;
       grip.item = {

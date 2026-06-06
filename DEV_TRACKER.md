@@ -48,6 +48,11 @@ Copier dans la description de PR :
 
 ## 2026-06-06
 
+### Completed — Caillou centré entre les deux mains (2026-06-06)
+
+- **FPS** : pivot `sharedItem` — rocher placé au milieu des deux paumes (plus ancré main droite).
+- **Cache bust** : `20260606-tool-caillou-center-31`
+
 ### Completed — Caillou : frappe rotative `rock_slam` (2026-06-06)
 
 - **Melee** : wind-up court puis rotation épaules/coudes/poignets vers l'avant et le bas (plus de simple translation).

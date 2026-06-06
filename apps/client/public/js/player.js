@@ -384,9 +384,28 @@
       anim: { melee: { style: 'swing_down', swingX: 0.58, swingZ: 0.30, dur: 0.34 } },
     }),
     tool_caillou: _grip({
-      item: { x: 0.02, y: 0.02, z: -0.06, rx: 0.08, ry: 0.12, rz: 0.06 },
-      rArm: { style: 'grip', mcRotX: -4 },
-      anim: { melee: { style: 'swing_overhead', swingX: 0.62, swingZ: 0.18, dur: 0.32 } },
+      twoHanded: true,
+      item: { x: -0.11, y: 0.05, z: -0.11, rx: 0.08, ry: 0, rz: 0.03 },
+      rArm: {
+        style: 'grip', mcRotX: -18, mcRotY: -16,
+        mcPostX: 0.06, mcPostZ: -0.05,
+        mcElbowZ: -10, mcWristY: -14,
+      },
+      lArm: {
+        style: 'grip', mcRotX: -18, mcRotY: 16,
+        mcPostX: -0.06, mcPostY: 0.01, mcPostZ: -0.08,
+        mcElbowZ: 10, mcWristY: 14,
+      },
+      remote: { rArmRot: [0.58, 0, -0.28], handHolder: [0, -0.66, -0.10], lArmMode: 'aimAtHand' },
+      anim: {
+        melee: {
+          style: 'thrust_forward',
+          thrustZ: 0.22,
+          rArmX: 0.12,
+          swingX: 0.10,
+          dur: 0.30,
+        },
+      },
     }),
     tool_hachette: _grip({
       item: { x: 0.54, y: -0.78, z: 0.22, rx: 0.06, ry: 0.88, rz: -0.52 },
@@ -467,6 +486,12 @@
     let wx = style === 'hold' ? -0.44 : -0.34;
     let wy = i * 0.05;
     let wz = i * -0.03;
+    ex += (ra.mcElbowX || 0) * _DEG;
+    ey += i * (ra.mcElbowY || 0) * _DEG;
+    ez += i * (ra.mcElbowZ || 0) * _DEG;
+    wx += (ra.mcWristX || 0) * _DEG;
+    wy += i * (ra.mcWristY || 0) * _DEG;
+    wz += i * (ra.mcWristZ || 0) * _DEG;
 
     if (swing > 0) {
       sx += -0.68 * swingEase;
@@ -588,13 +613,14 @@
     const lo = offsets.lArm || {};
     const rp = _resolveRArmPose(grip);
 
+    const ra = grip.rArm || {};
     const mcOpts = {
       equip: offsets.equip || 0,
       swing: offsets.swing || 0,
       useT: offsets.useT,
-      dx: ro.x || 0,
-      dy: ro.y || 0,
-      dz: ro.z || 0,
+      dx: (ro.x || 0) + (ra.mcPostX || 0),
+      dy: (ro.y || 0) + (ra.mcPostY || 0),
+      dz: (ro.z || 0) + (ra.mcPostZ || 0),
     };
     _applyFPSArmChain(rArm.userData.chain, 'right', grip, mcOpts);
 
@@ -628,6 +654,8 @@
       const la = grip.lArm;
       _applyFPSArmChain(lArm.userData.chain, 'left', { rArm: la }, {
         equip: offsets.equip || 0,
+        swing: offsets.swing || 0,
+        useT: offsets.useT,
         dx: (lo.x || 0) + (la.mcPostX || 0),
         dy: (lo.y || 0) + (la.mcPostY || 0),
         dz: (lo.z || 0) + (la.mcPostZ || 0),
@@ -684,11 +712,22 @@
     const mcOff = { swing: 0, useT: null };
 
     if (anim.kind === 'melee' || anim.kind === 'punch') {
-      mcOff.swing = e;
       const a = anim.kind === 'punch' ? grip.anim.punch : grip.anim.melee;
-      io.rx = -s * (a.swingX || 0.5) * 0.12;
-      io.rz =  s * (a.swingZ || 0.18) * 0.25;
-      io.ry =  s * (a.swingY || 0);
+      if (a.style === 'thrust_forward') {
+        const thrust = s * (a.thrustZ || 0.20);
+        io.z = -thrust;
+        ro.z = -thrust;
+        lo.z = -thrust;
+        const ext = s * (a.rArmX || 0.10);
+        ro.x = -ext;
+        lo.x = -ext;
+        io.rx = -s * (a.swingX || 0.10) * 0.2;
+      } else {
+        mcOff.swing = e;
+        io.rx = -s * (a.swingX || 0.5) * 0.12;
+        io.rz =  s * (a.swingZ || 0.18) * 0.25;
+        io.ry =  s * (a.swingY || 0);
+      }
     } else if (anim.kind === 'use') {
       mcOff.useT = e;
     } else if (anim.kind === 'recoil') {
@@ -1043,7 +1082,10 @@
     // 1) Modèle procédural normalisé immédiat (affichage instantané)
     const cat = ZS.ITEMS?.[type]?.category || '';
     const viewScale = fpsGroup.userData?.isFPS
-      ? (cat === 'firearm' ? 0.70 : (type === 'tool_hachette' ? 0.88 : (cat === 'melee' || cat === 'tool' ? 0.58 : 0.82)))
+      ? (cat === 'firearm' ? 0.70
+        : (type === 'tool_hachette' ? 0.88
+          : (type === 'tool_caillou' ? 0.62
+            : (cat === 'melee' || cat === 'tool' ? 0.58 : 0.82))))
       : 1;
     const procModel = _buildModel(type);
     const procGrip  = _getGripPoint(type, procModel);

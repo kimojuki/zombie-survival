@@ -48,6 +48,24 @@ Copier dans la description de PR :
 
 ## 2026-06-06
 
+### Completed — Caillou : pose écartée + frappe deux mains (2026-06-06)
+
+- **Idle** : bras écartés, coudes/poignets inclinés — une main de chaque côté du caillou.
+- **Melee** : anim `thrust_forward` — les deux bras poussent le rocher vers l'avant.
+- **Cache bust** : `20260606-tool-caillou-thrust-27`
+
+### Completed — decoradd devant le joueur (2026-06-06)
+
+- **RCON** : `decoradd prefab building_survivor_shack 0 1` = rotY + scale **devant vous** (plus confondu avec x/z camp).
+- **Mots-clés** : `here`, `.`, `@`, `devant`, `ici` pour forcer la position relative.
+- **Bâtiments** : placement à 8 m devant le joueur, orientation = votre `rotY` si non précisée.
+
+### Completed — Caillou tenu à deux mains (2026-06-06)
+
+- **FPS** : grip `tool_caillou` en `twoHanded` — bras gauche visible, caillou centré entre les paumes.
+- **Prefab** : `buildHandRock` élargi/aplatie, point de prise au centre.
+- **Cache bust** : `20260606-tool-caillou-twohand-26`
+
 ### Completed — Merge `origin/dev` + intégration locale (2026-06-06)
 
 - **Merge** : commit collègue `1cd6124` (`building_survivor_shack`, `decoritems`) fusionné avec zombies/trees/caillou/collisions.

@@ -164,8 +164,8 @@ Objets visibles par tous les joueurs, synchronisés via `decorItems` au `game-in
 | `decorprefabs` | Liste les prefabs (`spawn_campfire`, `spawn_supply_crate`, `building_survivor_shack`, …) |
 | `decoritems [filtre]` | Liste les items de jeu posables comme objet décor |
 | `decoradd prefab spawn_border_log [x z] [rotY] [scale]` | Pose un rondin de lisière (scale ≈ longueur / 0.42 m) |
-| `decoradd prefab building_survivor_shack [x z] [rotY] [scale]` | Pose le premier bâtiment prefab RCON |
-| `decoradd prefab <id> [x z] [rotY] [scale]` | Pose un prefab décor/bâtiment (camp, épaves, cabanes, …) |
+| `decoradd prefab building_survivor_shack [here\|x z] [rotY] [scale]` | Cabane — **sans x/z** = devant vous (`0 1` = rotY 0, scale 1 devant vous) |
+| `decoradd prefab <id> [here\|x z] [rotY] [scale]` | Prefab décor/bâtiment — mots-clés position : `here`, `.`, `@`, `devant`, `ici` |
 | `decoradd prefab wreck_sedan [x z] [rotY] [scale] [variant] [tilt] [wheels] [sink]` | Épave — variants : `rust`, `olive`, `navy`, `beige`, `burnt` |
 | `decorseed wrecks` | Ajoute les épaves seed si absentes (sans redémarrer le serveur) |
 | `decorseed wrecks reset` | Supprime toutes les épaves seed et les replace aux positions du gabarit |

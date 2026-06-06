@@ -78,6 +78,88 @@ function createRcon(ctx) {
     return Array.from(ctx.itemTypes || []);
   }
 
+  const DECOR_HERE_KEYS = new Set(['here', '.', '@', 'devant', 'me', 'ici']);
+
+  /** Deux nombres ressemblent à rotY + scale (pas à x/z monde). */
+  function _looksLikeRotScale(a, b) {
+    if (!Number.isFinite(a) || !Number.isFinite(b)) return false;
+    if (b <= 0 || b > 12) return false;
+    if (a < -Math.PI * 2 || a > Math.PI * 2) return false;
+    if (Math.abs(a) > 8 || Math.abs(b) > 8) return false;
+    if (Number.isInteger(a) && Number.isInteger(b) && (Math.abs(a) >= 4 || Math.abs(b) >= 4)) return false;
+    if (a < 0 && Math.abs(a) >= 2) return false;
+    if (b < 0 && Math.abs(b) >= 2) return false;
+    return true;
+  }
+
+  /**
+   * Parse [x z] [rotY] [scale] pour decoradd.
+   * Sans x/z explicites → devant le joueur (here / rotY scale / rien).
+   */
+  function _parseDecorPlacement(args, offset, meta, ref, kind) {
+    const isBuilding = kind === 'prefab' && String(ref).startsWith('building_');
+    const spawnAhead = isBuilding ? 8 : 2.5;
+    const baseRotY = Number.isFinite(meta.player?.rotY) ? meta.player.rotY : 0;
+    const px = Number.isFinite(meta.player?.x) ? meta.player.x : 0;
+    const pz = Number.isFinite(meta.player?.z) ? meta.player.z : 0;
+
+    const aheadPos = () => ({
+      x: px - Math.sin(baseRotY) * spawnAhead,
+      z: pz - Math.cos(baseRotY) * spawnAhead,
+    });
+
+    const defRotY = (v) => (Number.isFinite(v) ? v : (isBuilding ? baseRotY : 0));
+
+    const token0 = (args[offset] || '').toLowerCase();
+    if (DECOR_HERE_KEYS.has(token0)) {
+      const { x, z } = aheadPos();
+      return {
+        x, z,
+        rotY: defRotY(Number(args[offset + 1])),
+        scale: Number.isFinite(Number(args[offset + 2])) ? Number(args[offset + 2]) : 1,
+        extraBase: offset + 3,
+      };
+    }
+
+    const n0 = Number(args[offset]);
+    const n1 = Number(args[offset + 1]);
+    const n2 = Number(args[offset + 2]);
+    const n3 = Number(args[offset + 3]);
+    const has = (i) => args.length > i && Number.isFinite(Number(args[i]));
+
+    if (has(offset + 3)) {
+      return { x: n0, z: n1, rotY: defRotY(n2), scale: n3, extraBase: offset + 4 };
+    }
+
+    if (has(offset + 1) && _looksLikeRotScale(n0, n1)) {
+      const { x, z } = aheadPos();
+      return { x, z, rotY: n0, scale: n1, extraBase: offset + 2 };
+    }
+
+    if (has(offset + 1)) {
+      return {
+        x: n0, z: n1,
+        rotY: defRotY(n2),
+        scale: Number.isFinite(n3) ? n3 : 1,
+        extraBase: offset + 4,
+      };
+    }
+
+    if (has(offset)) {
+      const { x, z } = aheadPos();
+      const scale = Number(args[offset + 1]);
+      return {
+        x, z,
+        rotY: defRotY(n0),
+        scale: Number.isFinite(scale) ? scale : 1,
+        extraBase: offset + 2,
+      };
+    }
+
+    const { x, z } = aheadPos();
+    return { x, z, rotY: isBuilding ? baseRotY : 0, scale: 1, extraBase: offset };
+  }
+
   function findNearestZombie(x, pz) {
     let best = null;
     for (const zm of ctx.zombies.values()) {
@@ -452,7 +534,7 @@ function createRcon(ctx) {
     );
   });
 
-  register('decoradd', 'Pose un décor — decoradd prefab <id> [x z] [rotY] [scale] [variant tilt wheels sink] (épaves)', (args, meta) => {
+  register('decoradd', 'Pose un décor — decoradd prefab <id> [here|x z] [rotY] [scale] (sans x/z = devant vous)', (args, meta) => {
     let kind = 'item';
     let ref = args[1];
     let offset = 2;
@@ -461,7 +543,7 @@ function createRcon(ctx) {
       ref = args[2];
       offset = 3;
     }
-    if (!ref) return fail('Usage: decoradd <type> [x z] [rotY] [scale]  ou  decoradd prefab <id> [x z] [rotY] [scale]');
+    if (!ref) return fail('Usage: decoradd <type> [here|x z] [rotY] [scale]  ou  decoradd prefab <id> [here|x z] [rotY] [scale]');
     if (kind === 'item' && listDecorPrefabs().includes(ref)) {
       kind = 'prefab';
     }
@@ -469,14 +551,8 @@ function createRcon(ctx) {
     if (kind === 'item' && !listItemTypes().includes(ref)) {
       return fail(`Item décor inconnu: ${ref}. Utilise un vrai type d'item ou 'decorprefabs'.`);
     }
-    const hasXZ = args.length >= offset + 2 && Number.isFinite(Number(args[offset])) && Number.isFinite(Number(args[offset + 1]));
-    const spawnAhead = 2.5;
-    const baseRotY = Number.isFinite(meta.player?.rotY) ? meta.player.rotY : 0;
-    const x = hasXZ ? Number(args[offset]) : (meta.player.x - Math.sin(baseRotY) * spawnAhead);
-    const z = hasXZ ? Number(args[offset + 1]) : (meta.player.z - Math.cos(baseRotY) * spawnAhead);
-    const rotY = Number(args[hasXZ ? offset + 2 : offset]);
-    const scale = Number(args[hasXZ ? offset + 3 : offset + 1]);
-    const extraBase = hasXZ ? offset + 4 : offset + 2;
+    const place = _parseDecorPlacement(args, offset, meta, ref, kind);
+    const { x, z, rotY, scale, extraBase } = place;
     const item = {
       id: ctx.makeDecorItemId(),
       kind,
@@ -486,7 +562,7 @@ function createRcon(ctx) {
       y: 0,
       z,
       rotX: 0,
-      rotY: Number.isFinite(rotY) ? rotY : 0,
+      rotY,
       rotZ: 0,
       scale: Number.isFinite(scale) ? scale : 1,
       createdBy: meta.player?.username || 'admin',

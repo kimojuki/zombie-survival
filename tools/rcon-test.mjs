@@ -161,6 +161,12 @@ async function main() {
     (t) => t.includes('spawn_workbench'),
   ));
 
+  results.push(await expectOk(
+    'decoradd building rot scale ahead',
+    'decoradd prefab building_survivor_shack 0 1',
+    (t) => t.includes('building_survivor_shack') && !t.includes('@ (0.0, 1.0)'),
+  ));
+
   const buildingAdd = await rcon('decoradd prefab building_survivor_shack 16 -12 0.35 1');
   const buildingAddText = (buildingAdd.lines || []).join('\n');
   const addedBuildingId = buildingAddText.match(/(decor_\d+)/)?.[1];

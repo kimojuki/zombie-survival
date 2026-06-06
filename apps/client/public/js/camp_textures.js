@@ -7,6 +7,7 @@
     wood: '/textures/camp/wood_planks.png',
     canvas: '/textures/camp/olive_canvas.png',
     ground: '/textures/camp/spawn_ground.png',
+    trailForest: '/textures/camp/trail_forest.png',
   };
 
   const _texLoader = new THREE.TextureLoader();
@@ -36,6 +37,7 @@
     const texWoodDark = load(URLS.wood, 1.4, 1.0);
     const texCanvas = load(URLS.canvas, 1.4, 1.2);
     const texCanvasTight = load(URLS.canvas, 0.9, 0.9);
+    const texTrail = load(URLS.trailForest, 2.8, 2.8);
 
     _mats = {
       wood: (color) => new THREE.MeshLambertMaterial({ color: color || 0xc69158, map: texWood }),
@@ -53,6 +55,13 @@
       stone: () => new THREE.MeshLambertMaterial({ color: 0x7a7468 }),
       metal: () => new THREE.MeshLambertMaterial({ color: 0x7d7f84 }),
       tool: () => new THREE.MeshLambertMaterial({ color: 0x5f6d46 }),
+      trail: (color) => new THREE.MeshLambertMaterial({
+        color: color || 0x9a8870,
+        map: texTrail,
+        polygonOffset: true,
+        polygonOffsetFactor: -4,
+        polygonOffsetUnits: -10,
+      }),
     };
     return _mats;
   }

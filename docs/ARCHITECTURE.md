@@ -43,10 +43,11 @@ Vue d'ensemble pour onboarding et reviews PR.
 
 Ordre des scripts legacy (important) dans `apps/client/src/bootstrap/legacy-modules.js` :
 
-1. `items.js`, `noise.js`, `buildings.js`
-2. `camp_textures.js` — **avant** `mapgen.js` et `spawn_clearing.js`
-3. `mapgen.js`, `spawn_clearing.js`, `world.js`, `player.js`
-4. `network.js`, `game.js`, `inventory.js`
+1. `noise.js`, `camp_textures.js`, `buildings.js`
+2. `trails.js`, `spawn_clearing.js`, `proc_spawn.js` — **spawn + sentier refonte**
+3. `world.js`, `game.js` — pas de secteurs legacy
+
+Le pipeline `RoadNetwork.buildMeshes` / secteurs est **désactivé** pendant la refonte (voir `legacy-modules.js`).
 
 Le premier client connecté envoie au serveur :
 - `world-colliders` — collision zombies
@@ -77,6 +78,7 @@ Les **prefabs décor** (caisses, sacs, bedroll, établi, abri, poteaux…) sont 
 | `wood_planks_light.png` | Planches, caisses, établi, bûches |
 | `wood_planks.png` | Montants / cadres bois foncé |
 | `olive_canvas.png` | Toile, sacs, couvertures |
+| `trail_forest.png` | Sentiers piéton (`type: trail` dans RoadNetwork) |
 | `spawn_ground.png` | Patch sol clairière spawn |
 
 API client : `ZS.CampTextures.load(url, repeatX, repeatY)` et `ZS.CampTextures.materials()` (cache partagé avec `mapgen.js`).
@@ -84,7 +86,8 @@ API client : `ZS.CampTextures.load(url, repeatX, repeatY)` et `ZS.CampTextures.m
 Pose in-game / admin :
 - **Prefabs** : `ZS.spawnDecorPrefab(scene, prefabId, x, y, z)` — liste via `ZS.listDecorPrefabs()`
 - **Items posés** : `ZS.spawnDecorItem(scene, type, x, y, z)` — réutilise `getItemModel()` (loot équipable ≠ prefab bois/toile)
-- **RCON** : `decoradd prefab …` / `decoradd <type> …` — voir [docs/RCON.md](RCON.md)
+- **Sentiers (refonte)** : `ZS.Trails.registerFlatten(pts)` avant terrain, `ZS.Trails.buildMesh(scene, pts)` après — voir `trails.js` + `SPAWN_TRAIL_PTS`
+- **RCON** : `decoradd prefab …` — voir [docs/RCON.md](RCON.md)
 
 ### Contrôles
 

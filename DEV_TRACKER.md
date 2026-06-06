@@ -48,6 +48,65 @@ Copier dans la description de PR :
 
 ## 2026-06-05
 
+### Completed — Sentier camp prolongé (~22 m, courbe naturelle) (2026-06-06)
+
+- **`SPAWN_TRAIL_PTS`** : 20 points — sortie languette, arc doux est puis inflexion ouest (sentier piéton réaliste).
+- **Docs** : `ROAD_NETWORK.md` aligné refonte (`trails.js`, `spawn_border_log`, API actuelle).
+- **Cache bust** : `20260606-spawn-trail-refonte-08`
+
+### Completed — Fix sentier spawn (triangles + double texture) (2026-06-06)
+
+- **Bug** : grand triangle marron (triangulation cassée aux coudes/taper), ovale « dirt » sous le mesh (corridor route = tint atlas terrain).
+- **`noise.js`** : `registerTrailCorridor` — aplatit le terrain sans `isInRoadCorridor` (pas de teinte dirt).
+- **`trails.js`** : échantillonnage continu le long du polyline ; plus de `prevRow` cassé aux angles ; largeur 1.55 m.
+- **`proc_spawn`** : patch terrain camp réduit (6×5.5 m) + `registerClearingDisc` ; sentier via trail corridor.
+- **`spawn_clearing`** : sol camp texturé (ellipse + gap sud) ; pierres bordure en dodécaèdres sombres.
+- **Cache bust** : `20260606-spawn-trail-refonte-03`
+
+### Completed — Fix lisière camp (rondins + herbe + jointure sentier) (2026-06-06)
+
+- **Sol camp** : arc ellipse corrigé (signe Z shape Three.js), gap sud propre, couverture 98 % de la clairière.
+- **Rondins** : tangente ellipse (`atan2`) + espacement uniforme sur l'arc (26 rondins).
+- **Herbe verte** : terrain enfoncé sous la clairière + teinte dirt dans `isInClearingDisc` pour éviter le z-fight.
+- **Sentier** : premier point à la bouche sud (-10.78), `taperStart` réduit pour jointure fluide.
+- **Cache bust** : `20260606-spawn-trail-refonte-04`
+
+### Completed — Couches décor : props sur sol camp (couche 2) (2026-06-06)
+
+- **`getDecorGroundHeight(x, z)`** : terrain + relèvement camp (+0.07) ou sentier (+0.08) selon la zone.
+- Branché sur `spawnDecorPrefab`, `spawnDecorItem`, `getEffectiveFloorHeight` (joueur), init spawn, loot au sol, mesh sentier.
+- **Cache bust** : `20260606-spawn-trail-refonte-05`
+
+### Completed — Languette camp + anneau rondins tangent (2026-06-06)
+
+- **Jointure** : languette de sol (triangle sud) alignée sur la bouche du sentier ; `taperStart: 0` ; points trail recalculés depuis la languette.
+- **Rondins** : rotation `YXZ` (tangents à l'ellipse), longueur = arc ÷ N pour se toucher (~0.42 m, ~60 rondins).
+- **Cache bust** : `20260606-spawn-trail-refonte-06`
+
+### Completed — Rondins lisière → prefab RCON + collision (2026-06-06)
+
+- **`spawn_border_log`** : prefab client + collider box orientée (`decor_colliders.js`), scale = longueur / 0.42 m.
+- **Seed serveur** : anneau généré via `packages/shared/src/camp-border-logs.mjs` (~60 décors sync multijoueur).
+- **RCON** : `decoradd prefab spawn_border_log …`, `decorremove`, `decorlist` — comme les autres prefabs camp.
+- **Cache bust** : `20260606-spawn-trail-refonte-07`
+
+### Completed — Sentier spawn refonte (sans legacy RoadNetwork) (2026-06-06)
+
+- **Retrait** : `road_network.js`, `vehicles.js`, `sector_*.js` retirés du chargement client ; plus de `buildMeshes` / routes ville.
+- **`trails.js`** : ruban sentier autonome (`registerFlatten`, `buildMesh`, `sample`, `isNear`) + texture `trail_forest.png`.
+- **Spawn** : `proc_spawn.build` → lisière camp + sentier ~8 m + pierres de bordure ; décor camp reste seed serveur / RCON.
+- **Ordre** : aplatissement sentier (`SpawnZone.registerTerrain`) → terrain → `buildAll` spawn-only.
+- **Cache bust** : `20260606-spawn-trail-refonte-02`
+
+### Completed — Sentier spawn texturé + pipeline routes restauré (2026-06-06) — annulé (rebranchage legacy)
+
+- **Fix critique** : `road_network.js`, `vehicles.js` et secteurs `sector_*.js` remis dans `legacy-modules.js` ; `registerSector` et `buildWorld` restaurés (flatten → terrain → meshes).
+- **Texture** : `textures/camp/trail_forest.png` (sentier forêt piétiné) + matériau `M.trail` / `CampTextures.materials().trail()`.
+- **API** : `trails.js` → `ZS.Trails.define({ id, pts, width, taperStart, taperEnd })`.
+- **Spawn** : `SPAWN_TRAIL_PTS` courbe naturelle (~10 pts) ; clairière `spawn_clearing` + sentier `spawn_trail` (type `trail`, 1.85 m).
+- **Docs** : `docs/ROAD_NETWORK.md`, `docs/ARCHITECTURE.md`
+- **Cache bust** : `20260606-spawn-trail-01`
+
 ### Completed — Textures camp bois/toile sur prefabs décor (2026-06-06)
 
 - **`camp_textures.js`** : module partagé (`wood_planks_light.png`, `wood_planks.png`, `olive_canvas.png`) — matériaux réutilisables pour tout décor camp.

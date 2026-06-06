@@ -341,7 +341,9 @@
     if (_worldItems.has(d.id)) return;
     if (d.bag) {                                  // butin de mort (caisse)
       const mesh  = _makeBagMesh();
-      const baseY = (ZS.getTerrainHeight ? ZS.getTerrainHeight(d.x, d.z) : 0) + 0.45;
+      const baseY = (ZS.getDecorGroundHeight
+        ? ZS.getDecorGroundHeight(d.x, d.z)
+        : (ZS.getTerrainHeight ? ZS.getTerrainHeight(d.x, d.z) : 0)) + 0.45;
       mesh.position.set(d.x, baseY, d.z);
       mesh.userData.baseY = baseY;
       _scene.add(mesh);
@@ -351,7 +353,9 @@
     const def = _def(d.type);
     if (!def) return;
     const mesh = _makePickupMesh(def, d.type);
-    const baseY = (ZS.getTerrainHeight ? ZS.getTerrainHeight(d.x, d.z) : 0) + 0.55;
+    const baseY = (ZS.getDecorGroundHeight
+      ? ZS.getDecorGroundHeight(d.x, d.z)
+      : (ZS.getTerrainHeight ? ZS.getTerrainHeight(d.x, d.z) : 0)) + 0.55;
     mesh.position.set(d.x, baseY, d.z);
     mesh.userData.baseY = baseY;
     _scene.add(mesh);

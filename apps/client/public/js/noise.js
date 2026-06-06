@@ -63,6 +63,7 @@
   const _terrainPatches = [];
   // Polylignes routières — aplatissement lisse (distance au tracé, pas boîtes)
   const _roadCorridors = [];
+  const _trailCorridors = [];
   // { cx, cz, hw, hd, y }  — walkable upper floor
   const _upperFloors = [];
   // { cx, cz, hw, hd, y0, y1, axis }  — staircase ramp
@@ -126,6 +127,7 @@
     let h = _rawHeight(x, z);
     h = _clearingHeight(x, z, h);
     h = _roadCorridorHeight(x, z, h);
+    h = _trailCorridorHeight(x, z, h);
     h = _riverBedHeight(x, z, h);
     h = _applyFlatZones(x, z, h);
     return h;
@@ -242,7 +244,7 @@
     return Number.isFinite(v) ? v : fallback;
   }
 
-  function _pushRoadCorridor(pts, heights, halfW, halfWidths, blendVal) {
+  function _pushCorridor(list, pts, heights, halfW, halfWidths, blendVal) {
     let minX = Infinity, maxX = -Infinity, minZ = Infinity, maxZ = -Infinity;
     const maxHalf = halfWidths
       ? Math.max(...halfWidths)
@@ -252,7 +254,7 @@
       minX = Math.min(minX, x - pad); maxX = Math.max(maxX, x + pad);
       minZ = Math.min(minZ, z - pad); maxZ = Math.max(maxZ, z + pad);
     }
-    _roadCorridors.push({
+    list.push({
       points: pts,
       heights,
       halfW: halfWidths ? null : Math.max(halfW || 4, 0.5),
@@ -260,6 +262,10 @@
       blend: blendVal,
       minX, maxX, minZ, maxZ,
     });
+  }
+
+  function _pushRoadCorridor(pts, heights, halfW, halfWidths, blendVal) {
+    _pushCorridor(_roadCorridors, pts, heights, halfW, halfWidths, blendVal);
   }
 
   function registerRoadCorridor(points, halfWidth, blend) {
@@ -360,6 +366,50 @@
     const roadH = sumH / sumW;
     const blend = Math.min(1, maxW + (sumW > 1 ? 0.15 : 0));
     return _finite(roadH * blend + baseH * (1 - blend), baseH);
+  }
+
+  function _corridorHeightFrom(list, x, z, baseH) {
+    if (_insideFlatZone(x, z)) return baseH;
+    let sumW = 0, sumH = 0, maxW = 0;
+    for (const rc of list) {
+      if (x < rc.minX || x > rc.maxX || z < rc.minZ || z > rc.maxZ) continue;
+      const hit = _sampleRoadCorridor(rc, x, z);
+      if (!hit) continue;
+      const halfW = hit.halfW || hit.rc.halfW;
+      const outer = halfW + hit.rc.blend;
+      if (hit.dist >= outer) continue;
+      let w;
+      if (hit.dist <= halfW) {
+        w = 1;
+      } else {
+        const t = 1 - (hit.dist - halfW) / hit.rc.blend;
+        w = t * t * (3 - 2 * t);
+      }
+      if (w <= 0) continue;
+      sumW += w;
+      sumH += hit.h * w;
+      if (w > maxW) maxW = w;
+    }
+    if (sumW <= 0) return baseH;
+    const roadH = sumH / sumW;
+    const blend = Math.min(1, maxW + (sumW > 1 ? 0.15 : 0));
+    return _finite(roadH * blend + baseH * (1 - blend), baseH);
+  }
+
+  function _trailCorridorHeight(x, z, baseH) {
+    return _corridorHeightFrom(_trailCorridors, x, z, baseH);
+  }
+
+  function registerTrailCorridor(points, halfWidth, blend) {
+    if (!Array.isArray(points) || points.length < 2) return;
+    const pts = points
+      .map(p => [_finite(p[0], null), _finite(p[1], null)])
+      .filter(p => p[0] !== null && p[1] !== null);
+    if (pts.length < 2) return;
+    let heights = pts.map(([x, z]) => _rawHeight(x, z));
+    for (let pass = 0; pass < 2; pass++) heights = _smoothHeights(heights, 2);
+    const blendVal = Math.max(blend || 3, 0.5);
+    _pushCorridor(_trailCorridors, pts, heights, halfWidth, null, blendVal);
   }
 
   // Harmonise les hauteurs aux nœuds partagés (croisements de routes).
@@ -486,7 +536,9 @@
   // Returns the highest floor the player is currently standing on.
   // playerY is the camera/eye Y (feet = playerY - 1.7).
   function getEffectiveFloorHeight(x, z, playerY) {
-    let best = getTerrainHeight(x, z);
+    let best = ZS.getDecorGroundHeight
+      ? ZS.getDecorGroundHeight(x, z)
+      : getTerrainHeight(x, z);
 
     for (const ramp of _ramps) {
       if (Math.abs(x - ramp.cx) > ramp.hw || Math.abs(z - ramp.cz) > ramp.hd) continue;
@@ -519,6 +571,7 @@
   ZS.registerFlatPath        = registerFlatPath;
   ZS.registerRoadCorridor      = registerRoadCorridor;
   ZS.registerRoadCorridorVar   = registerRoadCorridorVar;
+  ZS.registerTrailCorridor     = registerTrailCorridor;
   ZS.finalizeRoadNetwork       = finalizeRoadNetwork;
   ZS.isInRoadCorridor          = isInRoadCorridor;
   ZS.registerRiverChannel      = registerRiverChannel;

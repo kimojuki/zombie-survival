@@ -947,8 +947,12 @@
 
   function spawnDecorItem(scene, type, x, y, z, opts = {}) {
     if (!scene || !type) return Promise.resolve(null);
-    const groundedY = opts.grounded !== false && ZS.getTerrainHeight
-      ? ZS.getTerrainHeight(x || 0, z || 0) + (Number.isFinite(opts.groundLift) ? opts.groundLift : 0)
+    const groundedY = opts.grounded !== false
+      ? (ZS.getDecorGroundHeight
+          ? ZS.getDecorGroundHeight(x || 0, z || 0, { groundLift: opts.groundLift })
+          : (ZS.getTerrainHeight
+              ? ZS.getTerrainHeight(x || 0, z || 0) + (Number.isFinite(opts.groundLift) ? opts.groundLift : 0)
+              : (y || 0)))
       : (y || 0);
     const root = new THREE.Group();
     root.position.set(x || 0, groundedY, z || 0);

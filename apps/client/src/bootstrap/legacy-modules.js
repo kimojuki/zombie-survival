@@ -1,18 +1,18 @@
 // Single source of truth for the legacy ZS script order.
-// The current game still loads classic scripts; Vite is introduced first as
-// tooling/build infrastructure before the gameplay modules migrate to imports.
+// Refonte progressive : spawn + sentier uniquement (pas de secteurs / RoadNetwork legacy).
 export const LEGACY_MODULES = [
   '/js/items.js',
   '/js/survival.js',
   '/js/craft.js',
   '/js/noise.js',
-  '/js/buildings.js',
   '/js/camp_textures.js',
+  '/js/buildings.js',
   '/js/mapgen.js',
   '/js/campfire.js',
   '/js/decor_colliders.js',
-  '/js/proc_spawn.js',
+  '/js/trails.js',
   '/js/spawn_clearing.js',
+  '/js/proc_spawn.js',
   '/js/world.js',
   '/js/player.js',
   '/js/icons.js',

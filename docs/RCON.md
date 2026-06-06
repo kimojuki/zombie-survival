@@ -154,6 +154,7 @@ Props visibles par tous les joueurs, synchronisés via `decorItems` au `game-ini
 | Commande | Description |
 |----------|-------------|
 | `decorprefabs` | Liste les prefabs camp (`spawn_campfire`, `spawn_supply_crate`, …) |
+| `decoradd prefab spawn_border_log [x z] [rotY] [scale]` | Pose un rondin de lisière (scale ≈ longueur / 0.42 m) |
 | `decoradd prefab <id> [x z] [rotY] [scale]` | Pose un prefab décor (bois/toile texturés via `camp_textures.js`) |
 | `decoradd <type> [x z] [rotY] [scale]` | Pose un item de jeu comme prop (`food_conserves`, `tool_hachette`, …) — modèle 3D `getItemModel()` |
 | `decorlist` | Liste les décors actifs (id, kind, position) |
@@ -161,7 +162,7 @@ Props visibles par tous les joueurs, synchronisés via `decorItems` au `game-ini
 
 **Prefabs camp** : meshes procéduraux avec textures PNG dans `apps/client/public/textures/camp/` (`wood_planks_light.png`, `wood_planks.png`, `olive_canvas.png`). Module client : `camp_textures.js` → `ZS.CampTextures.materials()`.
 
-**Seed spawn** : 19 décors posés au boot serveur (`seedSpawnDecorItems()` dans `apps/server/index.js`).
+**Seed spawn** : décors camp + ~60 rondins de lisière (`spawn_border_log`) au boot serveur via `computeCampBorderLogPlacements()` (`packages/shared/src/camp-border-logs.mjs`).
 
 Tests automatisés : `node tools/rcon-test.mjs` (inclut `decoradd`, `decorprefabs`, etc.).
 

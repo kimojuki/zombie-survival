@@ -10,6 +10,9 @@
     spawn_log_pile: [
       { type: 'box', lx: 0, lz: 0, hw: 0.42, hd: 0.32, maxY: 0.45 },
     ],
+    spawn_border_log: [
+      { type: 'box', lx: 0, lz: 0, hw: 0.21, hd: 0.058, maxY: 0.13 },
+    ],
     spawn_supply_crate: [
       { type: 'box', lx: 0, lz: 0, hw: 0.40, hd: 0.34, maxY: 0.48 },
     ],

@@ -25,17 +25,145 @@
     return Math.hypot(dx, dz) < 0.88;
   }
 
-  /** Sentier : clairière → ouverture sud de la route principale */
-  const SPAWN_TRAIL_PTS = [
-    [0, -11.2],
-    [0.6, -12.8],
-    [2.2, -14.2],
-    [4.5, -15.8],
-    [7.0, -17.0],
-    [9.5, -18.2],
-    [12.0, -19.8],
-    [14, -21.0],
-  ];
+  /** Ellipse spawn : angle a → offset shape Three.js (rotateX -90° → monde XZ). */
+  function _shapeEllipsePoint(a, rx, rz) {
+    return new THREE.Vector2(Math.cos(a) * rx, -Math.sin(a) * rz);
+  }
+
+  function _ellipseWorld(a, rx, rz, cx, cz) {
+    return [cx + Math.cos(a) * rx, cz + Math.sin(a) * rz];
+  }
+
+  /** Tangente à l'ellipse au paramètre a (axe du rondin). */
+  function _ellipseTangentYaw(a, rx, rz) {
+    return Math.atan2(-rx * Math.sin(a), rz * Math.cos(a));
+  }
+
+  function _pointInTriangle(px, pz, ax, az, bx, bz, cx, cz) {
+    const v0x = cx - ax; const v0z = cz - az;
+    const v1x = bx - ax; const v1z = bz - az;
+    const v2x = px - ax; const v2z = pz - az;
+    const dot00 = v0x * v0x + v0z * v0z;
+    const dot01 = v0x * v1x + v0z * v1z;
+    const dot02 = v0x * v2x + v0z * v2z;
+    const dot11 = v1x * v1x + v1z * v1z;
+    const dot12 = v1x * v2x + v1z * v2z;
+    const inv = dot00 * dot11 - dot01 * dot01;
+    if (Math.abs(inv) < 1e-8) return false;
+    const u = (dot11 * dot02 - dot01 * dot12) / inv;
+    const v = (dot00 * dot12 - dot01 * dot02) / inv;
+    return u >= -0.02 && v >= -0.02 && (u + v) <= 1.02;
+  }
+
+  function _ellipseArcLength(rx, rz, a0, a1, steps) {
+    let len = 0;
+    let px = null; let pz = null;
+    const n = steps || 80;
+    for (let i = 0; i <= n; i++) {
+      const a = a0 + (i / n) * (a1 - a0);
+      const x = rx * Math.cos(a);
+      const z = rz * Math.sin(a);
+      if (px !== null) len += Math.hypot(x - px, z - pz);
+      px = x; pz = z;
+    }
+    return len;
+  }
+
+  function _gapTongueTip(cx, cz, rx, rz) {
+    return [cx, cz + Math.sin(CAMP_GAP_CENTER) * rz * 1.05];
+  }
+
+  function _inGapTongue(x, z, cx, cz) {
+    const rx = CLEAR_RX * 0.98;
+    const rz = CLEAR_RZ * 0.98;
+    const aL = CAMP_GAP_CENTER + CAMP_GAP_WIDTH;
+    const aR = CAMP_GAP_CENTER - CAMP_GAP_WIDTH;
+    const [xL, zL] = _ellipseWorld(aL, rx, rz, cx, cz);
+    const [xR, zR] = _ellipseWorld(aR, rx, rz, cx, cz);
+    const [xT, zT] = _gapTongueTip(cx, cz, rx, rz);
+    return _pointInTriangle(x, z, xL, zL, xR, zR, xT, zT);
+  }
+
+  function _orientLogTangent(log, x, y, z, yaw) {
+    log.position.set(x, y, z);
+    log.rotation.order = 'YXZ';
+    log.rotation.y = yaw;
+    log.rotation.x = Math.PI / 2;
+    log.rotation.z = 0;
+  }
+
+  const CAMP_GAP_CENTER = -Math.PI / 2;
+  const CAMP_GAP_WIDTH = 0.52;
+  const CAMP_GROUND_LIFT = 0.07;
+  const TRAIL_SURFACE_LIFT = 0.08;
+
+  /** Zone couverte par le mesh sol camp (ellipse + languette sud vers le sentier). */
+  function _onCampGroundPatch(x, z, cx, cz) {
+    if (_inGapTongue(x, z, cx, cz)) return true;
+    const rx = CLEAR_RX * 0.98;
+    const rz = CLEAR_RZ * 0.98;
+    const dx = (x - cx) / rx;
+    const dz = (z - cz) / rz;
+    if (Math.hypot(dx, dz) > 1.0) return false;
+    const a = Math.atan2(z - cz, x - cx);
+    let da = a - CAMP_GAP_CENTER;
+    while (da > Math.PI) da -= Math.PI * 2;
+    while (da < -Math.PI) da += Math.PI * 2;
+    return Math.abs(da) >= CAMP_GAP_WIDTH;
+  }
+
+  /** Relèvement décor au-dessus du terrain brut (couche 2 camp, sentier, etc.). */
+  function getDecorSurfaceLift(x, z) {
+    if (_onCampGroundPatch(x, z, SPAWN_CX, SPAWN_CZ)) return CAMP_GROUND_LIFT;
+    if (ZS.Trails?.isNear && ZS.SPAWN_TRAIL_PTS
+        && ZS.Trails.isNear(ZS.SPAWN_TRAIL_PTS, x, z, 0.75)) {
+      return TRAIL_SURFACE_LIFT;
+    }
+    return 0;
+  }
+
+  /**
+   * Hauteur de pose props / items / joueur : terrain (couche 1) + surface décor.
+   * opts.groundLift = offset local au-dessus de la surface (ex. y serveur RCON).
+   */
+  function getDecorGroundHeight(x, z, opts) {
+    opts = opts || {};
+    const base = ZS.getTerrainHeight ? ZS.getTerrainHeight(x, z) : 0;
+    const surface = opts.layer === 'terrain' ? 0 : getDecorSurfaceLift(x, z);
+    const lift = Number.isFinite(opts.groundLift) ? opts.groundLift : 0;
+    return base + surface + lift;
+  }
+
+  /** Points du sentier : bouche sud (languette camp) → forêt (~22 m, courbe naturelle) */
+  function _spawnTrailPoints() {
+    const rx = CLEAR_RX * 0.98;
+    const rz = CLEAR_RZ * 0.98;
+    const [mx, mz] = _gapTongueTip(SPAWN_CX, SPAWN_CZ, rx, rz);
+    return [
+      [mx, mz],
+      [mx - 0.04, mz - 0.62],
+      [mx + 0.05, mz - 1.35],
+      [mx + 0.22, mz - 2.28],
+      [mx + 0.48, mz - 3.18],
+      [mx + 0.82, mz - 4.05],
+      [mx + 1.28, mz - 4.92],
+      [mx + 1.82, mz - 5.78],
+      [mx + 2.38, mz - 6.62],
+      [mx + 2.88, mz - 7.48],
+      [mx + 3.28, mz - 8.38],
+      [mx + 3.52, mz - 9.32],
+      [mx + 3.58, mz - 10.28],
+      [mx + 3.42, mz - 11.22],
+      [mx + 3.05, mz - 12.08],
+      [mx + 2.52, mz - 12.82],
+      [mx + 1.88, mz - 13.42],
+      [mx + 1.15, mz - 13.88],
+      [mx + 0.38, mz - 14.18],
+      [mx - 0.35, mz - 14.32],
+    ];
+  }
+
+  const SPAWN_TRAIL_PTS = _spawnTrailPoints();
 
   function _add(parent, geo, mat, x, y, z, rx, ry, rz) {
     const m = new THREE.Mesh(geo, mat);
@@ -299,49 +427,94 @@
     g.add(light);
   }
 
+  /** Rondin de lisière — un segment ; scale = longueur / 0.42 m */
+  function _buildBorderLog(root) {
+    const M = _campMats();
+    const bark = M ? M.bark() : new THREE.MeshLambertMaterial({ color: 0x4a3018 });
+    const baseLen = 0.42;
+    const r = 0.055;
+    const log = new THREE.Mesh(
+      new THREE.CylinderGeometry(r * 0.92, r, baseLen, 6), bark);
+    log.rotation.order = 'YXZ';
+    log.rotation.y = 0;
+    log.rotation.x = Math.PI / 2;
+    log.position.set(0, r + 0.015, 0);
+    log.castShadow = true;
+    log.receiveShadow = true;
+    root.add(log);
+  }
+
   /** Lisière de rondins + pierres — jointure douce clairière / herbe */
   function buildCampGround(scene, cx, cz, baseY, B) {
     const M = _campMats();
-    const bark = M ? M.bark() : new THREE.MeshLambertMaterial({ color: 0x4a3018 });
     const stone = M ? M.stone() : new THREE.MeshLambertMaterial({ color: 0x6a6458 });
-    const segs = 28;
-    const gapCenter = -Math.PI / 2;
-    const gapWidth = 0.62;
+    const gapCenter = CAMP_GAP_CENTER;
+    const gapWidth = CAMP_GAP_WIDTH;
+    const groundRx = CLEAR_RX * 0.98;
+    const groundRz = CLEAR_RZ * 0.98;
+    const ringRx = CLEAR_RX * 0.94;
+    const ringRz = CLEAR_RZ * 0.94;
+    const arcStart = gapCenter + gapWidth;
+    const arcSpan = Math.PI * 2 - gapWidth * 2;
 
-    for (let i = 0; i < segs; i++) {
-      const a = (i / segs) * Math.PI * 2;
-      let da = a - gapCenter;
-      while (da > Math.PI) da -= Math.PI * 2;
-      while (da < -Math.PI) da += Math.PI * 2;
-      if (Math.abs(da) < gapWidth) continue;
+    const shape = new THREE.Shape();
+    const groundSteps = 56;
+    for (let i = 0; i <= groundSteps; i++) {
+      const a = arcStart + (i / groundSteps) * arcSpan;
+      const p = _shapeEllipsePoint(a, groundRx, groundRz);
+      if (i === 0) shape.moveTo(p.x, p.y);
+      else shape.lineTo(p.x, p.y);
+    }
+    const tongue = _shapeEllipsePoint(
+      CAMP_GAP_CENTER,
+      groundRx * 0.38,
+      groundRz * 1.05
+    );
+    shape.lineTo(tongue.x, tongue.y);
+    shape.closePath();
 
-      const rx = CLEAR_RX * 0.94;
-      const rz = CLEAR_RZ * 0.94;
-      const px = cx + Math.cos(a) * rx;
-      const pz = cz + Math.sin(a) * rz;
-      const py = ZS.getTerrainHeight(px, pz);
-      const logLen = 0.55 + (i % 3) * 0.08;
-      const logR = 0.07 + (i % 2) * 0.015;
+    const gGeo = new THREE.ShapeGeometry(shape, 4);
+    gGeo.rotateX(-Math.PI / 2);
+    const gPos = gGeo.attributes.position;
+    for (let i = 0; i < gPos.count; i++) {
+      const lx = gPos.getX(i);
+      const lz = gPos.getZ(i);
+      const x = cx + lx;
+      const z = cz + lz;
+      gPos.setY(i, getDecorGroundHeight(x, z, { layer: 'camp' }));
+    }
+    gGeo.computeVertexNormals();
+    const ground = new THREE.Mesh(gGeo, new THREE.MeshLambertMaterial({
+      map: _groundTex,
+      color: 0xffffff,
+      depthWrite: true,
+      polygonOffset: true,
+      polygonOffsetFactor: -4,
+      polygonOffsetUnits: -10,
+    }));
+    ground.position.set(cx, 0, cz);
+    ground.renderOrder = 3;
+    ground.receiveShadow = true;
+    scene.add(ground);
 
-      const log = new THREE.Mesh(
-        new THREE.CylinderGeometry(logR * 0.9, logR, logLen, 6), bark);
-      log.rotation.z = Math.PI / 2;
-      log.rotation.y = a + Math.PI / 2;
-      log.position.set(px, py + logR + 0.02, pz);
-      log.castShadow = true;
-      scene.add(log);
+    const arcLen = _ellipseArcLength(ringRx, ringRz, arcStart, arcStart + arcSpan);
+    const logCount = Math.max(16, Math.round(arcLen / 0.42));
+    const rockEvery = Math.max(4, Math.round(logCount / 10));
 
-      if (i % 4 === 0) {
-        const sx = cx + Math.cos(a) * (rx + 0.35);
-        const sz = cz + Math.sin(a) * (rz + 0.35);
-        const sy = ZS.getTerrainHeight(sx, sz);
-        const rock = new THREE.Mesh(
-          new THREE.DodecahedronGeometry(0.12 + (i % 2) * 0.04, 0), stone);
-        rock.position.set(sx, sy + 0.08, sz);
-        rock.rotation.set(i * 0.3, i * 0.5, 0);
-        rock.castShadow = true;
-        scene.add(rock);
-      }
+    for (let i = 0; i < logCount; i += rockEvery) {
+      const tMid = (i + 0.5) / logCount;
+      const a = arcStart + tMid * arcSpan;
+      const [px, pz] = _ellipseWorld(a, ringRx, ringRz, cx, cz);
+      const outA = Math.atan2((pz - cz) / ringRz, (px - cx) / ringRx);
+      const sx = cx + Math.cos(outA) * (ringRx + 0.28);
+      const sz = cz + Math.sin(outA) * (ringRz + 0.28);
+      const sy = getDecorGroundHeight(sx, sz, { layer: 'terrain' });
+      const rock = new THREE.Mesh(
+        new THREE.DodecahedronGeometry(0.10 + (i % 2) * 0.025, 0), stone);
+      rock.position.set(sx, sy + 0.06, sz);
+      rock.rotation.set(i * 0.25, i * 0.45, 0);
+      rock.castShadow = true;
+      scene.add(rock);
     }
 
   }
@@ -353,6 +526,7 @@
       },
     },
     spawn_log_pile: { build(root) { _buildLogPile(root, 0, 0, 0); } },
+    spawn_border_log: { build(root) { _buildBorderLog(root); } },
     spawn_supply_crate: { build(root) { _buildCrate(root, 0, 0, 0, 0); } },
     spawn_marker_left: { build(root) { _buildMarkerPole(root, 0, 0, 0, -1); } },
     spawn_marker_right: { build(root) { _buildMarkerPole(root, 0, 0, 0, 1); } },
@@ -384,8 +558,8 @@
   function spawnDecorPrefab(scene, prefabId, x, y, z, opts = {}) {
     const prefab = DECOR_PREFABS[prefabId];
     if (!scene || !prefab) return null;
-    const groundedY = opts.grounded !== false && ZS.getTerrainHeight
-      ? ZS.getTerrainHeight(x || 0, z || 0) + (Number.isFinite(opts.groundLift) ? opts.groundLift : 0)
+    const groundedY = opts.grounded !== false
+      ? getDecorGroundHeight(x || 0, z || 0, { groundLift: opts.groundLift })
       : (y || 0);
     const root = new THREE.Group();
     root.position.set(x || 0, groundedY, z || 0);
@@ -477,27 +651,26 @@
 
   /** Points du sentier spawn → route goudronnée (14, -18) */
   function _onPath(x, z) {
-    if (ZS.isNearRoad) return ZS.isNearRoad(x, z, 0.2);
-    const pts = ZS.SPAWN_TRAIL_PTS || [];
-    const margin = 1.4;
-    for (let i = 0; i < pts.length - 1; i++) {
-      const [x0, z0] = pts[i], [x1, z1] = pts[i + 1];
-      const dx = x1 - x0, dz = z1 - z0;
+    if (ZS.Trails?.isNear) return ZS.Trails.isNear(SPAWN_TRAIL_PTS, x, z, 1.15);
+    const margin = 1.2;
+    for (let i = 0; i < SPAWN_TRAIL_PTS.length - 1; i++) {
+      const [x0, z0] = SPAWN_TRAIL_PTS[i];
+      const [x1, z1] = SPAWN_TRAIL_PTS[i + 1];
+      const dx = x1 - x0;
+      const dz = z1 - z0;
       const len2 = dx * dx + dz * dz;
       if (len2 < 0.0001) continue;
       const t = Math.max(0, Math.min(1, ((x - x0) * dx + (z - z0) * dz) / len2));
-      const px = x0 + dx * t, pz = z0 + dz * t;
+      const px = x0 + dx * t;
+      const pz = z0 + dz * t;
       if (Math.hypot(x - px, z - pz) < margin) return true;
     }
     return false;
   }
 
   function _samplePath(t, pts) {
-    if (ZS.RoadNetwork && ZS.RoadNetwork.sampleAlong) {
-      const s = ZS.RoadNetwork.sampleAlong('spawn_trail', t);
-      if (s) return s;
-    }
-    return _pointAlongPath(pts, t);
+    if (ZS.Trails?.sample) return ZS.Trails.sample(pts || SPAWN_TRAIL_PTS, t);
+    return _pointAlongPath(pts || SPAWN_TRAIL_PTS, t);
   }
 
   function _pointAlongPath(pts, t) {
@@ -659,64 +832,45 @@
   }
 
   /** Sentier spawn → route : pierres bordure, lanterne, panneau */
-  function buildSpawnTrail(scene, pts, B) {
+  /** Décor léger le long du sentier (pierres de bordure). */
+  function buildSpawnTrailDecor(scene, pts, B) {
     const rr = _rng(0x0a7001);
-    const postMat = new THREE.MeshLambertMaterial({ color: 0x4a3020 });
-    const stoneMat = new THREE.MeshLambertMaterial({ color: 0x7a7468 });
+    const stoneMat = ZS.CampTextures?.materials
+      ? ZS.CampTextures.materials().stone()
+      : new THREE.MeshLambertMaterial({ color: 0x6a6458 });
 
-    // ── Pierres en bordure alternées (délimitent le sentier) ───────────────────
-    const stoneGeo = new THREE.BoxGeometry(0.12, 0.04, 0.09);
-    for (let t = 0.04; t < 0.92; t += 0.11) {
+    for (let t = 0.12; t < 0.86; t += 0.18) {
       const p = _samplePath(t, pts);
-      const side = (Math.floor(t * 24) % 2 === 0) ? 1 : -1;
-      const px = p.x + (-p.uz) * side * 1.25;
-      const pz = p.z + p.ux * side * 1.25;
+      if (!p) continue;
+      const side = (Math.floor(t * 20) % 2 === 0) ? 1 : -1;
+      const px = p.x + (-p.uz) * side * 1.15;
+      const pz = p.z + p.ux * side * 1.15;
       const py = ZS.getTerrainHeight(px, pz);
-      const stone = new THREE.Mesh(stoneGeo, stoneMat);
-      stone.position.set(px, py + 0.03, pz);
-      stone.rotation.y = Math.atan2(p.ux, p.uz) + rr() * 0.25;
-      stone.castShadow = true;
-      scene.add(stone);
+      const r = 0.07 + rr() * 0.04;
+      const rock = new THREE.Mesh(
+        new THREE.DodecahedronGeometry(r, 0),
+        stoneMat
+      );
+      rock.position.set(px, py + r * 0.55, pz);
+      rock.rotation.set(rr() * 0.4, Math.atan2(p.ux, p.uz) + rr() * 0.5, rr() * 0.3);
+      rock.castShadow = true;
+      scene.add(rock);
     }
+  }
 
-    // ── Lanterne au milieu du sentier (bord du chemin) ────────────────────────
-    const mid = _samplePath(0.48, pts);
-    const my = ZS.getTerrainHeight(mid.x, mid.z);
-    const mnx = -mid.uz, mnz = mid.ux;
-    const lx = mid.x + mnx * 1.45, lz = mid.z + mnz * 1.45;
-    const ly = ZS.getTerrainHeight(lx, lz);
-    const mPost = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.065, 1.25, 6), postMat);
-    mPost.position.set(lx, ly + 0.62, lz);
-    mPost.castShadow = true;
-    scene.add(mPost);
-    const lampMat = new THREE.MeshLambertMaterial({
-      color: 0xffcc66, emissive: 0xff9922, emissiveIntensity: 0.75,
-    });
-    const lamp = new THREE.Mesh(new THREE.BoxGeometry(0.18, 0.24, 0.18), lampMat);
-    lamp.position.set(lx, ly + 1.28, lz);
-    scene.add(lamp);
-    const lampLight = new THREE.PointLight(0xffaa55, 0.55, 10, 2);
-    lampLight.position.set(lx, ly + 1.35, lz);
-    scene.add(lampLight);
-
-    // ── Panneau « Ville » à côté de l'ouverture (hors chaussée) ───────────────
-    const end = _samplePath(0.96, pts);
-    const sx = end.x + 3.2, sz = end.z + 0.8;
-    const sy = ZS.getTerrainHeight(sx, sz);
-    const jPost = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.08, 1.4, 6), postMat);
-    jPost.position.set(sx, sy + 0.7, sz);
-    jPost.castShadow = true;
-    scene.add(jPost);
-    const signMat = new THREE.MeshLambertMaterial({ color: 0x3a5a28 });
-    const board = new THREE.Mesh(new THREE.BoxGeometry(0.85, 0.4, 0.04), signMat);
-    board.position.set(sx, sy + 1.28, sz);
-    board.rotation.y = -0.35;
-    scene.add(board);
-    const arrow = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.04, 0.04),
-      new THREE.MeshLambertMaterial({ color: 0xc8b878 }));
-    arrow.position.set(sx - 0.22, sy + 1.3, sz - 0.12);
-    arrow.rotation.y = -Math.PI / 2;
-    scene.add(arrow);
+  /** Mesh sentier + décor (refonte spawn, sans RoadNetwork). */
+  function buildSpawnTrail(scene, pts, B) {
+    const path = pts || SPAWN_TRAIL_PTS;
+    if (ZS.Trails?.buildMesh) {
+      ZS.Trails.buildMesh(scene, path, {
+        width: 1.55,
+        taperStart: 0,
+        taperEnd: 0.65,
+        step: 0.2,
+        smooth: true,
+      });
+    }
+    buildSpawnTrailDecor(scene, path, B);
   }
 
   /** @deprecated alias */
@@ -727,6 +881,7 @@
   window.ZS = window.ZS || {};
   ZS.buildClearingRing  = buildClearingRing;
   ZS.buildSpawnTrail     = buildSpawnTrail;
+  ZS.buildSpawnTrailDecor = buildSpawnTrailDecor;
   ZS.buildClearingExit   = buildClearingExit;
   ZS.SPAWN_TRAIL_PTS     = SPAWN_TRAIL_PTS;
   ZS.buildCampGround    = buildCampGround;
@@ -735,4 +890,8 @@
   ZS.buildSpawnCamp     = buildSpawnCamp;
   ZS.spawnDecorPrefab   = spawnDecorPrefab;
   ZS.listDecorPrefabs   = listDecorPrefabs;
+  ZS.getDecorGroundHeight = getDecorGroundHeight;
+  ZS.getDecorSurfaceLift  = getDecorSurfaceLift;
+  ZS.CAMP_GROUND_LIFT     = CAMP_GROUND_LIFT;
+  ZS.TRAIL_SURFACE_LIFT   = TRAIL_SURFACE_LIFT;
 }());

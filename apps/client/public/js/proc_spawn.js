@@ -307,23 +307,38 @@
   }
 
   function build(scene) {
-    // Spawn décor is now server-seeded and RCON-manageable.
+    const baseY = ZS.getTerrainHeight(SPAWN_CX, SPAWN_CZ);
+    if (ZS.buildCampGround) ZS.buildCampGround(scene, SPAWN_CX, SPAWN_CZ, baseY, ZS.B);
+    if (ZS.buildCampProps) ZS.buildCampProps(scene, SPAWN_CX, SPAWN_CZ, baseY, ZS.B);
+    if (ZS.buildSpawnTrail && ZS.SPAWN_TRAIL_PTS) {
+      ZS.buildSpawnTrail(scene, ZS.SPAWN_TRAIL_PTS, ZS.B);
+    }
   }
 
   function _registerTerrain() {
+    if (ZS.registerClearingDisc) {
+      ZS.registerClearingDisc(SPAWN_CX, SPAWN_CZ, 5.8, 5.2, 3.5);
+    }
     if (ZS.registerTerrainPatch) {
-      ZS.registerTerrainPatch(SPAWN_CX, SPAWN_CZ, 18.0, 16.0, 11.0, {
-        smooth: 0.95,
-        level: 0.08,
-        sampleRadius: 2.2,
+      ZS.registerTerrainPatch(SPAWN_CX, SPAWN_CZ, 6.0, 5.5, 2.5, {
+        smooth: 0.9,
+        level: 0.1,
+        sampleRadius: 1.6,
+      });
+    }
+    if (ZS.Trails?.registerFlatten && ZS.SPAWN_TRAIL_PTS) {
+      ZS.Trails.registerFlatten(ZS.SPAWN_TRAIL_PTS, {
+        width: 1.55,
+        shoulder: 0.65,
+        blend: 3.5,
+        smooth: true,
       });
     }
   }
 
-  _registerTerrain();
   ZS.SpawnZone = {
     build,
-    // Spawn the player south of the camp, facing north into it.
+    registerTerrain: _registerTerrain,
     spawn: { x: SPAWN_CX + 0.4, y: 1, z: SPAWN_CZ + 13.0, rotY: 0 },
   };
   ZS.Buildings.registerSector({ build, roads: [], spawnOnly: true });

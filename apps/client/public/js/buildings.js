@@ -34,6 +34,9 @@
   }
   const _texAsphalt = _roadTexture('/img/road_asphalt.png');
   const _texDirt    = _roadTexture('/img/road_dirt.png');
+  const _texTrail   = ZS.CampTextures?.load
+    ? ZS.CampTextures.load('/textures/camp/trail_forest.png', 2.8, 2.8)
+    : _texDirt;
 
   // ── Materials ─────────────────────────────────────────────────────────────────
   const M = {
@@ -58,6 +61,7 @@
     roadLine: new THREE.MeshLambertMaterial({ color: 0xeecc22, polygonOffset: true, polygonOffsetFactor: -3, polygonOffsetUnits: -10 }),
     roadDirt: new THREE.MeshLambertMaterial({ map: _texDirt, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -8 }),
     path:     new THREE.MeshLambertMaterial({ map: _texDirt, color: 0x9a8870, polygonOffset: true, polygonOffsetFactor: -3, polygonOffsetUnits: -8 }),
+    trail:    new THREE.MeshLambertMaterial({ map: _texTrail, color: 0x9a8870, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -8 }),
     stairs:   new THREE.MeshLambertMaterial({ color: 0x6b4f30 }),
   };
 
@@ -446,27 +450,6 @@
     if (!sectorObj || sectorObj.spawnOnly !== true) return;
     _sectors.push(sectorObj);
     _spawnSectors.push(sectorObj);
-    if (!ZS.RoadNetwork) return;
-    if (sectorObj.clearings) {
-      for (const c of sectorObj.clearings) ZS.RoadNetwork.defineClearing(c);
-    }
-    if (sectorObj.roads) {
-      for (const r of sectorObj.roads) {
-        ZS.RoadNetwork.defineEdge({
-          id: r.id,
-          pts: r.pts,
-          width: r.width,
-          type: r.type || 'dirt',
-          visual: r.visual !== false,
-          smooth: r.smooth !== false,
-          taperStart: r.taperStart || 0,
-          taperEnd: r.taperEnd || 0,
-          line: !!r.line,
-          broken: !!r.broken,
-          barriers: r.barriers !== false,
-        });
-      }
-    }
   }
 
   function applyRoadFlattening() {

@@ -221,6 +221,7 @@
     spawnStars();
     spawnClouds();
 
+    if (ZS.SpawnZone?.registerTerrain) ZS.SpawnZone.registerTerrain();
     buildTerrain(scene);
     const buildingColliders = ZS.Buildings.buildAll(scene);
     for (const c of buildingColliders) _colliders.push(c);
@@ -524,7 +525,8 @@
     const col  = new THREE.Color();
     for (let i = 0; i < pos.count; i++) {
       const vx = pos.getX(i), vz = pos.getZ(i);
-      const h  = ZS.getTerrainHeight(vx, vz);
+      let h = ZS.getTerrainHeight(vx, vz);
+      if (ZS.isInClearingDisc?.(vx, vz, 0.12)) h -= 0.14;
       pos.setY(i, h);
     }
 
@@ -545,8 +547,9 @@
       const avgH = (a.y + b.y + c.y) / 3;
       const cx = (a.x + b.x + c.x) / 3, cz = (a.z + b.z + c.z) / 3;
       const inRiver = ZS.isInRiverChannel?.(cx, cz, 0) ?? false;
+      const inClearing = ZS.isInClearingDisc?.(cx, cz, 0.25) ?? false;
       const onRoad  = ZS.isInRoadCorridor?.(cx, cz, 0.8) ?? ZS.isNearRoad?.(cx, cz, 1.2) ?? false;
-      const useDirt = inRiver || onRoad || slope > 0.22 || avgH > 13.5;
+      const useDirt = inRiver || onRoad || inClearing || slope > 0.22 || avgH > 13.5;
       const uBase = useDirt ? 0.52 : 0.02;
       const uSpan = 0.46;
 

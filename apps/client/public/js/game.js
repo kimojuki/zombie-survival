@@ -145,7 +145,9 @@
   }
 
   // Position camera at spawn before first render
-  state.player.y = ZS.getTerrainHeight(state.player.x, state.player.z) + 1.7;
+  state.player.y = (ZS.getDecorGroundHeight
+    ? ZS.getDecorGroundHeight(state.player.x, state.player.z)
+    : ZS.getTerrainHeight(state.player.x, state.player.z)) + 1.7;
   localAvatar.position.set(state.player.x, state.player.y - 1.7, state.player.z);
   localAvatar.rotation.y = state.camera.yaw;
   camera.position.set(state.player.x, state.player.y, state.player.z);

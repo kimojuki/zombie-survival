@@ -42,6 +42,24 @@ test('marker poles have cylindrical colliders', () => {
   assert.equal(cols[0].topY, undefined);
 });
 
+test('border log prefab has oriented box collider', () => {
+  const ZS = loadDecorColliders();
+  const cols = ZS.buildDecorColliders({
+    kind: 'prefab',
+    prefabId: 'spawn_border_log',
+    x: 1,
+    z: -6,
+    baseY: 0.1,
+    rotY: 0.5,
+    scale: 1.1,
+    decorId: 'decor_log',
+  });
+  assert.equal(cols.length, 1);
+  assert.equal(cols[0].type, 'box');
+  assert.ok(cols[0].hw > 0.2);
+  assert.equal(cols[0].rotY, 0.5);
+});
+
 test('unknown item type falls back to default collider', () => {
   const ZS = loadDecorColliders();
   const cols = ZS.buildDecorColliders({

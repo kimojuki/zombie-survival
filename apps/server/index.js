@@ -4,6 +4,7 @@ const http = require('http');
 const fs = require('fs');
 const path = require('path');
 const { execSync } = require('child_process');
+const { pathToFileURL } = require('url');
 const { Server } = require('socket.io');
 const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
@@ -279,6 +280,7 @@ let decorSeq = 1;
 const decorPrefabs = [
   'spawn_campfire',
   'spawn_log_pile',
+  'spawn_border_log',
   'spawn_supply_crate',
   'spawn_marker_left',
   'spawn_marker_right',
@@ -326,8 +328,10 @@ function flattenInv(inv) {
 }
 
 function seedSpawnDecorItems() {
-  if (decorItems.size) return;
-  const seed = [
+  if (decorItems.size) return Promise.resolve();
+  return import(pathToFileURL(path.join(__dirname, '../../packages/shared/src/camp-border-logs.mjs')).href)
+    .then(({ computeCampBorderLogPlacements }) => {
+      const seed = [
     { kind: 'prefab', prefabId: 'spawn_campfire', x: 0.2, z: -6.15, rotY: 0, scale: 1.0 },
     { kind: 'prefab', prefabId: 'spawn_log_pile', x: 2.1, z: -8.25, rotY: 0.2, scale: 1.0 },
     { kind: 'prefab', prefabId: 'spawn_supply_crate', x: 2.55, z: -5.75, rotY: -0.34, scale: 1.2 },
@@ -347,21 +351,32 @@ function seedSpawnDecorItems() {
     { kind: 'item', type: 'food_eau_bouteille', x: 2.38, z: -5.72, rotY: -0.2, scale: 0.9 },
     { kind: 'item', type: 'food_conserves', x: 2.62, z: -5.94, rotX: 0.18, rotY: 0.35, scale: 0.82 },
     { kind: 'item', type: 'tool_hachette', x: 2.95, z: -5.82, rotY: 0.85, scale: 1.0, layFlat: true },
-  ];
-  for (const d of seed) {
-    const item = {
-      id: `decor_${decorSeq++}`,
-      y: 0,
-      rotX: 0,
-      rotY: 0,
-      rotZ: 0,
-      scale: 1,
-      createdBy: 'seed',
-      createdAt: Date.now(),
-      ...d,
-    };
-    decorItems.set(item.id, item);
-  }
+      ];
+      for (const p of computeCampBorderLogPlacements(0, -6)) {
+        seed.push({
+          kind: 'prefab',
+          prefabId: 'spawn_border_log',
+          x: p.x,
+          z: p.z,
+          rotY: p.rotY,
+          scale: p.scale,
+        });
+      }
+      for (const d of seed) {
+        const item = {
+          id: `decor_${decorSeq++}`,
+          y: 0,
+          rotX: 0,
+          rotY: 0,
+          rotZ: 0,
+          scale: 1,
+          createdBy: 'seed',
+          createdAt: Date.now(),
+          ...d,
+        };
+        decorItems.set(item.id, item);
+      }
+    });
 }
 
 // ── Collision géométrique (transmise une fois par le premier client) ──────────
@@ -606,7 +621,7 @@ for (let i = 0; i < ZOMBIE_COUNT; i++) {
   zombies.set(z.id, z);
 }
 
-seedSpawnDecorItems();
+seedSpawnDecorItems().catch((err) => log.error('seedSpawnDecorItems failed', err));
 
 rcon = createRcon({
   io,
@@ -1161,22 +1176,26 @@ async function resetAllPlayersOnce() {
   }
 }
 
-server.listen(PORT, HOST, () => {
-  serverReady = true;
-  log.info('boot', 'server started', {
-    url: `http://localhost:${PORT}`,
-    listen: `${HOST}:${PORT}`,
-    clientMode: USE_CLIENT_BUILD ? 'build/client' : 'apps/client',
-    db: require('./src/db').DB_CLIENT,
-    logLevel: log.level,
-    playerSnapshotMs: log.PLAYER_SNAPSHOT_MS,
-    serverStatsMs: log.SERVER_STATS_MS,
-    zombies: ZOMBIE_COUNT,
-    rcon: !!(RCON_PASSWORD || ADMIN_USERS.size),
-    admins: ADMIN_USERS.size,
+seedSpawnDecorItems()
+  .catch((err) => log.error('seedSpawnDecorItems failed', err))
+  .finally(() => {
+    server.listen(PORT, HOST, () => {
+      serverReady = true;
+      log.info('boot', 'server started', {
+        url: `http://localhost:${PORT}`,
+        listen: `${HOST}:${PORT}`,
+        clientMode: USE_CLIENT_BUILD ? 'build/client' : 'apps/client',
+        db: require('./src/db').DB_CLIENT,
+        logLevel: log.level,
+        playerSnapshotMs: log.PLAYER_SNAPSHOT_MS,
+        serverStatsMs: log.SERVER_STATS_MS,
+        zombies: ZOMBIE_COUNT,
+        rcon: !!(RCON_PASSWORD || ADMIN_USERS.size),
+        admins: ADMIN_USERS.size,
+      });
+      resetAllPlayersOnce().then(() => log.info('boot', 'player reset check done'));
+    }).on('error', (err) => {
+      log.error('boot', 'server failed to start', { err: err.message });
+      process.exit(1);
+    });
   });
-  resetAllPlayersOnce().then(() => log.info('boot', 'player reset check done'));
-}).on('error', (err) => {
-  log.error('boot', 'server failed to start', { err: err.message });
-  process.exit(1);
-});

@@ -8,9 +8,9 @@
   const JUNCTION_MERGE = 0.42;
   const JUNCTION_ARC_STEPS = 12;
 
-  const SHOULDER = { clearing: 0.5, dirt: 1.0, path: 0.8, asphalt: 2.8 };
-  const BLEND    = { clearing: 4.0, dirt: 5.0, path: 4.0, asphalt: 6.5 };
-  const QUERY_PAD = { clearing: 0.3, dirt: 0.6, path: 0.5, asphalt: 1.2 };
+  const SHOULDER = { clearing: 0.5, dirt: 1.0, path: 0.8, trail: 0.85, asphalt: 2.8 };
+  const BLEND    = { clearing: 4.0, dirt: 5.0, path: 4.0, trail: 4.5, asphalt: 6.5 };
+  const QUERY_PAD = { clearing: 0.3, dirt: 0.6, path: 0.5, trail: 0.55, asphalt: 1.2 };
   const BARRIER_OFFSET = 0.55;
   const BARRIER_STEP = 2.6;
 
@@ -179,7 +179,7 @@
 
     _barrierGaps.length = 0;
     for (const trail of _resolved) {
-      if (trail.type === 'dirt' || trail.type === 'path') {
+      if (trail.type === 'dirt' || trail.type === 'path' || trail.type === 'trail') {
         const join = _findRoadJoinAtEnd(trail);
         if (join) {
           _barrierGaps.push({ x: join.x, z: join.z, r: 7.5 });
@@ -281,6 +281,7 @@
 
   function _matFor(edge, M) {
     if (edge.type === 'clearing') return M.path || M.roadDirt;
+    if (edge.type === 'trail') return M.trail || M.path || M.roadDirt;
     if (edge.type === 'dirt' || edge.type === 'path') return M.roadDirt || M.path;
     return M.road;
   }

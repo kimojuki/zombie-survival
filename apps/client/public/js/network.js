@@ -116,7 +116,9 @@
         state.player.x   = spawn.x;
         state.player.z   = spawn.z;
         state.camera.yaw = spawn.rotY || 0;
-        state.player.y   = (ZS.getTerrainHeight ? ZS.getTerrainHeight(spawn.x, spawn.z) : state.player.y - 1.7) + 1.7;
+        state.player.y   = ((ZS.getDecorGroundHeight
+          ? ZS.getDecorGroundHeight(spawn.x, spawn.z)
+          : (ZS.getTerrainHeight ? ZS.getTerrainHeight(spawn.x, spawn.z) : state.player.y - 1.7))) + 1.7;
         localStorage.setItem('zombie_spawn', JSON.stringify(spawn));
       }
       if (typeof data.worldTime === 'number') ZS.setWorldTime(data.worldTime);
@@ -261,7 +263,9 @@
       if (spawn) {
         state.player.x = spawn.x;
         state.player.z = spawn.z;
-        state.player.y = (ZS.getTerrainHeight ? ZS.getTerrainHeight(spawn.x, spawn.z) : 1) + 1.7;
+        state.player.y = ((ZS.getDecorGroundHeight
+          ? ZS.getDecorGroundHeight(spawn.x, spawn.z)
+          : (ZS.getTerrainHeight ? ZS.getTerrainHeight(spawn.x, spawn.z) : 1))) + 1.7;
         state.player.velocityY = 0;
         state.player.onGround  = true;
         state.camera.yaw = spawn.rotY || 0;

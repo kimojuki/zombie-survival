@@ -36,8 +36,8 @@ export function decorWorldToLocal(px, py, pz, col) {
   let lx = px - col.cx;
   let ly = py - (col.baseY ?? 0);
   let lz = pz - col.cz;
-  if (col.rotZ) {
-    const q = _quatConjugate(_quatFromEulerXYZ(0, col.rotY || 0, col.rotZ || 0));
+  if (col.rotX || col.rotZ) {
+    const q = _quatConjugate(_quatFromEulerXYZ(col.rotX || 0, col.rotY || 0, col.rotZ || 0));
     const v = _quatApply(q, lx, ly, lz);
     lx = v.x;
     ly = v.y;
@@ -57,8 +57,8 @@ export function decorLocalToWorld(lx, ly, lz, col) {
   let wx = lx;
   let wy = ly;
   let wz = lz;
-  if (col.rotZ) {
-    const q = _quatFromEulerXYZ(0, col.rotY || 0, col.rotZ || 0);
+  if (col.rotX || col.rotZ) {
+    const q = _quatFromEulerXYZ(col.rotX || 0, col.rotY || 0, col.rotZ || 0);
     const v = _quatApply(q, lx, ly, lz);
     wx = v.x;
     wy = v.y;
@@ -72,6 +72,34 @@ export function decorLocalToWorld(lx, ly, lz, col) {
     wz = x * s + z * c;
   }
   return { x: col.cx + wx, z: col.cz + wz };
+}
+
+function _distPointToSegment(px, pz, x0, z0, x1, z1) {
+  const dx = x1 - x0;
+  const dz = z1 - z0;
+  const len2 = dx * dx + dz * dz;
+  if (len2 < 1e-8) {
+    return { dist: Math.hypot(px - x0, pz - z0), cx: x0, cz: z0, ux: 0, uz: 1 };
+  }
+  const t = Math.max(0, Math.min(1, ((px - x0) * dx + (pz - z0) * dz) / len2));
+  const cx = x0 + dx * t;
+  const cz = z0 + dz * t;
+  const dist = Math.hypot(px - cx, pz - cz);
+  const len = Math.sqrt(len2);
+  return { dist, cx, cz, ux: dx / len, uz: dz / len };
+}
+
+function _resolveSegment(col, px, pz, agentR, feetY, { skipJumpable = false } = {}) {
+  if (skipJumpable && col.maxY !== undefined && feetY >= col.maxY - 0.05) return null;
+  if (col.baseY != null && feetY < col.baseY - 0.35) return null;
+  const hit = _distPointToSegment(px, pz, col.x0, col.z0, col.x1, col.z1);
+  const min = agentR + (col.r || 0.1);
+  if (hit.dist >= min) return null;
+  if (hit.dist < 0.001) {
+    return { x: px + hit.ux * min, z: pz + hit.uz * min };
+  }
+  const scale = min / hit.dist;
+  return { x: hit.cx + (px - hit.cx) * scale, z: hit.cz + (pz - hit.cz) * scale };
 }
 
 function _resolveOrientedBox(col, px, pz, agentR, feetY, { skipJumpable = false } = {}) {
@@ -143,8 +171,11 @@ function _resolveCylinder(col, px, pz, agentR, feetY, { skipJumpable = false } =
  */
 export function resolveAgentAgainstCollider(col, px, pz, agentR, feetY = 0, opts = {}) {
   if (!col || !Number.isFinite(px) || !Number.isFinite(pz)) return null;
+  if (col.type === 'seg') {
+    return _resolveSegment(col, px, pz, agentR, feetY, opts);
+  }
   if (col.type === 'box' || col.cx !== undefined) {
-    if (col.lx != null || col.rotZ || (col.rotY && col.baseY != null)) {
+    if (col.lx != null || col.rotX || col.rotZ || (col.rotY && col.baseY != null)) {
       return _resolveOrientedBox(col, px, pz, agentR, feetY, opts);
     }
     if (col.rotY) {

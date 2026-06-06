@@ -34,6 +34,12 @@
     spawn_stone: [
       { type: 'cyl', lx: 0, lz: 0, r: 0.17, topY: 0.32 },
     ],
+    rock_boulder: [
+      { type: 'cyl', lx: 0, lz: 0, r: 0.72, topY: 0.95 },
+    ],
+    rock_outcrop: [
+      { type: 'cyl', lx: 0, lz: 0, r: 0.55, topY: 0.55 },
+    ],
     spawn_workbench: [
       { type: 'box', lx: 0, lz: 0, hw: 0.52, hd: 0.34, maxY: 0.88 },
     ],
@@ -51,6 +57,12 @@
     ],
     spawn_marker_right: [
       { type: 'cyl', lx: 0, lz: 0, r: 0.14 },
+    ],
+    road_barrier_post: [
+      { type: 'cyl', lx: 0, lz: 0, r: 0.09, topY: 0.72 },
+    ],
+    road_barrier_rail: [
+      { type: 'box', lx: 0, lz: 0, hw: 0.5, hd: 0.04, maxY: 0.66 },
     ],
     spawn_flat_stone: [],
     spawn_drink_set: [],
@@ -116,12 +128,31 @@
 
   function buildDecorColliders(spec) {
     if (!spec) return [];
+    if (spec.prefabId === 'road_barrier_rail' && spec.railSeg) {
+      const baseY = Number.isFinite(spec.baseY) ? spec.baseY : 0;
+      return [{
+        type: 'seg',
+        x0: spec.railSeg.x0,
+        z0: spec.railSeg.z0,
+        x1: spec.railSeg.x1,
+        z1: spec.railSeg.z1,
+        r: 0.14,
+        baseY,
+        maxY: baseY + 0.78,
+        decorId: spec.decorId,
+      }];
+    }
     const {
       x = 0, z = 0, baseY = 0,
-      rotY = 0, scale = 1,
+      rotY = 0, rotX = 0, scale: scaleIn = 1,
       wreckTilt = 0,
       rotZ = 0,
+      railLen,
     } = spec;
+    const scale = scaleIn ?? 1;
+    const railLenScale = (spec.prefabId === 'road_barrier_rail' && Number.isFinite(railLen))
+      ? railLen
+      : null;
     const isWreck = spec.prefabId?.startsWith('wreck_');
     const tiltZ = isWreck ? (Number(wreckTilt) || Number(rotZ) || 0) : 0;
     const cos = Math.cos(rotY);
@@ -132,9 +163,9 @@
       if (!raw) continue;
       if (raw.door && spec.doorOpen) continue;
       const def = _applyLayFlat(raw, spec);
-      const lx0 = (def.lx || 0) * scale;
-      const lz0 = (def.lz || 0) * scale;
-      const hw = (def.hw || 0.1) * scale;
+      const lx0 = (def.lx || 0) * (railLenScale ?? scale);
+      const lz0 = (def.lz || 0) * (railLenScale ?? scale);
+      const hw = (def.hw || 0.1) * (railLenScale ?? scale);
       const hd = (def.hd || 0.1) * scale;
 
       if (def.type === 'cyl' || def.r != null) {
@@ -179,9 +210,10 @@
         hw,
         hd,
         rotY,
+        rotX: rotX || 0,
         baseY,
-        maxY: def.maxY != null ? baseY + def.maxY * scale : undefined,
-        minY: def.minY != null ? baseY + def.minY * scale : undefined,
+        maxY: def.maxY != null ? baseY + def.maxY : undefined,
+        minY: def.minY != null ? baseY + def.minY : undefined,
         decorId: spec.decorId,
       });
     }

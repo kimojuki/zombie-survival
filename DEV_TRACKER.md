@@ -48,6 +48,68 @@ Copier dans la description de PR :
 
 ## 2026-06-06
 
+### Completed — Repousse arbres (croissance) + rochers aléatoires (2026-06-06)
+
+- **Arbres** : spawn progressif (pousse phase 0 → adulte phase 4), scale + bois + collider synchronisés ; seed initial = adultes.
+- **Croissance** : 2 min / phase (`GROWTH_PHASE_MS`), sync `decor-tree-grow`.
+- **Rochers** : repousse aléatoire taille adulte, évite chevauchement décors (`resource-spawn.mjs`).
+- **Serveur** : tick regen 10 s (`resource-regen.mjs`) — cibles 72 arbres / 18 rochers monde.
+- **Cache bust** : `20260606-resource-regen-47`
+
+### Completed — Colliders rochers synchronisés à la récolte (2026-06-06)
+
+- **Fix** : `_updateRockColliders()` recalcule le cylindre de collision avec le même ratio que le mesh (`0.22 + 0.78 × pierre restante`).
+- **Hitbox récolte** : rayon de visée `_rockHitRadius()` réduit aussi avec le rocher.
+- **Cache bust** : `20260606-rock-collider-46`
+
+### Completed — Fix spawn rochers pierre visibles au départ (2026-06-06)
+
+- **Cause** : seed camp initial sans `rock_boulder` sur serveurs déjà seedés ; rochers procéduraux loin du spawn / exclus du sentier.
+- **Fix** : `CAMP_ROCK_ANCHORS` (3 rochers fixes près du sentier) + `ensureCampRocks()` au boot et `decorseed rocks`.
+- **Visuel** : boulders plus gros ; colliders `rock_boulder` / `rock_outcrop`.
+- **Cache bust** : `20260606-rock-spawn-45`
+
+### Completed — Inventaire PC : touche Tab (2026-06-06)
+
+- **PC** (`mode-desktop`) : **Tab** ouvre/ferme l'inventaire (comme **I**), `preventDefault` pour éviter le focus navigateur.
+- **Cache bust** : `20260606-inv-tab-44`
+
+### Completed — Récolte pierre + crafts Rust-like au spawn (2026-06-06)
+
+- **Ressource** : `res_pierre` — nœuds minables (`rock_boulder`, `rock_outcrop`, `spawn_stone`) ; rétrécissement visuel progressif puis disparition.
+- **Récolte** : caillou / pioche / hache en pierre → `mineRock()` client + sync `decor-mine` serveur (`decor-rock-mine` / `decor-rock-depleted`).
+- **Crafts** (panneau C) : lance en bois, hache en pierre, pioche en pierre, lance en pierre (upgrade depuis lance bois).
+- **Spawn** : gros `rock_boulder` près du camp ; hachette au sol retirée (progression craft pure).
+- **Shared** : `rock-stone.mjs`, `rock-placements.mjs` ; RCON `decorseed rocks [reset]`.
+- **Cache bust** : `20260606-rock-harvest-43`
+
+- **Fix collisions rails (v3 — root cause)** : `clearDecorColliders()` au reconnect socket effaçait les hitboxes RN ; registre statique `getBarrierColliders()` fusionné dans `getColliders()`.
+- **Cache bust** : `20260606-road-barriers-fix-42`
+
+- **Fix collisions rails (v2)** : colliders segment `type:'seg'` entre poteaux (r=0.14 m) — fiable sur pentes ; plus de box orientée fine.
+- **Cache bust** : `20260606-road-barriers-seg-41`
+
+- **Fix collisions barrières** : rails — `minY` retiré, longueur seule (`railLen`) scale `hw` ; `rotX` pris en compte ; poteaux `r=0.09`.
+- **Cache bust** : `20260606-road-barriers-col-40`
+
+- **Fix orientation** : rail le long de Z local + quaternion `setFromUnitVectors` (comme l'ancien `_buildBarriers`).
+- **Cache bust** : `20260606-road-barriers-rot-39`
+
+### Completed — Fix glissières disparues : build client prefabs (2026-06-06)
+
+- **Cause** : `_buildBarriers` vidé côté client ; seed serveur seul ne suffit pas (serveur pas redémarré / pas de sync visuelle fiable).
+- **Fix** : `barrier_prefabs.buildRoadBarriers()` — prefabs posés au build RN (`road_network.js`), rails inclinés (`rotX`).
+- **Réseau** : ignore `road_barrier_*` du `game-init` (évite doublons avec le build local).
+- **Cache bust** : `20260606-road-barriers-client-38`
+
+### Completed — Barrières routières en prefabs + collisions (2026-06-06)
+
+- **Prefabs** : `road_barrier_post` + `road_barrier_rail` (`barrier_prefabs.js`).
+- **Placements** : `packages/shared/src/road-barriers.mjs` — `town_main` + `city_highway`, pas 2,6 m, gap jonction sentier.
+- **Collisions** : poteau cylindrique + rail box orienté (`railLen` → scale collider).
+- **Seed** : boot serveur + `decorseed barriers [reset]` ; meshes procéduraux retirés de `road_network.js`.
+- **Cache bust** : `20260606-road-barriers-prefab-37`
+
 ### Completed — Fix porte cabane : interaction + taille + anim + son (2026-06-06)
 
 - **Bug** : `doorPivot` sur le groupe enfant → jamais enregistré dans `DECOR_DOORS` (E / bouton mobile inopérants).
@@ -635,6 +697,34 @@ These are intentionally ignored by Git for local development.
 - **Refonte** : un seul bloc bras (4×12×4 Steve) + manche bleu, pivot `HeldItemRenderer` `(0.56, -0.52, -0.72)` rot `(-100°, 45°, -65°)`.
 - **Anims MC** : swing `sqrt(sin)` attaque, consommation montée vers bouche (`pow` easing), plus de rig articulé 3 segments.
 - **Cache bust** : `20260606t`
+
+### Completed — Persistance position + sommeil / fouille (2026-06-06)
+
+- **Position sauvegardée** : `game-init` utilise la position serveur (`data.spawn`) au lieu d'écraser avec `SpawnZone` procédural.
+- **Déconnexion** : joueur vivant → corps endormi (`player-sleep`) visible couché ; inventaire persisté en mémoire serveur + DB.
+- **Reconnexion** : reprise position/inventaire (`player-wake`), le corps disparaît pour les autres.
+- **Fouille** : `E` (PC) ou bouton action (mobile) près d'un dormeur → panneau `sleep_loot.js`, vol item par item (`sleep-loot-take`).
+- **Cache bust** : `20260606-sleep-persist-49`
+
+### Fix — position écrasée au refresh (2026-06-06)
+
+- **Cause racine** : le client envoyait `move` au spawn par défaut (0.4, 7) *avant* `game-init`, ce qui réécrivait la position DB à chaque F5.
+- **Client** : `sendMove` bloqué jusqu'à `game-init` (`_spawnReady`).
+- **Serveur** : ignore les moves « spawn » pendant 4 s si la position restaurée est loin ; id joueur depuis la DB ; save fallback par username.
+- **Cache bust** : `20260606-pos-persist-51`
+
+### Fix — bouton Réapparaître (2026-06-06)
+
+- **Cause** : survie (infection/faim/soif) non réinitialisée au clic → retour instantané à l'écran mort.
+- **Fix** : `Survival.reset()` au respawn client + `respawn-at` serveur ; touch mobile sur le bouton.
+- **Cache bust** : `20260606-respawn-fix-50`
+
+### Fix — persistance position au refresh (2026-06-06)
+
+- **Handoff session** : nouvelle socket reprend la position live de l'ancienne au refresh (course déco/connect).
+- **SQLite** : chemin DB résolu depuis la racine projet (`database/local-dev.sqlite`).
+- **Auto-save** : position forcée toutes les 15 s même sans changement d'inventaire.
+- **Client** : caméra/avatar repositionnés dès `game-init`.
 
 ### Completed — Bras FPS articulé + anims consommables (2026-06-06)
 

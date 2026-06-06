@@ -91,7 +91,7 @@
       if (p.health <= 0 && !p.dead) {
         p.dead = true;
         ZS.Network?.sendDied?.();
-        ZS.UI.showDeath(p.kills);
+        ZS.UI.showDeath(_state.player.kills);
       }
     }
 

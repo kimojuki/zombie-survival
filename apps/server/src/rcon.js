@@ -612,7 +612,7 @@ function createRcon(ctx) {
     return ok('=== Prefabs décor ===', ...list.map((id) => `  ${id}`));
   });
 
-  register('decorseed', 'Seed décor manquant — decorseed wrecks|trees [reset]', async (args) => {
+  register('decorseed', 'Seed décor manquant — decorseed wrecks|trees|barriers|rocks [reset]', async (args) => {
     const kind = (args[1] || '').toLowerCase();
     const reset = (args[2] || '').toLowerCase() === 'reset';
     if (kind === 'wrecks') {
@@ -625,9 +625,24 @@ function createRcon(ctx) {
       if (!ctx.ensureWorldTrees) return fail('ensureWorldTrees indisponible');
       const n = await ctx.ensureWorldTrees({ broadcast: true, reset });
       if (!n && !reset) return ok('Arbres déjà présents — rien à ajouter.');
-      return ok(`${n} arbre(s) prefab ${reset ? 'repositionné(s)' : 'ajouté(s)'} et synchronisé(s).`);
+      return ok(`${n} arbre(s) prefab ${reset ? 'repositionnée(s)' : 'ajouté(s)'} et synchronisé(s).`);
     }
-    return fail('Usage: decorseed wrecks|trees [reset]');
+    if (kind === 'barriers') {
+      if (!ctx.ensureRoadBarriers) return fail('ensureRoadBarriers indisponible');
+      const n = await ctx.ensureRoadBarriers({ broadcast: true, reset });
+      if (!n && !reset) return ok('Barrières déjà présentes — rien à ajouter.');
+      return ok(`${n} barrière(s) routière(s) ${reset ? 'repositionnée(s)' : 'ajoutée(s)'} et synchronisée(s).`);
+    }
+    if (kind === 'rocks') {
+      if (!ctx.ensureCampRocks) return fail('ensureCampRocks indisponible');
+      if (!ctx.ensureWorldRocks) return fail('ensureWorldRocks indisponible');
+      const camp = await ctx.ensureCampRocks({ broadcast: true, reset });
+      const world = await ctx.ensureWorldRocks({ broadcast: true, reset });
+      const n = camp + world;
+      if (!n && !reset) return ok('Rochers déjà présents — rien à ajouter.');
+      return ok(`${n} rocher(s) minable(s) ${reset ? 'repositionné(s)' : 'ajouté(s)'} et synchronisé(s).`);
+    }
+    return fail('Usage: decorseed wrecks|trees|barriers|rocks [reset]');
   });
 
   register('decoritems', 'Liste les items posables comme décor [filtre]', (args) => {

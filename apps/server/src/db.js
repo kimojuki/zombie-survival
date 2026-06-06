@@ -30,9 +30,13 @@ function createSqlitePool() {
     throw e;
   }
 
-  const dbDir = path.join(__dirname, '..', 'database');
-  const dbPath = process.env.SQLITE_PATH || path.join(dbDir, 'local-dev.sqlite');
-  fs.mkdirSync(dbDir, { recursive: true });
+  const ROOT_DIR = path.resolve(__dirname, '..', '..', '..');
+  const dbPath = process.env.SQLITE_PATH
+    ? (path.isAbsolute(process.env.SQLITE_PATH)
+      ? process.env.SQLITE_PATH
+      : path.join(ROOT_DIR, process.env.SQLITE_PATH))
+    : path.join(ROOT_DIR, 'database', 'local-dev.sqlite');
+  fs.mkdirSync(path.dirname(dbPath), { recursive: true });
 
   const db = new Database(dbPath);
   db.pragma('journal_mode = WAL');
@@ -95,11 +99,20 @@ async function createPlayer(username, passwordHash, inventory, spawn) {
   return result.insertId;
 }
 
-async function savePlayerState(id, x, y, z, rotY, health, kills, inventory) {
-  await pool.execute(
+async function savePlayerState(id, x, y, z, rotY, health, kills, inventory, username) {
+  const inv = inventory ?? '[]';
+  const baseParams = [x, y, z, rotY, health, kills, inv];
+  let [result] = await pool.execute(
     'UPDATE players SET pos_x=?, pos_y=?, pos_z=?, rot_y=?, health=?, kills=?, inventory=?, last_saved=CURRENT_TIMESTAMP WHERE id=?',
-    [x, y, z, rotY, health, kills, inventory ?? '[]', id]
+    [...baseParams, id]
   );
+  if ((!result.affectedRows) && username) {
+    [result] = await pool.execute(
+      'UPDATE players SET pos_x=?, pos_y=?, pos_z=?, rot_y=?, health=?, kills=?, inventory=?, last_saved=CURRENT_TIMESTAMP WHERE username=?',
+      [...baseParams, username]
+    );
+  }
+  return result.affectedRows || 0;
 }
 
 module.exports = { pool, getPlayer, createPlayer, savePlayerState, DB_CLIENT };

@@ -53,11 +53,16 @@ buildMeshes()               — asphalte, ligne jaune, barrières, jonction sent
 
 (Véhicules / carcasses : prochaine brique — `vehicles.js` non chargé.)
 
-### Barrières autoroute (`_buildBarriers`)
+### Barrières autoroute (prefabs `road_barrier_*`)
 
-- Poteaux espacés tous les **2,6 m** le long de la **polyligne complète** (pas segment par segment).
-- Rails alignés en **3D** entre deux poteaux (`Quaternion.setFromUnitVectors`).
-- **Gaps** près des jonctions sentier→route (`_barrierGaps`, rayon 7,5 m).
+- **Visuel + collisions client** : `barrier_prefabs.buildRoadBarriers()` appelé depuis `road_network._buildBarriers` au build des meshes RN.
+- Placements alignés sur les arêtes **résolues** (`town_main`, `city_highway`) — pas 2,6 m, gap jonction sentier.
+- Prefabs : `road_barrier_post`, `road_barrier_rail` (`barrier_prefabs.js`) ; colliders dans `decor_colliders.js`.
+- Seed serveur optionnel (`decorseed barriers`) — le client ignore les `road_barrier_*` réseau pour éviter les doublons.
+- Seed serveur au boot + RCON `decorseed barriers [reset]`.
+- Collisions : cylindre (poteau) + box orientée (`railLen` = longueur rail).
+- **Gap** à la jonction sentier→`town_main` (rayon 7,5 m).
+- Meshes procéduraux retirés de `road_network.js` (plus de doublon visuel).
 
 ### Véhicules (`vehicle_prefabs.js` + `packages/shared/src/road-wrecks.mjs`)
 
@@ -80,7 +85,8 @@ Legacy `vehicles.js` : stub vide (remplacé par prefabs décor).
 | `public/js/spawn_clearing.js` | `SPAWN_TRAIL_PTS`, `getDecorGroundHeight`, prefabs camp |
 | `packages/shared/src/camp-border-logs.mjs` | Placement anneau `spawn_border_log` (seed serveur) |
 | `textures/camp/trail_forest.png` | Texture sentier forêt (ruban `type: trail`) |
-| `public/js/vehicles.js` | Carcasses routières (config `WRECKS`) |
+| `packages/shared/src/road-barriers.mjs` | Placements barrières RN (seed serveur) |
+| `public/js/barrier_prefabs.js` | Visuels poteau + rail |
 | `public/js/buildings.js` | `B.carcass()`, registre secteurs → `defineEdge` |
 | `public/js/noise.js` | `registerClearingDisc`, `registerRoadCorridor` |
 | `public/js/world.js` | Orchestration : flatten → terrain → buildAll → meshes → véhicules |

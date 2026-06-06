@@ -749,54 +749,14 @@
     };
   }
 
-  function _buildBarriers(scene, edge, M) {
+  function _buildBarriers(scene, edge, _M) {
     if (!edge.barriers || edge.type !== 'asphalt') return;
-    const railMat = M.metal || M.rust;
-    const postMat = M.metal || M.rust;
-    const hw = edge.width * 0.5 + BARRIER_OFFSET;
-    const pts = edge.pts;
-    if (pts.length < 2) return;
-
-    const cum = [0];
-    for (let i = 1; i < pts.length; i++) {
-      cum.push(cum[i - 1] + Math.hypot(pts[i][0] - pts[i - 1][0], pts[i][1] - pts[i - 1][1]));
-    }
-    const totalLen = cum[cum.length - 1];
-    if (totalLen < 0.01) return;
-
-    const axisX = new THREE.Vector3(1, 0, 0);
-    const dir = new THREE.Vector3();
-    const quat = new THREE.Quaternion();
-
-    for (const side of [-1, 1]) {
-      const posts = [];
-      for (let d = 0; d <= totalLen + 0.001; d += BARRIER_STEP) {
-        const p = _barrierPointAt(pts, cum, d);
-        const bx = p.x + (-p.tz) * hw * side;
-        const bz = p.z + p.tx * hw * side;
-        if (_inBarrierGap(bx, bz)) { posts.push(null); continue; }
-        const by = ZS.getTerrainHeight(bx, bz);
-        const post = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.07, 0.72, 5), postMat);
-        post.position.set(bx, by + 0.36, bz);
-        post.castShadow = true;
-        scene.add(post);
-        posts.push({ x: bx, y: by + 0.62, z: bz });
-      }
-
-      for (let i = 0; i < posts.length - 1; i++) {
-        const a = posts[i], b = posts[i + 1];
-        if (!a || !b) continue;
-        const dx = b.x - a.x, dy = b.y - a.y, dz = b.z - a.z;
-        const len = Math.hypot(dx, dy, dz);
-        if (len < 0.02) continue;
-        const rail = new THREE.Mesh(new THREE.BoxGeometry(len, 0.07, 0.07), railMat);
-        rail.position.set((a.x + b.x) / 2, (a.y + b.y) / 2, (a.z + b.z) / 2);
-        dir.set(dx / len, dy / len, dz / len);
-        quat.setFromUnitVectors(axisX, dir);
-        rail.setRotationFromQuaternion(quat);
-        rail.castShadow = true;
-        scene.add(rail);
-      }
+    if (ZS.BarrierPrefabs?.buildRoadBarriers) {
+      ZS.BarrierPrefabs.buildRoadBarriers(scene, edge, {
+        offset: BARRIER_OFFSET,
+        step: BARRIER_STEP,
+        inGap: _inBarrierGap,
+      });
     }
   }
 

@@ -145,7 +145,9 @@ _registerClientStatic();
 
 // ── Game state (avant /api/health pour le handler) ───────────────────────────
 
-const players    = new Map();
+const players         = new Map();
+const sleepingPlayers = new Map(); // playerId → corps endormi (déco)
+const SLEEP_LOOT_RADIUS = 3.5;
 let serverReady  = false;
 
 function _emitPlayersOnline() {
@@ -291,6 +293,8 @@ const decorPrefabs = [
   'spawn_drink_set',
   'spawn_lantern',
   'spawn_stone',
+  'rock_boulder',
+  'rock_outcrop',
   'spawn_workbench',
   'spawn_flat_stone',
   'wreck_sedan',
@@ -349,10 +353,163 @@ function flattenInv(inv) {
   return out;
 }
 
+function _normalizeInv(inv) {
+  if (!inv || typeof inv !== 'object') {
+    return { hotbar: [], bag: [], equip: { Tête: null, Torso: null, Mains: null, Dos: null } };
+  }
+  if (Array.isArray(inv)) return { hotbar: inv, bag: [], equip: { Tête: null, Torso: null, Mains: null, Dos: null } };
+  return {
+    hotbar: inv.hotbar || [],
+    bag: inv.bag || [],
+    equip: inv.equip || { Tête: null, Torso: null, Mains: null, Dos: null },
+  };
+}
+
+function _cloneInv(inv) {
+  return JSON.parse(JSON.stringify(_normalizeInv(inv)));
+}
+
+function _sleepBodyId(playerId) {
+  return `sleep:${playerId}`;
+}
+
+function _normPlayerId(id) {
+  const n = Number(id);
+  return Number.isFinite(n) ? n : id;
+}
+
+/** Session encore ouverte (refresh : nouvelle socket avant déco de l'ancienne). */
+function _takeoverLiveSession(userId, newSocketId) {
+  const uid = _normPlayerId(userId);
+  for (const [sid, op] of players.entries()) {
+    if (_normPlayerId(op.id) !== uid || sid === newSocketId) continue;
+    players.delete(sid);
+    adminSockets.delete(sid);
+    const oldSock = io.sockets.sockets.get(sid);
+    if (oldSock) {
+      oldSock._handoff = true;
+      oldSock.disconnect(true);
+    }
+    log.info('socket', 'session handoff', { username: op.username, from: sid, to: newSocketId });
+    return op;
+  }
+  return null;
+}
+
+function _hasOnlineSession(userId, exceptSocketId) {
+  const uid = _normPlayerId(userId);
+  for (const [sid, op] of players.entries()) {
+    if (sid === exceptSocketId) continue;
+    if (_normPlayerId(op.id) === uid) return true;
+  }
+  return false;
+}
+
+function _distXZ(ax, az, bx, bz) {
+  return Math.hypot(ax - bx, az - bz);
+}
+
+function _takeInvSlot(inv, zone, index) {
+  const n = _normalizeInv(inv);
+  if (zone === 'equip') {
+    const key = String(index);
+    const item = n.equip[key];
+    if (!item || !item.type) return null;
+    n.equip[key] = null;
+    Object.assign(inv, n);
+    return JSON.parse(JSON.stringify(item));
+  }
+  const arr = zone === 'bag' ? n.bag : n.hotbar;
+  const i = Number(index);
+  if (!Number.isFinite(i) || i < 0 || i >= arr.length) return null;
+  const item = arr[i];
+  if (!item || !item.type) return null;
+  arr[i] = null;
+  Object.assign(inv, n);
+  return JSON.parse(JSON.stringify(item));
+}
+
+function _tryAddSlotToInv(inv, item) {
+  if (!item?.type) return false;
+  const n = _normalizeInv(inv);
+  let left = item.qty || 1;
+  const maxStack = 99;
+  for (const arr of [n.hotbar, n.bag]) {
+    for (let i = 0; i < arr.length && left > 0; i++) {
+      if (!arr[i] || arr[i].type !== item.type) continue;
+      const room = maxStack - (arr[i].qty || 1);
+      if (room <= 0) continue;
+      const add = Math.min(room, left);
+      arr[i].qty = (arr[i].qty || 1) + add;
+      left -= add;
+    }
+  }
+  for (const arr of [n.hotbar, n.bag]) {
+    for (let i = 0; i < arr.length && left > 0; i++) {
+      if (arr[i]) continue;
+      const add = Math.min(maxStack, left);
+      arr[i] = JSON.parse(JSON.stringify({ ...item, qty: add }));
+      left -= add;
+    }
+  }
+  if (left > 0) return false;
+  Object.assign(inv, n);
+  return true;
+}
+
+function _saveSleepingToDb(sleep) {
+  if (!sleep?.playerId) return;
+  savePlayerState(
+    sleep.playerId,
+    sleep.x,
+    sleep.y,
+    sleep.z,
+    sleep.rotY,
+    sleep.health ?? 100,
+    sleep.kills ?? 0,
+    saveBlob({ inv: sleep.inv, survival: sleep.survival || DEFAULT_SURVIVAL }),
+    sleep.username
+  ).catch(() => {});
+}
+
+function _persistPlayer(p) {
+  if (!p?.id) return Promise.resolve(0);
+  return savePlayerState(p.id, p.x, p.y, p.z, p.rotY, p.health, p.kills, saveBlob(p), p.username)
+    .catch((err) => {
+      log.warn('save', 'persist failed', { user: p.username, err: err.message });
+      return 0;
+    });
+}
+
 const ROAD_WRECKS_URL = pathToFileURL(path.join(__dirname, '../../packages/shared/src/road-wrecks.mjs')).href;
+const ROAD_BARRIERS_URL = pathToFileURL(path.join(__dirname, '../../packages/shared/src/road-barriers.mjs')).href;
 const TREE_PLACEMENTS_URL = pathToFileURL(path.join(__dirname, '../../packages/shared/src/tree-placements.mjs')).href;
 const TREE_WOOD_URL = pathToFileURL(path.join(__dirname, '../../packages/shared/src/tree-wood.mjs')).href;
+const ROCK_STONE_URL = pathToFileURL(path.join(__dirname, '../../packages/shared/src/rock-stone.mjs')).href;
+const ROCK_PLACEMENTS_URL = pathToFileURL(path.join(__dirname, '../../packages/shared/src/rock-placements.mjs')).href;
+const RESOURCE_REGEN_URL = pathToFileURL(path.join(__dirname, 'src/resource-regen.mjs')).href;
 const _TREE_WOOD_FALLBACK = { tree_oak: 8, tree_pine: 10, tree_birch: 6, tree_dead: 3 };
+const _TREE_WOOD_RATIO = [0.1, 0.28, 0.5, 0.78, 1.0];
+const _ROCK_STONE_FALLBACK = { rock_boulder: 20, rock_outcrop: 14, spawn_stone: 8 };
+
+function _treeWoodForPhase(prefabId, phase) {
+  const p = Math.max(0, Math.min(4, Math.floor(Number(phase) ?? 4)));
+  const adult = _TREE_WOOD_FALLBACK[prefabId] ?? 6;
+  return Math.max(1, Math.floor(adult * _TREE_WOOD_RATIO[p]));
+}
+
+function _applyTreeFields(item) {
+  if (!item.prefabId?.startsWith('tree_')) return;
+  const isRegen = item.regen || item.zoneId === 'regen_tree';
+  if (item.growthPhase == null) item.growthPhase = isRegen ? 0 : 4;
+  if (item.plantedAt == null) item.plantedAt = item.createdAt || Date.now();
+  if (item.woodMax == null) item.woodMax = _treeWoodForPhase(item.prefabId, item.growthPhase);
+  if (item.woodRemaining == null) item.woodRemaining = item.woodMax;
+}
+
+function _isMinableRockPrefab(prefabId) {
+  return prefabId === 'spawn_stone' || prefabId?.startsWith('rock_');
+}
 
 function _makeDecorItem(d) {
   const item = {
@@ -366,9 +523,12 @@ function _makeDecorItem(d) {
     createdAt: Date.now(),
     ...d,
   };
-  if (item.prefabId?.startsWith('tree_') && item.woodMax == null) {
-    item.woodMax = _TREE_WOOD_FALLBACK[item.prefabId] ?? 6;
-    if (item.woodRemaining == null) item.woodRemaining = item.woodMax;
+  if (item.prefabId?.startsWith('tree_')) {
+    _applyTreeFields(item);
+  }
+  if (_isMinableRockPrefab(item.prefabId) && item.stoneMax == null) {
+    item.stoneMax = _ROCK_STONE_FALLBACK[item.prefabId] ?? 10;
+    if (item.stoneRemaining == null) item.stoneRemaining = item.stoneMax;
   }
   decorItems.set(item.id, item);
   return item;
@@ -393,6 +553,33 @@ function ensureRoadWrecks({ broadcast = false, reset = false } = {}) {
     }
     if (added.length) {
       log.info('seed', 'road wrecks added', { count: added.length });
+      if (broadcast && rcon?.broadcastDecorSpawn) {
+        for (const item of added) rcon.broadcastDecorSpawn(item);
+      }
+    }
+    return added.length;
+  });
+}
+
+/** Barrières routières prefab — seed serveur (boot ou RCON decorseed barriers). */
+function ensureRoadBarriers({ broadcast = false, reset = false } = {}) {
+  if (reset) {
+    for (const [id, d] of decorItems) {
+      if (!d.prefabId?.startsWith('road_barrier_')) continue;
+      decorItems.delete(id);
+      if (broadcast && rcon?.broadcastDecorRemove) rcon.broadcastDecorRemove(id);
+    }
+  } else {
+    const hasBarriers = [...decorItems.values()].some((d) => d.prefabId?.startsWith('road_barrier_'));
+    if (hasBarriers) return Promise.resolve(0);
+  }
+  return import(ROAD_BARRIERS_URL).then(({ computeRoadBarrierPlacements }) => {
+    const added = [];
+    for (const b of computeRoadBarrierPlacements()) {
+      added.push(_makeDecorItem(b));
+    }
+    if (added.length) {
+      log.info('seed', 'road barriers added', { count: added.length });
       if (broadcast && rcon?.broadcastDecorSpawn) {
         for (const item of added) rcon.broadcastDecorSpawn(item);
       }
@@ -430,6 +617,69 @@ function ensureWorldTrees({ broadcast = false, reset = false } = {}) {
   }));
 }
 
+/** Rochers fixes au spawn — ré-injectés si absents (boot ou RCON decorseed rocks). */
+function ensureCampRocks({ broadcast = false, reset = false } = {}) {
+  if (reset) {
+    for (const [id, d] of decorItems) {
+      if (!d.anchorId) continue;
+      if (!_isMinableRockPrefab(d.prefabId)) continue;
+      decorItems.delete(id);
+      if (broadcast && rcon?.broadcastDecorRemove) rcon.broadcastDecorRemove(id);
+    }
+  }
+  return import(ROCK_PLACEMENTS_URL).then(({ computeCampRockAnchors }) =>
+    import(ROCK_STONE_URL).then(({ getRockStoneMax }) => {
+      const added = [];
+      for (const r of computeCampRockAnchors()) {
+        const exists = [...decorItems.values()].some((d) =>
+          d.anchorId === r.anchorId
+          || (_isMinableRockPrefab(d.prefabId)
+            && Math.hypot((d.x || 0) - r.x, (d.z || 0) - r.z) < 1.2),
+        );
+        if (exists) continue;
+        const stoneMax = getRockStoneMax(r.prefabId);
+        added.push(_makeDecorItem({ ...r, stoneMax, stoneRemaining: stoneMax }));
+      }
+      if (added.length) {
+        log.info('seed', 'camp rocks added', { count: added.length });
+        if (broadcast && rcon?.broadcastDecorSpawn) {
+          for (const item of added) rcon.broadcastDecorSpawn(item);
+        }
+      }
+      return added.length;
+    }));
+}
+
+/** Ajoute les rochers minables si absents (boot ou RCON decorseed rocks). */
+function ensureWorldRocks({ broadcast = false, reset = false } = {}) {
+  if (reset) {
+    for (const [id, d] of decorItems) {
+      if (!d.zoneId) continue;
+      if (!_isMinableRockPrefab(d.prefabId)) continue;
+      decorItems.delete(id);
+      if (broadcast && rcon?.broadcastDecorRemove) rcon.broadcastDecorRemove(id);
+    }
+  } else {
+    const hasWorldRocks = [...decorItems.values()].some((d) => d.zoneId);
+    if (hasWorldRocks) return Promise.resolve(0);
+  }
+  return import(ROCK_PLACEMENTS_URL).then(({ computeRockPlacements }) =>
+    import(ROCK_STONE_URL).then(({ getRockStoneMax }) => {
+      const added = [];
+      for (const r of computeRockPlacements()) {
+        const stoneMax = getRockStoneMax(r.prefabId);
+        added.push(_makeDecorItem({ ...r, stoneMax, stoneRemaining: stoneMax }));
+      }
+      if (added.length) {
+        log.info('seed', 'world rocks added', { count: added.length });
+        if (broadcast && rcon?.broadcastDecorSpawn) {
+          for (const item of added) rcon.broadcastDecorSpawn(item);
+        }
+      }
+      return added.length;
+    }));
+}
+
 function seedSpawnDecorItems() {
   if (decorItems.size) return Promise.resolve();
   const borderLogsUrl = pathToFileURL(path.join(__dirname, '../../packages/shared/src/camp-border-logs.mjs')).href;
@@ -445,15 +695,12 @@ function seedSpawnDecorItems() {
     { kind: 'prefab', prefabId: 'spawn_lantern', x: -1.45, z: -6.35, rotY: 0, scale: 1.0 },
     { kind: 'prefab', prefabId: 'spawn_stump_seat', x: -1.0, z: -4.0, rotY: 0, scale: 2.0 },
     { kind: 'prefab', prefabId: 'spawn_stump_seat', x: 1.05, z: -4.1, rotY: 0, scale: 1.9 },
-    { kind: 'prefab', prefabId: 'spawn_stone', x: 0.8, z: -3.55, rotY: -0.35, scale: 1.25 },
-    { kind: 'prefab', prefabId: 'spawn_stone', x: -0.4, z: -3.8, rotY: 0.2, scale: 0.9 },
     { kind: 'prefab', prefabId: 'spawn_drink_set', x: 1.1, z: -6.55, rotY: 0, scale: 1.0 },
     { kind: 'prefab', prefabId: 'spawn_marker_left', x: -3.35, z: -4.7, rotY: 0, scale: 1.0 },
     { kind: 'prefab', prefabId: 'spawn_marker_right', x: 1.95, z: -3.35, rotY: 0, scale: 1.0 },
     { kind: 'prefab', prefabId: 'spawn_marker_left', x: -0.2, z: -3.2, rotY: 0, scale: 1.0 },
     { kind: 'item', type: 'food_eau_bouteille', x: 2.38, z: -5.72, rotY: -0.2, scale: 0.9 },
     { kind: 'item', type: 'food_conserves', x: 2.62, z: -5.94, rotX: 0.18, rotY: 0.35, scale: 0.82 },
-    { kind: 'item', type: 'tool_hachette', x: 2.95, z: -5.82, rotY: 0.85, scale: 1.0, layFlat: true },
       ];
       for (const p of computeCampBorderLogPlacements(0, -6)) {
         seed.push({
@@ -601,9 +848,10 @@ const ALL_ITEMS = [
   'wpn_pistolet', 'wpn_fusil_pompe', 'wpn_fusil_chasse',
   'ammo_pistolet', 'ammo_fusil_pompe', 'ammo_fusil_chasse',
   'eq_petit_sac', 'eq_sac_moyen', 'eq_casque', 'eq_gilet_protection', 'eq_gants',
-  'res_bois_brut', 'res_planche', 'res_ferraille', 'res_metal', 'res_clous',
+  'res_bois_brut', 'res_planche', 'res_pierre', 'res_ferraille', 'res_metal', 'res_clous',
   'res_ruban_adhesif', 'res_chiffon', 'res_corde',
-  'tool_marteau', 'tool_hachette', 'tool_pioche', 'tool_caillou',
+  'tool_marteau', 'tool_hachette', 'tool_hache_pierre', 'tool_pioche', 'tool_pioche_pierre', 'tool_caillou',
+  'wpn_lance_bois', 'wpn_lance_pierre',
 ];
 
 function _randInt(min, max) { return min + Math.floor(Math.random() * (max - min + 1)); }
@@ -821,10 +1069,32 @@ rcon = createRcon({
   clearLoot,
   makeDecorItemId: () => `decor_${decorSeq++}`,
   ensureRoadWrecks,
+  ensureRoadBarriers,
   ensureWorldTrees,
+  ensureCampRocks,
+  ensureWorldRocks,
   itemTypes: ALL_ITEMS,
   log,
 });
+
+let resourceRegen = null;
+import(RESOURCE_REGEN_URL).then(({ createResourceRegen }) => {
+  resourceRegen = createResourceRegen({
+    io,
+    decorItems,
+    makeDecorItem: _makeDecorItem,
+    log,
+  });
+  log.info('boot', 'resource regen ready');
+}).catch((err) => log.error('boot', 'resource regen init failed', { err: err.message }));
+
+setInterval(() => {
+  try {
+    resourceRegen?.tick();
+  } catch (err) {
+    log.error('regen', 'tick failed', { err: err.message });
+  }
+}, 10_000);
 
 // Zombie AI — 100ms tick
 setInterval(() => {
@@ -932,13 +1202,16 @@ if (log.SERVER_STATS_MS > 0) {
   }), log.SERVER_STATS_MS);
 }
 
-// Auto-save player state every 5s
+// Auto-save position + inventaire (5 s si dirty, 15 s force position)
+const _lastPosSave = new Map();
 setInterval(() => {
+  const now = Date.now();
   players.forEach((p) => {
-    if (p.dirty && p.id) {
-      savePlayerState(p.id, p.x, p.y, p.z, p.rotY, p.health, p.kills, saveBlob(p)).catch(() => {});
-      p.dirty = false;
-    }
+    if (!p.id) return;
+    const last = _lastPosSave.get(p.id) || 0;
+    const forcePos = now - last >= 15000;
+    if (!p.dirty && !forcePos) return;
+    _persistPlayer(p).then(() => { p.dirty = false; _lastPosSave.set(p.id, now); });
   });
 }, 5000);
 
@@ -965,25 +1238,44 @@ io.on('connection', async (socket) => {
   const _survival = (_save && _save.survival) ? _save.survival : { ...DEFAULT_SURVIVAL };
   if (_save && !Array.isArray(_save)) delete _save.survival;
 
+  const userId = _normPlayerId(socket.user.id);
+  const liveSession = _takeoverLiveSession(userId, socket.id);
+
+  const priorSleep = sleepingPlayers.get(userId);
+  if (priorSleep) {
+    sleepingPlayers.delete(userId);
+    io.emit('player-wake', { playerId: userId });
+  }
+
+  const restore = liveSession || priorSleep || null;
+  const dbId = saved?.id != null ? _normPlayerId(saved.id) : userId;
   const p = {
     socketId: socket.id,
-    id: socket.user.id,
+    id: dbId,
     username: socket.user.username,
-    x:    (saved && saved.pos_x != null) ? saved.pos_x : FOREST_SPAWN.x,
-    y:    (saved && saved.pos_y != null) ? saved.pos_y : FOREST_SPAWN.y,
-    z:    (saved && saved.pos_z != null) ? saved.pos_z : FOREST_SPAWN.z,
-    rotY: (saved && saved.rot_y != null) ? saved.rot_y : FOREST_SPAWN.rotY,
-    health: saved?.health ?? 100,
-    kills:  saved?.kills  ?? 0,
-    inv: _save,            // { hotbar, bag, equip }
-    survival: _survival,   // { faim, soif, infection, saignement }
-    equipped: null,        // type de l'item tenu en main (visible des autres joueurs)
-    dirty: false,
-    invincible: true
+    x:    restore?.x ?? ((saved && saved.pos_x != null) ? saved.pos_x : FOREST_SPAWN.x),
+    y:    restore?.y ?? ((saved && saved.pos_y != null) ? saved.pos_y : FOREST_SPAWN.y),
+    z:    restore?.z ?? ((saved && saved.pos_z != null) ? saved.pos_z : FOREST_SPAWN.z),
+    rotY: restore?.rotY ?? ((saved && saved.rot_y != null) ? saved.rot_y : FOREST_SPAWN.rotY),
+    health: restore?.health ?? saved?.health ?? 100,
+    kills:  restore?.kills ?? saved?.kills ?? 0,
+    inv: restore ? _cloneInv(restore.inv) : _save,
+    survival: restore ? { ...(restore.survival || DEFAULT_SURVIVAL) } : _survival,
+    equipped: restore?.equipped ?? null,
+    dirty: true,
+    invincible: true,
+    connectedAt: Date.now(),
+    anchorX: 0,
+    anchorY: 0,
+    anchorZ: 0,
   };
+  p.anchorX = p.x;
+  p.anchorY = p.y;
+  p.anchorZ = p.z;
   setTimeout(() => { if (players.has(socket.id)) p.invincible = false; }, 5000);
   if (ensureStarterRock(p)) p.dirty = true;
   players.set(socket.id, p);
+  _persistPlayer(p);
   log.info('socket', 'connect', {
     username: p.username,
     online: players.size,
@@ -1011,7 +1303,17 @@ io.on('connection', async (socket) => {
     features: { chat: true },
     onlineCount: players.size,
     inventory: p.inv,
-    survival:  p.survival
+    survival:  p.survival,
+    sleeping: [...sleepingPlayers.values()].map((s) => ({
+      id: _sleepBodyId(s.playerId),
+      playerId: s.playerId,
+      username: s.username,
+      x: s.x,
+      y: s.y,
+      z: s.z,
+      rotY: s.rotY,
+      equipped: s.equipped || null,
+    })),
   });
   socket.broadcast.emit('player-join', { id: socket.id, username: p.username, x: p.x, y: p.y, z: p.z, rotY: p.rotY, equipped: p.equipped });
   _emitPlayersOnline();
@@ -1059,6 +1361,13 @@ io.on('connection', async (socket) => {
   });
 
   socket.on('move', (d) => {
+    if (!d || !Number.isFinite(d.x) || !Number.isFinite(d.z)) return;
+    const age = Date.now() - (p.connectedAt || 0);
+    if (age < 4000) {
+      const nearSpawn = Math.hypot(d.x - FOREST_SPAWN.x, d.z - FOREST_SPAWN.z) < 4;
+      const anchorFar = Math.hypot(p.anchorX - FOREST_SPAWN.x, p.anchorZ - FOREST_SPAWN.z) > 10;
+      if (nearSpawn && anchorFar) return;
+    }
     p.x = d.x; p.y = d.y; p.z = d.z; p.rotY = d.rotY; p.dirty = true;
     socket.broadcast.emit('player-move', { id: socket.id, x: d.x, y: d.y, z: d.z, rotY: d.rotY });
     if (log.isTrace()) {
@@ -1208,8 +1517,8 @@ io.on('connection', async (socket) => {
     if (item.falling) return;
     if (Math.hypot(item.x - p.x, item.z - p.z) > 6) return;
 
-    import(TREE_WOOD_URL).then(({ getTreeWoodMax, TREE_FALL_LINGER_MS }) => {
-      const woodMax = item.woodMax ?? getTreeWoodMax(item.prefabId);
+    import(TREE_WOOD_URL).then(({ TREE_FALL_LINGER_MS }) => {
+      const woodMax = item.woodMax ?? _treeWoodForPhase(item.prefabId, item.growthPhase ?? 4);
       item.woodMax = woodMax;
       if (item.woodRemaining == null) item.woodRemaining = woodMax;
 
@@ -1222,6 +1531,7 @@ io.on('connection', async (socket) => {
         woodTaken,
         woodRemaining: item.woodRemaining,
         woodMax,
+        growthPhase: item.growthPhase ?? 4,
         by: p.id,
       };
 
@@ -1247,6 +1557,47 @@ io.on('connection', async (socket) => {
         decorId: id,
         woodTaken,
         woodRemaining: item.woodRemaining,
+      });
+    });
+  });
+
+  // Récolte pierre sur rocher prefab — sync multijoueur
+  socket.on('decor-mine', (d) => {
+    const id = d?.id;
+    if (!id || typeof id !== 'string') return;
+    const item = decorItems.get(id);
+    if (!_isMinableRockPrefab(item?.prefabId)) return;
+    if (Math.hypot(item.x - p.x, item.z - p.z) > 6) return;
+
+    import(ROCK_STONE_URL).then(({ getRockStoneMax }) => {
+      const stoneMax = item.stoneMax ?? getRockStoneMax(item.prefabId);
+      item.stoneMax = stoneMax;
+      if (item.stoneRemaining == null) item.stoneRemaining = stoneMax;
+
+      const yieldReq = Math.max(1, Math.min(6, Number(d.yield) || 1));
+      const stoneTaken = Math.min(yieldReq, item.stoneRemaining);
+      item.stoneRemaining -= stoneTaken;
+
+      const base = {
+        id,
+        stoneTaken,
+        stoneRemaining: item.stoneRemaining,
+        stoneMax,
+        by: p.id,
+      };
+
+      if (item.stoneRemaining <= 0) {
+        decorItems.delete(id);
+        io.emit('decor-rock-depleted', base);
+        io.emit('decor-item-remove', id);
+      } else {
+        socket.broadcast.emit('decor-rock-mine', base);
+      }
+      log.debug('world', 'rock mine', {
+        player: p.username,
+        decorId: id,
+        stoneTaken,
+        stoneRemaining: item.stoneRemaining,
       });
     });
   });
@@ -1313,6 +1664,7 @@ io.on('connection', async (socket) => {
 
   // Mort : le butin du joueur tombe au sol dans une caisse récupérable 30 min.
   socket.on('player-died', () => {
+    p.health = 0;
     const loot = flattenInv(p.inv);
     if (loot.length) {
       const id  = ++itemIdCounter;
@@ -1342,6 +1694,59 @@ io.on('connection', async (socket) => {
     socket.emit('take-damage', { health: 100 });
     socket.emit('respawn-at', { spawn: FOREST_SPAWN, inventory: kit, survival: { ...DEFAULT_SURVIVAL } });
     log.info('death', 'respawn', { player: p.username, spawn: FOREST_SPAWN, kit: 'tool_caillou' });
+  });
+
+  // Fouille d'un joueur endormi (déconnecté)
+  socket.on('sleep-loot-open', (data, cb) => {
+    if (typeof cb !== 'function') return;
+    const targetId = Number(data?.playerId);
+    const sleep = sleepingPlayers.get(targetId);
+    if (!sleep) return cb({ ok: false, error: 'Personne endormie ici' });
+    if (_distXZ(p.x, p.z, sleep.x, sleep.z) > SLEEP_LOOT_RADIUS) {
+      return cb({ ok: false, error: 'Trop loin' });
+    }
+    cb({
+      ok: true,
+      playerId: targetId,
+      username: sleep.username,
+      inventory: _cloneInv(sleep.inv),
+    });
+  });
+
+  socket.on('sleep-loot-take', (data, cb) => {
+    if (typeof cb !== 'function') return;
+    const targetId = Number(data?.playerId);
+    const zone = data?.zone;
+    const index = data?.index;
+    const sleep = sleepingPlayers.get(targetId);
+    if (!sleep) return cb({ ok: false, error: 'Personne endormie ici' });
+    if (_distXZ(p.x, p.z, sleep.x, sleep.z) > SLEEP_LOOT_RADIUS) {
+      return cb({ ok: false, error: 'Trop loin' });
+    }
+    if (!['hotbar', 'bag', 'equip'].includes(zone)) {
+      return cb({ ok: false, error: 'Zone invalide' });
+    }
+    const item = _takeInvSlot(sleep.inv, zone, index);
+    if (!item) return cb({ ok: false, error: 'Emplacement vide' });
+    if (!_tryAddSlotToInv(p.inv, item)) {
+      const n = _normalizeInv(sleep.inv);
+      if (zone === 'equip') n.equip[String(index)] = item;
+      else if (zone === 'bag') n.bag[Number(index)] = item;
+      else n.hotbar[Number(index)] = item;
+      Object.assign(sleep.inv, n);
+      return cb({ ok: false, error: 'Inventaire plein' });
+    }
+    p.dirty = true;
+    _saveSleepingToDb(sleep);
+    socket.emit('item-add', { slot: item });
+    io.emit('sleep-loot-update', { playerId: targetId, inventory: _cloneInv(sleep.inv) });
+    log.info('sleep', 'loot take', {
+      looter: p.username,
+      target: sleep.username,
+      type: item.type,
+      qty: item.qty || 1,
+    });
+    cb({ ok: true, inventory: _cloneInv(sleep.inv) });
   });
 
   // ── Chat joueurs ────────────────────────────────────────────────────────────
@@ -1418,17 +1823,59 @@ io.on('connection', async (socket) => {
 
   socket.on('disconnect', () => {
     adminSockets.delete(socket.id);
+    const leaving = players.get(socket.id);
+    if (!leaving) return;
     players.delete(socket.id);
+
+    const handoff = !!socket._handoff;
     log.info('socket', 'disconnect', {
-      username: p.username,
+      username: leaving.username,
       online: players.size,
-      lastPos: { x: +p.x.toFixed(1), y: +p.y.toFixed(1), z: +p.z.toFixed(1) },
-      health: p.health,
-      kills: p.kills,
+      handoff,
+      lastPos: { x: +leaving.x.toFixed(1), y: +leaving.y.toFixed(1), z: +leaving.z.toFixed(1) },
+      health: leaving.health,
+      kills: leaving.kills,
     });
-    io.emit('player-leave', socket.id);
+
+    if (handoff || _hasOnlineSession(leaving.id, socket.id)) {
+      _emitPlayersOnline();
+      return;
+    }
+
+    if (leaving.id) {
+      _persistPlayer(leaving);
+    }
+
+    if (leaving.id && leaving.health > 0) {
+      const sleep = {
+        playerId: _normPlayerId(leaving.id),
+        username: leaving.username,
+        x: leaving.x,
+        y: leaving.y,
+        z: leaving.z,
+        rotY: leaving.rotY,
+        health: leaving.health,
+        kills: leaving.kills,
+        inv: _cloneInv(leaving.inv),
+        survival: { ...(leaving.survival || DEFAULT_SURVIVAL) },
+        equipped: leaving.equipped || null,
+        since: Date.now(),
+      };
+      sleepingPlayers.set(_normPlayerId(leaving.id), sleep);
+      io.emit('player-sleep', {
+        id: _sleepBodyId(leaving.id),
+        playerId: _normPlayerId(leaving.id),
+        username: leaving.username,
+        x: leaving.x,
+        y: leaving.y,
+        z: leaving.z,
+        rotY: leaving.rotY,
+        equipped: leaving.equipped || null,
+      });
+    } else {
+      io.emit('player-leave', socket.id);
+    }
     _emitPlayersOnline();
-    if (p.id) savePlayerState(p.id, p.x, p.y, p.z, p.rotY, p.health, p.kills, saveBlob(p)).catch(() => {});
   });
 });
 
@@ -1457,8 +1904,14 @@ ensureZombiePopulation()
   .catch((err) => log.error('seedSpawnDecorItems failed', err))
   .then(() => ensureRoadWrecks())
   .catch((err) => log.error('ensureRoadWrecks failed', err))
+  .then(() => ensureRoadBarriers())
+  .catch((err) => log.error('ensureRoadBarriers failed', err))
   .then(() => ensureWorldTrees())
   .catch((err) => log.error('ensureWorldTrees failed', err))
+  .then(() => ensureCampRocks())
+  .catch((err) => log.error('ensureCampRocks failed', err))
+  .then(() => ensureWorldRocks())
+  .catch((err) => log.error('ensureWorldRocks failed', err))
   .finally(() => {
     server.listen(PORT, HOST, () => {
       serverReady = true;
@@ -1467,6 +1920,7 @@ ensureZombiePopulation()
         listen: `${HOST}:${PORT}`,
         clientMode: USE_CLIENT_BUILD ? 'build/client' : 'apps/client',
         db: require('./src/db').DB_CLIENT,
+        sqlite: require('./src/db').pool.path || undefined,
         logLevel: log.level,
         playerSnapshotMs: log.PLAYER_SNAPSHOT_MS,
         serverStatsMs: log.SERVER_STATS_MS,

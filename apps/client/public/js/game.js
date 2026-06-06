@@ -179,6 +179,7 @@
 
   // ── Inventory ─────────────────────────────────────────────────────────────
   ZS.Inventory.init(state, scene, socket);
+  ZS.SleepLoot?.init?.(state);
   ZS.Map.init(state, scene);
   ZS.Craft.init();
   ZS.Audio.init();
@@ -389,7 +390,7 @@
       return;
     }
     if (e.code === 'KeyE') {
-      if (_interactDoor()) e.preventDefault();
+      if (_interactWorld()) e.preventDefault();
       return;
     }
     state.keys[e.code] = true;
@@ -536,15 +537,30 @@
 
   function _canHarvestWood(type, def) {
     if (!def) return false;
-    if (type === 'wpn_hache_combat' || type === 'tool_hachette') return true;
+    if (type === 'wpn_hache_combat' || type === 'tool_hachette' || type === 'tool_hache_pierre') return true;
     return def.type_recolte === 'Bois' && def.degats_impact > 0;
+  }
+
+  function _canHarvestStone(type, def) {
+    if (type === 'tool_caillou') return true;
+    if (type === 'tool_pioche_pierre' || type === 'tool_pioche') return true;
+    if (type === 'tool_hache_pierre') return true;
+    return def?.type_recolte === 'Pierre' && def.degats_impact > 0;
   }
 
   function _chopWoodYield(type, def) {
     if (type === 'tool_hachette') return 2;
+    if (type === 'tool_hache_pierre') return 2;
     if (type === 'wpn_hache_combat') return 1;
     if (type === 'tool_caillou') return 1;
     return Math.max(1, Math.floor((def?.efficacite_recolte || 1) * 0.8));
+  }
+
+  function _mineStoneYield(type, def) {
+    if (type === 'tool_caillou') return 1;
+    if (type === 'tool_pioche_pierre' || type === 'tool_pioche') return 3;
+    if (type === 'tool_hache_pierre') return 1;
+    return Math.max(1, Math.floor((def?.efficacite_recolte || 1) * 0.6));
   }
 
   function _meleeSwing(item, def) {
@@ -557,15 +573,39 @@
     const dir = raycaster.ray.direction;
     const range = def.portee_metre || 1.2;
     const cam = _cameraWorldPos();
+    const harvestRange = Math.max(range + 1.2, 2.4);
+    let harvested = false;
+
+    // Récolter de la pierre sur un rocher devant soi
+    if (_canHarvestStone(item.type, def) && ZS.mineRock) {
+      const mine = ZS.mineRock(
+        cam.x, cam.z, dir.x, dir.z,
+        harvestRange,
+        _mineStoneYield(item.type, def),
+      );
+      if (mine?.hit) {
+        harvested = true;
+        ZS.Audio.chopWood(0.95);
+        if (mine.stoneTaken > 0) {
+          ZS.Inventory.addItem('res_pierre', mine.stoneTaken);
+          ZS.UI.showNotif('+' + mine.stoneTaken + ' Pierre');
+        }
+        if (mine.depleted) ZS.UI.showNotif('Rocher épuisé');
+        if (mine.decorId) {
+          ZS.Network.notifyDecorMine(mine.decorId, mine.stoneTaken);
+        }
+      }
+    }
 
     // Outils / armes : récolter du bois sur un arbre devant soi
-    if (_canHarvestWood(item.type, def) && ZS.chopTree) {
+    if (!harvested && _canHarvestWood(item.type, def) && ZS.chopTree) {
       const chop = ZS.chopTree(
         cam.x, cam.z, dir.x, dir.z,
-        Math.max(range + 1.2, 2.4),
+        harvestRange,
         _chopWoodYield(item.type, def),
       );
       if (chop?.hit) {
+        harvested = true;
         ZS.Audio.chopWood(1.0);
         if (chop.woodTaken > 0) {
           ZS.Inventory.addItem('res_bois_brut', chop.woodTaken);
@@ -575,11 +615,10 @@
         if (chop.decorId) {
           ZS.Network.notifyDecorChop(chop.decorId, chop.woodTaken, dir.x, dir.z);
         }
-      } else {
-        const hitDist = ZS.Zombies.nearestDist(cam.x, cam.z);
-        ZS.Audio.melee(hitDist < range + 0.8 ? 1.0 : 0.45);
       }
-    } else {
+    }
+
+    if (!harvested) {
       const hitDist = ZS.Zombies.nearestDist(cam.x, cam.z);
       ZS.Audio.melee(hitDist < range + 0.8 ? 1.0 : 0.45);
     }
@@ -656,7 +695,7 @@
     ].join(';');
     const fire = (e) => {
       if (e) e.preventDefault();
-      _interactDoor();
+      _interactWorld();
     };
     _doorBtn.addEventListener('click', fire);
     _doorBtn.addEventListener('touchstart', fire, { passive: false });
@@ -672,18 +711,26 @@
     return true;
   }
 
+  function _interactWorld() {
+    if (_interactDoor()) return true;
+    return ZS.SleepLoot?.tryInteract?.() || false;
+  }
+
   function _updateDoorInteractUi() {
     const door = ZS.findNearestDecorDoor?.(state.player.x, state.player.z, 3.2) || null;
-    if (!door && !_nearDoor) return;
+    const sleeper = (!door && !state.player.dead) ? ZS.SleepLoot?.getNearestForUi?.(state.player.x, state.player.z) : null;
+    if (!door && !sleeper && !_nearDoor) return;
     _nearDoor = door;
     const btn = _ensureDoorButton();
-    if (!door || state.player.dead || ZS.Rcon?.isOpen?.() || ZS.Chat?.isOpen?.()) {
+    if ((!door && !sleeper) || state.player.dead || ZS.Rcon?.isOpen?.() || ZS.Chat?.isOpen?.() || ZS.SleepLoot?.isOpen?.()) {
       btn.style.display = 'none';
       return;
     }
-    const action = door.open ? 'Fermer' : 'Ouvrir';
     const mobile = document.body.classList.contains('mode-mobile');
-    btn.textContent = mobile ? action : `E — ${action}`;
+    let label;
+    if (door) label = door.open ? 'Fermer' : 'Ouvrir';
+    else label = 'Fouiller';
+    btn.textContent = mobile ? label : `E — ${label}`;
     btn.style.display = 'block';
     btn.style.right = mobile ? '92px' : '24px';
     btn.style.bottom = mobile ? '132px' : '96px';
@@ -711,6 +758,8 @@
     state.player.dead      = false;
     state.player.velocityY = 0;
     state.player.onGround  = true;
+    // Réinit survie tout de suite — sinon infection/faim à 0 retue avant `respawn-at`.
+    ZS.Survival?.reset?.();
     ZS.UI.setHealth(100);
     ZS.UI.hideDeath();
     // Le serveur fait autorité : il renvoie `respawn-at` avec la position (Start
@@ -754,6 +803,7 @@
     ZS.setShadowCenter(state.player.x, state.player.z);
     ZS.tickDayNight(dt);
     ZS.tickTreeFalls?.(dt);
+    ZS.tickRockMines?.(dt);
     ZS.tickDecorDoors?.(dt);
     const camPos = _cameraWorldPos();
     const camX = camPos.x, camZ = camPos.z;
@@ -829,12 +879,20 @@
     const feetY = p.y - 1.7; // Y des pieds du joueur
 
     for (const col of colliders) {
-      // Ignore les colliders trop éloignés (optimisation — 30² = 900)
-      const _cdx = (col.cx !== undefined ? col.cx : col.x) - newX;
-      const _cdz = (col.cz !== undefined ? col.cz : col.z) - newZ;
+      const refX = col.cx ?? col.x ?? ((col.x0 ?? 0) + (col.x1 ?? 0)) * 0.5;
+      const refZ = col.cz ?? col.z ?? ((col.z0 ?? 0) + (col.z1 ?? 0)) * 0.5;
+      const _cdx = refX - newX;
+      const _cdz = refZ - newZ;
       if (_cdx * _cdx + _cdz * _cdz > 900) continue;
 
-      if (col.type === 'box') {
+      if (col.type === 'seg') {
+        if (ZS.shouldSkipDecorSideCollision?.(col, feetY, p.y, p.velocityY, newX, newZ, PLAYER_R)) continue;
+        const resolved = ZS.resolveDecorSegmentCollision?.(col, newX, newZ, feetY, PLAYER_R);
+        if (resolved) {
+          newX = resolved.x;
+          newZ = resolved.z;
+        }
+      } else if (col.type === 'box') {
         if (ZS.shouldSkipDecorSideCollision?.(col, feetY, p.y, p.velocityY, newX, newZ, PLAYER_R)) continue;
         const resolved = ZS.resolveDecorBoxCollision?.(col, newX, newZ, feetY, PLAYER_R);
         if (resolved) {

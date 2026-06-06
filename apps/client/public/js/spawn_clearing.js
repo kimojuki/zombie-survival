@@ -302,6 +302,8 @@
     rock.castShadow = true;
     rock.receiveShadow = true;
     g.add(rock);
+    g.userData.boulderVisual = g;
+    parent.userData.boulderVisual = g;
   }
 
   function _buildWorkbench(parent, x, y, z, ry) {
@@ -635,6 +637,8 @@
     spawn_drink_set: { build(root) { _buildDrinkSet(root, 0, 0, 0); } },
     spawn_lantern: { build(root) { _buildLantern(root, 0, 0, 0); } },
     spawn_stone: { build(root) { _buildStone(root, 0, 0, 0, 0.16, 0); } },
+    rock_boulder: { build(root, opts) { ZS.RockWorldPrefabs?.buildBoulder?.(root, opts); } },
+    rock_outcrop: { build(root, opts) { ZS.RockWorldPrefabs?.buildOutcrop?.(root, opts); } },
     spawn_workbench: { build(root) { _buildWorkbench(root, 0, 0, 0, 0); } },
     building_survivor_shack: { build(root) { _buildSurvivorShack(root, 0, 0, 0, 0); } },
     spawn_flat_stone: {
@@ -767,6 +771,8 @@
         scale: s,
         wreckTilt: isWreck ? root.rotation.z : undefined,
         doorOpen: !!opts.doorOpen,
+        railLen: Number.isFinite(opts.railLen) ? opts.railLen : undefined,
+        rotX: Number.isFinite(opts.rotX) ? opts.rotX : undefined,
       };
     root.userData.decorSpec = decorSpec;
 
@@ -791,6 +797,18 @@
         prefabId,
         woodMax: opts.woodMax,
         woodRemaining: opts.woodRemaining,
+        growthPhase: Number.isFinite(opts.growthPhase) ? opts.growthPhase : 4,
+        baseScale: s,
+      });
+    }
+
+    const minableRock = prefabId === 'spawn_stone' || prefabId.startsWith('rock_');
+    if (minableRock && ZS.registerMinableRock) {
+      ZS.registerMinableRock(scene, root, root.position.x, root.position.z, decorId, {
+        prefabId,
+        stoneMax: opts.stoneMax,
+        stoneRemaining: opts.stoneRemaining,
+        baseScale: s,
       });
     }
 

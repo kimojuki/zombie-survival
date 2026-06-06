@@ -95,6 +95,16 @@
       icon: '🏹', color: 0x886633,
       degats_impact: 18, portee_metre: 3.6, cadence_attaque: 0.8, durabilite_max: 40,
     },
+    wpn_lance_bois: {
+      label: 'Lance en Bois', category: 'melee', maxStack: 1,
+      icon: '🏹', color: 0x886633,
+      degats_impact: 14, portee_metre: 3.2, cadence_attaque: 0.75, durabilite_max: 35,
+    },
+    wpn_lance_pierre: {
+      label: 'Lance en Pierre', category: 'melee', maxStack: 1,
+      icon: '🏹', color: 0x777766,
+      degats_impact: 22, portee_metre: 3.4, cadence_attaque: 0.85, durabilite_max: 50,
+    },
     wpn_batte_cloutee: {
       label: 'Batte Cloutée', category: 'melee', maxStack: 1,
       icon: '🏏', color: 0x886633,
@@ -169,6 +179,7 @@
 
     // ── RESSOURCES ──────────────────────────────────────────────────────────
     res_bois_brut:     { label: 'Bois Brut',    category: 'resource', maxStack: 200, icon: '🪵', color: 0x8b5a2b },
+    res_pierre:        { label: 'Pierre',        category: 'resource', maxStack: 200, icon: '🪨', color: 0x7a7468 },
     res_planche:       { label: 'Planche',       category: 'resource', maxStack: 200, icon: '🪵', color: 0xbb8844 },
     res_ferraille:     { label: 'Ferraille',     category: 'resource', maxStack: 100, icon: '⚙️', color: 0x888888 },
     res_metal:         { label: 'Métal',         category: 'resource', maxStack: 100, icon: '🔩', color: 0xaaaaaa },
@@ -198,11 +209,24 @@
       degats_impact: 22, portee_metre: 2.8, cadence_attaque: 0.6,
       bois_par_arbre: 3,
     },
+    tool_hache_pierre: {
+      label: 'Hache en Pierre', category: 'tool', maxStack: 1,
+      icon: '🪓', color: 0x665544,
+      type_recolte: 'Bois', efficacite_recolte: 1.5, durabilite_max: 100,
+      degats_impact: 18, portee_metre: 2.4, cadence_attaque: 0.65,
+      bois_par_arbre: 2,
+    },
     tool_pioche: {
       label: 'Pioche', category: 'tool', maxStack: 1,
       icon: '⛏️', color: 0x888888,
       type_recolte: 'Pierre', efficacite_recolte: 3.0, durabilite_max: 150,
       degats_impact: 25, portee_metre: 2.6, cadence_attaque: 0.9,   // sert aussi d'arme
+    },
+    tool_pioche_pierre: {
+      label: 'Pioche en Pierre', category: 'tool', maxStack: 1,
+      icon: '⛏️', color: 0x666666,
+      type_recolte: 'Pierre', efficacite_recolte: 2.0, durabilite_max: 120,
+      degats_impact: 20, portee_metre: 2.4, cadence_attaque: 0.75,
     },
     tool_torche: {
       label: 'Torche', category: 'tool', maxStack: 1,

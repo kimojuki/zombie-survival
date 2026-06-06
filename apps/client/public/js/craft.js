@@ -3,6 +3,11 @@
   'use strict';
 
   const RECIPES = [
+    // Progression Rust-like au spawn (caillou → bois + pierre → premiers outils)
+    { result: 'wpn_lance_bois', qty: 1, ingredients: { res_bois_brut: 3 } },
+    { result: 'tool_hache_pierre', qty: 1, ingredients: { res_bois_brut: 2, res_pierre: 3 } },
+    { result: 'tool_pioche_pierre', qty: 1, ingredients: { res_bois_brut: 2, res_pierre: 3 } },
+    { result: 'wpn_lance_pierre', qty: 1, ingredients: { wpn_lance_bois: 1, res_pierre: 2 } },
     // Transformation de base du bois brut
     { result: 'res_planche', qty: 2, ingredients: { res_bois_brut: 1 } },
     { result: 'tool_torche', qty: 1, ingredients: { res_bois_brut: 2 } },

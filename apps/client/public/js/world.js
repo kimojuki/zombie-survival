@@ -226,7 +226,10 @@
     if (ZS.Buildings?.applyRoadFlattening) ZS.Buildings.applyRoadFlattening();
     buildTerrain(scene);
     const buildingColliders = ZS.Buildings.buildAll(scene);
-    if (ZS.RoadNetwork?.buildMeshes) ZS.RoadNetwork.buildMeshes(scene, ZS.B.M);
+    if (ZS.RoadNetwork?.buildMeshes) {
+      ZS.BarrierPrefabs?.resetBarrierColliders?.();
+      ZS.RoadNetwork.buildMeshes(scene, ZS.B.M);
+    }
     for (const c of buildingColliders) _colliders.push(c);
     tickDayNight(0);
   }
@@ -740,21 +743,52 @@
     return _trees.find((t) => t.decorId === decorId) || null;
   }
 
+  function _treeGrowthScale(phase) {
+    return ZS.TreeGrowth?.getScale?.(phase) ?? 1;
+  }
+
+  function _updateTreeColliders(tree) {
+    if (!tree?.decorId || !ZS.buildDecorColliders) return;
+    const spec = tree.group?.userData?.decorSpec;
+    if (!spec) return;
+    const growthScale = _treeGrowthScale(tree.growthPhase ?? 4);
+    const effectiveScale = (tree.baseScale || spec.scale || 1) * growthScale;
+    ZS.registerDecorColliders(
+      tree.decorId,
+      ZS.buildDecorColliders({ ...spec, scale: effectiveScale }),
+    );
+    ZS.Network?.syncWorldColliders?.();
+  }
+
+  function _updateTreeVisual(tree) {
+    if (!tree?.group) return;
+    const growthScale = _treeGrowthScale(tree.growthPhase ?? 4);
+    tree.group.scale.setScalar((tree.baseScale || 1) * growthScale);
+    _updateTreeColliders(tree);
+  }
+
   function _registerTree(scene, group, x, z, collider, decorId, opts = {}) {
     const prefabId = opts.prefabId || group.userData.prefabId || 'tree_oak';
-    const woodMax = opts.woodMax ?? _woodMaxFor(prefabId);
+    const growthPhase = Number.isFinite(opts.growthPhase) ? opts.growthPhase : 4;
+    const baseScale = Number.isFinite(opts.baseScale) ? opts.baseScale : (group.scale.x || 1);
+    const woodMax = opts.woodMax
+      ?? (ZS.TreeGrowth?.getWoodMax?.(prefabId, growthPhase) ?? _woodMaxFor(prefabId));
     const woodRemaining = Number.isFinite(opts.woodRemaining) ? opts.woodRemaining : woodMax;
-    _trees.push({
+    const tree = {
       scene, group, x, z, collider, decorId: decorId || null,
-      prefabId, woodMax, woodRemaining,
+      prefabId, woodMax, woodRemaining, growthPhase, baseScale,
       state: 'standing',
       shakeT: 0,
       fallAnim: null,
       fallTimer: null,
-    });
+    };
+    _trees.push(tree);
+    _updateTreeVisual(tree);
+    return tree;
   }
 
   function registerChoppableTree(scene, group, x, z, decorId, opts = {}) {
+    if (opts.baseScale == null) opts.baseScale = group.scale.x || 1;
     return _registerTree(scene, group, x, z, { decorId }, decorId, opts);
   }
 
@@ -792,11 +826,25 @@
     }, TREE_FALL_LINGER_MS);
   }
 
-  function applyRemoteTreeChop(decorId, woodRemaining) {
+  function applyRemoteTreeChop(decorId, woodRemaining, woodMax) {
     const tree = _findTreeByDecorId(decorId);
     if (!tree || tree.state !== 'standing') return;
+    if (Number.isFinite(woodMax)) tree.woodMax = woodMax;
     if (Number.isFinite(woodRemaining)) tree.woodRemaining = woodRemaining;
     _shakeTree(tree);
+  }
+
+  function applyRemoteTreeGrow(decorId, data = {}) {
+    const tree = _findTreeByDecorId(decorId);
+    if (!tree || tree.state !== 'standing') return;
+    if (Number.isFinite(data.growthPhase)) tree.growthPhase = data.growthPhase;
+    if (Number.isFinite(data.woodMax)) tree.woodMax = data.woodMax;
+    if (Number.isFinite(data.woodRemaining)) tree.woodRemaining = data.woodRemaining;
+    _updateTreeVisual(tree);
+  }
+
+  function _treeHitRadius(tree) {
+    return 0.4 + 1.1 * _treeGrowthScale(tree.growthPhase ?? 4);
   }
 
   function applyRemoteTreeFell(decorId, dirX, dirZ) {
@@ -835,7 +883,7 @@
       const proj = (t.x - ox) * nx + (t.z - oz) * nz;
       if (proj < 0 || proj > range) continue;
       const perp = Math.hypot(ox + nx * proj - t.x, oz + nz * proj - t.z);
-      if (perp < 1.4 && proj < bestT) { bestT = proj; best = t; }
+      if (perp < _treeHitRadius(t) && proj < bestT) { bestT = proj; best = t; }
     }
     if (!best) return null;
     const yieldAmt = Math.max(1, woodYield || 1);
@@ -849,6 +897,157 @@
       felled,
       woodTaken,
       woodRemaining: best.woodRemaining,
+      x: best.x,
+      z: best.z,
+      decorId: best.decorId || null,
+    };
+  }
+
+  // ── Rochers minables (récolte progressive de pierre) ───────────────────────
+
+  const ROCK_STONE_MAX = {
+    rock_boulder: 20, rock_outcrop: 14, spawn_stone: 8,
+  };
+
+  const _rocks = [];
+
+  function _stoneMaxFor(prefabId) {
+    return ROCK_STONE_MAX[prefabId] ?? 10;
+  }
+
+  function _findRockByDecorId(decorId) {
+    if (!decorId) return null;
+    return _rocks.find((r) => r.decorId === decorId) || null;
+  }
+
+  function _rockHarvestRatio(rock) {
+    return rock.stoneMax > 0 ? rock.stoneRemaining / rock.stoneMax : 0;
+  }
+
+  function _rockVisualScale(ratio) {
+    return 0.22 + 0.78 * ratio;
+  }
+
+  function _updateRockColliders(rock) {
+    if (!rock?.decorId || !ZS.buildDecorColliders) return;
+    const spec = rock.group?.userData?.decorSpec;
+    if (!spec) return;
+    const visualScale = _rockVisualScale(_rockHarvestRatio(rock));
+    const effectiveScale = (rock.baseScale || spec.scale || 1) * visualScale;
+    ZS.registerDecorColliders(
+      rock.decorId,
+      ZS.buildDecorColliders({ ...spec, scale: effectiveScale }),
+    );
+    ZS.Network?.syncWorldColliders?.();
+  }
+
+  function _updateRockVisual(rock) {
+    const visualScale = _rockVisualScale(_rockHarvestRatio(rock));
+    const vis = rock.group.userData.boulderVisual;
+    if (vis) {
+      vis.scale.setScalar(visualScale);
+    } else {
+      rock.group.scale.setScalar(rock.baseScale * visualScale);
+    }
+    _updateRockColliders(rock);
+  }
+
+  function _rockHitRadius(rock) {
+    return 0.35 + 1.15 * _rockVisualScale(_rockHarvestRatio(rock));
+  }
+
+  function _registerRock(scene, group, x, z, decorId, opts = {}) {
+    const prefabId = opts.prefabId || group.userData.prefabId || 'rock_boulder';
+    const stoneMax = opts.stoneMax ?? _stoneMaxFor(prefabId);
+    const stoneRemaining = Number.isFinite(opts.stoneRemaining) ? opts.stoneRemaining : stoneMax;
+    const baseScale = Number.isFinite(opts.baseScale) ? opts.baseScale : (group.scale.x || 1);
+    const rock = {
+      scene, group, x, z, decorId: decorId || null,
+      prefabId, stoneMax, stoneRemaining, baseScale,
+      state: 'active',
+      shakeT: 0,
+    };
+    _rocks.push(rock);
+    _updateRockVisual(rock);
+    return rock;
+  }
+
+  function registerMinableRock(scene, group, x, z, decorId, opts = {}) {
+    return _registerRock(scene, group, x, z, decorId, opts);
+  }
+
+  function removeMinableRock(decorId) {
+    const idx = _rocks.findIndex((r) => r.decorId === decorId);
+    if (idx < 0) return;
+    _rocks[idx].state = 'gone';
+    _rocks.splice(idx, 1);
+  }
+
+  function _shakeRock(rock) {
+    rock.shakeT = 0.1;
+  }
+
+  function _depleteRock(rock) {
+    if (!rock || rock.state !== 'active') return;
+    rock.state = 'depleted';
+    rock.stoneRemaining = 0;
+    _updateRockVisual(rock);
+    if (rock.decorId) ZS.removeDecorColliders?.(rock.decorId);
+    setTimeout(() => {
+      if (rock.scene && rock.group?.parent) rock.scene.remove(rock.group);
+      const idx = _rocks.indexOf(rock);
+      if (idx >= 0) _rocks.splice(idx, 1);
+    }, 350);
+  }
+
+  function applyRemoteRockMine(decorId, stoneRemaining) {
+    const rock = _findRockByDecorId(decorId);
+    if (!rock || rock.state !== 'active') return;
+    if (Number.isFinite(stoneRemaining)) rock.stoneRemaining = stoneRemaining;
+    _updateRockVisual(rock);
+    _shakeRock(rock);
+  }
+
+  function applyRemoteRockDepleted(decorId) {
+    const rock = _findRockByDecorId(decorId);
+    if (!rock || rock.state !== 'active') return;
+    _depleteRock(rock);
+  }
+
+  function tickRockMines(dt) {
+    for (const rock of _rocks) {
+      if (rock.shakeT > 0) {
+        rock.shakeT = Math.max(0, rock.shakeT - dt);
+        const s = rock.shakeT > 0 ? (Math.random() - 0.5) * 0.05 * (rock.shakeT / 0.1) : 0;
+        rock.group.position.x = rock.x + s;
+      }
+    }
+  }
+
+  function mineRock(ox, oz, dirX, dirZ, range, stoneYield) {
+    const len = Math.hypot(dirX, dirZ) || 1;
+    const nx = dirX / len, nz = dirZ / len;
+    let best = null, bestT = Infinity;
+    for (const r of _rocks) {
+      if (r.state !== 'active') continue;
+      const proj = (r.x - ox) * nx + (r.z - oz) * nz;
+      if (proj < 0 || proj > range) continue;
+      const perp = Math.hypot(ox + nx * proj - r.x, oz + nz * proj - r.z);
+      if (perp < _rockHitRadius(r) && proj < bestT) { bestT = proj; best = r; }
+    }
+    if (!best) return null;
+    const yieldAmt = Math.max(1, stoneYield || 1);
+    const stoneTaken = Math.min(yieldAmt, best.stoneRemaining);
+    best.stoneRemaining -= stoneTaken;
+    _shakeRock(best);
+    _updateRockVisual(best);
+    const depleted = best.stoneRemaining <= 0;
+    if (depleted) _depleteRock(best);
+    return {
+      hit: true,
+      depleted,
+      stoneTaken,
+      stoneRemaining: best.stoneRemaining,
       x: best.x,
       z: best.z,
       decorId: best.decorId || null,
@@ -1151,8 +1350,10 @@
   }
 
   function getColliders() {
-    if (!_decorColliders.size) return _colliders;
     const out = _colliders.slice();
+    const barriers = ZS.getBarrierColliders?.();
+    if (barriers?.length) out.push(...barriers);
+    if (!_decorColliders.size) return out;
     for (const cols of _decorColliders.values()) {
       for (const c of cols) out.push(c);
     }
@@ -1168,8 +1369,8 @@
   /** Monde → espace local décor (rotY + rotZ inclinaison épaves). */
   function decorWorldToLocal(px, py, pz, col) {
     _dcV.set(px - col.cx, py - (col.baseY ?? 0), pz - col.cz);
-    if (col.rotZ) {
-      _dcE.set(0, col.rotY || 0, col.rotZ || 0);
+    if (col.rotX || col.rotZ) {
+      _dcE.set(col.rotX || 0, col.rotY || 0, col.rotZ || 0);
       _dcQ.setFromEuler(_dcE).invert();
       _dcV.applyQuaternion(_dcQ);
     } else if (col.rotY) {
@@ -1185,8 +1386,8 @@
 
   function decorLocalToWorld(lx, ly, lz, col) {
     _dcV.set(lx, ly, lz);
-    if (col.rotZ) {
-      _dcE.set(0, col.rotY || 0, col.rotZ || 0);
+    if (col.rotX || col.rotZ) {
+      _dcE.set(col.rotX || 0, col.rotY || 0, col.rotZ || 0);
       _dcQ.setFromEuler(_dcE);
       _dcV.applyQuaternion(_dcQ);
     } else if (col.rotY) {
@@ -1228,9 +1429,41 @@
     return decorLocalToWorld(outLX, local.ly, outLZ, col);
   }
 
+  function _distPointToSegment(px, pz, x0, z0, x1, z1) {
+    const dx = x1 - x0;
+    const dz = z1 - z0;
+    const len2 = dx * dx + dz * dz;
+    if (len2 < 1e-8) return { dist: Math.hypot(px - x0, pz - z0), cx: x0, cz: z0, ux: 0, uz: 1 };
+    const t = Math.max(0, Math.min(1, ((px - x0) * dx + (pz - z0) * dz) / len2));
+    const cx = x0 + dx * t;
+    const cz = z0 + dz * t;
+    const dist = Math.hypot(px - cx, pz - cz);
+    const len = Math.sqrt(len2);
+    return { dist, cx, cz, ux: dx / len, uz: dz / len };
+  }
+
+  function resolveDecorSegmentCollision(col, px, pz, feetY, playerR) {
+    if (col.maxY !== undefined && feetY >= col.maxY - 0.05) return null;
+    if (col.baseY != null && feetY < col.baseY - 0.35) return null;
+    const hit = _distPointToSegment(px, pz, col.x0, col.z0, col.x1, col.z1);
+    const min = playerR + (col.r || 0.1);
+    if (hit.dist >= min) return null;
+    if (hit.dist < 0.001) {
+      return { x: px + hit.ux * min, z: pz + hit.uz * min };
+    }
+    const scale = min / hit.dist;
+    return { x: hit.cx + (px - hit.cx) * scale, z: hit.cz + (pz - hit.cz) * scale };
+  }
+
+  function overSegmentFootprint(px, pz, margin, col) {
+    const hit = _distPointToSegment(px, pz, col.x0, col.z0, col.x1, col.z1);
+    return hit.dist <= (col.r || 0.1) + margin;
+  }
+
   function overColliderFootprint(px, pz, margin, col) {
+    if (col.type === 'seg') return overSegmentFootprint(px, pz, margin, col);
     if (col.type === 'box' || col.cx !== undefined) {
-      if (col.lx != null || col.rotZ) return overBoxFootprint(px, pz, margin, col);
+      if (col.lx != null || col.rotX || col.rotZ) return overBoxFootprint(px, pz, margin, col);
       const dx = px - col.cx;
       const dz = pz - col.cz;
       let lx, lz;
@@ -1278,6 +1511,7 @@
   }
 
   ZS.getColliders           = getColliders;
+  ZS.getBarrierColliders     = () => (ZS.BarrierPrefabs?.getBarrierColliders?.() || []);
   ZS.registerDecorColliders = registerDecorColliders;
   ZS.removeDecorColliders   = removeDecorColliders;
   ZS.clearDecorColliders    = clearDecorColliders;
@@ -1285,13 +1519,21 @@
   ZS.overColliderFootprint  = overColliderFootprint;
   ZS.shouldSkipDecorSideCollision = shouldSkipDecorSideCollision;
   ZS.resolveDecorBoxCollision = resolveDecorBoxCollision;
+  ZS.resolveDecorSegmentCollision = resolveDecorSegmentCollision;
   ZS.decorWorldToLocal      = decorWorldToLocal;
   ZS.chopTree              = chopTree;
   ZS.registerChoppableTree = registerChoppableTree;
   ZS.removeChoppableTree   = removeChoppableTree;
   ZS.applyRemoteTreeChop   = applyRemoteTreeChop;
+  ZS.applyRemoteTreeGrow   = applyRemoteTreeGrow;
   ZS.applyRemoteTreeFell   = applyRemoteTreeFell;
   ZS.tickTreeFalls         = tickTreeFalls;
+  ZS.mineRock              = mineRock;
+  ZS.registerMinableRock   = registerMinableRock;
+  ZS.removeMinableRock     = removeMinableRock;
+  ZS.applyRemoteRockMine   = applyRemoteRockMine;
+  ZS.applyRemoteRockDepleted = applyRemoteRockDepleted;
+  ZS.tickRockMines         = tickRockMines;
   ZS.registerFireLight     = registerFireLight;
   ZS.registerBillboards    = registerBillboards;
   ZS.updateBillboards      = updateBillboards;

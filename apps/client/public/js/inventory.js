@@ -430,6 +430,30 @@
     return left === 0;
   }
 
+  /** Ajoute un slot complet (fouille, butin avec durabilité/munitions). */
+  function addItemSlot(slot) {
+    if (!slot?.type) return false;
+    const clone = JSON.parse(JSON.stringify(slot));
+    const n = clone.qty || 1;
+    if (n > 1 && !clone.durability && clone.ammo == null) {
+      return addItem(clone.type, n);
+    }
+    for (const arr of [_hotbar, _bag]) {
+      for (let i = 0; i < arr.length; i++) {
+        if (arr[i]) continue;
+        arr[i] = clone;
+        _renderHotbar();
+        if (_panelOpen) _renderInvPanel();
+        _syncToServer();
+        const def = _def(clone.type);
+        if (def) ZS.UI.showNotif('+' + (clone.qty || 1) + ' ' + (def.label || clone.type));
+        return true;
+      }
+    }
+    ZS.UI?.showNotif?.('Inventaire plein !');
+    return false;
+  }
+
   // ── Armes à feu ────────────────────────────────────────────────────────────
 
   function getActiveItem() { return _hotbar[_active] || null; }
@@ -1056,10 +1080,15 @@
   function _bindKeys() {
     document.addEventListener('keydown', (e) => {
       if (window.ZS?.Rcon?.isOpen?.()) return;
+      if (window.ZS?.Chat?.isOpen?.()) return;
       const digit = parseInt(e.key);
       if (digit >= 1 && digit <= 6) _setActiveSlot(digit - 1);
       if (e.code === 'KeyE') { if (!grabNearest()) _useActiveItem(); }
       if (e.code === 'KeyI') togglePanel();
+      if (e.code === 'Tab' && document.body.classList.contains('mode-desktop')) {
+        e.preventDefault();
+        togglePanel();
+      }
       if (e.code === 'PageUp'   && _isStructure(_hotbar[_active]?.type)) _changeLevel(1);
       if (e.code === 'PageDown' && _isStructure(_hotbar[_active]?.type)) _changeLevel(-1);
       if (e.code === 'Escape' && _panelOpen) togglePanel();
@@ -1175,7 +1204,7 @@
   ZS.Inventory = {
     init, tick,
     spawnWorldItem, removeWorldItem, receivePickup, spawnStructure, collectBag,
-    countItem, addItem, removeItem, consumeOne,
+    countItem, addItem, addItemSlot, removeItem, consumeOne,
     getActiveItem, getWeaponAmmo, decrementAmmo, reloadWeapon, wearActiveWeapon,
     getArmorValue, getMaxHealth, togglePanel, loadFromSave, loadRespawnKit, ensureStarterCaillou, clear,
   };

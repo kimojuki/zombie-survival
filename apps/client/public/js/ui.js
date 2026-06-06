@@ -170,9 +170,13 @@
   // ── Respawn ───────────────────────────────────────────────────────────────
 
   function _setupRespawn() {
-    document.getElementById('respawn-btn').addEventListener('click', () => {
-      if (_state.onRespawn) _state.onRespawn();
-    });
+    const btn = document.getElementById('respawn-btn');
+    const fire = (e) => {
+      if (e) e.preventDefault();
+      if (_state?.onRespawn) _state.onRespawn();
+    };
+    btn.addEventListener('click', fire);
+    btn.addEventListener('touchstart', fire, { passive: false });
   }
 
   // ── HUD updates ───────────────────────────────────────────────────────────

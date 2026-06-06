@@ -96,6 +96,22 @@
     return root;
   }
 
+  /** Pose couchée (joueur endormi / déconnecté). */
+  function applySleepPose(root) {
+    const rig = root.userData.rig;
+    const limbs = root.userData.limbs;
+    if (!rig || !limbs) return;
+    root.rotation.x = -Math.PI / 2;
+    root.position.y += 0.22;
+    rig.hips.rotation.z = 0.08;
+    limbs.lArm.rotation.x = 0.35;
+    limbs.lArm.rotation.z = 0.45;
+    limbs.rArm.rotation.x = -0.15;
+    limbs.rArm.rotation.z = -0.35;
+    limbs.lLeg.rotation.x = 0.12;
+    limbs.rLeg.rotation.x = -0.08;
+  }
+
   function _bone(name, parent, x, y, z) {
     const g = new THREE.Group();
     g.name = name;
@@ -419,6 +435,22 @@
     tool_pioche: _grip({
       item: { x: 0, y: -0.14, z: -0.22, rx: 0.28, ry: 0.04, rz: 0.01 },
       anim: { melee: { style: 'swing_down', swingX: 0.56, swingZ: 0.32, dur: 0.36 } },
+    }),
+    tool_hache_pierre: _grip({
+      item: { x: 0.54, y: -0.78, z: 0.22, rx: 0.06, ry: 0.88, rz: -0.52 },
+      anim: { melee: { style: 'swing_down', swingX: 0.54, swingZ: 0.28, dur: 0.30 } },
+    }),
+    tool_pioche_pierre: _grip({
+      item: { x: 0, y: -0.14, z: -0.22, rx: 0.28, ry: 0.04, rz: 0.01 },
+      anim: { melee: { style: 'swing_down', swingX: 0.56, swingZ: 0.32, dur: 0.36 } },
+    }),
+    wpn_lance_bois: _grip({
+      item: { x: 0, y: -0.02, z: -0.34, rx: 0.12, ry: 0.02, rz: 0.01 },
+      anim: { melee: { style: 'thrust', thrustZ: 0.42, dur: 0.28 } },
+    }),
+    wpn_lance_pierre: _grip({
+      item: { x: 0, y: -0.02, z: -0.34, rx: 0.12, ry: 0.02, rz: 0.01 },
+      anim: { melee: { style: 'thrust', thrustZ: 0.42, dur: 0.28 } },
     }),
   };
 
@@ -1371,12 +1403,16 @@
       case 'wpn_barre_fer':                 return _ironBar();
       case 'wpn_machette':                  return _machette();
       case 'wpn_lance_artisanale':          return _spear();
+      case 'wpn_lance_bois':                return _spear(0x886633);
+      case 'wpn_lance_pierre':              return _spear(0x777766, true);
       case 'wpn_batte_cloutee':             return _bat();
       // ── Outils ───────────────────────────────────────────────────────────
       case 'tool_marteau':                  return _hammer();
       case 'tool_caillou':                  return _rock();
       case 'tool_hachette':                 return _axe(0x775522);
+      case 'tool_hache_pierre':             return _axe(0x665544, true);
       case 'tool_pioche':                   return _pickaxe();
+      case 'tool_pioche_pierre':            return _pickaxe(0x666666, true);
       case 'tool_torche':                   return _lighter();
       // ── Nourriture ───────────────────────────────────────────────────────
       case 'food_eau_bouteille':            return _bottle(0x88bbff, 0.85);
@@ -1464,19 +1500,20 @@
     return _setGripPoint(g, 0, -0.05, 0);
   }
 
-  function _axe(woodColor) {
+  function _axe(woodColor, stoneHead) {
     const g = new THREE.Group();
-    addBox(g, m(woodColor), 0.040, 0.76, 0.040, 0,    0.00, 0);         // manche
+    addBox(g, m(woodColor || 0x887733), 0.040, 0.76, 0.040, 0,    0.00, 0);         // manche
     addBox(g, m(0x8b8877),  0.065, 0.12, 0.085, 0.04, 0.28, 0.00);      // collet
-    addBox(g, m(0x999988),   0.11,  0.22, 0.11,  0.12, 0.40, 0.01);     // tête
+    const headColor = stoneHead ? 0x7a7468 : 0x999988;
+    addBox(g, m(headColor),   0.11,  0.22, 0.11,  0.12, 0.40, 0.01);     // tête
     const blade = new THREE.Mesh(
       new THREE.BoxGeometry(0.34, 0.18, 0.04),
-      m(0xdddddd)
+      m(stoneHead ? 0x8a8578 : 0xdddddd)
     );
     blade.rotation.z = -0.92;
     blade.position.set(0.32, 0.46, 0.08);
     g.add(blade);
-    addBox(g, m(0x666655),   0.07,  0.07, 0.09,  0.08, 0.36, -0.05);     // contrepoids
+    addBox(g, m(stoneHead ? 0x6e6a60 : 0x666655),   0.07,  0.07, 0.09,  0.08, 0.36, -0.05);
     return _setGripPoint(g, 0, -0.03, 0);
   }
 
@@ -1495,10 +1532,10 @@
     return _setGripPoint(g, 0, -0.05, 0);
   }
 
-  function _spear() {
+  function _spear(woodColor, stoneTip) {
     const g = new THREE.Group();
-    addBox(g, m(0x885533), 0.036, 0.78, 0.036, 0, 0, 0);
-    addBox(g, m(0xccccaa), 0.026, 0.16, 0.058, 0, 0.43, 0);
+    addBox(g, m(woodColor || 0x885533), 0.036, 0.78, 0.036, 0, 0, 0);
+    addBox(g, m(stoneTip ? 0x7a7468 : 0xccccaa), 0.026, 0.16, 0.058, 0, 0.43, 0);
     return _setGripPoint(g, 0, -0.18, 0);
   }
 
@@ -1530,11 +1567,11 @@
     return _setGripPoint(g, 0, 0, 0);
   }
 
-  function _pickaxe() {
+  function _pickaxe(handleColor, stoneHead) {
     const g = new THREE.Group();
-    addBox(g, m(0x553322), 0.036, 0.44, 0.036, 0, -0.04, 0);
-    addBox(g, m(0x888888), 0.28,  0.048, 0.048, 0,  0.20, 0);           // traverse
-    addBox(g, m(0x777777), 0.048, 0.052, 0.11,  0.14, 0.17, 0.062);     // pointe
+    addBox(g, m(handleColor || 0x553322), 0.036, 0.44, 0.036, 0, -0.04, 0);
+    addBox(g, m(stoneHead ? 0x7a7468 : 0x888888), 0.28,  0.048, 0.048, 0,  0.20, 0);
+    addBox(g, m(stoneHead ? 0x6e6a60 : 0x777777), 0.048, 0.052, 0.11,  0.14, 0.17, 0.062);
     return _setGripPoint(g, 0, -0.04, 0);
   }
 
@@ -1760,6 +1797,7 @@
 
   window.ZS = window.ZS || {};
   ZS.createPlayerModel = createPlayerModel;
+  ZS.applySleepPose = applySleepPose;
   ZS.createZombieModel = createZombieModel;
   ZS.createHumanoidRig = _createHumanoidRig;
   ZS.createFPSArms     = createFPSArms;

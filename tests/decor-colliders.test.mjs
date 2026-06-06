@@ -116,6 +116,24 @@ test('survivor shack door collider toggles with door state', () => {
   assert.equal(open.some((c) => c.cz < -2.05 && c.hw > 0.55), false);
 });
 
+test('barrier rail uses segment collider between posts', () => {
+  const ZS = loadDecorColliders();
+  const cols = ZS.buildDecorColliders({
+    kind: 'prefab',
+    prefabId: 'road_barrier_rail',
+    x: 0,
+    z: 0,
+    baseY: 1,
+    decorId: 'rb_rail_1',
+    railSeg: { x0: -2, z0: 5, x1: 2, z1: 5 },
+  });
+  assert.equal(cols.length, 1);
+  assert.equal(cols[0].type, 'seg');
+  assert.equal(cols[0].x0, -2);
+  assert.equal(cols[0].x1, 2);
+  assert.equal(cols[0].r, 0.14);
+});
+
 test('unknown item type falls back to default collider', () => {
   const ZS = loadDecorColliders();
   const cols = ZS.buildDecorColliders({

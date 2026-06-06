@@ -429,16 +429,24 @@
     _add(g, new THREE.BoxGeometry(0.74, 0.08, 0.11), trimMat, -2.66, 1.24, 0.62);
     _add(g, new THREE.BoxGeometry(0.08, 0.62, 0.11), trimMat, -2.66, 1.55, 0.62);
 
-    const roofA = new THREE.Mesh(new THREE.BoxGeometry(5.8, 0.18, 2.65), roofMat);
-    roofA.position.set(0, 2.95, -0.72);
-    roofA.rotation.x = 0.42;
-    roofA.castShadow = roofA.receiveShadow = true;
-    g.add(roofA);
-    const roofB = roofA.clone();
-    roofB.position.z = 0.72;
-    roofB.rotation.x = -0.42;
-    g.add(roofB);
-    _add(g, new THREE.BoxGeometry(5.9, 0.18, 0.18), trimMat, 0, 3.45, 0);
+    const roofGeo = new THREE.BufferGeometry();
+    roofGeo.setAttribute('position', new THREE.Float32BufferAttribute([
+      -3.0, 2.62, -2.45,  3.0, 2.62, -2.45,  3.0, 3.55, 0,     -3.0, 3.55, 0,
+      -3.0, 3.55, 0,      3.0, 3.55, 0,      3.0, 2.62, 2.45,  -3.0, 2.62, 2.45,
+      -3.0, 2.62, -2.45, -3.0, 3.55, 0,     -3.0, 2.62, 2.45,
+       3.0, 2.62, -2.45,  3.0, 2.62, 2.45,   3.0, 3.55, 0,
+    ]));
+    roofGeo.setIndex([
+      0, 1, 2, 0, 2, 3,
+      4, 5, 6, 4, 6, 7,
+      8, 9, 10,
+      11, 12, 13,
+    ]);
+    roofGeo.computeVertexNormals();
+    const roof = new THREE.Mesh(roofGeo, roofMat);
+    roof.castShadow = roof.receiveShadow = true;
+    g.add(roof);
+    _add(g, new THREE.BoxGeometry(6.08, 0.18, 0.18), trimMat, 0, 3.55, 0);
 
     _add(g, new THREE.BoxGeometry(1.2, 0.08, 0.54), clothMat, -1.15, 0.08, -2.62, 0, 0.12, 0);
   }

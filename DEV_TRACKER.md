@@ -48,6 +48,11 @@ Copier dans la description de PR :
 
 ## 2026-06-06
 
+### Completed — Fix toit cabane prefab RCON (2026-06-06)
+
+- **Prefab** : `building_survivor_shack` — toit refait en géométrie pignon dédiée au lieu de deux plaques inclinées inversées.
+- **Cache bust** : `20260606-survivor-shack-roof-26`
+
 ### Completed — Merge `origin/dev` + intégration locale (2026-06-06)
 
 - **Merge** : commit collègue `1cd6124` (`building_survivor_shack`, `decoritems`) fusionné avec zombies/trees/caillou/collisions.

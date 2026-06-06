@@ -665,14 +665,15 @@
   }
 
   function _interactDoor() {
-    const door = ZS.findNearestDecorDoor?.(state.player.x, state.player.z, 2.5);
+    const door = ZS.findNearestDecorDoor?.(state.player.x, state.player.z, 3.2);
     if (!door) return false;
+    ZS.setDecorDoorState?.(door.decorId, !door.open);
     ZS.Network.requestDecorDoorToggle(door.decorId);
     return true;
   }
 
   function _updateDoorInteractUi() {
-    const door = ZS.findNearestDecorDoor?.(state.player.x, state.player.z, 2.5) || null;
+    const door = ZS.findNearestDecorDoor?.(state.player.x, state.player.z, 3.2) || null;
     if (!door && !_nearDoor) return;
     _nearDoor = door;
     const btn = _ensureDoorButton();
@@ -681,8 +682,11 @@
       return;
     }
     const action = door.open ? 'Fermer' : 'Ouvrir';
-    btn.textContent = document.body.classList.contains('mode-mobile') ? action : `E ${action}`;
+    const mobile = document.body.classList.contains('mode-mobile');
+    btn.textContent = mobile ? action : `E — ${action}`;
     btn.style.display = 'block';
+    btn.style.right = mobile ? '92px' : '24px';
+    btn.style.bottom = mobile ? '132px' : '96px';
   }
 
   state.onShoot  = attack;
@@ -750,6 +754,7 @@
     ZS.setShadowCenter(state.player.x, state.player.z);
     ZS.tickDayNight(dt);
     ZS.tickTreeFalls?.(dt);
+    ZS.tickDecorDoors?.(dt);
     const camPos = _cameraWorldPos();
     const camX = camPos.x, camZ = camPos.z;
     if (Math.hypot(camX - _bbCamX, camZ - _bbCamZ) > 0.2) {

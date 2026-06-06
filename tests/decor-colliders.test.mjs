@@ -112,8 +112,8 @@ test('survivor shack door collider toggles with door state', () => {
     doorOpen: true,
   });
   assert.equal(closed.length, open.length + 1);
-  assert.ok(closed.some((c) => c.cz < -2.1 && c.hw < 0.5));
-  assert.equal(open.some((c) => c.cz < -2.1 && c.hw < 0.5), false);
+  assert.ok(closed.some((c) => c.cz < -2.05 && c.hw > 0.55 && c.hw < 0.7));
+  assert.equal(open.some((c) => c.cz < -2.05 && c.hw > 0.55), false);
 });
 
 test('unknown item type falls back to default collider', () => {

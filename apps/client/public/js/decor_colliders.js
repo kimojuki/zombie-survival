@@ -43,7 +43,7 @@
       { type: 'box', lx: 2.54, lz: 0, hw: 0.11, hd: 2.08 },
       { type: 'box', lx: -1.61, lz: -2.04, hw: 0.99, hd: 0.11 },
       { type: 'box', lx: 1.61, lz: -2.04, hw: 0.99, hd: 0.11 },
-      { type: 'box', lx: 0, lz: -2.16, hw: 0.46, hd: 0.08, door: true },
+      { type: 'box', lx: 0, lz: -2.12, hw: 0.62, hd: 0.10, door: true },
     ],
     // Poteaux de signalisation camp (4 m) — cylindre pleine hauteur, non montable
     spawn_marker_left: [

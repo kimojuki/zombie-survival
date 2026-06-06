@@ -277,6 +277,47 @@
     o.start(t); o.stop(t + 0.2);
   }
 
+  // ── Porte / bois — grincement court (secours synthèse) ─────────────────────
+  function door(open, vol, pan) {
+    if (!ctx || _muted) return;
+    const v = (vol == null ? 1 : vol);
+    const t = ctx.currentTime;
+    const out = _panNode(pan);
+    const opening = open == null ? 1 : (open ? 1 : 0.85);
+
+    const src = _noiseSource(); src.loop = false;
+    const bp = ctx.createBiquadFilter();
+    bp.type = 'bandpass'; bp.frequency.value = opening ? 420 : 280; bp.Q.value = 1.1;
+    const g = ctx.createGain();
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.linearRampToValueAtTime(0.55 * v * opening, t + 0.04);
+    g.gain.exponentialRampToValueAtTime(0.001, t + (opening ? 0.38 : 0.28));
+    src.connect(bp); bp.connect(g); g.connect(out);
+    src.start(t); src.stop(t + 0.42);
+
+    const o = ctx.createOscillator();
+    o.type = 'sawtooth';
+    o.frequency.setValueAtTime(opening ? 110 : 85, t);
+    o.frequency.exponentialRampToValueAtTime(opening ? 62 : 48, t + 0.22);
+    const og = ctx.createGain();
+    og.gain.setValueAtTime(0.22 * v, t);
+    og.gain.exponentialRampToValueAtTime(0.001, t + 0.24);
+    o.connect(og); og.connect(out);
+    o.start(t); o.stop(t + 0.26);
+
+    if (!opening) {
+      const th = ctx.createOscillator();
+      th.type = 'sine';
+      th.frequency.setValueAtTime(48, t + 0.08);
+      th.frequency.exponentialRampToValueAtTime(28, t + 0.22);
+      const tg = ctx.createGain();
+      tg.gain.setValueAtTime(0.35 * v, t + 0.08);
+      tg.gain.exponentialRampToValueAtTime(0.001, t + 0.24);
+      th.connect(tg); tg.connect(out);
+      th.start(t + 0.08); th.stop(t + 0.26);
+    }
+  }
+
   // ── Coup sur bois (hache / caillou sur arbre) ───────────────────────────────
   function chopWood(vol, pan) {
     if (!ctx || _muted) return;
@@ -427,5 +468,5 @@
   function toggleMute() { setMuted(!_muted); }
 
   window.ZS = window.ZS || {};
-  ZS.Audio = { init, gunshot, melee, chopWood, treeFall, zombieGroan, setMuted, toggleMute };
+  ZS.Audio = { init, gunshot, melee, chopWood, treeFall, door, zombieGroan, setMuted, toggleMute };
 }());

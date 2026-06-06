@@ -48,6 +48,14 @@ Copier dans la description de PR :
 
 ## 2026-06-06
 
+### Completed — Fix porte cabane : interaction + taille + anim + son (2026-06-06)
+
+- **Bug** : `doorPivot` sur le groupe enfant → jamais enregistré dans `DECOR_DOORS` (E / bouton mobile inopérants).
+- **Visuel** : porte agrandie (1,24 × 2,02 m) pour remplir l'ouverture du mur.
+- **Anim** : `tickDecorDoors` — rotation progressive (~0,5 s) ; son `door()` ouverture / fermeture.
+- **UI** : portée 3,2 m ; bouton mobile + hint desktop « E — Ouvrir ».
+- **Cache bust** : `20260606-shack-door-fix-36`
+
 ### Completed — Porte interactive cabane prefab (2026-06-06) — Georges
 
 - **Prefab** : `building_survivor_shack` — porte séparée avec pivot (`survivorShackDoorPivot`) et état ouvert/fermé.

@@ -413,18 +413,23 @@
     _add(g, new THREE.BoxGeometry(0.1, 2.2, 0.08), trimMat, -2.05, 1.16, -2.16);
     _add(g, new THREE.BoxGeometry(0.1, 2.2, 0.08), trimMat, 2.05, 1.16, -2.16);
 
+    const DOOR_W = 1.24;
+    const DOOR_H = 2.02;
+    const DOOR_D = 0.14;
+    const DOOR_HX = DOOR_W * 0.5;
+
     const doorPivot = new THREE.Group();
     doorPivot.name = 'survivorShackDoorPivot';
-    doorPivot.position.set(-0.46, 0.08, -2.18);
+    doorPivot.position.set(-DOOR_HX + 0.02, 0.08, -2.10);
     doorPivot.userData.isDoor = true;
     g.add(doorPivot);
-    const door = new THREE.Mesh(new THREE.BoxGeometry(0.92, 1.82, 0.12), trimMat);
+    const door = new THREE.Mesh(new THREE.BoxGeometry(DOOR_W, DOOR_H, DOOR_D), trimMat);
     door.name = 'survivorShackDoor';
-    door.position.set(0.46, 0.91, 0);
+    door.position.set(DOOR_HX - 0.02, DOOR_H * 0.5, 0);
     door.castShadow = door.receiveShadow = true;
     doorPivot.add(door);
     const handleMat = new THREE.MeshLambertMaterial({ color: 0xb99b52 });
-    _add(doorPivot, new THREE.BoxGeometry(0.08, 0.08, 0.08), handleMat, 0.82, 0.96, -0.08);
+    _add(doorPivot, new THREE.BoxGeometry(0.08, 0.08, 0.08), handleMat, DOOR_W - 0.18, DOOR_H * 0.82, -0.07);
 
     const windowMat = new THREE.MeshLambertMaterial({
       color: 0x93b7c4,
@@ -480,6 +485,7 @@
     _add(g, new THREE.BoxGeometry(1.2, 0.08, 0.54), clothMat, -1.15, 0.08, -2.62, 0, 0.12, 0);
 
     g.userData.doorPivot = doorPivot;
+    parent.userData.doorPivot = doorPivot;
   }
 
   /** Vertical marker that stays readable from far away. */
@@ -608,6 +614,8 @@
   }
 
   const DECOR_DOORS = new Map();
+  const DOOR_OPEN_ANGLE = -Math.PI * 0.52;
+  const DOOR_ANIM_SPEED = 3.2;
 
   const DECOR_PREFABS = {
     spawn_campfire: {
@@ -656,27 +664,56 @@
     _registerDecorCollision(root.userData.decorSpec.decorId, root.userData.decorSpec);
   }
 
-  function _setDoorVisual(entry, open) {
+  function _setDoorVisual(entry, open, opts = {}) {
     if (!entry?.pivot) return false;
-    entry.open = !!open;
-    entry.root.userData.doorOpen = entry.open;
-    entry.root.userData.decorSpec.doorOpen = entry.open;
-    entry.pivot.rotation.y = entry.open ? -Math.PI / 2 : 0;
+    const wantOpen = !!open;
+    const prevOpen = !!entry.open;
+    entry.open = wantOpen;
+    entry.targetOpen = wantOpen;
+    entry.root.userData.doorOpen = wantOpen;
+    if (entry.root.userData.decorSpec) entry.root.userData.decorSpec.doorOpen = wantOpen;
+    if (opts.instant) {
+      entry.openAngle = wantOpen ? DOOR_OPEN_ANGLE : 0;
+      entry.pivot.rotation.y = entry.openAngle;
+    } else if (prevOpen !== wantOpen) {
+      ZS.Audio?.door?.(wantOpen ? 1 : 0);
+    }
     _refreshDecorCollision(entry.root);
     return true;
   }
 
-  function setDecorDoorState(decorId, open) {
+  function tickDecorDoors(dt) {
+    for (const entry of DECOR_DOORS.values()) {
+      if (!entry?.pivot?.parent) continue;
+      const target = entry.targetOpen ? DOOR_OPEN_ANGLE : 0;
+      let angle = Number.isFinite(entry.openAngle) ? entry.openAngle : entry.pivot.rotation.y;
+      const delta = target - angle;
+      if (Math.abs(delta) < 0.008) {
+        if (angle !== target) {
+          angle = target;
+          entry.openAngle = target;
+          entry.pivot.rotation.y = target;
+        }
+        continue;
+      }
+      const step = Math.sign(delta) * Math.min(Math.abs(delta), DOOR_ANIM_SPEED * dt);
+      angle += step;
+      entry.openAngle = angle;
+      entry.pivot.rotation.y = angle;
+    }
+  }
+
+  function setDecorDoorState(decorId, open, opts = {}) {
     const entry = DECOR_DOORS.get(decorId);
     if (!entry || !entry.root.parent) return false;
-    return _setDoorVisual(entry, !!open);
+    return _setDoorVisual(entry, !!open, opts);
   }
 
   function unregisterDecorDoor(decorId) {
     DECOR_DOORS.delete(decorId);
   }
 
-  function findNearestDecorDoor(x, z, maxDist = 2.4) {
+  function findNearestDecorDoor(x, z, maxDist = 3.2) {
     let best = null;
     const pos = new THREE.Vector3();
     for (const [decorId, entry] of DECOR_DOORS) {
@@ -738,9 +775,11 @@
         root,
         pivot: root.userData.doorPivot,
         open: !!opts.doorOpen,
+        targetOpen: !!opts.doorOpen,
+        openAngle: 0,
       };
       DECOR_DOORS.set(decorId, entry);
-      _setDoorVisual(entry, !!opts.doorOpen);
+      _setDoorVisual(entry, !!opts.doorOpen, { instant: true });
     }
 
     if (opts.collide !== false) {
@@ -1067,6 +1106,7 @@
   ZS.findNearestDecorDoor = findNearestDecorDoor;
   ZS.setDecorDoorState    = setDecorDoorState;
   ZS.unregisterDecorDoor  = unregisterDecorDoor;
+  ZS.tickDecorDoors       = tickDecorDoors;
   ZS.getDecorGroundHeight = getDecorGroundHeight;
   ZS.getDecorSurfaceLift  = getDecorSurfaceLift;
   ZS.CAMP_GROUND_LIFT     = CAMP_GROUND_LIFT;

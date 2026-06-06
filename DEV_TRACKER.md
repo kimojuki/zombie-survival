@@ -48,6 +48,11 @@ Copier dans la description de PR :
 
 ## 2026-06-06
 
+### Completed — Fix toit cabane (pans inclinés corrects) (2026-06-06)
+
+- **Prefab** : `building_survivor_shack` — remplace BufferGeometry cassé par 2 pans + pignons + faîtière alignés sur les murs.
+- **Cache bust** : `20260606-shack-roof-fix-29`
+
 ### Completed — Merge origin/dev toit cabane + caillou (2026-06-06)
 
 - **Merge** : commit collègue `4d639bb` (toit `building_survivor_shack`) + caillou two-hand/thrust + decoradd devant joueur.

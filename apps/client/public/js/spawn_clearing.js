@@ -429,24 +429,46 @@
     _add(g, new THREE.BoxGeometry(0.74, 0.08, 0.11), trimMat, -2.66, 1.24, 0.62);
     _add(g, new THREE.BoxGeometry(0.08, 0.62, 0.11), trimMat, -2.66, 1.55, 0.62);
 
-    const roofGeo = new THREE.BufferGeometry();
-    roofGeo.setAttribute('position', new THREE.Float32BufferAttribute([
-      -3.0, 2.62, -2.45,  3.0, 2.62, -2.45,  3.0, 3.55, 0,     -3.0, 3.55, 0,
-      -3.0, 3.55, 0,      3.0, 3.55, 0,      3.0, 2.62, 2.45,  -3.0, 2.62, 2.45,
-      -3.0, 2.62, -2.45, -3.0, 3.55, 0,     -3.0, 2.62, 2.45,
-       3.0, 2.62, -2.45,  3.0, 2.62, 2.45,   3.0, 3.55, 0,
-    ]));
-    roofGeo.setIndex([
-      0, 1, 2, 0, 2, 3,
-      4, 5, 6, 4, 6, 7,
-      8, 9, 10,
-      11, 12, 13,
-    ]);
-    roofGeo.computeVertexNormals();
-    const roof = new THREE.Mesh(roofGeo, roofMat);
-    roof.castShadow = roof.receiveShadow = true;
-    g.add(roof);
-    _add(g, new THREE.BoxGeometry(6.08, 0.18, 0.18), trimMat, 0, 3.55, 0);
+    // Toit à deux pans — ridge le long de X, pente en Z (rotations opposées corrigées).
+    const halfRun = 2.45;
+    const rise = 0.93;
+    const pitch = Math.atan2(rise, halfRun);
+    const eaveY = 2.62;
+    const ridgeY = eaveY + rise;
+    const panelCY = eaveY + rise * 0.5;
+    const roofW = 5.88;
+    const roofThick = 0.16;
+    const panelLen = halfRun + 0.12;
+
+    const northRoof = new THREE.Mesh(new THREE.BoxGeometry(roofW, roofThick, panelLen), roofMat);
+    northRoof.position.set(0, panelCY, -halfRun * 0.5);
+    northRoof.rotation.x = -pitch;
+    northRoof.castShadow = northRoof.receiveShadow = true;
+    g.add(northRoof);
+
+    const southRoof = new THREE.Mesh(new THREE.BoxGeometry(roofW, roofThick, panelLen), roofMat);
+    southRoof.position.set(0, panelCY, halfRun * 0.5);
+    southRoof.rotation.x = pitch;
+    southRoof.castShadow = southRoof.receiveShadow = true;
+    g.add(southRoof);
+
+    _add(g, new THREE.BoxGeometry(roofW + 0.14, 0.14, 0.16), trimMat, 0, ridgeY, 0);
+
+    // Pignons est / ouest (ferment les triangles aux extrémités du faîtage).
+    for (const sx of [-1, 1]) {
+      const gableGeo = new THREE.BufferGeometry();
+      const gx = sx * 2.68;
+      gableGeo.setAttribute('position', new THREE.Float32BufferAttribute([
+        gx, eaveY, -halfRun - 0.06,
+        gx, eaveY, halfRun + 0.06,
+        gx, ridgeY, 0,
+      ], 3));
+      gableGeo.setIndex([0, 1, 2]);
+      gableGeo.computeVertexNormals();
+      const gable = new THREE.Mesh(gableGeo, roofMat);
+      gable.castShadow = gable.receiveShadow = true;
+      g.add(gable);
+    }
 
     _add(g, new THREE.BoxGeometry(1.2, 0.08, 0.54), clothMat, -1.15, 0.08, -2.62, 0, 0.12, 0);
   }

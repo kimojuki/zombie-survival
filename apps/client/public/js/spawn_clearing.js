@@ -154,7 +154,10 @@
   }
 
   function _spawnTrailPoints() {
-    return [];
+    return (ZS.BEACH_TRAIL_PTS || [
+      [242, -8], [215, -8], [175, -7], [130, -6], [85, -6],
+      [45, -6], [0, -6], [14, -18],
+    ]).map((p) => p.slice());
   }
 
   const SPAWN_TRAIL_PTS = _spawnTrailPoints();

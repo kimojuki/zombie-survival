@@ -11,8 +11,8 @@ export const BARRIER_ROADS = Object.freeze([
   { id: 'city_highway', pts: CITY_HIGHWAY_PTS, width: 12 },
 ]);
 
-/** Bouche sentier spawn → RN (proc_roads.js). */
-export const SPAWN_TRAIL_MOUTH = Object.freeze([0, -11.35]);
+/** Bouche sentier plage (côté est, sync beach-spawn.mjs). */
+export const SPAWN_TRAIL_MOUTH = Object.freeze([242, -8]);
 
 const _ROAD_WIDTH = { town_main: 8.4, city_highway: 12 };
 

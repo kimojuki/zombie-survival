@@ -2,21 +2,24 @@
 
 import { TREE_ZONES, TREE_EXCLUSIONS, SPAWN_TRAIL_PTS } from './tree-placements.mjs';
 import { ROCK_ZONES, ROCK_EXCLUSIONS, isInCampFootprint } from './rock-placements.mjs';
+import { isInBeachFootprint } from './beach-spawn.mjs';
 import { getTreeScale } from './tree-growth.mjs';
 
 export const REGEN_CONFIG = Object.freeze({
-  treeIntervalMs: 25_000,
-  rockIntervalMs: 35_000,
-  treesPerTick: 2,
-  rocksPerTick: 1,
+  treeIntervalMs: 10_000,
+  rockIntervalMs: 12_000,
+  treesPerTick: 8,
+  rocksPerTick: 3,
+  /** Phase initiale des arbres regen (0–4) — évite les pousses quasi inutilisables. */
+  regenTreeStartPhase: 2,
   /** Arbres debout ciblés (seed + repousse). */
-  treeTargetStanding: 72,
+  treeTargetStanding: 220,
   /** Rochers monde (hors ancres camp fixes). */
-  rockTargetWorld: 65,
-  spawnAttempts: 48,
-  minClearance: 2.4,
-  minTreeGap: 3.6,
-  minRockGap: 3.4,
+  rockTargetWorld: 75,
+  spawnAttempts: 80,
+  minClearance: 2.2,
+  minTreeGap: 2.8,
+  minRockGap: 3.2,
 });
 
 const TREE_PREFABS = ['tree_oak', 'tree_pine', 'tree_birch'];
@@ -147,15 +150,16 @@ function _pickRockPrefab(rng) {
 /** @returns {object|null} placement arbre regen ou null */
 export function findRandomTreeSpawn(decors, seed = Date.now()) {
   const rng = _mulberry32(seed >>> 0);
-  const regenZones = TREE_ZONES.filter((z) => z.id === 'forest_main' || z.id.startsWith('forest_'));
+  const regenZones = TREE_ZONES.filter((z) => z.id.startsWith('forest_') || z.id.startsWith('coastal_'));
   if (!regenZones.length) return null;
   for (let attempt = 0; attempt < REGEN_CONFIG.spawnAttempts; attempt++) {
     const zone = regenZones[Math.floor(rng() * regenZones.length)];
     const ang = rng() * Math.PI * 2;
-    const dist = rng() * zone.radius;
+    const dist = Math.sqrt(rng()) * zone.radius;
     const x = zone.cx + Math.cos(ang) * dist;
     const z = zone.cz + Math.sin(ang) * dist;
     if (_nearTrail(x, z)) continue;
+    if (isInBeachFootprint(x, z, 1.5)) continue;
     if (!isSpawnPointClear(x, z, decors, { minGap: REGEN_CONFIG.minTreeGap })) continue;
     return {
       kind: 'prefab',

@@ -30,10 +30,11 @@
   }
 
   // ── State ─────────────────────────────────────────────────────────────────
+  const _spawn0 = ZS.SpawnZone?.spawn || { x: 248, y: 5, z: -8, rotY: Math.PI / 2 };
   const state = {
     selfId: null,
     player: {
-      x: 234, y: 5, z: 8, rotY: Math.PI / 2,
+      x: _spawn0.x, y: 5, z: _spawn0.z, rotY: _spawn0.rotY,
       velocityY: 0,
       onGround: true,
       health: parseInt(localStorage.getItem('zombie_health') || '100'),
@@ -449,7 +450,7 @@
     const inv = document.getElementById('inv-panel');
     if (inv && inv.style.display === 'block') return true;
     const craft = document.getElementById('craft-panel');
-    if (craft && craft.style.display === 'flex') return true;
+    if (craft && craft.classList.contains('is-open')) return true;
     const map = document.getElementById('map-overlay');
     if (map && map.style.display === 'flex') return true;
     if (ZS.StorageUI?.isOpen?.()) return true;
@@ -475,6 +476,7 @@
   }
 
   function _requestPointerLock() {
+    if (ZS.SpawnIntro?.isActive?.()) return;
     if (_isMobile || pointerLocked) return;
     if (ZS.Rcon?.isOpen?.()) return;
     if (ZS.Chat?.isOpen?.() || document.body.classList.contains('chat-open')) return;
@@ -514,6 +516,7 @@
   ZS.onUiPanelClose = _onUiPanelClose;
 
   document.addEventListener('mousemove', (e) => {
+    if (ZS.SpawnIntro?.isActive?.()) return;
     if (!pointerLocked) return;
     state.camera.yaw   -= e.movementX * 0.002;
     state.camera.pitch -= e.movementY * 0.002;
@@ -763,6 +766,7 @@
 
   function attack() {
     if (state.player.dead) return;
+    if (ZS.SpawnIntro?.blocksInput?.()) return;
     if (ZS.Loading?.isActive?.() || !ZS.Network?.isSpawnReady?.()) return;
     const item = ZS.Inventory.getActiveItem();
     const def  = item ? ZS.ITEMS[item.type] : null;
@@ -1290,10 +1294,12 @@
     const dt = Math.min((timestamp - state.lastTime) / 1000, 0.05);
     state.lastTime = timestamp;
 
-    if (!state.player.dead && !ZS.Loading?.isActive?.() && ZS.Network?.isSpawnReady?.()) {
+    if (!state.player.dead && !ZS.Loading?.isActive?.() && ZS.Network?.isSpawnReady?.()
+        && !ZS.SpawnIntro?.isActive?.()) {
       updateMovement(dt);
       _updateWaterEffect(state.player.x, state.player.z, state.player.y);
     }
+    ZS.SpawnIntro?.tick?.(dt);
     ZS.tickFPSArms(fpsArms, dt, {
       moving: !!state.player.isMoving,
       speed: state.player.moveSpeed || 0,
@@ -1344,6 +1350,7 @@
   const JUMP_V    = 8;
 
   function updateMovement(dt) {
+    if (ZS.SpawnIntro?.isActive?.()) return;
     const SPEED = _inWater ? 2.8 : 5;
     const keys  = state.keys;
 

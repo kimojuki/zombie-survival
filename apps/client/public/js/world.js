@@ -526,6 +526,17 @@
     return _cT.getHex();
   }
 
+  function _beachSandColor(x, z) {
+    const n = _tvn(x * 0.07, z * 0.07);
+    _cT.setHex(0xd4bc94);
+    if (n > 0.62) {
+      _cD.setHex(0xc4a878); _cT.lerp(_cD, 0.22);
+    } else if (n < 0.32) {
+      _cD.setHex(0xe8d8b8); _cT.lerp(_cD, 0.18);
+    }
+    return _cT.getHex();
+  }
+
   function buildTerrain(scene) {
     const SIZE = 600, SEG = 144;
     const geo  = new THREE.PlaneGeometry(SIZE, SIZE, SEG, SEG).toNonIndexed();
@@ -557,10 +568,11 @@
       const slope = 1 - Math.max(0, nrm.y);
       const avgH = (a.y + b.y + c.y) / 3;
       const cx = (a.x + b.x + c.x) / 3, cz = (a.z + b.z + c.z) / 3;
+      const inBeach = ZS.isInBeachFootprint?.(cx, cz, 0.35) ?? false;
       const inRiver = ZS.isInRiverChannel?.(cx, cz, 0) ?? false;
-      const inClearing = ZS.isInClearingDisc?.(cx, cz, 0.25) ?? false;
+      const inClearing = !inBeach && (ZS.isInClearingDisc?.(cx, cz, 0.25) ?? false);
       const onRoad  = ZS.isInRoadCorridor?.(cx, cz, 0.8) ?? ZS.isNearRoad?.(cx, cz, 1.2) ?? false;
-      const useDirt = inRiver || onRoad || inClearing || slope > 0.22 || avgH > 13.5;
+      const useDirt = !inBeach && (inRiver || onRoad || inClearing || slope > 0.22 || avgH > 13.5);
       const uBase = useDirt ? 0.52 : 0.02;
       const uSpan = 0.46;
 
@@ -569,7 +581,8 @@
         const vx = pos.getX(idx), vy = pos.getY(idx), vz = pos.getZ(idx);
         uvs[idx * 2] = uBase + frac((vx + 300) / tileScale) * uSpan;
         uvs[idx * 2 + 1] = frac((vz + 300) / tileScale);
-        col.setHex(_terrainTint(vx, vz, vy, slope, useDirt));
+        if (inBeach) col.setHex(_beachSandColor(vx, vz));
+        else col.setHex(_terrainTint(vx, vz, vy, slope, useDirt));
         cols[idx * 3] = col.r; cols[idx * 3 + 1] = col.g; cols[idx * 3 + 2] = col.b;
       }
     }

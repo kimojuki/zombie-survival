@@ -28,6 +28,7 @@
   function _panelOpen(id, displayVal) {
     const el = document.getElementById(id);
     if (!el) return false;
+    if (el.classList.contains('is-open')) return true;
     const d = el.style.display;
     if (displayVal) return d === displayVal;
     return d && d !== 'none';

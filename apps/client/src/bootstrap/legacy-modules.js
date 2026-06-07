@@ -23,6 +23,7 @@ export const LEGACY_MODULES = [
   '/js/tree_prefabs.js',
   '/js/barrier_prefabs.js',
   '/js/proc_roads.js',
+  '/js/beach_textures.js',
   '/js/proc_spawn.js',
   '/js/world.js',
   '/js/player.js',
@@ -38,5 +39,6 @@ export const LEGACY_MODULES = [
   '/js/inventory.js',
   '/js/sleep_loot.js',
   '/js/map.js',
+  '/js/spawn_intro.js',
   '/js/game.js',
 ];

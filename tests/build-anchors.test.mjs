@@ -274,6 +274,30 @@ describe('build anchors', () => {
     assert.ok(edges.some((e) => Math.abs(e.x + 1.5) < 0.01));
   });
 
+  it('syncRegistryFromDecor does not recurse on adjacent foundations', () => {
+    const ctx = {
+      window: {},
+      ZS: { getTerrainHeight: (x, z) => 1.0 + (x + z) * 0.01 },
+    };
+    ctx.window.ZS = ctx.ZS;
+    vm.runInNewContext(src, ctx);
+    const BA = ctx.ZS.BuildAnchors;
+    BA.clear();
+    BA.registerFoundation('a', 0, 0, 2.0, { hw: 1.5, hd: 1.5 });
+    BA.registerFoundation('b', 3, 0, 2.0, { hw: 1.5, hd: 1.5 });
+    BA.registerFoundation('c', 6, 0, 2.0, { hw: 1.5, hd: 1.5 });
+    assert.doesNotThrow(() => {
+      BA.syncRegistryFromDecor([
+        { id: 'a', prefabId: 'build_floor_wood', x: 0, z: 0, baseY: 2.0 },
+        { id: 'b', prefabId: 'build_floor_wood', x: 3, z: 0, baseY: 2.0 },
+        { id: 'c', prefabId: 'build_floor_wood', x: 6, z: 0, baseY: 2.0 },
+      ]);
+      BA.reconcileAllFoundationHeights();
+    });
+    const adj = BA.listAdjacentFoundations(3, 0);
+    assert.equal(adj.length, 2);
+  });
+
   it('ceiling snap anchors to foundation center at wall top', () => {
     const BA = loadAnchors();
     BA.clear();

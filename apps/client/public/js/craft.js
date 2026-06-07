@@ -274,8 +274,8 @@
 
   function toggle() {
     _visible = !_visible;
-    _panel.style.display = _visible ? 'flex' : 'none';
-    _backdrop.style.display = _visible ? 'block' : 'none';
+    _panel.classList.toggle('is-open', _visible);
+    _backdrop.classList.toggle('is-open', _visible);
     if (_visible) {
       _render();
       _renderQueueUi();
@@ -297,39 +297,11 @@
   function _buildPanel() {
     _backdrop = document.createElement('div');
     _backdrop.id = 'craft-backdrop';
-    Object.assign(_backdrop.style, {
-      display: 'none',
-      position: 'fixed',
-      inset: '0',
-      zIndex: '499',
-      background: 'rgba(0, 0, 0, 0.35)',
-    });
     _backdrop.addEventListener('click', toggle);
     document.body.appendChild(_backdrop);
 
     _panel = document.createElement('div');
     _panel.id = 'craft-panel';
-    Object.assign(_panel.style, {
-      display: 'none',
-      position: 'fixed',
-      top: '50%',
-      left: '50%',
-      transform: 'translate(-50%, -50%)',
-      width: 'min(360px, 96vw)',
-      maxHeight: '80vh',
-      overflow: 'hidden',
-      flexDirection: 'column',
-      gap: '6px',
-      padding: '14px 12px',
-      zIndex: '500',
-      background: '#0a0906',
-      border: '1px solid #6a5a2a',
-      borderRadius: '8px',
-      color: '#e8d090',
-      fontFamily: 'monospace',
-      fontSize: '13px',
-      boxShadow: '0 4px 32px rgba(0, 0, 0, 0.7)',
-    });
 
     const hdr = document.createElement('div');
     hdr.className = 'craft-hdr';

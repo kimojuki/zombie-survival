@@ -240,18 +240,29 @@
     const dx = px - f.cx;
     const dz = pz - f.cz;
     const dist = Math.hypot(dx, dz);
+    if (dist < 0.35) return false;
     if (dist < 0.55) return true;
     if (dist < CELL * 0.45 || dist > CELL * 1.55) return false;
     return Math.min(Math.abs(dx), Math.abs(dz)) <= Math.max(f.hw, f.hd) + 1.05;
   }
 
-  function listAdjacentFoundations(px, pz, excludeId) {
+  /** Voisins géométriques sans filtre cohérence (évite récursion avec _isCoherentDeck). */
+  function _neighborsAtRaw(px, pz, excludeId) {
     const out = [];
     for (const [id, f] of _floors.entries()) {
       if (excludeId && id === excludeId) continue;
-      if (!_isCoherentDeck(f)) continue;
       if (!_isNeighborCell(px, pz, f)) continue;
       out.push({ id, cx: f.cx, cz: f.cz, baseY: f.baseY, level: f.level, hw: f.hw, hd: f.hd });
+    }
+    return out;
+  }
+
+  function listAdjacentFoundations(px, pz, excludeId) {
+    const out = [];
+    for (const n of _neighborsAtRaw(px, pz, excludeId)) {
+      const f = _floors.get(n.id);
+      if (!f || !_isCoherentDeck(f)) continue;
+      out.push(n);
     }
     return out;
   }
@@ -442,7 +453,7 @@
     const absurdTop = ground + Math.max(eff + 2, 3) * LEVEL_H + 1.5;
     if (f.baseY > absurdTop) return false;
     // Dalle surélevée pour joindre une voisine (pente / cluster unifié)
-    for (const n of listAdjacentFoundations(f.cx, f.cz)) {
+    for (const n of _neighborsAtRaw(f.cx, f.cz)) {
       if (Math.abs(f.baseY - n.baseY) <= 0.12) return true;
     }
     return false;

@@ -19,7 +19,7 @@ export function computeCampRockAnchors() {
 /** Zones bâties / denses où on ne pose pas de rochers procéduraux. */
 export const ROCK_EXCLUSIONS = Object.freeze([
   ...TREE_EXCLUSIONS,
-  { cx: 252, cz: 8, r: 42 },
+  { cx: 270, cz: -8, r: 42 },
   { cx: -20, cz: -185, r: 58 },
   { cx: -200, cz: -160, r: 68 },
   { cx: -155, cz: 0, r: 22 },
@@ -29,10 +29,10 @@ export const ROCK_EXCLUSIONS = Object.freeze([
 export const ROCK_ZONES = Object.freeze([
   {
     id: 'beach_ring',
-    cx: 252,
-    cz: 8,
+    cx: 270,
+    cz: -8,
     count: 4,
-    radius: 48,
+    radius: 44,
     boulderWeight: 0.5,
     seed: 89001,
   },

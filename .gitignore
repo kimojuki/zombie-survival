@@ -7,6 +7,9 @@ node_modules/
 .inventory_reset_v2_done
 .inventory_reset_v3_done
 .inventory_reset_v4_done
+.beach_spawn_v1_reset
+.beach_spawn_v2_forest_edge
+.beach_spawn_v3_east_edge
 database/*.sqlite
 database/*.sqlite-*
 apps/server/database/*.sqlite

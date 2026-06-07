@@ -1261,6 +1261,7 @@
   }
 
   const STARTER_CAILLOU = { type: 'tool_caillou', qty: 1, durability: 80 };
+  const STARTER_TORCHE  = { type: 'tool_torche', qty: 1 };
 
   function _initToolDurability(slot) {
     if (!slot?.type || slot.durability != null) return;
@@ -1275,17 +1276,38 @@
       || Object.values(_equip).some((s) => s && s.type);
     if (hasAny) return false;
     _hotbar[0] = { ...STARTER_CAILLOU };
+    _hotbar[1] = { ...STARTER_TORCHE };
     _setActiveSlot(0);
     _syncToServer();
     return true;
   }
 
-  /** Respawn : restaure le kit serveur + caillou slot 1 + main. */
+  function _hasItemType(type) {
+    return _hotbar.some((s) => s && s.type === type)
+      || _bag.some((s) => s && s.type === type)
+      || Object.values(_equip).some((s) => s && s.type === type);
+  }
+
+  /** Torche si absente (rejoin de nuit — secours client si sync serveur en retard). */
+  function ensureStarterTorche() {
+    if (_hasItemType('tool_torche')) return false;
+    const idx = _hotbar.findIndex((s) => !s || !s.type);
+    if (idx >= 0) _hotbar[idx] = { ...STARTER_TORCHE };
+    else _bag.push({ ...STARTER_TORCHE });
+    _renderHotbar();
+    return true;
+  }
+
+  /** Respawn : restaure le kit serveur + caillou slot 0 + torche slot 1. */
   function loadRespawnKit(data) {
     loadFromSave(data, { fullReset: true });
     let changed = false;
     if (!_hotbar[0] || _hotbar[0].type !== 'tool_caillou') {
       _hotbar[0] = { ...STARTER_CAILLOU };
+      changed = true;
+    }
+    if (!_hotbar[1] || _hotbar[1].type !== 'tool_torche') {
+      _hotbar[1] = { ...STARTER_TORCHE };
       changed = true;
     }
     _initToolDurability(_hotbar[0]);
@@ -1900,6 +1922,6 @@
     countItem, findItemSlot, addItem, addItemSlot, removeItem, removeStack, getStorageStacks, getStorageSlots, canAddItem, canAddStack, consumeOne,
     getInvSnapshot, syncToServer, applyAuthoritativeInv,
     placeActiveStructure, getActiveItem, hasDoorKey, removeDoorKey, installDoorLockOnNearestDoor, getWeaponAmmo, decrementAmmo, reloadWeapon, wearActiveWeapon,
-    getArmorValue, getMaxHealth, togglePanel, loadFromSave, loadRespawnKit, ensureStarterCaillou, clear,
+    getArmorValue, getMaxHealth, togglePanel, loadFromSave, loadRespawnKit, ensureStarterCaillou, ensureStarterTorche, clear,
   };
 }());

@@ -472,13 +472,26 @@ let doorLockSeq        = 0;
 let worldWaterZones    = [];
 
 // ── Spawn / kit / survie ──────────────────────────────────────────────────────
-const BEACH_SPAWN      = { x: 234, y: 1, z: 8, rotY: Math.PI / 2 }; // sync beach-spawn.mjs
+const BEACH_SPAWN      = { x: 248, y: 1, z: -8, rotY: Math.PI / 2 }; // sync beach-spawn.mjs
 const DEFAULT_SURVIVAL = { faim: 80, soif: 80, infection: 0, saignement: false };
 const STARTING_ITEMS   = {
-  hotbar: [{ type: 'tool_caillou', qty: 1, durability: 80 }, null, null, null, null, null],
+  hotbar: [
+    { type: 'tool_caillou', qty: 1, durability: 80 },
+    { type: 'tool_torche', qty: 1 },
+    null, null, null, null,
+  ],
   bag: [],
   equip: { 'Tête': null, 'Torso': null, 'Mains': null, 'Dos': null },
 };
+
+function _invHasType(inv, type) {
+  const hotbar = Array.isArray(inv.hotbar) ? inv.hotbar : [];
+  const bag = inv.bag || [];
+  const equip = inv.equip || {};
+  return hotbar.some((s) => s && s.type === type)
+    || bag.some((s) => s && s.type === type)
+    || Object.values(equip).some((s) => s && s.type === type);
+}
 
 function ensureStarterRock(p) {
   const inv = p.inv;
@@ -490,8 +503,29 @@ function ensureStarterRock(p) {
     || bag.some((s) => s && s.type)
     || Object.values(equip).some((s) => s && s.type);
   if (hasAny) return false;
-  inv.hotbar = [{ type: 'tool_caillou', qty: 1, durability: 80 }, null, null, null, null, null];
+  inv.hotbar = [
+    { type: 'tool_caillou', qty: 1, durability: 80 },
+    { type: 'tool_torche', qty: 1 },
+    null, null, null, null,
+  ];
   inv.bag = inv.bag || [];
+  return true;
+}
+
+/** Torche de départ si absent (rejoin de nuit). */
+function ensureStarterTorch(p) {
+  const inv = p.inv;
+  if (!inv || typeof inv !== 'object') return false;
+  if (_invHasType(inv, 'tool_torche')) return false;
+  const hotbar = Array.isArray(inv.hotbar) ? inv.hotbar : (inv.hotbar = []);
+  const idx = hotbar.findIndex((s) => !s || !s.type);
+  const torch = { type: 'tool_torche', qty: 1 };
+  if (idx >= 0) {
+    hotbar[idx] = torch;
+    return true;
+  }
+  inv.bag = inv.bag || [];
+  inv.bag.push(torch);
   return true;
 }
 const STARTING_SAVE = JSON.stringify({ ...STARTING_ITEMS, survival: DEFAULT_SURVIVAL });
@@ -1523,7 +1557,7 @@ setInterval(() => {
   } catch (err) {
     log.error('regen', 'tick failed', { err: err.message });
   }
-}, 10_000);
+}, 5_000);
 
 setInterval(() => {
   try {
@@ -1778,6 +1812,7 @@ io.on('connection', async (socket) => {
   p.anchorZ = p.z;
   setTimeout(() => { if (players.has(socket.id)) p.invincible = false; }, 5000);
   if (ensureStarterRock(p)) p.dirty = true;
+  if (ensureStarterTorch(p)) p.dirty = true;
   players.set(socket.id, p);
   _persistPlayer(p);
   log.info('socket', 'connect', {
@@ -2801,7 +2836,7 @@ io.on('connection', async (socket) => {
     setTimeout(() => { if (players.has(socket.id)) p.invincible = false; }, 3000);
     _emitSurvivalUpdate(socket, p);
     socket.emit('respawn-at', { spawn: BEACH_SPAWN, inventory: kit, survival: { ...DEFAULT_SURVIVAL } });
-    log.info('death', 'respawn', { player: p.username, spawn: BEACH_SPAWN, kit: 'tool_caillou' });
+    log.info('death', 'respawn', { player: p.username, spawn: BEACH_SPAWN, kit: 'caillou+torche' });
   });
 
   // Fouille d'un joueur endormi (déconnecté)
@@ -2993,7 +3028,7 @@ io.on('connection', async (socket) => {
 // ── Réinitialisation unique (lancement) ───────────────────────────────────────
 // Remet TOUS les joueurs au spawn plage (une fois après migration camp → plage).
 async function resetAllPlayersOnce() {
-  const marker = path.join(ROOT_DIR, '.beach_spawn_v1_reset');
+  const marker = path.join(ROOT_DIR, '.beach_spawn_v3_east_edge');
   if (fs.existsSync(marker)) return;
   try {
     const [r] = await pool.execute(
@@ -3001,7 +3036,7 @@ async function resetAllPlayersOnce() {
       [STARTING_SAVE, BEACH_SPAWN.x, BEACH_SPAWN.y, BEACH_SPAWN.z, BEACH_SPAWN.rotY]
     );
     fs.writeFileSync(marker, new Date().toISOString());
-    log.info('boot', 'players reset once', { affected: r.affectedRows });
+    log.info('boot', 'players reset to east-edge beach', { affected: r.affectedRows });
   } catch (e) {
     log.error('boot', 'player reset failed', { err: e.message });
   }

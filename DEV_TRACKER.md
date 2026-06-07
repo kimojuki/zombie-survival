@@ -50,6 +50,64 @@ Copier dans la description de PR :
 
 ## 2026-06-07
 
+### Completed — Torche au kit de départ (2026-06-07)
+
+- **Serveur** : `STARTING_ITEMS` hotbar slot 2 = `tool_torche` ; `ensureStarterTorch()` à la connexion si absent (rejoin de nuit).
+- **Client** : `ensureStarterTorche()` secours après `game-init` ; respawn idem.
+- **Version** : `20260607-starter-torch-148`
+
+### Completed — Son coupé par défaut (2026-06-07)
+
+- **Audio** : muet au premier lancement (`zs_audio_muted` absent → mute) ; menu ☰ pour réactiver.
+- **Version** : `20260607-audio-muted-default-147`
+
+### Completed — Mega-forêt S01 + côte sable pleine (2026-06-07)
+
+- **Côte** : rectangle sable x244–295 (plus de bande herbe) ; eau chevauche le rivage.
+- **Forêt** : ~750 arbres seed (+ zones north/south/west) ; regen cible 220, 8/tick.
+- **Version** : `20260607-mega-forest-coast-146`
+
+### Completed — Plage côte + forêt littorale (2026-06-07)
+
+- **Visuel** : sable jusqu'au bord map (plus de bande herbe entre sable/eau) ; terrain mesh = couleur sable sous la plage.
+- **Forêt** : zones `coastal_edge` / `coastal_littoral` — arbres dès la fin du sable.
+- **Version** : `20260607-beach-coast-forest-145`
+
+### Completed — Plage bord est map (2026-06-07)
+
+- **Position** : côte est (`x≈272`), océan à l'horizon, ~250 m de sentier avant la clairière forêt.
+- **Gameplay** : réveil sur la plage au bord → marche vers l'ouest → lisière → forêt S01.
+- **Reset serveur** : `.beach_spawn_v3_east_edge` (one-shot).
+- **Version** : `20260607-beach-east-edge-144`
+
+### Completed — Fix stack overflow build_anchors (2026-06-07)
+
+- **Symptôme** : `game-init failed RangeError: Maximum call stack size exceeded` → connexion Socket.io coupée.
+- **Cause** : `_isCoherentDeck` ↔ `listAdjacentFoundations` en récursion infinie (fondation comptée comme sa propre voisine).
+- **Fix** : voisins géométriques `_neighborsAtRaw` sans filtre cohérence ; exclusion cellule `< 0.35 m`.
+- **Version** : `20260607-build-anchors-stackfix-143`
+
+### Completed — Fix artisanat PC (layout) (2026-06-07)
+
+- **Cause** : styles inline dans `craft.js` forçaient `width: 360px` (mobile) sur PC → grille 2 colonnes écrasée.
+- **Fix** : layout 100 % CSS ; panneau desktop `780px`, onglets + grille, scrollbars propres.
+- **Version** : `20260607-craft-desktop-fix-142`
+
+### Completed — Plage spawn + intro réveil (2026-06-07)
+
+- **Carte** : plage déplacée au bord est de la forêt S01 (`72,-8`), sentier vers clairière `(0,-6)`.
+- **Visuels** : texture sable procédurale, océan large à l'est, sable mouillé, bois flotté.
+- **Intro** : première connexion — réveil au sol, bulle scénario (mobile + PC), montée caméra puis contrôle.
+- **Serveur** : reset unique `.beach_spawn_v2_forest_edge` pour repositionner les comptes existants.
+- **Version** : `20260607-beach-intro-141`
+
+### Completed — Repousse arbres/rochers accélérée (2026-06-07)
+
+- **Regen** : intervalles 10 s / 12 s (ex. 25 / 35), batch 5 arbres + 3 rochers, cibles 85 / 75.
+- **Arbres regen** : départ phase 2 (~50 % bois) au lieu de pousse vide.
+- **Croissance** : `GROWTH_PHASE_MS` 45 s (ex. 120 s) ; tick regen serveur 5 s.
+- **Version** : `20260607-resource-regen-faster-140`
+
 ### Completed — Serveurs multi-domaines (Badom + preview prod) (2026-06-07)
 
 - **`GET /api/servers`** : liste dynamique, même origine = pas de redirect, auto-sélection par `SERVER_ROLE`.

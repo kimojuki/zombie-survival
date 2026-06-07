@@ -6,7 +6,7 @@ import { getTreeWoodMax } from './tree-wood.mjs';
 export const TREE_GROWTH_MAX_PHASE = 4;
 
 /** Durée réelle entre deux phases de croissance (ms). */
-export const GROWTH_PHASE_MS = 120_000;
+export const GROWTH_PHASE_MS = 45_000;
 
 export const TREE_SCALE_BY_PHASE = Object.freeze([0.14, 0.32, 0.52, 0.76, 1.0]);
 

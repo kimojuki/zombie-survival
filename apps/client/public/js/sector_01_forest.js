@@ -31,7 +31,11 @@
   ZS.registerFlatZone(-104, -9, 18, 5, 5);   // Pont S01→S02
 
   function _forestRoads() {
-    const trail = (ZS.SPAWN_TRAIL_PTS || [[0, -11.2], [14, -18]]).map(p => p.slice());
+    const fallback = (ZS.BEACH_TRAIL_PTS || [
+      [242, -8], [215, -8], [175, -7], [130, -6], [85, -6],
+      [45, -6], [0, -6], [14, -18],
+    ]).map(p => p.slice());
+    const trail = (ZS.SPAWN_TRAIL_PTS?.length ? ZS.SPAWN_TRAIL_PTS : fallback).map(p => p.slice());
     return [
       { id: 'spawn_trail', pts: trail, width: 1.25, type: 'dirt', smooth: true },
     ];

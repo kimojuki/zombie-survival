@@ -1,11 +1,13 @@
-/** Arbres prefab — placements seed serveur (forêt + clusters morts). */
+/** Arbres prefab — placements seed serveur (mega-forêt S01 + littoral). */
 
-/** Ancien sentier camp → route (retiré). */
-export const SPAWN_TRAIL_PTS = Object.freeze([]);
+import { BEACH_TRAIL_PTS, isInBeachFootprint } from './beach-spawn.mjs';
+
+/** Plage → clairière forêt → ville. */
+export const SPAWN_TRAIL_PTS = BEACH_TRAIL_PTS;
 
 /** Exclusions (cx, cz, r) — plage, bâtiments, jonctions. */
 export const TREE_EXCLUSIONS = Object.freeze([
-  { cx: 252, cz: 8, r: 38 },
+  { cx: 270, cz: -8, r: 30 },
   { cx: -20, cz: 33, r: 24 },
   { cx: -60, cz: -70, r: 14 },
   { cx: -80, cz: 42, r: 14 },
@@ -15,30 +17,80 @@ export const TREE_EXCLUSIONS = Object.freeze([
 
 export const TREE_ZONES = Object.freeze([
   {
+    id: 'coastal_edge',
+    cx: 218,
+    cz: -8,
+    count: 72,
+    radius: 44,
+    pineWeight: 0.58,
+    birchWeight: 0.16,
+    seed: 88004,
+  },
+  {
+    id: 'coastal_littoral',
+    cx: 115,
+    cz: -10,
+    count: 120,
+    radius: 108,
+    pineWeight: 0.52,
+    birchWeight: 0.14,
+    seed: 88005,
+  },
+  {
     id: 'forest_main',
-    cx: -48,
-    cz: -52,
-    count: 55,
-    radius: 130,
+    cx: -58,
+    cz: -48,
+    count: 175,
+    radius: 178,
     pineWeight: 0.55,
     birchWeight: 0.14,
     seed: 88001,
   },
   {
+    id: 'forest_north',
+    cx: -28,
+    cz: 58,
+    count: 90,
+    radius: 132,
+    pineWeight: 0.5,
+    birchWeight: 0.16,
+    seed: 88006,
+  },
+  {
+    id: 'forest_south',
+    cx: -22,
+    cz: -118,
+    count: 90,
+    radius: 128,
+    pineWeight: 0.52,
+    birchWeight: 0.14,
+    seed: 88007,
+  },
+  {
+    id: 'forest_west',
+    cx: -148,
+    cz: -38,
+    count: 100,
+    radius: 148,
+    pineWeight: 0.54,
+    birchWeight: 0.12,
+    seed: 88008,
+  },
+  {
     id: 'forest_dead_a',
-    cx: 32,
-    cz: -55,
-    count: 4,
-    radius: 12,
+    cx: 38,
+    cz: -58,
+    count: 8,
+    radius: 18,
     deadOnly: true,
     seed: 88002,
   },
   {
     id: 'forest_dead_b',
-    cx: -40,
-    cz: 60,
-    count: 4,
-    radius: 12,
+    cx: -42,
+    cz: 62,
+    count: 8,
+    radius: 16,
     deadOnly: true,
     seed: 88003,
   },
@@ -95,15 +147,16 @@ function _placementsForZone(zone) {
   const rng = _mulberry32(zone.seed || 1);
   const out = [];
   let attempts = 0;
-  const maxAttempts = zone.count * 40;
+  const maxAttempts = zone.count * 55;
   while (out.length < zone.count && attempts < maxAttempts) {
     attempts++;
     const ang = rng() * Math.PI * 2;
-    const dist = rng() * zone.radius;
+    const dist = Math.sqrt(rng()) * zone.radius;
     const x = zone.cx + Math.cos(ang) * dist;
     const z = zone.cz + Math.sin(ang) * dist;
     if (Math.hypot(x, z) < 4) continue;
     if (_inExclusion(x, z)) continue;
+    if (isInBeachFootprint(x, z, 1.5)) continue;
     if (_nearTrail(x, z)) continue;
     const treeSeed = Math.floor(rng() * 0xffffff);
     out.push({
@@ -120,9 +173,6 @@ function _placementsForZone(zone) {
   return out;
 }
 
-/**
- * @returns {Array<{ kind: 'prefab', prefabId: string, x: number, z: number, rotY: number, scale: number, treeSeed: number }>}
- */
 /** Clé stable pour dédupliquer un arbre seed serveur. */
 export function treePlacementKey(placement) {
   if (!placement) return '';
@@ -142,4 +192,3 @@ export function computeTreePlacements() {
 export function listTreePrefabIds() {
   return ['tree_oak', 'tree_pine', 'tree_birch', 'tree_dead'];
 }
-

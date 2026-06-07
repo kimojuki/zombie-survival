@@ -291,6 +291,7 @@
     if (data.inventory) {
       ZS.Inventory.loadFromSave(data.inventory);
       ZS.Inventory.ensureStarterCaillou?.();
+      ZS.Inventory.ensureStarterTorche?.();
     }
     if (data.survival) ZS.Survival.loadFromSave(data.survival);
     if (typeof data.onlineCount === 'number') _setOnlineCount(data.onlineCount);
@@ -305,6 +306,7 @@
     _syncPlayerPosToServer();
     _spawnReady = true;
     if (_socket) _socket.emit('request-zombie-sync');
+    ZS.SpawnIntro?.tryStart?.(_state);
 
     L?.setPhase?.('finalize', 1, 'Prêt', '');
     _connecting(false);

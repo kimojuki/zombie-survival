@@ -1018,6 +1018,12 @@ body.mode-mobile.chat-open.chat-keyboard #chat-log {
   font-size: 13px;
   box-shadow: 0 4px 32px rgba(0, 0, 0, 0.7);
 }
+#craft-panel.is-open {
+  display: flex;
+}
+#craft-backdrop.is-open {
+  display: block;
+}
 .craft-hdr {
   display: flex;
   justify-content: space-between;
@@ -1149,9 +1155,12 @@ body.mode-desktop .craft-desktop-only {
 body.mode-desktop .craft-desktop-shell {
   flex: 1;
   min-height: 0;
+  min-width: 0;
   margin-top: 4px;
   border-top: 1px solid #4a3a22;
   overflow: hidden;
+  flex-direction: row;
+  align-items: stretch;
 }
 body.mode-desktop .craft-tabs {
   display: flex;
@@ -1234,17 +1243,30 @@ body.mode-desktop .craft-tab-hint {
 body.mode-desktop .craft-recipe-grid {
   flex: 1;
   min-height: 0;
+  min-width: 0;
+  overflow-x: hidden;
   overflow-y: auto;
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 10px;
   align-content: start;
   padding-right: 6px;
+  scrollbar-width: thin;
+  scrollbar-color: #6a5a2a rgba(0, 0, 0, 0.2);
+}
+body.mode-desktop .craft-recipe-grid::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+body.mode-desktop .craft-recipe-grid::-webkit-scrollbar-thumb {
+  background: #6a5a2a;
+  border-radius: 4px;
 }
 body.mode-desktop .craft-card {
   display: flex;
   flex-direction: column;
   gap: 8px;
+  min-width: 0;
   padding: 12px;
   border-radius: 8px;
   border: 1px solid #3a3830;

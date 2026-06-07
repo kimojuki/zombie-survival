@@ -1,6 +1,6 @@
 'use strict';
 
-import { clampGrowthPhase, getTreeScale, getTreeWoodForPhase, nextGrowthDueAt, TREE_GROWTH_MAX_PHASE } from '../../../packages/shared/src/tree-growth.mjs';
+import { clampGrowthPhase, getTreeScale, getTreeWoodForPhase, nextGrowthDueAt, TREE_GROWTH_MAX_PHASE, GROWTH_PHASE_MS } from '../../../packages/shared/src/tree-growth.mjs';
 import {
   REGEN_CONFIG,
   findRandomTreeSpawn,
@@ -59,13 +59,15 @@ export function createResourceRegen(ctx) {
     for (let i = 0; i < batch; i++) {
       const spot = findRandomTreeSpawn(decors, now + i * 9973);
       if (!spot) break;
-      const woodMax = getTreeWoodForPhase(spot.prefabId, 0);
+      const startPhase = clampGrowthPhase(REGEN_CONFIG.regenTreeStartPhase ?? 0);
+      const woodMax = getTreeWoodForPhase(spot.prefabId, startPhase);
       const item = ctx.makeDecorItem({
         ...spot,
-        growthPhase: 0,
-        plantedAt: now,
+        growthPhase: startPhase,
+        plantedAt: now - startPhase * GROWTH_PHASE_MS,
         woodMax,
         woodRemaining: woodMax,
+        treeScale: getTreeScale(startPhase),
       });
       decors.push(item);
       ctx.io.emit('decor-item-spawn', item);

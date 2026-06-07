@@ -4,11 +4,19 @@
 (function () {
   'use strict';
 
+  const MUTE_KEY = 'zs_audio_muted';
+  /** Par défaut muet (SFX zombies trop présents — réactivable via menu ☰). */
+  function _readMutedPref() {
+    const v = localStorage.getItem(MUTE_KEY);
+    if (v === null) return true;
+    return v === '1';
+  }
+
   let ctx = null;
   let master = null;     // gain principal
   let musicBus = null;   // bus musique
   let sfxBus = null;     // bus effets
-  let _muted = false;
+  let _muted = _readMutedPref();
   let _musicStarted = false;
   let _musicEl = null;   // élément <audio> de la musique de fond
   let _noise = null;     // buffer de bruit blanc réutilisable
@@ -67,6 +75,7 @@
 
   // ── Initialisation / reprise du contexte (au 1er geste) ─────────────────────
   function init() {
+    setMuted(_muted);
     const resume = () => _ensure();
     ['pointerdown', 'touchstart', 'keydown', 'click'].forEach((ev) =>
       document.addEventListener(ev, resume, { passive: true }));
@@ -460,13 +469,15 @@
   // ── Mute / bouton UI ────────────────────────────────────────────────────────
   function setMuted(m) {
     _muted = m;
+    try { localStorage.setItem(MUTE_KEY, m ? '1' : '0'); } catch { /* privé */ }
     if (master) master.gain.value = m ? 0 : 0.9;
     if (_musicEl) _musicEl.muted = m;   // couvre le cas non routé dans Web Audio
     const item = document.getElementById('menu-audio');
     if (item) item.textContent = m ? '🔇 Son : coupé' : '🔊 Son : activé';
   }
   function toggleMute() { setMuted(!_muted); }
+  function isMuted() { return _muted; }
 
   window.ZS = window.ZS || {};
-  ZS.Audio = { init, gunshot, melee, chopWood, treeFall, door, zombieGroan, setMuted, toggleMute };
+  ZS.Audio = { init, gunshot, melee, chopWood, treeFall, door, zombieGroan, setMuted, toggleMute, isMuted };
 }());

@@ -22,7 +22,7 @@ test('growth schedule uses plantedAt', () => {
   const planted = 1_000_000;
   assert.ok(nextGrowthDueAt(planted, 0) > planted);
   assert.equal(nextGrowthDueAt(planted, 4), Infinity);
-  assert.ok(GROWTH_PHASE_MS > 60_000);
+  assert.ok(GROWTH_PHASE_MS >= 30_000);
 });
 
 test('clamp growth phase', () => {

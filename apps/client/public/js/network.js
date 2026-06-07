@@ -938,18 +938,27 @@
 
   function requestDecorDoorLock(decorId, cb) {
     if (!_socket || !decorId) return;
-    _socket.emit('decor-door-lock', { id: decorId }, (res) => {
-      if (res?.ok) ZS.Inventory?.removeItem?.('tool_verrou', 1);
-      else if (res?.error) ZS.UI?.showNotif?.(res.error);
+    const inv = ZS.Inventory?.getInvSnapshot?.();
+    ZS.Inventory?.syncToServer?.();
+    _socket.emit('decor-door-lock', { id: decorId, inv }, (res) => {
+      if (res?.ok) {
+        ZS.Inventory?.removeItem?.('tool_verrou', 1);
+        ZS.UI?.showNotif?.('Porte verrouillée — clé reçue');
+      } else {
+        ZS.UI?.showNotif?.(res?.error || 'Verrouillage impossible');
+      }
       if (typeof cb === 'function') cb(res);
     });
   }
 
   function requestDecorDoorUnlock(decorId, cb) {
     if (!_socket || !decorId) return;
-    _socket.emit('decor-door-unlock', { id: decorId }, (res) => {
+    const inv = ZS.Inventory?.getInvSnapshot?.();
+    ZS.Inventory?.syncToServer?.();
+    _socket.emit('decor-door-unlock', { id: decorId, inv }, (res) => {
       if (res?.ok && res.lockId) ZS.Inventory?.removeDoorKey?.(res.lockId);
-      else if (!res?.ok && res?.error) ZS.UI?.showNotif?.(res.error);
+      else if (!res?.ok) ZS.UI?.showNotif?.(res?.error || 'Retrait du verrou impossible');
+      else if (res?.ok) ZS.UI?.showNotif?.('Verrou retiré');
       if (typeof cb === 'function') cb(res);
     });
   }

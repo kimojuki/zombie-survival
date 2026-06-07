@@ -1850,17 +1850,25 @@ io.on('connection', async (socket) => {
   });
 
   socket.on('decor-door-lock', (d, cb) => {
+    const reply = (payload) => {
+      socket.emit('door-lock-result', { ...payload, id: d?.id || null });
+      if (typeof cb === 'function') cb(payload);
+    };
+    if (d?.inv && typeof d.inv === 'object') {
+      p.inv = _normalizeInv(d.inv);
+      p.dirty = true;
+    }
     const item = _getNearbyDoor(d?.id, p.x, p.z);
     if (!item) {
-      if (typeof cb === 'function') cb({ ok: false, error: 'Porte introuvable' });
+      reply({ ok: false, error: 'Porte introuvable' });
       return;
     }
     if (item.locked) {
-      if (typeof cb === 'function') cb({ ok: false, error: 'Déjà verrouillée' });
+      reply({ ok: false, error: 'Déjà verrouillée' });
       return;
     }
     if (!_consumeInvType(p.inv, 'tool_verrou', 1)) {
-      if (typeof cb === 'function') cb({ ok: false, error: 'Pas de verrou' });
+      reply({ ok: false, error: 'Pas de verrou dans l\'inventaire' });
       return;
     }
     const lockId = `lock_${Date.now()}_${++doorLockSeq}`;
@@ -1881,10 +1889,14 @@ io.on('connection', async (socket) => {
       lockOwner: p.username,
     });
     log.info('world', 'door locked', { player: p.username, decorId: item.id, lockId });
-    if (typeof cb === 'function') cb({ ok: true, lockId });
+    reply({ ok: true, lockId });
   });
 
   socket.on('decor-door-unlock', (d, cb) => {
+    if (d?.inv && typeof d.inv === 'object') {
+      p.inv = _normalizeInv(d.inv);
+      p.dirty = true;
+    }
     const item = _getNearbyDoor(d?.id, p.x, p.z);
     if (!item || !item.locked) {
       if (typeof cb === 'function') cb({ ok: false, error: 'Pas verrouillée' });

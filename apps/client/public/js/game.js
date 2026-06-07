@@ -1017,19 +1017,7 @@
   }
 
   function tryInstallDoorLock() {
-    const item = ZS.Inventory?.getActiveItem?.();
-    if (!item || item.type !== 'tool_verrou') return false;
-    const door = ZS.findNearestDecorDoor?.(state.player.x, state.player.z, 3.2);
-    if (!door) {
-      ZS.UI?.showNotif?.('Approchez une porte');
-      return false;
-    }
-    if (door.locked) {
-      ZS.UI?.showNotif?.('Porte déjà verrouillée');
-      return true;
-    }
-    ZS.Network?.requestDecorDoorLock?.(door.decorId);
-    return true;
+    return ZS.Inventory?.installDoorLockOnNearestDoor?.() || false;
   }
 
   function _toggleNearbyDoor(door) {
@@ -1056,8 +1044,7 @@
     if (!door) return false;
     const active = ZS.Inventory?.getActiveItem?.();
     if (active?.type === 'tool_verrou' && !door.locked) {
-      ZS.Network?.requestDecorDoorLock?.(door.decorId);
-      return true;
+      return ZS.Inventory?.installDoorLockOnNearestDoor?.() || false;
     }
     return _toggleNearbyDoor(door);
   }

@@ -50,9 +50,26 @@ Copier dans la description de PR :
 
 ## 2026-06-07
 
+### Fix — verrou porte sans effet v2 (2026-06-07)
+
+- **Cause** : appel réseau silencieux (ack socket parfois absent) + inventaire non vu par un serveur non redémarré.
+- **Fix** : `installDoorLockOnNearestDoor()` dans l'inventaire (socket direct), notif « Verrouillage… », event `door-lock-result`, timeout explicite.
+- **Cache bust** : `20260607-verrou-fix-107`
+
+### Fix — verrou porte sans effet (2026-06-07)
+
+- **Cause** : inventaire crafté côté client jamais synchronisé → serveur rejetait « Pas de verrou » sans retour visible fiable.
+- **Fix** : snapshot inventaire dans `decor-door-lock` / `unlock` ; sync après craft ; messages notif explicites.
+- **Cache bust** : `20260607-verrou-fix-106`
+
+### Completed — Craft verrou : 2 planches (2026-06-07)
+
+- **Verrou** : 2 planches (plus de ferraille / clous).
+- **Cache bust** : `20260607-verrou-craft-105`
+
 ### Completed — Verrou & clé sur portes (2026-06-07)
 
-- **Items** : `tool_verrou` (craft ferraille + clous) et `struct_cle` (clé liée à un `lockId`, créée à la pose).
+- **Items** : `tool_verrou` (craft 2 planches) et `struct_cle` (clé liée à un `lockId`, créée à la pose).
 - **Pose** : verrou en main + E près d'une porte (`build_door_wood` / grande porte) → consomme le verrou, accroche le cadenas, donne la clé au poseur.
 - **Ouverture** : porte verrouillée → clé correspondante requise (serveur `decor-door-toggle`).
 - **Retrait** : maintenir E ~2 s (propriétaire ou détenteur de la clé) → récupère le verrou, retire la clé matching.

@@ -26,7 +26,7 @@
     { result: 'struct_porte_bois', qty: 1, ingredients: { res_planche: 4 } },
     { result: 'struct_escalier_bois', qty: 1, ingredients: { res_planche: 8 } },
     { result: 'struct_grande_porte_bois', qty: 1, ingredients: { res_planche: 10 } },
-    { result: 'tool_verrou', qty: 1, ingredients: { res_ferraille: 2, res_clous: 4 } },
+    { result: 'tool_verrou', qty: 1, ingredients: { res_planche: 2 } },
     { result: 'struct_storage_chest', qty: 1, ingredients: { res_bois_brut: 15 } },
   ];
 
@@ -169,6 +169,7 @@
     if (!_canCraft(rec)) return;
     for (const [id, qty] of Object.entries(rec.ingredients)) ZS.Inventory.removeItem(id, qty);
     const added = ZS.Inventory.addItem(rec.result, rec.qty);
+    ZS.Inventory.syncToServer?.();
     ZS.UI.showNotif(added ? ('+ ' + ZS.ITEMS[rec.result]?.label) : 'Inventaire plein');
   }
 

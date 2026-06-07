@@ -15,6 +15,7 @@
   let _sel = null;      // sélection pour déplacement : { zone:'hotbar'|'bag'|'equip', idx }
 
   let _state, _scene, _socket;
+  let _lockPending = null;
   const _worldItems = new Map();
 
   // ── Init ───────────────────────────────────────────────────────────────────
@@ -33,6 +34,72 @@
     _setupUseBtn();
     _setupGrabBtn();
     _setupBuildCtl();
+    if (socket) {
+      socket.on('door-lock-result', _onDoorLockResult);
+    }
+  }
+
+  function _finishDoorLockAttempt(d) {
+    if (!_lockPending) return;
+    if (d?.id && _lockPending.decorId && d.id !== _lockPending.decorId) return;
+    clearTimeout(_lockPending.timer);
+    _lockPending = null;
+    if (d?.ok) {
+      removeItem('tool_verrou', 1);
+      ZS.UI?.showNotif?.('Porte verrouillée — clé reçue');
+    } else {
+      ZS.UI?.showNotif?.(d?.error || 'Verrouillage impossible');
+    }
+  }
+
+  function _onDoorLockResult(d) {
+    _finishDoorLockAttempt(d);
+  }
+
+  /** Verrou en main + porte battante à proximité → pose le cadenas (sync serveur). */
+  function installDoorLockOnNearestDoor() {
+    if (!_state?.player) return false;
+    const px = _state.player.x;
+    const pz = _state.player.z;
+    const door = ZS.findNearestDecorDoor?.(px, pz, 3.6);
+    if (!door) {
+      ZS.UI?.showNotif?.('Approchez une porte (objet Porte / Grande Porte)');
+      return false;
+    }
+    if (door.locked) {
+      ZS.UI?.showNotif?.('Porte déjà verrouillée');
+      return true;
+    }
+    const active = _hotbar[_active];
+    if (!active || active.type !== 'tool_verrou') {
+      ZS.UI?.showNotif?.('Sélectionnez le verrou dans la barre d\'action');
+      return false;
+    }
+    if (countItem('tool_verrou') < 1) {
+      ZS.UI?.showNotif?.('Pas de verrou');
+      return false;
+    }
+    if (!_socket?.connected) {
+      ZS.UI?.showNotif?.('Serveur déconnecté');
+      return false;
+    }
+    if (_lockPending) return true;
+
+    const inv = getInvSnapshot();
+    _syncToServer();
+    ZS.UI?.showNotif?.('Verrouillage…');
+    _lockPending = {
+      decorId: door.decorId,
+      timer: setTimeout(() => {
+        if (!_lockPending) return;
+        _lockPending = null;
+        ZS.UI?.showNotif?.('Pas de réponse serveur — redémarrez Node (npm run dev:server)');
+      }, 3500),
+    };
+    _socket.emit('decor-door-lock', { id: door.decorId, inv }, (res) => {
+      _finishDoorLockAttempt({ ...res, id: door.decorId });
+    });
+    return true;
   }
 
   // ── Capacité du sac (dépend du sac équipé) ──────────────────────────────────
@@ -792,6 +859,19 @@
     }
     _renderHotbar();
     if (_panelOpen) _renderInvPanel();
+    _syncToServer();
+  }
+
+  function getInvSnapshot() {
+    return {
+      hotbar: JSON.parse(JSON.stringify(_hotbar)),
+      bag: JSON.parse(JSON.stringify(_bag)),
+      equip: JSON.parse(JSON.stringify(_equip)),
+    };
+  }
+
+  function syncToServer() {
+    _syncToServer();
   }
 
   function getStorageStacks() {
@@ -1247,9 +1327,7 @@
       return;
     }
     if (def.category === 'tool' && item.type === 'tool_verrou') {
-      if (ZS.Game?.tryInstallDoorLock?.()) return;
-      ZS.UI?.showNotif?.('Approchez une porte pour la verrouiller');
-      return;
+      return installDoorLockOnNearestDoor();
     }
   }
 
@@ -1694,7 +1772,8 @@
     init, tick,
     spawnWorldItem, removeWorldItem, receivePickup, spawnStructure, collectBag,
     countItem, addItem, addItemSlot, removeItem, removeStack, getStorageStacks, getStorageSlots, canAddItem, canAddStack, consumeOne,
-    placeActiveStructure, getActiveItem, hasDoorKey, removeDoorKey, getWeaponAmmo, decrementAmmo, reloadWeapon, wearActiveWeapon,
+    getInvSnapshot, syncToServer,
+    placeActiveStructure, getActiveItem, hasDoorKey, removeDoorKey, installDoorLockOnNearestDoor, getWeaponAmmo, decrementAmmo, reloadWeapon, wearActiveWeapon,
     getArmorValue, getMaxHealth, togglePanel, loadFromSave, loadRespawnKit, ensureStarterCaillou, clear,
   };
 }());

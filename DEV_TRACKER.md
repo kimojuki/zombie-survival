@@ -50,6 +50,17 @@ Copier dans la description de PR :
 
 ## 2026-06-07
 
+### Completed — Murs secteur : coins et trous (2026-06-08)
+
+- **sector_walls.js** : périmètre pleine longueur (sans PAD), portes filtrées par bord, coins renforcés, step 1,75 m.
+- **Version** : `20260608-sector-walls-gap-250`
+
+### Completed — Carte M : position joueur live (2026-06-08)
+
+- **game.js** : `Map.tick(dt)` — le delta était absent (redraw jamais déclenché).
+- **map.js** : redraw si déplacement ≥ 0,2 m ou toutes les 0,1 s carte ouverte.
+- **Version** : `20260608-map-live-pos-249`
+
 ### Completed — Fix carte (M) PC (2026-06-08)
 
 - **map.js** ajouté à `legacy-modules.js` (le chargement via `ZS.loadScript` était un no-op).

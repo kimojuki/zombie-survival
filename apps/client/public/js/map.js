@@ -9,6 +9,10 @@
   let _found = localStorage.getItem('zs_map_found') === '1';
   let _open = false;
   let _drawAcc = 0;
+  let _lastDrawX = NaN;
+  let _lastDrawZ = NaN;
+  const _DRAW_MIN_DT = 0.1;
+  const _MOVE_REDRAW = 0.2;
 
   function _worldCfg() {
     const w = ZS.SectorBounds?.MAP_WORLD;
@@ -40,12 +44,16 @@
     if (!_found && _itemMesh) {
       if (Math.hypot(_state.player.x - SPAWN_X, _state.player.z - SPAWN_Z) < 2.2) _pickup();
     }
-    if (_open) {
-      _drawAcc += dt || 0;
-      if (_drawAcc >= 0.25) {
-        _drawAcc = 0;
-        _draw();
-      }
+    if (!_open) return;
+    const px = _state?.player?.x ?? 0;
+    const pz = _state?.player?.z ?? 0;
+    const moved = Math.hypot(px - _lastDrawX, pz - _lastDrawZ) >= _MOVE_REDRAW;
+    _drawAcc += dt || 0;
+    if (moved || _drawAcc >= _DRAW_MIN_DT) {
+      _drawAcc = 0;
+      _lastDrawX = px;
+      _lastDrawZ = pz;
+      _draw();
     }
   }
 
@@ -88,6 +96,9 @@
 
   function _open_() {
     _open = true;
+    _drawAcc = _DRAW_MIN_DT;
+    _lastDrawX = NaN;
+    _lastDrawZ = NaN;
     document.getElementById('map-overlay').style.display = 'flex';
     _draw();
     ZS.onUiPanelOpen?.();
@@ -95,6 +106,7 @@
 
   function _close() {
     _open = false;
+    _drawAcc = 0;
     document.getElementById('map-overlay').style.display = 'none';
     ZS.onUiPanelClose?.();
   }

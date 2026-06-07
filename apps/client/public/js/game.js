@@ -1300,7 +1300,7 @@
     ZS.Inventory.tick(dt);
     ZS.Craft.tick(dt);
     ZS.Survival.tick(dt);
-    ZS.Map?.tick?.();
+    ZS.Map?.tick?.(dt);
     _updateInteractHold(dt);
     _updateDoorInteractUi();
     _cullLights();

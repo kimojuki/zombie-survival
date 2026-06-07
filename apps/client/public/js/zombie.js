@@ -62,19 +62,20 @@
       if (!limbs) return;
 
       entry.animTime += dt;
+      const armTarget = entry.meleeReach ? entry.armPose : entry.armPose * 0.32;
 
       if (entry.isMoving) {
         const freq = entry.speed * 2.2;
         const swing = Math.sin(entry.animTime * freq);
         limbs.lLeg.rotation.x =  swing * 0.45;
         limbs.rLeg.rotation.x = -swing * 0.45;
-        limbs.lArm.rotation.x = entry.armPose + (-swing * 0.28);
-        limbs.rArm.rotation.x = entry.armPose + ( swing * 0.28);
+        limbs.lArm.rotation.x = armTarget + (-swing * 0.28);
+        limbs.rArm.rotation.x = armTarget + ( swing * 0.28);
       } else {
         limbs.lLeg.rotation.x *= 0.85;
         limbs.rLeg.rotation.x *= 0.85;
-        limbs.lArm.rotation.x += (entry.armPose - limbs.lArm.rotation.x) * 0.12;
-        limbs.rArm.rotation.x += (entry.armPose - limbs.rArm.rotation.x) * 0.12;
+        limbs.lArm.rotation.x += (armTarget - limbs.lArm.rotation.x) * 0.12;
+        limbs.rArm.rotation.x += (armTarget - limbs.rArm.rotation.x) * 0.12;
       }
     });
   }
@@ -142,6 +143,7 @@
       targetAngle:  initialAngle,
       speed:        z.speed || 2,
       isMoving:     false,
+      meleeReach:   !!z.meleeReach,
       prevX:        z.x,
       prevZ:        z.z,
     };
@@ -158,6 +160,7 @@
 
     if (z.angle != null) entry.targetAngle = z.angle;
     if (z.speed  != null) entry.speed = z.speed;
+    if (z.meleeReach != null) entry.meleeReach = !!z.meleeReach;
     if (z.maxHealth != null) entry.maxHealth = z.maxHealth;
     if (z.collideRadius != null) entry.collideRadius = z.collideRadius;
     if (z.health != null) _updateHealthBar(entry, z.health, entry.maxHealth);

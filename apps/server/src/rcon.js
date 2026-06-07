@@ -592,6 +592,7 @@ function createRcon(ctx) {
       item.treeSeed = Math.floor(Math.random() * 0xffffff);
     }
     ctx.decorItems.set(item.id, item);
+    ctx.persistDecorUpsert?.(item);
     broadcastDecorSpawn(item);
     return ok(`Décor posé ${item.id}: ${(item.prefabId || item.type)} @ (${x.toFixed(1)}, ${z.toFixed(1)}) scale=${item.scale.toFixed(2)}`);
   });
@@ -664,6 +665,7 @@ function createRcon(ctx) {
     }
     if (!target) return fail(`Décor introuvable: ${args[1] || 'nearest'}`);
     ctx.decorItems.delete(target.id);
+    ctx.persistDecorDelete?.(target.id, target);
     broadcastDecorRemove(target.id);
     return ok(`Décor retiré ${target.id} (${target.prefabId || target.type})`);
   });

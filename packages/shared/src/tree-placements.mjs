@@ -1,26 +1,23 @@
 /** Arbres prefab — placements seed serveur (forêt + clusters morts). */
 
-export const SPAWN_TRAIL_PTS = Object.freeze([
-  [0, -11.2],
-  [14, -18],
-]);
+/** Ancien sentier camp → route (retiré). */
+export const SPAWN_TRAIL_PTS = Object.freeze([]);
 
-/** Exclusions (cx, cz, r) — clairière, bâtiments, jonctions. */
+/** Exclusions (cx, cz, r) — plage, bâtiments, jonctions. */
 export const TREE_EXCLUSIONS = Object.freeze([
-  { cx: 0, cz: -6, r: 22 },
+  { cx: 252, cz: 8, r: 38 },
   { cx: -20, cz: 33, r: 24 },
   { cx: -60, cz: -70, r: 14 },
   { cx: -80, cz: 42, r: 14 },
   { cx: 82, cz: -100, r: 20 },
   { cx: 28, cz: -42, r: 10 },
-  { cx: 14, cz: -18, r: 8 },
 ]);
 
 export const TREE_ZONES = Object.freeze([
   {
     id: 'forest_main',
-    cx: 0,
-    cz: -6,
+    cx: -48,
+    cz: -52,
     count: 55,
     radius: 130,
     pineWeight: 0.55,
@@ -126,10 +123,18 @@ function _placementsForZone(zone) {
 /**
  * @returns {Array<{ kind: 'prefab', prefabId: string, x: number, z: number, rotY: number, scale: number, treeSeed: number }>}
  */
+/** Clé stable pour dédupliquer un arbre seed serveur. */
+export function treePlacementKey(placement) {
+  if (!placement) return '';
+  return `tree:${placement.zoneId}:${placement.treeSeed}`;
+}
+
 export function computeTreePlacements() {
   const out = [];
   for (const zone of TREE_ZONES) {
-    out.push(..._placementsForZone(zone));
+    for (const t of _placementsForZone(zone)) {
+      out.push({ ...t, placementKey: treePlacementKey(t) });
+    }
   }
   return out;
 }

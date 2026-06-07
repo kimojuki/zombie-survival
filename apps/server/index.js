@@ -10,9 +10,12 @@ const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
 require('dotenv').config();
 
-const { getPlayer, createPlayer, savePlayerState, pool } = require('./src/db');
+const db = require('./src/db');
+const { getPlayer, createPlayer, savePlayerState, pool, ensureWorldSchema } = db;
 const log = require('./src/logger');
 const { createRcon } = require('./src/rcon');
+const { createWorldPersist } = require('./src/world-persist');
+const worldPersist = createWorldPersist(db, log);
 
 // Dev SQLite : mot de passe par défaut "dev" si RCON_PASSWORD absent (prod MySQL = désactivé)
 const RCON_PASSWORD = process.env.RCON_PASSWORD
@@ -240,7 +243,7 @@ app.post('/api/auth/register', async (req, res) => {
   try {
     if (await getPlayer(username)) return res.status(409).json({ error: 'Nom déjà utilisé' });
     const hash = await bcrypt.hash(password, 12);
-    const id = await createPlayer(username, hash, STARTING_SAVE, FOREST_SPAWN);
+    const id = await createPlayer(username, hash, STARTING_SAVE, BEACH_SPAWN);
     const token = jwt.sign({ id, username }, JWT_SECRET, { expiresIn: '7d' });
     const isAdmin = isAdminUser(username) || RCON_AUTO_ADMIN;
     log.info('auth', 'register ok', { username });
@@ -298,7 +301,7 @@ app.post('/api/auth/login', async (req, res) => {
 const zombies    = new Map();
 const items      = new Map(); // world pickup items (+ butins de mort : bag:true)
 const structures = new Map(); // structures construites par les joueurs (base)
-const decorItems = new Map(); // props admin RCON visibles par tous
+const decorItems = new Map(); // props monde (seed + constructions joueurs)
 let decorSeq = 1;
 const decorPrefabs = [
   'spawn_campfire',
@@ -356,7 +359,7 @@ let doorLockSeq        = 0;
 let worldWaterZones    = [];
 
 // ── Spawn / kit / survie ──────────────────────────────────────────────────────
-const FOREST_SPAWN     = { x: 0.4, y: 1, z: 7, rotY: 0 };   // Procedural spawn approach
+const BEACH_SPAWN      = { x: 234, y: 1, z: 8, rotY: Math.PI / 2 }; // sync beach-spawn.mjs
 const DEFAULT_SURVIVAL = { faim: 80, soif: 80, infection: 0, saignement: false };
 const STARTING_ITEMS   = {
   hotbar: [{ type: 'tool_caillou', qty: 1, durability: 80 }, null, null, null, null, null],
@@ -379,7 +382,7 @@ function ensureStarterRock(p) {
   return true;
 }
 const STARTING_SAVE = JSON.stringify({ ...STARTING_ITEMS, survival: DEFAULT_SURVIVAL });
-const DEATH_BAG_MS  = 30 * 60 * 1000; // butin de mort : 30 min puis disparition
+const GROUND_ITEM_TTL_MS = 30 * 60 * 1000; // drops joueur / mort / zombie / coffre : 30 min
 
 // Sauvegarde combinée (objets + survie) écrite dans la colonne JSON `inventory`.
 function saveBlob(p) {
@@ -497,24 +500,27 @@ function _takeInvSlot(inv, zone, index) {
 }
 
 function _tryAddSlotToInv(inv, item) {
-  if (!item?.type) return false;
-  const n = _normalizeInv(inv);
+  const r = _addStackToInv(inv, item);
+  return r.added > 0 && r.leftover === 0;
+}
+
+/** Ajoute autant que possible ; retourne le reste non placé. */
+function _addStackToInv(inv, item) {
+  if (!item?.type) return { added: 0, leftover: 0 };
+  const qty = Math.max(1, Math.min(999, Number(item.qty) || 1));
   if (item.type === 'struct_cle' && item.lockId) {
-    for (const arr of [n.hotbar, n.bag]) {
-      for (let i = 0; i < arr.length; i++) {
-        if (arr[i]) continue;
-        arr[i] = JSON.parse(JSON.stringify({ ...item, qty: item.qty || 1 }));
-        Object.assign(inv, n);
-        return true;
-      }
-    }
-    return false;
+    if (qty !== 1) return { added: 0, leftover: qty };
+    const clone = JSON.parse(JSON.stringify({ ...item, qty: 1 }));
+    if (_addStackToInvOnce(inv, clone)) return { added: 1, leftover: 0 };
+    return { added: 0, leftover: 1 };
   }
-  let left = item.qty || 1;
+  const n = _normalizeInv(inv);
+  let left = qty;
   const maxStack = 99;
   for (const arr of [n.hotbar, n.bag]) {
     for (let i = 0; i < arr.length && left > 0; i++) {
       if (!arr[i] || arr[i].type !== item.type) continue;
+      if (item.lockId && arr[i].lockId !== item.lockId) continue;
       const room = maxStack - (arr[i].qty || 1);
       if (room <= 0) continue;
       const add = Math.min(room, left);
@@ -530,9 +536,37 @@ function _tryAddSlotToInv(inv, item) {
       left -= add;
     }
   }
-  if (left > 0) return false;
   Object.assign(inv, n);
-  return true;
+  return { added: qty - left, leftover: left };
+}
+
+function _addStackToInvOnce(inv, item) {
+  if (!item?.type) return false;
+  const n = _normalizeInv(inv);
+  if (item.type === 'struct_cle' && item.lockId) {
+    for (const arr of [n.hotbar, n.bag]) {
+      for (let i = 0; i < arr.length; i++) {
+        if (arr[i]) continue;
+        arr[i] = JSON.parse(JSON.stringify({ ...item, qty: item.qty || 1 }));
+        Object.assign(inv, n);
+        return true;
+      }
+    }
+    return false;
+  }
+  return _addStackToInv(inv, item).leftover === 0;
+}
+
+function _spawnChestOverflowDrop(type, qty, baseX, baseZ, extra, idx) {
+  const a = (idx / Math.max(1, idx + 1)) * Math.PI * 2 + idx * 0.4;
+  const r = 0.4 + (idx % 4) * 0.22;
+  return _dropWorldItem(
+    type,
+    Math.max(1, qty),
+    baseX + Math.cos(a) * r,
+    baseZ + Math.sin(a) * r,
+    extra,
+  );
 }
 
 function _consumeInvType(inv, type, qty = 1) {
@@ -581,14 +615,41 @@ function _getNearbyDoor(id, px, pz, maxDist = 6) {
 
 function _dropWorldItem(type, qty, x, z, extra = {}) {
   const id = ++itemIdCounter;
-  const drop = { id, type, qty, x, z, ...extra };
-  items.set(id, drop);
-  io.emit('item-spawn', drop);
-  return drop;
+  return _addGroundItem({ id, type, qty, x, z, ...extra });
+}
+
+function _addGroundItem(drop) {
+  if (!drop?.id) return null;
+  const item = { ...drop };
+  // Loot de bâtiment (loot:true) : reste jusqu'au ramassage. Tout le reste : 30 min.
+  if (!item.loot && item.expiresAt == null) {
+    item.expiresAt = Date.now() + GROUND_ITEM_TTL_MS;
+  }
+  items.set(item.id, item);
+  worldPersist.scheduleUpsertItem(item);
+  io.emit('item-spawn', item);
+  return item;
+}
+
+function _removeGroundItem(id, { emit = true } = {}) {
+  const item = items.get(id);
+  if (!item) return false;
+  items.delete(id);
+  worldPersist.scheduleDeleteItem(id, item);
+  if (emit) io.emit('item-remove', id);
+  return true;
+}
+
+function _hasPersistedBuildingLoot() {
+  for (const it of items.values()) {
+    if (it.loot) return true;
+  }
+  return false;
 }
 
 function _saveSleepingToDb(sleep) {
   if (!sleep?.playerId) return;
+  worldPersist?.scheduleUpsertSleeper?.(sleep);
   savePlayerState(
     sleep.playerId,
     sleep.x,
@@ -626,13 +687,17 @@ function _emitStorageUpdate(item) {
   if (payload) io.emit('storage-update', payload);
 }
 
-function _spawnWorldDrop(type, qty, x, z) {
+function _spawnWorldDrop(type, qty, x, z, extra = {}) {
   if (!type) return null;
   const id = ++itemIdCounter;
-  const drop = { id, type, qty: Math.max(1, Math.min(999, Number(qty) || 1)), x, z };
-  items.set(id, drop);
-  io.emit('item-spawn', drop);
-  return drop;
+  return _addGroundItem({
+    id,
+    type,
+    qty: Math.max(1, Math.min(999, Number(qty) || 1)),
+    x,
+    z,
+    ...extra,
+  });
 }
 
 const ROAD_WRECKS_URL = pathToFileURL(path.join(__dirname, '../../packages/shared/src/road-wrecks.mjs')).href;
@@ -677,9 +742,57 @@ function _decorStats() {
   };
 }
 
+function _touchDecorItem(item) {
+  if (item) worldPersist?.scheduleUpsertDecor(item);
+}
+
+function _removeDecorItem(id, { emit = true } = {}) {
+  const item = decorItems.get(id);
+  if (!item) return false;
+  decorItems.delete(id);
+  worldPersist?.scheduleDeleteDecor(id, item);
+  if (emit) io.emit('decor-item-remove', id);
+  return true;
+}
+
+function _seedDecorId(placementKey) {
+  if (!placementKey) return null;
+  const safe = String(placementKey).replace(/[^a-zA-Z0-9:_-]/g, '_').slice(0, 88);
+  return `seed_${safe}`;
+}
+
+function _getPlacementKey(d) {
+  if (!d) return null;
+  if (d.placementKey) return String(d.placementKey);
+  if (d.anchorId) return `anchor:${d.anchorId}`;
+  if (d.prefabId?.startsWith('tree_') && d.zoneId != null && d.treeSeed != null) {
+    return `tree:${d.zoneId}:${d.treeSeed}`;
+  }
+  if (_isMinableRockPrefab(d.prefabId) && d.zoneId != null && d.rockSeed != null) {
+    return `rock:${d.zoneId}:${d.rockSeed}`;
+  }
+  return null;
+}
+
+function _shouldSkipSeedPlacement(placementKey) {
+  if (!placementKey) return false;
+  if (worldPersist?.isSeedRemoved?.(placementKey)) return true;
+  const id = _seedDecorId(placementKey);
+  return !!(id && decorItems.has(id));
+}
+
+function _trySeedDecor(placement, extra = {}) {
+  const merged = { ...placement, ...extra };
+  const placementKey = _getPlacementKey(merged);
+  if (placementKey && _shouldSkipSeedPlacement(placementKey)) return null;
+  const id = placementKey ? _seedDecorId(placementKey) : null;
+  return _makeDecorItem({ ...merged, placementKey, ...(id ? { id } : {}) });
+}
+
 function _makeDecorItem(d) {
+  const placementKey = _getPlacementKey(d) || d.placementKey || null;
+  const id = d.id || (placementKey ? _seedDecorId(placementKey) : `decor_${decorSeq++}`);
   const item = {
-    id: `decor_${decorSeq++}`,
     y: 0,
     rotX: 0,
     rotY: 0,
@@ -688,6 +801,8 @@ function _makeDecorItem(d) {
     createdBy: 'seed',
     createdAt: Date.now(),
     ...d,
+    id,
+    placementKey,
   };
   if (!item.kind) {
     if (item.prefabId) item.kind = 'prefab';
@@ -709,6 +824,7 @@ function _makeDecorItem(d) {
     if (item.buildMaxHp == null) item.buildMaxHp = 100;
   }
   decorItems.set(item.id, item);
+  worldPersist?.scheduleUpsertDecor(item);
   return item;
 }
 
@@ -717,17 +833,14 @@ function ensureRoadWrecks({ broadcast = false, reset = false } = {}) {
   if (reset) {
     for (const [id, d] of decorItems) {
       if (!d.prefabId?.startsWith('wreck_')) continue;
-      decorItems.delete(id);
-      if (broadcast && rcon?.broadcastDecorRemove) rcon.broadcastDecorRemove(id);
+      _removeDecorItem(id, { emit: broadcast });
     }
-  } else {
-    const hasWrecks = [...decorItems.values()].some((d) => d.prefabId?.startsWith('wreck_'));
-    if (hasWrecks) return Promise.resolve(0);
   }
   return import(ROAD_WRECKS_URL).then(({ computeRoadWreckPlacements }) => {
     const added = [];
     for (const w of computeRoadWreckPlacements()) {
-      added.push(_makeDecorItem(w));
+      const item = _trySeedDecor(w);
+      if (item) added.push(item);
     }
     if (added.length) {
       log.info('seed', 'road wrecks added', { count: added.length });
@@ -744,17 +857,14 @@ function ensureRoadBarriers({ broadcast = false, reset = false } = {}) {
   if (reset) {
     for (const [id, d] of decorItems) {
       if (!d.prefabId?.startsWith('road_barrier_')) continue;
-      decorItems.delete(id);
-      if (broadcast && rcon?.broadcastDecorRemove) rcon.broadcastDecorRemove(id);
+      _removeDecorItem(id, { emit: broadcast });
     }
-  } else {
-    const hasBarriers = [...decorItems.values()].some((d) => d.prefabId?.startsWith('road_barrier_'));
-    if (hasBarriers) return Promise.resolve(0);
   }
   return import(ROAD_BARRIERS_URL).then(({ computeRoadBarrierPlacements }) => {
     const added = [];
     for (const b of computeRoadBarrierPlacements()) {
-      added.push(_makeDecorItem(b));
+      const item = _trySeedDecor(b);
+      if (item) added.push(item);
     }
     if (added.length) {
       log.info('seed', 'road barriers added', { count: added.length });
@@ -771,19 +881,16 @@ function ensureWorldTrees({ broadcast = false, reset = false } = {}) {
   if (reset) {
     for (const [id, d] of decorItems) {
       if (!d.prefabId?.startsWith('tree_')) continue;
-      decorItems.delete(id);
-      if (broadcast && rcon?.broadcastDecorRemove) rcon.broadcastDecorRemove(id);
+      _removeDecorItem(id, { emit: broadcast });
     }
-  } else {
-    const hasTrees = [...decorItems.values()].some((d) => d.prefabId?.startsWith('tree_'));
-    if (hasTrees) return Promise.resolve(0);
   }
   return import(TREE_PLACEMENTS_URL).then(({ computeTreePlacements }) =>
-    import(TREE_WOOD_URL).then(({ getTreeWoodMax, TREE_FALL_LINGER_MS }) => {
+    import(TREE_WOOD_URL).then(({ getTreeWoodMax }) => {
     const added = [];
     for (const t of computeTreePlacements()) {
       const woodMax = getTreeWoodMax(t.prefabId);
-      added.push(_makeDecorItem({ ...t, woodMax, woodRemaining: woodMax }));
+      const item = _trySeedDecor(t, { woodMax, woodRemaining: woodMax });
+      if (item) added.push(item);
     }
     if (added.length) {
       log.info('seed', 'world trees added', { count: added.length });
@@ -795,21 +902,24 @@ function ensureWorldTrees({ broadcast = false, reset = false } = {}) {
   }));
 }
 
-/** Rochers fixes au spawn — ré-injectés à chaque boot (ancres stables). */
+/** Rochers fixes au spawn — ancres stables, complétées si manquantes. */
 function ensureCampRocks({ broadcast = false, reset = false } = {}) {
-  for (const [id, d] of decorItems) {
-    if (!d.anchorId) continue;
-    if (!_isMinableRockPrefab(d.prefabId)) continue;
-    decorItems.delete(id);
-    if (broadcast && rcon?.broadcastDecorRemove) rcon.broadcastDecorRemove(id);
+  if (reset) {
+    for (const [id, d] of decorItems) {
+      if (!d.anchorId) continue;
+      if (!_isMinableRockPrefab(d.prefabId)) continue;
+      _removeDecorItem(id, { emit: broadcast });
+    }
   }
-  return import(ROCK_PLACEMENTS_URL).then(({ computeCampRockAnchors }) =>
+  return import(ROCK_PLACEMENTS_URL).then(({ computeCampRockAnchors, rockPlacementKey }) =>
     import(ROCK_STONE_URL).then(({ getRockStoneMax }) =>
       import(pathToFileURL(path.join(__dirname, '../../packages/shared/src/resource-spawn.mjs')).href)
         .then(({ isRockAnchorClear }) => {
       const occupied = Array.from(decorItems.values());
       const added = [];
       for (const r of computeCampRockAnchors()) {
+        const placementKey = rockPlacementKey(r);
+        if (_shouldSkipSeedPlacement(placementKey)) continue;
         const scale = Number.isFinite(r.scale) ? r.scale : 1.4;
         if (!isRockAnchorClear(r.x, r.z, occupied, { minGap: 2.8, rockScale: scale })) {
           log.warn('seed', 'camp rock anchor skipped (overlap)', {
@@ -820,7 +930,8 @@ function ensureCampRocks({ broadcast = false, reset = false } = {}) {
           continue;
         }
         const stoneMax = getRockStoneMax(r.prefabId);
-        const item = _makeDecorItem({ ...r, stoneMax, stoneRemaining: stoneMax });
+        const item = _trySeedDecor({ ...r, placementKey }, { stoneMax, stoneRemaining: stoneMax });
+        if (!item) continue;
         occupied.push(item);
         added.push(item);
       }
@@ -840,8 +951,7 @@ function ensureWorldRocks({ broadcast = false, reset = false, force = false } = 
     for (const [id, d] of decorItems) {
       if (d.anchorId) continue;
       if (!_isMinableRockPrefab(d.prefabId)) continue;
-      decorItems.delete(id);
-      if (broadcast && rcon?.broadcastDecorRemove) rcon.broadcastDecorRemove(id);
+      _removeDecorItem(id, { emit: broadcast });
     }
   }
   const resourceSpawnUrl = pathToFileURL(
@@ -856,18 +966,13 @@ function ensureWorldRocks({ broadcast = false, reset = false, force = false } = 
           ? REGEN_CONFIG.rockTargetWorld
           : Math.max(0, REGEN_CONFIG.rockTargetWorld - existing);
         if (need <= 0) return 0;
-        const existingKeys = new Set(
-          occupied
-            .filter((d) => _isMinableRockPrefab(d.prefabId) && !d.anchorId)
-            .map((d) => rockPlacementKey(d)),
-        );
         const added = [];
         for (const r of seedWorldRockPlacements(occupied, { target: need })) {
-          const key = rockPlacementKey(r);
-          if (existingKeys.has(key)) continue;
+          const placementKey = rockPlacementKey(r);
+          if (_shouldSkipSeedPlacement(placementKey)) continue;
           const stoneMax = getRockStoneMax(r.prefabId);
-          const item = _makeDecorItem({ ...r, stoneMax, stoneRemaining: stoneMax });
-          existingKeys.add(key);
+          const item = _trySeedDecor({ ...r, placementKey }, { stoneMax, stoneRemaining: stoneMax });
+          if (!item) continue;
           occupied.push(item);
           added.push(item);
         }
@@ -889,38 +994,8 @@ function ensureWorldRocks({ broadcast = false, reset = false, force = false } = 
 
 function seedSpawnDecorItems() {
   if (decorItems.size) return Promise.resolve();
-  const borderLogsUrl = pathToFileURL(path.join(__dirname, '../../packages/shared/src/camp-border-logs.mjs')).href;
-  return import(borderLogsUrl).then(({ computeCampBorderLogPlacements }) => {
-      const seed = [
-    { kind: 'prefab', prefabId: 'spawn_campfire', x: 0.2, z: -6.15, rotY: 0, scale: 1.0 },
-    { kind: 'prefab', prefabId: 'spawn_log_pile', x: 2.1, z: -8.25, rotY: 0.2, scale: 1.0 },
-    { kind: 'prefab', prefabId: 'spawn_supply_crate', x: 2.55, z: -5.75, rotY: -0.34, scale: 1.2 },
-    { kind: 'prefab', prefabId: 'spawn_supply_crate', x: 3.25, z: -6.7, rotY: 0.22, scale: 0.72 },
-    { kind: 'prefab', prefabId: 'spawn_workbench', x: -2.45, z: -5.7, rotY: 0.16, scale: 1.0 },
-    { kind: 'prefab', prefabId: 'spawn_bedroll', x: -2.9, z: -7.55, rotY: -0.12, scale: 1.0 },
-    { kind: 'prefab', prefabId: 'spawn_backpack', x: -1.95, z: -6.9, rotY: 0.34, scale: 1.0 },
-    { kind: 'prefab', prefabId: 'spawn_lantern', x: -1.45, z: -6.35, rotY: 0, scale: 1.0 },
-    { kind: 'prefab', prefabId: 'spawn_stump_seat', x: -1.0, z: -4.0, rotY: 0, scale: 2.0 },
-    { kind: 'prefab', prefabId: 'spawn_stump_seat', x: 1.05, z: -4.1, rotY: 0, scale: 1.9 },
-    { kind: 'prefab', prefabId: 'spawn_drink_set', x: 1.1, z: -6.55, rotY: 0, scale: 1.0 },
-    { kind: 'prefab', prefabId: 'spawn_marker_left', x: -3.35, z: -4.7, rotY: 0, scale: 1.0 },
-    { kind: 'prefab', prefabId: 'spawn_marker_right', x: 1.95, z: -3.35, rotY: 0, scale: 1.0 },
-    { kind: 'prefab', prefabId: 'spawn_marker_left', x: -0.2, z: -3.2, rotY: 0, scale: 1.0 },
-    { kind: 'item', type: 'food_eau_bouteille', x: 2.38, z: -5.72, rotY: -0.2, scale: 0.9 },
-    { kind: 'item', type: 'food_conserves', x: 2.62, z: -5.94, rotX: 0.18, rotY: 0.35, scale: 0.82 },
-      ];
-      for (const p of computeCampBorderLogPlacements(0, -6)) {
-        seed.push({
-          kind: 'prefab',
-          prefabId: 'spawn_border_log',
-          x: p.x,
-          z: p.z,
-          rotY: p.rotY,
-          scale: p.scale,
-        });
-      }
-      for (const d of seed) _makeDecorItem(d);
-    });
+  // Spawn plage — plus de camp/clairière forêt au boot.
+  return Promise.resolve();
 }
 
 // ── Collision géométrique (transmise une fois par le premier client) ──────────
@@ -930,8 +1005,8 @@ function seedSpawnDecorItems() {
 let worldColliders = [];
 const structureColliders = []; // murs/portes construits par les joueurs
 const ZOMBIE_R = 0.5;
-/** Horde de départ autour de la clairière (forêt) — visible en explorant le spawn. */
-const ZOMBIE_SPAWN_RING = { count: 18, rMin: 35, rMax: 110 };
+/** Horde de départ autour de la plage — loin du point de spawn. */
+const ZOMBIE_SPAWN_RING = { count: 12, rMin: 45, rMax: 130 };
 
 function resolveZombieCollision(nx, nz, agentR = ZOMBIE_R) {
   const all = worldColliders.concat(structureColliders);
@@ -977,9 +1052,18 @@ function resolveZombieCollision(nx, nz, agentR = ZOMBIE_R) {
   return [nx, nz];
 }
 
+/** Vue zombie → joueur (murs / structures au rez-de-chaussée). */
+function _zombieHasLineOfSight(zx, zz, px, pz) {
+  const all = worldColliders.concat(structureColliders);
+  if (_colliderResolve?.hasLineOfSight) {
+    return _colliderResolve.hasLineOfSight(zx, zz, px, pz, all, 0, { endpointShrink: 0.45 });
+  }
+  return true;
+}
+
 // Temps mondial partagé — source de vérité pour tous les clients
 let _worldTime = 0.3; // 0–1 (0=minuit, 0.25=lever, 0.5=midi, 0.75=coucher)
-const _DAY_DURATION = 600; // secondes par cycle complet (~10 min — transitions lentes et réalistes)
+const _DAY_DURATION = 1800; // secondes par cycle complet (15 min jour + 15 min nuit)
 const _TICK_DT = 0.1;      // durée du tick zombie en secondes
 
 const serverFlags = {
@@ -997,6 +1081,7 @@ function isAdminUser(username) {
 
 function setWorldTime(t) {
   _worldTime = ((t % 1) + 1) % 1;
+  worldPersist?.scheduleWorldState?.({ worldTime: _worldTime });
 }
 
 let rcon = null;
@@ -1094,7 +1179,7 @@ function pickLootType(table) {
 
 function clearLoot() {
   for (const [id, it] of items) {
-    if (it.loot) { items.delete(id); io.emit('item-remove', id); }
+    if (it.loot) _removeGroundItem(id);
   }
 }
 
@@ -1115,9 +1200,7 @@ function generateLoot() {
       placed.push({ x, z });
       const type = pickLootType(table);
       const id = ++itemIdCounter;
-      const drop = { id, type, x, z, qty: lootQty(type), loot: true };
-      items.set(id, drop);
-      io.emit('item-spawn', drop);
+      _addGroundItem({ id, type, x, z, qty: lootQty(type), loot: true });
     }
   }
   const generatedItems = [...items.values()].filter((i) => i.loot).length;
@@ -1128,20 +1211,26 @@ function generateLoot() {
 // automatique : on ne crée pas de nouveaux items à chaque connexion/heure.
 // (Respawn horaire désactivé volontairement.)
 
-// Expiration des butins de mort : disparaissent après 30 min s'ils ne sont pas ramassés.
+// Expiration objets au sol (drops, butins de mort…) — pas le loot permanent des bâtiments.
 setInterval(() => {
   const now = Date.now();
   for (const [id, it] of items) {
-    if (it.bag && it.expiresAt && now > it.expiresAt) {
-      items.delete(id);
-      io.emit('item-remove', id);
-      log.debug('death', 'death bag expired', { id, owner: it.owner });
+    if (it.expiresAt && now > it.expiresAt) {
+      _removeGroundItem(id);
+      log.debug('items', 'ground item expired', {
+        id,
+        type: it.type,
+        bag: !!it.bag,
+        owner: it.owner,
+      });
     }
   }
 }, 60 * 1000);
 
 const DETECT_RANGE   = 12;   // défaut si prefab sans detectRange
 const AGGRO_MEMORY   = 5;
+const AGGRO_LOST_SIGHT_DRAIN = 4;
+const ZOMBIE_ATTACK_RANGE = 1.35;
 const ZOMBIE_DMG       = 8;
 const ZOMBIE_ATTACK_CD = 0.9;
 const WANDER_SPEED   = 0.25;
@@ -1218,7 +1307,10 @@ async function ensureZombiePopulation(opts = {}) {
   if (reset) {
     const ids = [...zombies.keys()];
     zombies.clear();
-    for (const id of ids) io.emit('zombie-die', id);
+    for (const id of ids) {
+      worldPersist?.scheduleDeleteZombie?.(id);
+      io.emit('zombie-die', id);
+    }
   } else if (zombies.size >= target) {
     return { added: 0, total: zombies.size };
   }
@@ -1233,10 +1325,11 @@ async function ensureZombiePopulation(opts = {}) {
       const prefabId = zp?.pickZombiePrefabForZone?.('forest') || 'zombie_walker';
       const z = makeZombie({
         prefabId,
-        x: FOREST_SPAWN.x + Math.cos(ang) * dist,
-        z: FOREST_SPAWN.z + Math.sin(ang) * dist,
+        x: BEACH_SPAWN.x + Math.cos(ang) * dist,
+        z: BEACH_SPAWN.z + Math.sin(ang) * dist,
       });
       zombies.set(z.id, z);
+      worldPersist?.scheduleUpsertZombie?.(z);
       added++;
     }
   }
@@ -1244,6 +1337,7 @@ async function ensureZombiePopulation(opts = {}) {
   while (zombies.size < target) {
     const z = makeZombie();
     zombies.set(z.id, z);
+    worldPersist?.scheduleUpsertZombie?.(z);
     added++;
     if (players.size > 0) io.emit('zombie-spawn', z);
   }
@@ -1276,6 +1370,8 @@ rcon = createRcon({
   generateLoot,
   clearLoot,
   makeDecorItemId: () => `decor_${decorSeq++}`,
+  persistDecorUpsert: (item) => worldPersist.scheduleUpsertDecor(item),
+  persistDecorDelete: (id, item) => worldPersist.scheduleDeleteDecor(id, item),
   ensureRoadWrecks,
   ensureRoadBarriers,
   ensureWorldTrees,
@@ -1291,6 +1387,7 @@ import(RESOURCE_REGEN_URL).then(({ createResourceRegen }) => {
     io,
     decorItems,
     makeDecorItem: _makeDecorItem,
+    persistDecorUpsert: (item) => worldPersist.scheduleUpsertDecor(item),
     log,
   });
   log.info('boot', 'resource regen ready');
@@ -1303,6 +1400,17 @@ setInterval(() => {
     log.error('regen', 'tick failed', { err: err.message });
   }
 }, 10_000);
+
+setInterval(() => {
+  try {
+    for (const z of zombies.values()) {
+      worldPersist?.scheduleUpsertZombie?.(z);
+    }
+    worldPersist?.scheduleWorldState?.({ worldTime: _worldTime });
+  } catch (err) {
+    log.error('world', 'zombie persist tick failed', { err: err.message });
+  }
+}, 5000);
 
 // Zombie AI — 100ms tick
 setInterval(() => {
@@ -1328,15 +1436,21 @@ setInterval(() => {
       if (d < nearestDist) { nearestDist = d; nearestP = p; }
     }
 
-    // Aggro: detect when close, keep memory after losing sight
+    const hasLOS = nearestP
+      ? _zombieHasLineOfSight(z.x, z.z, nearestP.x, nearestP.z)
+      : false;
+
+    // Aggro: détection seulement avec ligne de vue ; perte rapide derrière un mur
     const detectRange = z.detectRange || DETECT_RANGE;
-    if (nearestDist < detectRange) {
+    if (nearestDist < detectRange && hasLOS) {
       z.aggroTimer = AGGRO_MEMORY;
+    } else if (z.aggroTimer > 0 && nearestDist < detectRange * 1.25 && !hasLOS) {
+      z.aggroTimer = Math.max(0, z.aggroTimer - DT * AGGRO_LOST_SIGHT_DRAIN);
     } else {
       z.aggroTimer = Math.max(0, z.aggroTimer - DT);
     }
 
-    if (z.aggroTimer > 0 && nearestP) {
+    if (z.aggroTimer > 0 && nearestP && hasLOS) {
       // Chase at full speed
       const ang = Math.atan2(nearestP.z - z.z, nearestP.x - z.x);
       z.angle = ang;
@@ -1348,12 +1462,15 @@ setInterval(() => {
                                            zR);
       z.x = chase[0];
       z.z = chase[1];
-      // Attaque avec cadence : distance recalculée après le déplacement du tick.
+      // Attaque : portée courte + LOS (pas de dégâts à travers les murs)
       z.attackTimer = Math.max(0, (z.attackTimer || 0) - DT);
       const zDmg = z.damage || ZOMBIE_DMG;
       const zCd = z.attackCd || ZOMBIE_ATTACK_CD;
       const hitDist = Math.hypot(nearestP.x - z.x, nearestP.z - z.z);
-      if (hitDist < 1.5 && !nearestP.invincible && nearestP.posSynced && z.attackTimer <= 0) {
+      const hitLOS = _zombieHasLineOfSight(z.x, z.z, nearestP.x, nearestP.z);
+      z.meleeReach = hitDist < ZOMBIE_ATTACK_RANGE + 0.15 && hitLOS;
+      if (hitDist < ZOMBIE_ATTACK_RANGE && hitLOS
+          && !nearestP.invincible && nearestP.posSynced && z.attackTimer <= 0) {
         z.attackTimer = zCd;
         nearestP.health = Math.max(0, nearestP.health - zDmg);
         io.to(nearestP.socketId).emit('take-damage', { dmg: zDmg });
@@ -1368,6 +1485,7 @@ setInterval(() => {
         });
       }
     } else {
+      z.meleeReach = false;
       // Wander slowly — change direction periodically, not every tick
       z.wanderTimer -= DT;
       if (z.wanderTimer <= 0) {
@@ -1453,6 +1571,7 @@ io.on('connection', async (socket) => {
   const priorSleep = sleepingPlayers.get(userId);
   if (priorSleep) {
     sleepingPlayers.delete(userId);
+    worldPersist?.scheduleDeleteSleeper?.(userId);
     io.emit('player-wake', { playerId: userId });
   }
 
@@ -1462,10 +1581,10 @@ io.on('connection', async (socket) => {
     socketId: socket.id,
     id: dbId,
     username: socket.user.username,
-    x:    restore?.x ?? ((saved && saved.pos_x != null) ? saved.pos_x : FOREST_SPAWN.x),
-    y:    restore?.y ?? ((saved && saved.pos_y != null) ? saved.pos_y : FOREST_SPAWN.y),
-    z:    restore?.z ?? ((saved && saved.pos_z != null) ? saved.pos_z : FOREST_SPAWN.z),
-    rotY: restore?.rotY ?? ((saved && saved.rot_y != null) ? saved.rot_y : FOREST_SPAWN.rotY),
+    x:    restore?.x ?? ((saved && saved.pos_x != null) ? saved.pos_x : BEACH_SPAWN.x),
+    y:    restore?.y ?? ((saved && saved.pos_y != null) ? saved.pos_y : BEACH_SPAWN.y),
+    z:    restore?.z ?? ((saved && saved.pos_z != null) ? saved.pos_z : BEACH_SPAWN.z),
+    rotY: restore?.rotY ?? ((saved && saved.rot_y != null) ? saved.rot_y : BEACH_SPAWN.rotY),
     health: restore?.health ?? saved?.health ?? 100,
     kills:  restore?.kills ?? saved?.kills ?? 0,
     inv: restore ? _cloneInv(restore.inv) : _save,
@@ -1537,11 +1656,13 @@ io.on('connection', async (socket) => {
     if (worldColliders.length === 0) {
       worldColliders = terrain;
       log.info('world', 'colliders loaded', { terrain: terrain.length, from: p.username });
+      worldPersist?.scheduleWorldState?.({ worldColliders });
     } else {
       worldColliders = worldColliders.filter((c) => !c.decorId);
     }
     if (decor.length) {
       worldColliders = worldColliders.concat(decor);
+      worldPersist?.scheduleWorldState?.({ worldColliders });
       if (decor.length !== _lastDecorColliderCount) {
         _lastDecorColliderCount = decor.length;
         log.info('world', 'decor colliders merged', {
@@ -1562,6 +1683,7 @@ io.on('connection', async (socket) => {
         Number.isFinite(z.r)
       );
       log.info('world', 'water zones loaded', { count: worldWaterZones.length, from: p.username });
+      worldPersist?.scheduleWorldState?.({ worldWaterZones });
     }
   });
 
@@ -1570,7 +1692,8 @@ io.on('connection', async (socket) => {
     if (lootBuildings.length === 0 && Array.isArray(list) && list.length) {
       lootBuildings = list.filter(b => b && typeof b.cx === 'number' && typeof b.cz === 'number');
       log.info('world', 'loot buildings loaded', { count: lootBuildings.length, from: p.username });
-      if (serverFlags.lootEnabled) generateLoot();
+      worldPersist?.scheduleWorldState?.({ lootBuildings });
+      if (serverFlags.lootEnabled && !_hasPersistedBuildingLoot()) generateLoot();
     }
   });
 
@@ -1650,18 +1773,17 @@ io.on('connection', async (socket) => {
       if (hit.health <= 0) {
         log.info('combat', 'zombie kill', { player: p.username, zombieId: hit.id, kills: p.kills + 1 });
         io.emit('zombie-die', hit.id);
+        worldPersist?.scheduleDeleteZombie?.(hit.id);
         // Random drop
         if (Math.random() < DROP_CHANCE) {
           const type   = DROP_TYPES[Math.floor(Math.random() * DROP_TYPES.length)];
           const dropId = ++itemIdCounter;
-          const drop   = {
-            id:   dropId,
+          _addGroundItem({
+            id: dropId,
             type,
             x: hit.x + (Math.random() - 0.5) * 1.6,
-            z: hit.z + (Math.random() - 0.5) * 1.6
-          };
-          items.set(dropId, drop);
-          io.emit('item-spawn', drop);
+            z: hit.z + (Math.random() - 0.5) * 1.6,
+          });
         }
         zombies.delete(hit.id);
         p.kills++;
@@ -1670,6 +1792,7 @@ io.on('connection', async (socket) => {
           setTimeout(() => {
             const nz = makeZombie();
             zombies.set(nz.id, nz);
+            worldPersist?.scheduleUpsertZombie?.(nz);
             io.emit('zombie-spawn', nz);
           }, 4000);
         }
@@ -1702,8 +1825,7 @@ io.on('connection', async (socket) => {
       });
       return;
     }
-    items.delete(d.id);
-    io.emit('item-remove', item.id);       // use authoritative id, not client-supplied
+    _removeGroundItem(d.id);
     log.debug('items', 'pickup', {
       player: p.username,
       type: item.type,
@@ -1776,18 +1898,17 @@ io.on('connection', async (socket) => {
       if (item.woodRemaining <= 0) {
         item.falling = true;
         item.fellAt = Date.now();
+        _touchDecorItem(item);
         socket.broadcast.emit('decor-tree-fell', {
           ...base,
           fallDirX: Number(d.dirX) || 0,
           fallDirZ: Number(d.dirZ) || 1,
         });
         setTimeout(() => {
-          if (decorItems.has(id)) {
-            decorItems.delete(id);
-            io.emit('decor-item-remove', id);
-          }
+          _removeDecorItem(id);
         }, TREE_FALL_LINGER_MS);
       } else {
+        _touchDecorItem(item);
         socket.broadcast.emit('decor-tree-chop', base);
       }
       log.debug('world', 'tree chop', {
@@ -1825,10 +1946,10 @@ io.on('connection', async (socket) => {
       };
 
       if (item.stoneRemaining <= 0) {
-        decorItems.delete(id);
+        _removeDecorItem(id);
         io.emit('decor-rock-depleted', base);
-        io.emit('decor-item-remove', id);
       } else {
+        _touchDecorItem(item);
         socket.broadcast.emit('decor-rock-mine', base);
       }
       log.debug('world', 'rock mine', {
@@ -1851,6 +1972,7 @@ io.on('connection', async (socket) => {
       return;
     }
     item.doorOpen = !item.doorOpen;
+    _touchDecorItem(item);
     io.emit('decor-door-state', { id, open: !!item.doorOpen });
     log.debug('world', 'door toggled', {
       player: p.username,
@@ -1887,10 +2009,18 @@ io.on('connection', async (socket) => {
     item.lockOwner = p.username;
     p.dirty = true;
     const key = { type: 'struct_cle', qty: 1, lockId };
-    if (!_tryAddSlotToInv(p.inv, key)) {
-      _dropWorldItem('struct_cle', 1, p.x + 0.4, p.z, { lockId });
-    } else {
-      socket.emit('item-add', { slot: key });
+    const addResult = _addStackToInv(p.inv, key);
+    let keyDropped = false;
+    if (addResult.leftover > 0) {
+      const ang = Math.random() * Math.PI * 2;
+      _dropWorldItem(
+        'struct_cle',
+        addResult.leftover,
+        item.x + Math.cos(ang) * 0.65,
+        item.z + Math.sin(ang) * 0.65,
+        { lockId },
+      );
+      keyDropped = true;
     }
     io.emit('door-lock-state', {
       id: item.id,
@@ -1898,8 +2028,16 @@ io.on('connection', async (socket) => {
       lockId,
       lockOwner: p.username,
     });
-    log.info('world', 'door locked', { player: p.username, decorId: item.id, lockId });
-    reply({ ok: true, lockId });
+    _touchDecorItem(item);
+    log.info('world', 'door locked', {
+      player: p.username,
+      decorId: item.id,
+      lockId,
+      keyDropped,
+    });
+    const invSnap = _cloneInv(p.inv);
+    socket.emit('inventory-authoritative', invSnap);
+    reply({ ok: true, lockId, keyDropped, inventory: invSnap });
   });
 
   socket.on('decor-door-unlock', (d, cb) => {
@@ -1912,10 +2050,8 @@ io.on('connection', async (socket) => {
       if (typeof cb === 'function') cb({ ok: false, error: 'Pas verrouillée' });
       return;
     }
-    const canRemove = item.lockOwner === p.username
-      || _playerHasDoorKey(p.inv, item.lockId);
-    if (!canRemove) {
-      if (typeof cb === 'function') cb({ ok: false, error: 'Pas autorisé' });
+    if (!_playerHasDoorKey(p.inv, item.lockId)) {
+      if (typeof cb === 'function') cb({ ok: false, error: 'Clé requise pour retirer le verrou' });
       return;
     }
     const oldLockId = item.lockId;
@@ -1931,13 +2067,15 @@ io.on('connection', async (socket) => {
       socket.emit('item-add', { type: 'tool_verrou', qty: 1 });
     }
     io.emit('door-lock-state', { id: item.id, locked: false, lockId: null, lockOwner: null });
+    _touchDecorItem(item);
     log.info('world', 'door unlocked', { player: p.username, decorId: item.id });
     if (typeof cb === 'function') cb({ ok: true, lockId: oldLockId });
   });
 
   function _getNearbyStorage(id) {
-    if (!id || typeof id !== 'string') return null;
-    const item = decorItems.get(id);
+    const sid = id != null ? String(id) : '';
+    if (!sid) return null;
+    const item = decorItems.get(sid);
     if (!item || item.prefabId !== 'storage_chest') return null;
     if (Math.hypot((item.x || 0) - p.x, (item.z || 0) - p.z) > 5) return null;
     if (!Array.isArray(item.storage)) item.storage = [];
@@ -1975,6 +2113,7 @@ io.on('connection', async (socket) => {
     }
     item.storage.push({ type, qty });
     _emitStorageUpdate(item);
+    _touchDecorItem(item);
     log.debug('storage', 'deposit', { player: p.username, decorId: item.id, type, qty });
   });
 
@@ -1987,6 +2126,7 @@ io.on('connection', async (socket) => {
     item.storage.splice(slot, 1);
     socket.emit('item-add', { type: stack.type, qty: stack.qty || 1 });
     _emitStorageUpdate(item);
+    _touchDecorItem(item);
     log.debug('storage', 'withdraw', { player: p.username, decorId: item.id, type: stack.type, qty: stack.qty || 1 });
   });
 
@@ -1995,14 +2135,15 @@ io.on('connection', async (socket) => {
     if (!item) return;
     item.breakHits = Math.max(0, Number(item.breakHits) || 0) + 1;
     if (item.breakHits < STORAGE_CHEST_BREAK_HITS) {
+      _touchDecorItem(item);
       socket.emit('storage-error', { message: `Coffre endommagé (${item.breakHits}/${STORAGE_CHEST_BREAK_HITS})` });
       return;
     }
-    decorItems.delete(item.id);
-    io.emit('decor-item-remove', item.id);
+    const decorId = item.id;
     const baseX = Number(item.x) || p.x;
     const baseZ = Number(item.z) || p.z;
     const drops = [...(item.storage || []), { type: 'struct_storage_chest', qty: 1 }];
+    _removeDecorItem(decorId);
     drops.forEach((stack, idx) => {
       const a = (idx / Math.max(1, drops.length)) * Math.PI * 2;
       const r = 0.45 + (idx % 3) * 0.18;
@@ -2018,26 +2159,106 @@ io.on('connection', async (socket) => {
     });
   });
 
-  socket.on('build-hit', async (d) => {
-    const { getBuildDamage, getBuildMaxHp, isBuildPrefab } = await buildDamageModPromise;
-    const id = String(d?.id || '').slice(0, 80);
-    const toolType = String(d?.toolType || '').slice(0, 80);
-    const dmg = getBuildDamage(toolType);
-    if (dmg <= 0 || !id) return;
-    const item = decorItems.get(id);
-    if (!item || !isBuildPrefab(item.prefabId)) return;
-    if (Math.hypot((item.x || 0) - p.x, (item.z || 0) - p.z) > 4.5) return;
-    const maxHp = Number(item.buildMaxHp) || getBuildMaxHp(item.prefabId);
-    if (maxHp <= 0) return;
-    item.buildDamage = Math.min(maxHp, (Number(item.buildDamage) || 0) + dmg);
-    if (item.buildDamage < maxHp) {
-      io.emit('build-damage', { id: item.id, damage: item.buildDamage, maxHp, toolType });
+  socket.on('storage-pickup', (d, cb) => {
+    const reply = (payload) => { if (typeof cb === 'function') cb(payload); };
+    if (d?.inv && typeof d.inv === 'object') {
+      p.inv = _normalizeInv(d.inv);
+      p.dirty = true;
+    }
+    const item = _getNearbyStorage(d?.id);
+    if (!item) {
+      reply({ ok: false, error: 'Coffre introuvable' });
       return;
     }
-    decorItems.delete(item.id);
-    io.emit('decor-item-remove', item.id);
-    io.emit('build-destroyed', { id: item.id, prefabId: item.prefabId });
-    log.info('build', 'wood structure destroyed', {
+    const baseX = Number(item.x) || p.x;
+    const baseZ = Number(item.z) || p.z;
+    const stored = (Array.isArray(item.storage) ? item.storage : []).filter((s) => s?.type);
+    let dropIdx = 0;
+    let droppedStacks = 0;
+
+    const chestRes = _addStackToInv(p.inv, { type: 'struct_storage_chest', qty: 1 });
+    if (chestRes.leftover > 0) {
+      _spawnChestOverflowDrop('struct_storage_chest', chestRes.leftover, baseX, baseZ, {}, dropIdx++);
+      droppedStacks++;
+    }
+
+    for (const stack of stored) {
+      const copy = {
+        type: stack.type,
+        qty: stack.qty || 1,
+        ...(stack.lockId ? { lockId: stack.lockId } : {}),
+        ...(stack.durability != null ? { durability: stack.durability } : {}),
+        ...(stack.ammo != null ? { ammo: stack.ammo } : {}),
+      };
+      const res = _addStackToInv(p.inv, copy);
+      if (res.leftover > 0) {
+        const extra = {};
+        if (copy.lockId) extra.lockId = copy.lockId;
+        if (copy.durability != null) extra.durability = copy.durability;
+        if (copy.ammo != null) extra.ammo = copy.ammo;
+        _spawnChestOverflowDrop(copy.type, res.leftover, baseX, baseZ, extra, dropIdx++);
+        droppedStacks++;
+      }
+    }
+
+    item.storage = [];
+    _removeDecorItem(item.id);
+    io.emit('storage-state', { id: item.id, open: false });
+    p.dirty = true;
+    const invOut = _cloneInv(p.inv);
+    socket.emit('inventory-authoritative', invOut);
+    log.info('storage', 'pickup chest', {
+      player: p.username,
+      decorId: item.id,
+      stored: stored.length,
+      droppedStacks,
+      pos: { x: +baseX.toFixed(1), z: +baseZ.toFixed(1) },
+    });
+    reply({ ok: true, dropped: droppedStacks, inventory: invOut });
+  });
+
+  socket.on('build-hit', async (d) => {
+    const {
+      getBuildDamage, getBuildMaxHp, isBuildPrefab,
+      getDoorBreakDamage, getLockedDoorBreakMaxHp, isLockableDoorPrefab,
+    } = await buildDamageModPromise;
+    const id = String(d?.id || '').slice(0, 80);
+    const toolType = String(d?.toolType || '').slice(0, 80);
+    if (!id) return;
+    const item = decorItems.get(id);
+    if (!item) return;
+    if (Math.hypot((item.x || 0) - p.x, (item.z || 0) - p.z) > 4.5) return;
+
+    const lockedDoor = !!item.locked && isLockableDoorPrefab(item.prefabId);
+    let dmg;
+    let maxHp;
+    if (lockedDoor) {
+      dmg = getDoorBreakDamage(toolType);
+      maxHp = Number(item.doorBreakMaxHp) || getLockedDoorBreakMaxHp(item.prefabId);
+    } else if (isBuildPrefab(item.prefabId)) {
+      dmg = getBuildDamage(toolType);
+      maxHp = Number(item.buildMaxHp) || getBuildMaxHp(item.prefabId);
+    } else {
+      return;
+    }
+    if (dmg <= 0 || maxHp <= 0) return;
+
+    const field = lockedDoor ? 'doorBreakDamage' : 'buildDamage';
+    item[field] = Math.min(maxHp, (Number(item[field]) || 0) + dmg);
+    if (item[field] < maxHp) {
+      io.emit('build-damage', {
+        id: item.id,
+        damage: item[field],
+        maxHp,
+        toolType,
+        kind: lockedDoor ? 'door' : 'build',
+      });
+      _touchDecorItem(item);
+      return;
+    }
+    _removeDecorItem(item.id);
+    io.emit('build-destroyed', { id: item.id, prefabId: item.prefabId, kind: lockedDoor ? 'door' : 'build' });
+    log.info('build', lockedDoor ? 'locked door destroyed' : 'wood structure destroyed', {
       player: p.username,
       decorId: item.id,
       prefabId: item.prefabId,
@@ -2062,6 +2283,7 @@ io.on('connection', async (socket) => {
     if (isFinite(y)) st.y = y;
     st.colliders = colliders;
     structures.set(id, st);
+    worldPersist.scheduleUpsertStructure(st);
     // Les zombies (au sol) ne se cognent que dans les murs du rez-de-chaussée (sans minY)
     for (const c of colliders) if (c.minY === undefined) structureColliders.push(c);
     io.emit('structure-spawn', st);
@@ -2109,6 +2331,7 @@ io.on('connection', async (socket) => {
       scale: 1,
       createdBy: p.username,
       createdAt: Date.now(),
+      persist: true,
       ...(Number.isFinite(baseY) ? { baseY: Math.max(-1, Math.min(30, baseY)) } : {}),
       ...(Number.isFinite(buildLevel) ? { buildLevel: Math.max(0, Math.min(8, buildLevel)) } : {}),
       ...(Number.isFinite(supportGroundY) ? { supportGroundY: Math.max(-1, Math.min(30, supportGroundY)) } : {}),
@@ -2125,15 +2348,21 @@ io.on('connection', async (socket) => {
 
   socket.on('decor-floor-height', (d) => {
     const item = decorItems.get(String(d?.id || ''));
-    if (!item?.prefabId?.startsWith('build_') || !item.prefabId.endsWith('_wood')) return;
+    const pid = item?.prefabId || '';
+    const isBuildWood = pid.startsWith('build_') && pid.endsWith('_wood');
+    if (!item || (!isBuildWood && pid !== 'storage_chest')) return;
     const y = Number(d.y);
     if (!Number.isFinite(y)) return;
     item.y = Math.max(-1, Math.min(30, y));
     item.baseY = item.y;
+    _touchDecorItem(item);
   });
 
   socket.on('inventory-sync', (slots) => {
-    if (slots && typeof slots === 'object') { p.inv = slots; p.dirty = true; }
+    if (slots && typeof slots === 'object') {
+      p.inv = _normalizeInv(slots);
+      p.dirty = true;
+    }
   });
 
   socket.on('survival-sync', (sv) => {
@@ -2156,10 +2385,16 @@ io.on('connection', async (socket) => {
     const loot = flattenInv(p.inv);
     if (loot.length) {
       const id  = ++itemIdCounter;
-      const bag = { id, type: 'death_bag', bag: true, x: p.x, z: p.z,
-                    items: loot, expiresAt: Date.now() + DEATH_BAG_MS, owner: p.username };
-      items.set(id, bag);
-      io.emit('item-spawn', bag);
+      _addGroundItem({
+        id,
+        type: 'death_bag',
+        bag: true,
+        x: p.x,
+        z: p.z,
+        items: loot,
+        expiresAt: Date.now() + GROUND_ITEM_TTL_MS,
+        owner: p.username,
+      });
       log.info('death', 'death bag spawned', {
         player: p.username,
         items: loot.length,
@@ -2176,13 +2411,13 @@ io.on('connection', async (socket) => {
     const kit = JSON.parse(JSON.stringify(STARTING_ITEMS));
     p.inv = kit;
     p.survival = { ...DEFAULT_SURVIVAL };
-    p.x = FOREST_SPAWN.x; p.y = FOREST_SPAWN.y; p.z = FOREST_SPAWN.z; p.rotY = FOREST_SPAWN.rotY;
+    p.x = BEACH_SPAWN.x; p.y = BEACH_SPAWN.y; p.z = BEACH_SPAWN.z; p.rotY = BEACH_SPAWN.rotY;
     p.posSynced = false;
     p.dirty = true;
     setTimeout(() => { if (players.has(socket.id)) p.invincible = false; }, 3000);
     socket.emit('take-damage', { health: 100 });
-    socket.emit('respawn-at', { spawn: FOREST_SPAWN, inventory: kit, survival: { ...DEFAULT_SURVIVAL } });
-    log.info('death', 'respawn', { player: p.username, spawn: FOREST_SPAWN, kit: 'tool_caillou' });
+    socket.emit('respawn-at', { spawn: BEACH_SPAWN, inventory: kit, survival: { ...DEFAULT_SURVIVAL } });
+    log.info('death', 'respawn', { player: p.username, spawn: BEACH_SPAWN, kit: 'tool_caillou' });
   });
 
   // Fouille d'un joueur endormi (déconnecté)
@@ -2335,6 +2570,9 @@ io.on('connection', async (socket) => {
       _persistPlayer(leaving);
     }
 
+    // Toujours retirer l'avatar debout des autres clients (évite doublon avec le corps endormi).
+    io.emit('player-leave', socket.id);
+
     if (leaving.id && leaving.health > 0) {
       const sleep = {
         playerId: _normPlayerId(leaving.id),
@@ -2351,6 +2589,7 @@ io.on('connection', async (socket) => {
         since: Date.now(),
       };
       sleepingPlayers.set(_normPlayerId(leaving.id), sleep);
+      worldPersist?.scheduleUpsertSleeper?.(sleep);
       io.emit('player-sleep', {
         id: _sleepBodyId(leaving.id),
         playerId: _normPlayerId(leaving.id),
@@ -2361,24 +2600,20 @@ io.on('connection', async (socket) => {
         rotY: leaving.rotY,
         equipped: leaving.equipped || null,
       });
-    } else {
-      io.emit('player-leave', socket.id);
     }
     _emitPlayersOnline();
   });
 });
 
 // ── Réinitialisation unique (lancement) ───────────────────────────────────────
-// Remet TOUS les joueurs à l'état « première connexion » : kit de départ + survie
-// par défaut, spawn dans Start Forest, vie pleine. Protégé par un marqueur pour ne
-// s'exécuter qu'une fois au prochain démarrage.
+// Remet TOUS les joueurs au spawn plage (une fois après migration camp → plage).
 async function resetAllPlayersOnce() {
-  const marker = path.join(ROOT_DIR, '.inventory_reset_v4_done');
+  const marker = path.join(ROOT_DIR, '.beach_spawn_v1_reset');
   if (fs.existsSync(marker)) return;
   try {
     const [r] = await pool.execute(
       'UPDATE players SET inventory = ?, pos_x = ?, pos_y = ?, pos_z = ?, rot_y = ?, health = 100',
-      [STARTING_SAVE, FOREST_SPAWN.x, FOREST_SPAWN.y, FOREST_SPAWN.z, FOREST_SPAWN.rotY]
+      [STARTING_SAVE, BEACH_SPAWN.x, BEACH_SPAWN.y, BEACH_SPAWN.z, BEACH_SPAWN.rotY]
     );
     fs.writeFileSync(marker, new Date().toISOString());
     log.info('boot', 'players reset once', { affected: r.affectedRows });
@@ -2387,23 +2622,65 @@ async function resetAllPlayersOnce() {
   }
 }
 
-ensureZombiePopulation()
-  .catch((err) => log.error('ensureZombiePopulation failed', err))
-  .then(() => { _setBoot('zombies', 2); return seedSpawnDecorItems(); })
+async function loadPersistedWorld() {
+  await ensureWorldSchema();
+  const loaded = await worldPersist.loadInto(decorItems, structures, items, zombies, sleepingPlayers);
+  decorSeq = Math.max(decorSeq, loaded.decorSeq || 1);
+  structureIdCounter = Math.max(structureIdCounter, loaded.structureIdCounter || 0);
+  itemIdCounter = Math.max(itemIdCounter, loaded.itemIdCounter || 0);
+  doorLockSeq = Math.max(doorLockSeq, loaded.doorLockSeq || 0);
+  zombieIdCounter = Math.max(zombieIdCounter, loaded.zombieIdCounter || 0);
+  if (Array.isArray(loaded.worldColliders) && loaded.worldColliders.length) {
+    worldColliders = loaded.worldColliders;
+  }
+  if (Array.isArray(loaded.worldWaterZones) && loaded.worldWaterZones.length) {
+    worldWaterZones = loaded.worldWaterZones;
+  }
+  if (Array.isArray(loaded.lootBuildings) && loaded.lootBuildings.length) {
+    lootBuildings = loaded.lootBuildings;
+  }
+  if (Number.isFinite(loaded.worldTime)) {
+    _worldTime = loaded.worldTime;
+  }
+  for (const st of structures.values()) {
+    for (const c of st.colliders || []) {
+      if (c.minY === undefined) structureColliders.push(c);
+    }
+  }
+  log.info('boot', 'persisted world loaded', {
+    decor: loaded.decorCount,
+    structures: loaded.structureCount,
+    groundItems: loaded.itemCount,
+    zombies: loaded.zombieCount,
+    sleepers: loaded.sleeperCount,
+    removedSeeds: loaded.removedSeedKeys?.length || 0,
+    decorSeq,
+    structureIdCounter,
+    itemIdCounter,
+    zombieIdCounter,
+  });
+  return loaded;
+}
+
+loadPersistedWorld()
+  .catch((err) => log.error('loadPersistedWorld failed', err))
+  .then(() => { _setBoot('world_persist', 1); return seedSpawnDecorItems(); })
   .catch((err) => log.error('seedSpawnDecorItems failed', err))
-  .then(() => { _setBoot('spawn_decor', 4); return ensureRoadWrecks(); })
+  .then(() => { _setBoot('spawn_decor', 2); return ensureRoadWrecks(); })
   .catch((err) => log.error('ensureRoadWrecks failed', err))
-  .then(() => { _setBoot('road_wrecks', 6); return ensureRoadBarriers(); })
+  .then(() => { _setBoot('road_wrecks', 4); return ensureRoadBarriers(); })
   .catch((err) => log.error('ensureRoadBarriers failed', err))
-  .then(() => { _setBoot('road_barriers', 8); return ensureCampRocks(); })
+  .then(() => { _setBoot('road_barriers', 6); return ensureCampRocks(); })
   .catch((err) => log.error('ensureCampRocks failed', err))
-  .then(() => { _setBoot('camp_rocks', 10); return ensureWorldRocks({ force: true }); })
+  .then(() => { _setBoot('camp_rocks', 8); return ensureWorldRocks(); })
   .catch((err) => log.error('ensureWorldRocks failed', err))
-  .then(() => { _setBoot('world_rocks', 11); return ensureWorldTrees(); })
+  .then(() => { _setBoot('world_rocks', 10); return ensureWorldTrees(); })
   .catch((err) => log.error('ensureWorldTrees failed', err))
-  .then(() => { _setBoot('world_trees', 12); })
+  .then(() => { _setBoot('world_trees', 12); return ensureZombiePopulation(); })
+  .catch((err) => log.error('ensureZombiePopulation failed', err))
+  .then(() => { _setBoot('zombies', 13); })
   .finally(() => {
-    _setBoot('listening', 13);
+    _setBoot('listening', 14);
     server.listen(PORT, HOST, () => {
       serverReady = true;
       log.info('boot', 'server started', {
@@ -2419,6 +2696,8 @@ ensureZombiePopulation()
         rcon: !!(RCON_PASSWORD || ADMIN_USERS.size),
         admins: ADMIN_USERS.size,
         decor: _decorStats(),
+        persistedDecor: [...decorItems.values()].filter((d) => worldPersist.shouldPersistDecor(d)).length,
+        groundItems: items.size,
       });
       resetAllPlayersOnce().then(() => log.info('boot', 'player reset check done'));
     }).on('error', (err) => {
@@ -2426,3 +2705,25 @@ ensureZombiePopulation()
       process.exit(1);
     });
   });
+
+async function _shutdownPersist() {
+  try {
+    await worldPersist.flushSync({
+      decorSeq,
+      doorLockSeq,
+      structureIdCounter,
+      itemIdCounter,
+      zombieIdCounter,
+      worldTime: _worldTime,
+    });
+  } catch (err) {
+    log.error('world', 'shutdown persist failed', { err: err.message });
+  }
+}
+
+for (const sig of ['SIGINT', 'SIGTERM']) {
+  process.on(sig, () => {
+    log.info('boot', 'shutdown', { signal: sig });
+    _shutdownPersist().finally(() => process.exit(0));
+  });
+}

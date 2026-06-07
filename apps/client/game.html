@@ -7,7 +7,7 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="mobile-web-app-capable" content="yes">
   <title>Zombie Survival</title>
-  <link rel="stylesheet" href="/css/style.css">
+  <link rel="stylesheet" href="/css/style.css?v=20260607-craft-mobile-fix-125">
   <script src="/js/loading.js?v=20260606-anchor-guides-only-81"></script>
 </head>
 <body>
@@ -232,7 +232,7 @@
     setConnectingMsg('Chargement du jeu…', 'Délai dépassé — tentative de connexion quand même', 12);
   }
 
-  const CACHE_BUST = '20260607-chest-foundation-109';
+  const CACHE_BUST = '20260607-daynight-15m-126';
   // Attendre le serveur, puis charger les scripts legacy via le manifeste Vite.
   (async () => {
     setConnectingMsg('Connexion au serveur…', 'Vérification de l\'état du serveur', 0);

@@ -56,6 +56,36 @@ function createSqlitePool() {
       last_saved TEXT DEFAULT CURRENT_TIMESTAMP,
       created_at TEXT DEFAULT CURRENT_TIMESTAMP
     );
+    CREATE TABLE IF NOT EXISTS world_decor (
+      id TEXT PRIMARY KEY,
+      payload TEXT NOT NULL,
+      created_by TEXT,
+      updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+    );
+    CREATE TABLE IF NOT EXISTS world_structures (
+      id INTEGER PRIMARY KEY,
+      payload TEXT NOT NULL,
+      updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+    );
+    CREATE TABLE IF NOT EXISTS world_meta (
+      key TEXT PRIMARY KEY,
+      value TEXT NOT NULL
+    );
+    CREATE TABLE IF NOT EXISTS world_items (
+      id INTEGER PRIMARY KEY,
+      payload TEXT NOT NULL,
+      updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+    );
+    CREATE TABLE IF NOT EXISTS world_zombies (
+      id INTEGER PRIMARY KEY,
+      payload TEXT NOT NULL,
+      updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+    );
+    CREATE TABLE IF NOT EXISTS world_sleepers (
+      player_id INTEGER PRIMARY KEY,
+      payload TEXT NOT NULL,
+      updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+    );
   `);
 
   return {
@@ -115,4 +145,246 @@ async function savePlayerState(id, x, y, z, rotY, health, kills, inventory, user
   return result.affectedRows || 0;
 }
 
-module.exports = { pool, getPlayer, createPlayer, savePlayerState, DB_CLIENT };
+async function ensureWorldSchema() {
+  if (DB_CLIENT === 'mysql') {
+    await pool.execute(`
+      CREATE TABLE IF NOT EXISTS world_decor (
+        id VARCHAR(96) PRIMARY KEY,
+        payload JSON NOT NULL,
+        created_by VARCHAR(64) NULL,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+      )
+    `);
+    await pool.execute(`
+      CREATE TABLE IF NOT EXISTS world_structures (
+        id INT PRIMARY KEY,
+        payload JSON NOT NULL,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+      )
+    `);
+    await pool.execute(`
+      CREATE TABLE IF NOT EXISTS world_meta (
+        \`key\` VARCHAR(64) PRIMARY KEY,
+        value TEXT NOT NULL
+      )
+    `);
+    await pool.execute(`
+      CREATE TABLE IF NOT EXISTS world_items (
+        id INT PRIMARY KEY,
+        payload JSON NOT NULL,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+      )
+    `);
+    await pool.execute(`
+      CREATE TABLE IF NOT EXISTS world_zombies (
+        id INT PRIMARY KEY,
+        payload JSON NOT NULL,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+      )
+    `);
+    await pool.execute(`
+      CREATE TABLE IF NOT EXISTS world_sleepers (
+        player_id INT PRIMARY KEY,
+        payload JSON NOT NULL,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+      )
+    `);
+  }
+}
+
+async function loadAllWorldDecor() {
+  const [rows] = await pool.execute(
+    'SELECT id, payload, created_by FROM world_decor ORDER BY id'
+  );
+  return rows.map((r) => ({
+    id: r.id,
+    payload: typeof r.payload === 'string' ? r.payload : JSON.stringify(r.payload),
+    created_by: r.created_by,
+  }));
+}
+
+async function upsertWorldDecor(id, payload, createdBy) {
+  if (DB_CLIENT === 'mysql') {
+    await pool.execute(
+      `INSERT INTO world_decor (id, payload, created_by) VALUES (?, ?, ?)
+       ON DUPLICATE KEY UPDATE payload=VALUES(payload), created_by=VALUES(created_by)`,
+      [id, payload, createdBy]
+    );
+    return;
+  }
+  await pool.execute(
+    `INSERT OR REPLACE INTO world_decor (id, payload, created_by, updated_at)
+     VALUES (?, ?, ?, datetime('now'))`,
+    [id, payload, createdBy]
+  );
+}
+
+async function deleteWorldDecor(id) {
+  await pool.execute('DELETE FROM world_decor WHERE id = ?', [id]);
+}
+
+async function loadAllWorldStructures() {
+  const [rows] = await pool.execute(
+    'SELECT id, payload FROM world_structures ORDER BY id'
+  );
+  return rows.map((r) => ({
+    id: r.id,
+    payload: typeof r.payload === 'string' ? r.payload : JSON.stringify(r.payload),
+  }));
+}
+
+async function upsertWorldStructure(id, payload) {
+  if (DB_CLIENT === 'mysql') {
+    await pool.execute(
+      `INSERT INTO world_structures (id, payload) VALUES (?, ?)
+       ON DUPLICATE KEY UPDATE payload=VALUES(payload)`,
+      [id, payload]
+    );
+    return;
+  }
+  await pool.execute(
+    `INSERT OR REPLACE INTO world_structures (id, payload, updated_at)
+     VALUES (?, ?, datetime('now'))`,
+    [id, payload]
+  );
+}
+
+async function deleteWorldStructure(id) {
+  await pool.execute('DELETE FROM world_structures WHERE id = ?', [id]);
+}
+
+async function loadAllWorldItems() {
+  const [rows] = await pool.execute(
+    'SELECT id, payload FROM world_items ORDER BY id'
+  );
+  return rows.map((r) => ({
+    id: r.id,
+    payload: typeof r.payload === 'string' ? r.payload : JSON.stringify(r.payload),
+  }));
+}
+
+async function upsertWorldItem(id, payload) {
+  if (DB_CLIENT === 'mysql') {
+    await pool.execute(
+      `INSERT INTO world_items (id, payload) VALUES (?, ?)
+       ON DUPLICATE KEY UPDATE payload=VALUES(payload)`,
+      [id, payload]
+    );
+    return;
+  }
+  await pool.execute(
+    `INSERT OR REPLACE INTO world_items (id, payload, updated_at)
+     VALUES (?, ?, datetime('now'))`,
+    [id, payload]
+  );
+}
+
+async function deleteWorldItem(id) {
+  await pool.execute('DELETE FROM world_items WHERE id = ?', [id]);
+}
+
+async function loadAllWorldZombies() {
+  const [rows] = await pool.execute('SELECT id, payload FROM world_zombies ORDER BY id');
+  return rows.map((r) => ({
+    id: r.id,
+    payload: typeof r.payload === 'string' ? r.payload : JSON.stringify(r.payload),
+  }));
+}
+
+async function upsertWorldZombie(id, payload) {
+  if (DB_CLIENT === 'mysql') {
+    await pool.execute(
+      `INSERT INTO world_zombies (id, payload) VALUES (?, ?)
+       ON DUPLICATE KEY UPDATE payload=VALUES(payload)`,
+      [id, payload]
+    );
+    return;
+  }
+  await pool.execute(
+    `INSERT OR REPLACE INTO world_zombies (id, payload, updated_at)
+     VALUES (?, ?, datetime('now'))`,
+    [id, payload]
+  );
+}
+
+async function deleteWorldZombie(id) {
+  await pool.execute('DELETE FROM world_zombies WHERE id = ?', [id]);
+}
+
+async function loadAllWorldSleepers() {
+  const [rows] = await pool.execute('SELECT player_id, payload FROM world_sleepers ORDER BY player_id');
+  return rows.map((r) => ({
+    player_id: r.player_id,
+    payload: typeof r.payload === 'string' ? r.payload : JSON.stringify(r.payload),
+  }));
+}
+
+async function upsertWorldSleeper(playerId, payload) {
+  if (DB_CLIENT === 'mysql') {
+    await pool.execute(
+      `INSERT INTO world_sleepers (player_id, payload) VALUES (?, ?)
+       ON DUPLICATE KEY UPDATE payload=VALUES(payload)`,
+      [playerId, payload]
+    );
+    return;
+  }
+  await pool.execute(
+    `INSERT OR REPLACE INTO world_sleepers (player_id, payload, updated_at)
+     VALUES (?, ?, datetime('now'))`,
+    [playerId, payload]
+  );
+}
+
+async function deleteWorldSleeper(playerId) {
+  await pool.execute('DELETE FROM world_sleepers WHERE player_id = ?', [playerId]);
+}
+
+async function getWorldMeta(key) {
+  const [rows] = await pool.execute(
+    DB_CLIENT === 'mysql'
+      ? 'SELECT value FROM world_meta WHERE `key` = ?'
+      : 'SELECT value FROM world_meta WHERE key = ?',
+    [key]
+  );
+  return rows[0]?.value ?? null;
+}
+
+async function setWorldMeta(key, value) {
+  if (DB_CLIENT === 'mysql') {
+    await pool.execute(
+      'INSERT INTO world_meta (`key`, value) VALUES (?, ?) ON DUPLICATE KEY UPDATE value=VALUES(value)',
+      [key, value]
+    );
+    return;
+  }
+  await pool.execute(
+    'INSERT OR REPLACE INTO world_meta (key, value) VALUES (?, ?)',
+    [key, value]
+  );
+}
+
+module.exports = {
+  pool,
+  getPlayer,
+  createPlayer,
+  savePlayerState,
+  DB_CLIENT,
+  ensureWorldSchema,
+  loadAllWorldDecor,
+  upsertWorldDecor,
+  deleteWorldDecor,
+  loadAllWorldStructures,
+  upsertWorldStructure,
+  deleteWorldStructure,
+  loadAllWorldItems,
+  upsertWorldItem,
+  deleteWorldItem,
+  loadAllWorldZombies,
+  upsertWorldZombie,
+  deleteWorldZombie,
+  loadAllWorldSleepers,
+  upsertWorldSleeper,
+  deleteWorldSleeper,
+  getWorldMeta,
+  setWorldMeta,
+};

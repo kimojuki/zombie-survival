@@ -24,14 +24,8 @@ test('barrier placements cover both asphalt roads', () => {
   }
 });
 
-test('spawn trail junction creates a barrier gap on town_main', () => {
-  const gaps = computeBarrierGaps();
-  assert.equal(gaps.length, 1);
-  assert.ok(gaps[0].r >= 7);
-  const nearGap = computeRoadBarrierPlacements().filter(
-    (p) => Math.hypot(p.x - gaps[0].x, p.z - gaps[0].z) < gaps[0].r + 1,
-  );
-  assert.ok(nearGap.length < countBarrierPlacements().total * 0.08);
+test('spawn trail removed — no barrier gap on town_main', () => {
+  assert.deepEqual(computeBarrierGaps(), []);
 });
 
 test('rails carry length for collider scaling', () => {

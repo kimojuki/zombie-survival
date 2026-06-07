@@ -392,6 +392,15 @@
 
     socket.on('player-sleep', (s) => {
       if (!s?.playerId) return;
+      // Filet de sécurité : retirer l'avatar debout si player-leave manque (déco → corps uniquement).
+      if (s.username) {
+        for (const [rid, rp] of remotePlayers) {
+          if (rp.mesh?.userData?.username === s.username) {
+            _scene.remove(rp.mesh);
+            remotePlayers.delete(rid);
+          }
+        }
+      }
       _addSleepingBody(s);
     });
 
@@ -520,13 +529,19 @@
       if (!d?.id) return;
       const entry = decorItems.get(d.id);
       if (entry?.data) {
-        entry.data.buildDamage = d.damage;
-        entry.data.buildMaxHp = d.maxHp;
+        if (d.kind === 'door') {
+          entry.data.doorBreakDamage = d.damage;
+          entry.data.doorBreakMaxHp = d.maxHp;
+        } else {
+          entry.data.buildDamage = d.damage;
+          entry.data.buildMaxHp = d.maxHp;
+        }
       }
-      ZS.UI?.showNotif?.(`Structure endommagée (${d.damage}/${d.maxHp})`);
+      const label = d.kind === 'door' ? 'Porte endommagée' : 'Structure endommagée';
+      ZS.UI?.showNotif?.(`${label} (${d.damage}/${d.maxHp})`);
     });
-    socket.on('build-destroyed', () => {
-      ZS.UI?.showNotif?.('Structure détruite');
+    socket.on('build-destroyed', (d) => {
+      ZS.UI?.showNotif?.(d?.kind === 'door' ? 'Porte détruite' : 'Structure détruite');
     });
     socket.on('decor-tree-chop', (d) => {
       if (!d?.id) return;
@@ -553,6 +568,13 @@
     socket.on('item-add',    (d) => {
       if (d?.slot && ZS.Inventory?.addItemSlot) ZS.Inventory.addItemSlot(d.slot);
       else ZS.Inventory.receivePickup(d.type, d.qty);
+    });
+    socket.on('inventory-authoritative', (inv) => {
+      if (inv && ZS.Inventory?.applyAuthoritativeInv) {
+        ZS.Inventory.applyAuthoritativeInv(inv);
+      } else if (inv && ZS.Inventory?.loadFromSave) {
+        ZS.Inventory.loadFromSave(inv, { fullReset: true });
+      }
     });
     socket.on('bag-collect', (d)  => ZS.Inventory.collectBag(d.items));
 
@@ -942,8 +964,16 @@
     ZS.Inventory?.syncToServer?.();
     _socket.emit('decor-door-lock', { id: decorId, inv }, (res) => {
       if (res?.ok) {
-        ZS.Inventory?.removeItem?.('tool_verrou', 1);
-        ZS.UI?.showNotif?.('Porte verrouillée — clé reçue');
+        if (res.inventory && ZS.Inventory?.applyAuthoritativeInv) {
+          ZS.Inventory.applyAuthoritativeInv(res.inventory);
+        } else {
+          ZS.Inventory?.removeItem?.('tool_verrou', 1);
+        }
+        if (res.keyDropped) {
+          ZS.UI?.showNotif?.('Porte verrouillée — clé au sol (inventaire plein)');
+        } else {
+          ZS.UI?.showNotif?.('Porte verrouillée — clé reçue');
+        }
       } else {
         ZS.UI?.showNotif?.(res?.error || 'Verrouillage impossible');
       }
@@ -992,6 +1022,27 @@
     _socket.emit('storage-hit', { id: decorId });
   }
 
+  function requestStoragePickup(decorId, cb) {
+    if (!_socket || !decorId) return;
+    const inv = ZS.Inventory?.getInvSnapshot?.();
+    _socket.emit('storage-pickup', { id: decorId, inv }, (res) => {
+      if (res?.ok) {
+        if (res.inventory && ZS.Inventory?.applyAuthoritativeInv) {
+          ZS.Inventory.applyAuthoritativeInv(res.inventory);
+        }
+        ZS.StorageUI?.closeIf?.(decorId);
+        if (res.dropped > 0) {
+          ZS.UI?.showNotif?.(`Coffre récupéré — ${res.dropped} pile(s) au sol (inventaire plein)`);
+        } else {
+          ZS.UI?.showNotif?.('Coffre récupéré');
+        }
+      } else {
+        ZS.UI?.showNotif?.(res?.error || 'Récupération impossible');
+      }
+      if (typeof cb === 'function') cb(res);
+    });
+  }
+
   function requestBuildHit(decorId, toolType) {
     if (!_socket || !decorId || !toolType) return;
     _socket.emit('build-hit', { id: decorId, toolType });
@@ -1002,6 +1053,10 @@
     if (!entry?.data) return;
     entry.data.y = y;
     entry.data.baseY = y;
+    if (entry.root) {
+      entry.root.position.y = y;
+      if (entry.root.userData.decorSpec) entry.root.userData.decorSpec.baseY = y;
+    }
   }
 
   function syncDecorFloorHeight(id, y) {
@@ -1022,6 +1077,7 @@
     getSocket: () => _socket,
     isSpawnReady: () => _spawnReady,
     requestStorageOpen, requestStorageClose, requestStorageDeposit, requestStorageWithdraw, requestStorageHit,
+    requestStoragePickup,
     requestBuildHit,
     getDecorRoot: _getDecorRoot,
     patchDecorFloorHeight: _patchDecorFloorHeight,

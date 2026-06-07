@@ -4,6 +4,8 @@ import {
   decorWorldToLocal,
   resolveAgentAgainstCollider,
   resolveAgentCollision,
+  segmentBlockedByColliders,
+  hasLineOfSight,
 } from '../packages/shared/src/collider-resolve.mjs';
 
 test('oriented decor box pushes agent out along rotY', () => {
@@ -99,4 +101,38 @@ test('decorWorldToLocal inverts rotY for local coords', () => {
   const local = decorWorldToLocal(10, 0, 6, col);
   assert.ok(Math.abs(local.lx - 1) < 0.001);
   assert.ok(Math.abs(local.lz) < 0.001);
+});
+
+test('segmentBlockedByColliders detects wall between two points', () => {
+  const wall = {
+    type: 'box',
+    cx: 0,
+    cz: 0,
+    lx: 0,
+    lz: 0,
+    hw: 0.5,
+    hd: 2,
+    rotY: 0,
+    baseY: 0,
+    decorId: 'wall1',
+  };
+  assert.equal(hasLineOfSight(-3, 0, 3, 0, [wall], 0), false);
+  assert.equal(hasLineOfSight(-3, 0, -1.2, 0, [wall], 0), true);
+});
+
+test('segmentBlockedByColliders ignores upper-floor minY band at ground level', () => {
+  const upper = {
+    type: 'box',
+    cx: 0,
+    cz: 0,
+    lx: 0,
+    lz: 0,
+    hw: 0.5,
+    hd: 2,
+    rotY: 0,
+    baseY: 2.6,
+    minY: 2.0,
+    decorId: 'wall_up',
+  };
+  assert.equal(hasLineOfSight(-3, 0, 3, 0, [upper], 0), true);
 });

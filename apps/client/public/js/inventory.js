@@ -45,8 +45,16 @@
     clearTimeout(_lockPending.timer);
     _lockPending = null;
     if (d?.ok) {
-      removeItem('tool_verrou', 1);
-      ZS.UI?.showNotif?.('Porte verrouillée — clé reçue');
+      if (d.inventory && ZS.Inventory?.applyAuthoritativeInv) {
+        ZS.Inventory.applyAuthoritativeInv(d.inventory);
+      } else {
+        removeItem('tool_verrou', 1);
+      }
+      if (d.keyDropped) {
+        ZS.UI?.showNotif?.('Porte verrouillée — clé au sol (inventaire plein)');
+      } else {
+        ZS.UI?.showNotif?.('Porte verrouillée — clé reçue');
+      }
     } else {
       ZS.UI?.showNotif?.(d?.error || 'Verrouillage impossible');
     }
@@ -421,7 +429,8 @@
           baseY = deck.baseY;
           level = deck.level;
         }
-      } else if (ZS.BuildAnchors?.clampStructureBaseY) {
+      }
+      if (ZS.BuildAnchors?.clampStructureBaseY) {
         baseY = ZS.BuildAnchors.clampStructureBaseY(x, z, baseY, level);
       }
       const supportGroundY = terrainAt(x, z);
@@ -1186,6 +1195,13 @@
     _syncArmor(false);
   }
 
+  function applyAuthoritativeInv(data) {
+    loadFromSave(data, { fullReset: true });
+    ZS.setHandItem?.(_hotbar[_active]?.type || null);
+    ZS.UI?.setWeaponUI?.(_hotbar[_active]?.type || null);
+    _syncToServer();
+  }
+
   const STARTER_CAILLOU = { type: 'tool_caillou', qty: 1, durability: 80 };
 
   function _initToolDurability(slot) {
@@ -1490,92 +1506,102 @@
 
   // ── Panneau inventaire ─────────────────────────────────────────────────────
 
+  const EQUIP_SLOTS = ['Tête', 'Torso', 'Mains', 'Dos'];
+
   function _buildInvPanel() {
     _invBackdrop = document.createElement('div');
-    Object.assign(_invBackdrop.style, {
-      display: 'none', position: 'fixed', inset: '0', zIndex: '449',
-    });
+    _invBackdrop.id = 'inv-backdrop';
     _invBackdrop.addEventListener('click', togglePanel);
     document.body.appendChild(_invBackdrop);
 
     const p = document.createElement('div');
     p.id = 'inv-panel';
-    Object.assign(p.style, {
-      display: 'none', position: 'fixed',
-      top: '50%', left: '50%', transform: 'translate(-50%,-50%)',
-      width: 'min(400px, 96vw)', maxHeight: '80vh', overflowY: 'auto',
-      background: 'rgba(8,8,6,0.97)', border: '1px solid #5a4a2a',
-      borderRadius: '8px', padding: '12px', zIndex: '450',
-      color: '#e8d090', fontFamily: 'monospace', fontSize: '12px',
-      boxShadow: '0 4px 32px rgba(0,0,0,0.8)',
-    });
 
     const hdr = document.createElement('div');
-    hdr.style.cssText = 'display:flex;justify-content:space-between;align-items:center;'
-      + 'margin-bottom:10px;border-bottom:1px solid #5a4a2a;padding-bottom:6px';
+    hdr.className = 'inv-hdr';
+    const titleWrap = document.createElement('div');
+    titleWrap.className = 'inv-hdr-title';
     const title = document.createElement('span');
-    title.style.cssText = 'font-size:15px;font-weight:bold';
-    title.textContent = '🎒 INVENTAIRE';
+    title.className = 'inv-hdr-name';
+    title.textContent = '🎒 Inventaire';
+    const sub = document.createElement('span');
+    sub.className = 'inv-hdr-sub inv-desktop-only';
+    sub.textContent = 'I · Tab · Échap pour fermer';
+    titleWrap.appendChild(title);
+    titleWrap.appendChild(sub);
     const hdrBtns = document.createElement('div');
-    hdrBtns.style.cssText = 'display:flex;gap:6px;align-items:center';
+    hdrBtns.className = 'inv-hdr-btns';
 
     const dropBtn = document.createElement('button');
+    dropBtn.type = 'button';
     dropBtn.id = 'inv-drop-btn';
+    dropBtn.className = 'inv-drop-btn';
     dropBtn.textContent = '🗑 Jeter';
-    dropBtn.style.cssText = 'background:rgba(120,40,40,0.5);color:#ffd0d0;border:1px solid #a05050;'
-      + 'border-radius:6px;padding:5px 12px;cursor:pointer;font-size:13px;font-weight:700;line-height:1;'
-      + 'min-height:36px;opacity:0.4;';
     dropBtn.addEventListener('click', _dropSelected);
     dropBtn.addEventListener('touchstart', (e) => { e.preventDefault(); _dropSelected(); }, { passive: false });
 
     const closeBtn = document.createElement('button');
+    closeBtn.type = 'button';
+    closeBtn.className = 'inv-close-btn';
     closeBtn.textContent = '✕';
-    closeBtn.style.cssText = 'background:rgba(80,50,10,0.5);color:#e8d090;border:1px solid #7a5a28;'
-      + 'border-radius:6px;padding:5px 13px;cursor:pointer;font-size:16px;line-height:1;'
-      + 'min-width:40px;min-height:36px;';
     closeBtn.addEventListener('click', togglePanel);
     hdrBtns.appendChild(dropBtn);
     hdrBtns.appendChild(closeBtn);
-    hdr.appendChild(title);
+    hdr.appendChild(titleWrap);
     hdr.appendChild(hdrBtns);
     p.appendChild(hdr);
 
     const hint = document.createElement('div');
     hint.id = 'inv-hint';
-    hint.style.cssText = 'font-size:10px;color:#9a8a6a;margin-bottom:8px;font-style:italic';
+    hint.className = 'inv-hint';
     hint.textContent = 'Touchez un objet puis un emplacement pour le déplacer.';
     p.appendChild(hint);
 
-    const eqTitle = document.createElement('div');
-    eqTitle.style.cssText = 'font-size:11px;color:#8a7a5a;margin-bottom:5px';
-    eqTitle.textContent = 'ÉQUIPEMENT';
-    p.appendChild(eqTitle);
+    const body = document.createElement('div');
+    body.className = 'inv-body';
 
+    const equipCol = document.createElement('aside');
+    equipCol.className = 'inv-equip-col';
+    const eqTitle = document.createElement('h3');
+    eqTitle.className = 'inv-section-title';
+    eqTitle.textContent = 'Équipement';
+    equipCol.appendChild(eqTitle);
     const equip = document.createElement('div');
     equip.id = 'inv-equip';
-    equip.style.cssText = 'display:grid;grid-template-columns:repeat(4,1fr);gap:5px;margin-bottom:10px';
-    p.appendChild(equip);
+    equip.className = 'inv-equip-grid';
+    equipCol.appendChild(equip);
+    body.appendChild(equipCol);
 
-    const hbTitle = document.createElement('div');
-    hbTitle.style.cssText = 'font-size:11px;color:#8a7a5a;margin-bottom:5px';
-    hbTitle.textContent = 'SLOTS JOUEUR';
-    p.appendChild(hbTitle);
+    const mainCol = document.createElement('div');
+    mainCol.className = 'inv-main-col';
 
+    const hbSec = document.createElement('section');
+    hbSec.className = 'inv-section inv-hotbar-section';
+    const hbTitle = document.createElement('h3');
+    hbTitle.className = 'inv-section-title';
+    hbTitle.textContent = 'Barre d\'action';
+    hbSec.appendChild(hbTitle);
     const hbGrid = document.createElement('div');
     hbGrid.id = 'inv-hotbar';
-    hbGrid.style.cssText = 'display:grid;grid-template-columns:repeat(6,1fr);gap:5px;margin-bottom:10px';
-    p.appendChild(hbGrid);
+    hbGrid.className = 'inv-hotbar-grid';
+    hbSec.appendChild(hbGrid);
+    mainCol.appendChild(hbSec);
 
-    const bagTitle = document.createElement('div');
+    const bagSec = document.createElement('section');
+    bagSec.className = 'inv-section inv-bag-section';
+    const bagTitle = document.createElement('h3');
     bagTitle.id = 'inv-bag-title';
-    bagTitle.style.cssText = 'font-size:11px;color:#8a7a5a;margin-bottom:5px';
-    bagTitle.textContent = 'SAC';
-    p.appendChild(bagTitle);
-
+    bagTitle.className = 'inv-section-title';
+    bagTitle.textContent = 'Sac';
+    bagSec.appendChild(bagTitle);
     const grid = document.createElement('div');
     grid.id = 'inv-grid';
-    grid.style.cssText = 'display:grid;grid-template-columns:repeat(5,1fr);gap:5px';
-    p.appendChild(grid);
+    grid.className = 'inv-bag-grid';
+    bagSec.appendChild(grid);
+    mainCol.appendChild(bagSec);
+
+    body.appendChild(mainCol);
+    p.appendChild(body);
 
     document.body.appendChild(p);
   }
@@ -1584,96 +1610,96 @@
     const equip = document.getElementById('inv-equip');
     if (!equip) return;
 
-    // Nom de l'item sélectionné, visible (le tooltip natif `title` ne s'affiche pas au toucher)
     const hint = document.getElementById('inv-hint');
     const selItem = _sel ? _getSlot(_sel.zone, _sel.idx) : null;
-    const selDef  = selItem ? _def(selItem.type) : null;
+    const selDef = selItem ? _def(selItem.type) : null;
     if (hint) {
+      hint.classList.toggle('inv-hint-selected', !!selDef);
       if (selDef) {
-        hint.textContent = '▸ ' + (selDef.label || selItem.type) + ' — déposez sur un emplacement ou 🗑 Jeter.';
-        hint.style.color = '#6cf';
-        hint.style.fontStyle = 'normal';
+        hint.textContent = '▸ ' + (selDef.label || selItem.type)
+          + ' — cliquez un emplacement ou 🗑 Jeter.';
       } else {
-        hint.textContent = 'Touchez un objet puis un emplacement pour le déplacer.';
-        hint.style.color = '#9a8a6a';
-        hint.style.fontStyle = 'italic';
+        hint.textContent = document.body.classList.contains('mode-desktop')
+          ? 'Cliquez un objet, puis un emplacement pour le déplacer.'
+          : 'Touchez un objet puis un emplacement pour le déplacer.';
       }
     }
-    // Bouton « Jeter » actif seulement si un objet est sélectionné
     const dropBtn = document.getElementById('inv-drop-btn');
     if (dropBtn) {
-      dropBtn.style.opacity       = selItem ? '1' : '0.4';
-      dropBtn.style.pointerEvents = selItem ? 'auto' : 'none';
+      dropBtn.classList.toggle('inv-drop-btn-active', !!selItem);
+      dropBtn.disabled = !selItem;
     }
 
-    // ÉQUIPEMENT
     equip.replaceChildren();
-    for (const [slotName, item] of Object.entries(_equip)) {
-      const el = _makeSlotEl(item);
-      const lbl = document.createElement('div');
-      lbl.style.cssText = 'position:absolute;top:2px;left:3px;font-size:9px;color:#7a6a4a;line-height:1';
+    for (const slotName of EQUIP_SLOTS) {
+      const item = _equip[slotName];
+      const wrap = document.createElement('div');
+      wrap.className = 'inv-equip-row';
+      const lbl = document.createElement('span');
+      lbl.className = 'inv-slot-label';
       lbl.textContent = slotName;
-      el.appendChild(lbl);
+      const el = _makeSlotEl(item);
       _wireSlot(el, 'equip', slotName);
-      equip.appendChild(el);
+      wrap.appendChild(lbl);
+      wrap.appendChild(el);
+      equip.appendChild(wrap);
     }
 
-    // SLOTS JOUEUR (hotbar)
     const hb = document.getElementById('inv-hotbar');
     hb.replaceChildren();
     for (let i = 0; i < HOTBAR_SIZE; i++) {
       const el = _makeSlotEl(_hotbar[i]);
-      if (i === _active) el.style.boxShadow = 'inset 0 0 0 2px #d4b860';
+      if (i === _active) el.classList.add('inv-slot-active');
+      const keyHint = document.createElement('span');
+      keyHint.className = 'inv-slot-key inv-desktop-only';
+      keyHint.textContent = String(i + 1);
+      el.appendChild(keyHint);
       _wireSlot(el, 'hotbar', i);
       hb.appendChild(el);
     }
 
-    // SAC
     const title = document.getElementById('inv-bag-title');
-    if (title) title.textContent = _bag.length ? `SAC  (${_bag.length} slots)` : 'SAC  (aucun sac équipé)';
+    if (title) {
+      title.textContent = _bag.length
+        ? `Sac · ${_bag.length} emplacements`
+        : 'Sac · aucun sac équipé';
+    }
     const grid = document.getElementById('inv-grid');
     grid.replaceChildren();
-    for (let i = 0; i < _bag.length; i++) {
-      const el = _makeSlotEl(_bag[i]);
-      _wireSlot(el, 'bag', i);
-      grid.appendChild(el);
+    if (!_bag.length) {
+      const empty = document.createElement('p');
+      empty.className = 'inv-bag-empty';
+      empty.textContent = 'Équipez un sac pour stocker des objets.';
+      grid.appendChild(empty);
+    } else {
+      for (let i = 0; i < _bag.length; i++) {
+        const el = _makeSlotEl(_bag[i]);
+        _wireSlot(el, 'bag', i);
+        grid.appendChild(el);
+      }
     }
   }
 
-  // Rend un slot cliquable + surligne le slot sélectionné.
   function _wireSlot(el, zone, idx) {
-    el.style.cursor = 'pointer';
     const item = _getSlot(zone, idx);
     if (item) el.title = _def(item.type)?.label || '';
-    if (_sel && _sel.zone === zone && _sel.idx === idx) {
-      el.style.boxShadow = 'inset 0 0 0 2px #6cf, 0 0 8px #6cf';
-      el.style.borderColor = '#6cf';
-    }
+    el.classList.toggle('inv-slot-selected', !!(_sel && _sel.zone === zone && _sel.idx === idx));
     el.addEventListener('click', (e) => { e.stopPropagation(); _clickSlot(zone, idx); });
   }
 
   function _makeSlotEl(item) {
     const el = document.createElement('div');
-    Object.assign(el.style, {
-      width: '54px', height: '54px', background: 'rgba(28,26,22,0.85)',
-      border: item ? '1px solid #6a5a2a' : '1px solid #3a3428',
-      borderRadius: '5px', display: 'flex', flexDirection: 'column',
-      alignItems: 'center', justifyContent: 'center', fontSize: '22px',
-      position: 'relative', userSelect: 'none',
-    });
+    el.className = 'inv-slot' + (item ? ' inv-slot-filled' : '');
     if (item) {
       const def = _def(item.type);
       const ic = document.createElement('span');
-      Object.assign(ic.style, {
-        width: '46px', height: '46px', display: 'flex',
-        alignItems: 'center', justifyContent: 'center', fontSize: '22px',
-      });
+      ic.className = 'inv-slot-icon';
       ic.textContent = def ? def.icon : '?';
       el.appendChild(ic);
       ZS.Icons?.apply(ic, item.type);
       if (item.qty > 1) {
         const q = document.createElement('span');
-        q.style.cssText = 'position:absolute;bottom:2px;right:4px;font-size:10px;color:#e8d090;line-height:1';
+        q.className = 'inv-slot-qty';
         q.textContent = item.qty;
         el.appendChild(q);
       }
@@ -1686,7 +1712,7 @@
     const p = document.getElementById('inv-panel');
     if (!p) return;
     _sel = null;
-    p.style.display = _panelOpen ? 'block' : 'none';
+    p.style.display = _panelOpen ? 'flex' : 'none';
     if (_invBackdrop) _invBackdrop.style.display = _panelOpen ? 'block' : 'none';
     if (_panelOpen) {
       _renderInvPanel();
@@ -1703,7 +1729,10 @@
       if (ZS.shortcutsBlocked?.(e) || ZS.Chat?.isOpen?.() || ZS.Rcon?.isOpen?.()) return;
       const digit = parseInt(e.key);
       if (digit >= 1 && digit <= 6) _setActiveSlot(digit - 1);
-      if (e.code === 'KeyE') { if (!grabNearest()) _useActiveItem(); }
+      if (e.code === 'KeyE') {
+        if (e.repeat || ZS.isInteractHoldActive?.()) return;
+        if (!grabNearest()) _useActiveItem();
+      }
       if (e.code === 'KeyI') togglePanel();
       if (e.code === 'Tab' && document.body.classList.contains('mode-desktop')) {
         e.preventDefault();
@@ -1836,7 +1865,7 @@
     init, tick,
     spawnWorldItem, removeWorldItem, receivePickup, spawnStructure, collectBag,
     countItem, addItem, addItemSlot, removeItem, removeStack, getStorageStacks, getStorageSlots, canAddItem, canAddStack, consumeOne,
-    getInvSnapshot, syncToServer,
+    getInvSnapshot, syncToServer, applyAuthoritativeInv,
     placeActiveStructure, getActiveItem, hasDoorKey, removeDoorKey, installDoorLockOnNearestDoor, getWeaponAmmo, decrementAmmo, reloadWeapon, wearActiveWeapon,
     getArmorValue, getMaxHealth, togglePanel, loadFromSave, loadRespawnKit, ensureStarterCaillou, clear,
   };

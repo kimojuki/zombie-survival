@@ -28,12 +28,15 @@ Vue d'ensemble pour onboarding et reviews PR.
 │  • players, zombies, items, structures (Maps en mémoire)   │
 │  • Zombie AI tick 100ms + jour/nuit partagé                  │
 │  • Loot bâtiments, butins de mort, structures joueurs        │
+│  • Persistance monde autoritaire → BDD (flush ~500 ms)       │
 │  • RCON (apps/server/src/rcon.js)                            │
 └──────────────────────┬──────────────────────────────────────┘
                        │
 ┌──────────────────────▼──────────────────────────────────────┐
 │  apps/server/src/db.js — SQLite dev ou MySQL/MariaDB prod    │
-│  Table players : position, health, kills, inventory JSON     │
+│  players : position, health, kills, inventory JSON           │
+│  world_decor / world_structures / world_items / world_meta   │
+│  world_zombies / world_sleepers                              │
 └─────────────────────────────────────────────────────────────┘
 ```
 
@@ -61,14 +64,17 @@ Le premier client connecté envoie au serveur :
 | Système | Autorité | Notes |
 |---------|----------|-------|
 | Position joueur | Hybride | Client envoie `move`, serveur rebroadcast |
-| Zombies | Serveur | IA, dégâts, respawn |
+| Zombies | Serveur + BDD | IA tick 100 ms ; positions ~5 s (`world_zombies`) |
 | Tir / hit | Serveur | Raycast vs zombies |
-| Jour/nuit | Serveur | `_worldTime`, sync via `zombie-tick` |
+| Jour/nuit | Serveur + BDD | `_worldTime` dans `world_meta` |
 | Inventaire / survie | Client + persist | `inventory-sync`, `survival-sync` |
 | Routes / terrain | Client | Généré localement, identique pour tous |
 | Admin RCON | Serveur | Commandes via socket ou API |
-| Décor monde | Serveur | `decorItems` Map ; sync spawn/remove aux clients |
-| Épaves routières | serveur seed + RCON | prefabs `wreck_sedan` / `wreck_pickup` (`vehicle_prefabs.js`) |
+| Décor monde | Serveur + BDD | Arbres, rochers, épaves, barrières, builds — IDs `seed_*` ; chop/mine/portes persistés |
+| Joueur endormi | Serveur + BDD | `world_sleepers` (corps déco + inventaire) |
+| Constructions joueur | Serveur + BDD | `place-decor-prefab` → `world_decor` |
+| Loot / drops au sol | Serveur + BDD | `world_items` ; TTL 30 min sauf loot bâtiments |
+| Colliders / eau / loot bâtiments | Client → serveur + BDD | Premier client ; snapshot `world_meta` |
 
 ### Décor camp et textures (`camp_textures.js`)
 

@@ -41,16 +41,16 @@
     return base + rolls + Math.max(h1, Math.max(h2, Math.max(h3, Math.max(h4, h5))));
   }
 
-  const _SPAWN_REF_Y = _rawHeightCore(0, -6);
+  const _BEACH_REF_Y = _rawHeightCore(252, 8);
 
   function _rawHeight(x, z) {
     let h = _rawHeightCore(x, z);
-    // Start Forest — clairière de spawn : relief adouci (évite bosses/crêtes locales)
-    const md = Math.hypot(x * 0.48, (z + 7) * 0.52);
-    const MEADOW_R = 36;
-    if (md < MEADOW_R) {
-      const w = Math.pow(1 - md / MEADOW_R, 1.8);
-      h = h * (1 - w * 0.92) + _SPAWN_REF_Y * w * 0.92;
+    // Plage est — relief adouci (spawn Rust-like)
+    const md = Math.hypot((x - 252) * 0.42, (z - 8) * 0.38);
+    const BEACH_R = 42;
+    if (md < BEACH_R) {
+      const w = Math.pow(1 - md / BEACH_R, 1.6);
+      h = h * (1 - w * 0.88) + _BEACH_REF_Y * w * 0.88;
     }
     return h;
   }

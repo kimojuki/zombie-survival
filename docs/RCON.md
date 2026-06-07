@@ -112,7 +112,7 @@ Erreurs : `403` (mauvais mot de passe), `503` (RCON non configuré ou serveur en
 | `night` | Minuit (0.0) |
 | `dawn` | Aube (0.25) |
 | `dusk` | Crépuscule (0.75) |
-| `autoday on` / `autoday off` | Cycle automatique (~10 min / cycle) |
+| `autoday on` / `autoday off` | Cycle automatique (~30 min / cycle : 15 min jour + 15 min nuit) |
 
 ### Zombies
 

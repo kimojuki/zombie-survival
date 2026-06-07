@@ -213,3 +213,134 @@ export function resolveAgentCollision(nx, nz, colliders, agentR, feetY = 0, opts
   }
   return [x, z];
 }
+
+function _colliderBlocksLos(col, feetY = 0) {
+  if (!col) return false;
+  if (col.minY !== undefined && feetY < col.minY - 0.05) return false;
+  if (col.baseY != null && feetY < col.baseY - 0.35) return false;
+  return true;
+}
+
+/** Segment 2D vs AABB axis-aligned (local ou monde). */
+function _segmentIntersectsAABB2D(x0, z0, x1, z1, minX, maxX, minZ, maxZ) {
+  let t0 = 0;
+  let t1 = 1;
+  const dx = x1 - x0;
+  const dz = z1 - z0;
+  const planes = [
+    [-dx, x0 - minX],
+    [dx, maxX - x0],
+    [-dz, z0 - minZ],
+    [dz, maxZ - z0],
+  ];
+  for (const [p, q] of planes) {
+    if (Math.abs(p) < 1e-8) {
+      if (q < 0) return false;
+    } else {
+      const t = q / p;
+      if (p < 0) {
+        if (t > t1) return false;
+        if (t > t0) t0 = t;
+      } else {
+        if (t < t0) return false;
+        if (t < t1) t1 = t;
+      }
+    }
+  }
+  return t0 <= t1;
+}
+
+function _segmentIntersectsOrientedBox(col, x0, z0, x1, z1, feetY) {
+  if (!_colliderBlocksLos(col, feetY)) return false;
+  const p0 = decorWorldToLocal(x0, feetY, z0, col);
+  const p1 = decorWorldToLocal(x1, feetY, z1, col);
+  const lx0 = p0.lx - (col.lx || 0);
+  const lz0 = p0.lz - (col.lz || 0);
+  const lx1 = p1.lx - (col.lx || 0);
+  const lz1 = p1.lz - (col.lz || 0);
+  return _segmentIntersectsAABB2D(
+    lx0, lz0, lx1, lz1,
+    -col.hw, col.hw, -col.hd, col.hd,
+  );
+}
+
+function _segmentIntersectsSimpleBox(col, x0, z0, x1, z1, feetY) {
+  if (!_colliderBlocksLos(col, feetY)) return false;
+  return _segmentIntersectsAABB2D(
+    x0, z0, x1, z1,
+    col.cx - col.hw, col.cx + col.hw,
+    col.cz - col.hd, col.cz + col.hd,
+  );
+}
+
+function _segmentIntersectsCylinder(col, x0, z0, x1, z1) {
+  const hit = _distPointToSegment(col.x, col.z, x0, z0, x1, z1);
+  const r = (col.r || 0.3) + 0.05;
+  return hit.dist <= r;
+}
+
+function _segmentIntersectsSeg(col, x0, z0, x1, z1, feetY) {
+  if (!_colliderBlocksLos(col, feetY)) return false;
+  const hitA = _distPointToSegment(col.x0, col.z0, x0, z0, x1, z1);
+  const hitB = _distPointToSegment(col.x1, col.z1, x0, z0, x1, z1);
+  const r = (col.r || 0.1) + 0.05;
+  return hitA.dist <= r || hitB.dist <= r;
+}
+
+function _segmentHitsCollider(col, x0, z0, x1, z1, feetY = 0) {
+  if (!col || !Number.isFinite(x0) || !Number.isFinite(z0)) return false;
+  if (col.type === 'seg') {
+    return _segmentIntersectsSeg(col, x0, z0, x1, z1, feetY);
+  }
+  if (col.type === 'box' || col.cx !== undefined) {
+    if (col.lx != null || col.rotX || col.rotZ || (col.rotY && col.baseY != null)) {
+      return _segmentIntersectsOrientedBox(col, x0, z0, x1, z1, feetY);
+    }
+    if (col.rotY) {
+      return _segmentIntersectsOrientedBox(
+        { ...col, lx: 0, lz: 0, baseY: col.baseY ?? 0 },
+        x0, z0, x1, z1, feetY,
+      );
+    }
+    return _segmentIntersectsSimpleBox(col, x0, z0, x1, z1, feetY);
+  }
+  if (col.x !== undefined) {
+    return _segmentIntersectsCylinder(col, x0, z0, x1, z1);
+  }
+  return false;
+}
+
+/**
+ * True si un segment XZ est bloqué par un collider (LOS combat / zombie).
+ * @param {number} x0
+ * @param {number} z0
+ * @param {number} x1
+ * @param {number} z1
+ * @param {object[]} colliders
+ * @param {number} [feetY=0]
+ * @param {{ endpointShrink?: number }} [opts]
+ */
+export function segmentBlockedByColliders(x0, z0, x1, z1, colliders, feetY = 0, opts = {}) {
+  if (!Array.isArray(colliders) || !colliders.length) return false;
+  const shrink = Number.isFinite(opts.endpointShrink) ? opts.endpointShrink : 0.45;
+  const dx = x1 - x0;
+  const dz = z1 - z0;
+  const len = Math.hypot(dx, dz);
+  if (len < 0.05) return false;
+  const ux = dx / len;
+  const uz = dz / len;
+  const pad = Math.min(shrink, len * 0.12);
+  const ax = x0 + ux * pad;
+  const az = z0 + uz * pad;
+  const bx = x1 - ux * pad;
+  const bz = z1 - uz * pad;
+  for (const c of colliders) {
+    if (_segmentHitsCollider(c, ax, az, bx, bz, feetY)) return true;
+  }
+  return false;
+}
+
+/** True si la vue/combat n'est pas obstruée entre deux points XZ. */
+export function hasLineOfSight(x0, z0, x1, z1, colliders, feetY = 0, opts = {}) {
+  return !segmentBlockedByColliders(x0, z0, x1, z1, colliders, feetY, opts);
+}

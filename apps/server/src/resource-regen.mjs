@@ -41,6 +41,7 @@ export function createResourceRegen(ctx) {
         woodRemaining: item.woodRemaining,
         treeScale: getTreeScale(item.growthPhase),
       });
+      ctx.persistDecorUpsert?.(item);
       advanced++;
     }
     return advanced;

@@ -33,7 +33,7 @@
   const state = {
     selfId: null,
     player: {
-      x: 0.4, y: 5, z: 7, rotY: 0,
+      x: 234, y: 5, z: 8, rotY: Math.PI / 2,
       velocityY: 0,
       onGround: true,
       health: parseInt(localStorage.getItem('zombie_health') || '100'),
@@ -396,8 +396,18 @@
       }
       return;
     }
+    if (e.code === 'Escape' && ZS.StorageUI?.isOpen?.()) {
+      e.preventDefault();
+      ZS.StorageUI.close();
+      return;
+    }
     if (e.code === 'KeyE') {
       state.keys[e.code] = true;
+      // key repeat remettait _doorUnlockHold.t à 0 → barre qui repart de zéro
+      if (e.repeat) {
+        if (_interactHold) e.preventDefault();
+        return;
+      }
       if (_interactWorldKeyDown()) e.preventDefault();
       return;
     }
@@ -406,7 +416,7 @@
   document.addEventListener('keyup', (e) => {
     if (ZS.shortcutsBlocked?.(e) || ZS.Chat?.isOpen?.()) return;
     if (ZS.Rcon?.isOpen?.() || _rconTyping(e)) return;
-    if (e.code === 'KeyE') _interactDoorHoldEnd();
+    if (e.code === 'KeyE') _interactHoldEnd();
     state.keys[e.code] = false;
   });
 
@@ -423,7 +433,7 @@
   function _blocksPointerLock(el) {
     if (!el || el === canvas) return false;
     return !!el.closest?.(
-      '#menu-panel, #menu-btn, #inv-panel, #craft-panel, #map-overlay, #death-screen, '
+      '#menu-panel, #menu-btn, #inv-panel, #craft-panel, #storage-panel, #storage-backdrop, #map-overlay, #death-screen, '
       + '#connecting-screen, #rcon-panel, #chat-wrap, #hotbar, #craft-btn, #inv-btn, #map-btn, #chat-btn, '
       + '#build-ctl, button, a, input, textarea, select, [contenteditable]'
     );
@@ -442,6 +452,7 @@
     if (craft && craft.style.display === 'flex') return true;
     const map = document.getElementById('map-overlay');
     if (map && map.style.display === 'flex') return true;
+    if (ZS.StorageUI?.isOpen?.()) return true;
     return false;
   }
 
@@ -577,6 +588,10 @@
     raycaster.setFromCamera(screenCenter, camera);
     const dir = raycaster.ray.direction;
     const cam = _cameraWorldPos();
+    if (_tryDamageDecorRay('__fist__', FIST.portee_metre + 1.2)) {
+      ZS.Audio.chopWood(0.85);
+      return;
+    }
     const hitDist = ZS.Zombies.nearestDist(cam.x, cam.z);
     ZS.Audio.melee(hitDist < FIST.portee_metre + 0.8 ? 0.9 : 0.4);
     ZS.Network.sendShoot(cam.x, cam.z, dir.x, dir.z,
@@ -598,6 +613,46 @@
 
   function _canDamageBuild(type) {
     return type === 'tool_caillou' || type === 'tool_hache_pierre';
+  }
+
+  function _canBreakLockedDoor(type) {
+    if (!type) return false;
+    if (type === '__fist__') return true;
+    if (_canDamageBuild(type)) return true;
+    if (type === 'tool_hachette' || type === 'wpn_hache_combat') return true;
+    const def = ZS.ITEMS?.[type];
+    return (def?.category === 'melee' || def?.category === 'tool') && (def.degats_impact || 0) > 0;
+  }
+
+  function _isLockedDoorWithoutKey(meta) {
+    return !!meta?.locked && !_hasDoorKey(meta.lockId);
+  }
+
+  function _tryDamageDecorRay(itemType, maxDist) {
+    if (!ZS.hitDecorBuildRay && !ZS.hitDecorDoorRay) return false;
+    raycaster.setFromCamera(screenCenter, camera);
+    raycaster.far = maxDist;
+
+    const buildHit = ZS.hitDecorBuildRay?.(raycaster, maxDist);
+    if (buildHit?.decorId) {
+      const meta = ZS.getDecorDoorMeta?.(buildHit.decorId);
+      const lockedNoKey = _isLockedDoorWithoutKey(meta);
+      if (lockedNoKey && _canBreakLockedDoor(itemType)) {
+        ZS.Network.requestBuildHit(buildHit.decorId, itemType);
+        return true;
+      }
+      if (!lockedNoKey && _canDamageBuild(itemType)) {
+        ZS.Network.requestBuildHit(buildHit.decorId, itemType);
+        return true;
+      }
+    }
+
+    const doorHit = ZS.hitDecorDoorRay?.(raycaster, maxDist);
+    if (doorHit?.decorId && _isLockedDoorWithoutKey(doorHit) && _canBreakLockedDoor(itemType)) {
+      ZS.Network.requestBuildHit(doorHit.decorId, itemType);
+      return true;
+    }
+    return false;
   }
 
   function _chopWoodYield(type, def) {
@@ -628,14 +683,12 @@
     const harvestRange = Math.max(range + 1.2, 2.4);
     let harvested = false;
 
-    // Dégâts construction — avant récolte (caillou récolte aussi bois/pierre en cone XZ)
-    if (_canDamageBuild(item.type) && ZS.hitDecorBuildRay) {
+    // Dégâts construction / porte verrouillée sans clé
+    if (ZS.hitDecorBuildRay || ZS.hitDecorDoorRay) {
       raycaster.far = harvestRange + 1.5;
-      const buildHit = ZS.hitDecorBuildRay(raycaster, harvestRange + 1.5);
-      if (buildHit?.decorId) {
+      if (_tryDamageDecorRay(item.type, harvestRange + 1.5)) {
         harvested = true;
         ZS.Audio.chopWood(0.88);
-        ZS.Network.requestBuildHit(buildHit.decorId, item.type);
       }
     }
 
@@ -788,6 +841,7 @@
     function _ensurePanel() {
       if (panel) return;
       backdrop = document.createElement('div');
+      backdrop.id = 'storage-backdrop';
       backdrop.style.cssText = 'display:none;position:fixed;inset:0;z-index:469;background:rgba(0,0,0,.28)';
       backdrop.addEventListener('click', close);
       document.body.appendChild(backdrop);
@@ -940,6 +994,7 @@
       backdrop.style.display = 'block';
       panel.style.display = 'block';
       render();
+      if (_isDesktopMode()) ZS.onUiPanelOpen?.();
     }
 
     function update(data) {
@@ -951,22 +1006,37 @@
     }
 
     function close() {
+      const wasOpen = isOpen();
       if (state.id) ZS.setDecorStorageState?.(state.id, false);
       if (state.id) ZS.Network?.requestStorageClose?.(state.id);
       if (panel) panel.style.display = 'none';
       if (backdrop) backdrop.style.display = 'none';
+      state.id = null;
+      if (wasOpen && _isDesktopMode()) ZS.onUiPanelClose?.();
     }
 
-    return { open, update, close };
+    function closeIf(decorId) {
+      if (state.id && state.id === decorId) close();
+    }
+
+    function isOpen() {
+      return !!state.id && panel?.style.display !== 'none';
+    }
+
+    return { open, update, close, closeIf, isOpen };
   })();
   window.ZS = window.ZS || {};
   ZS.StorageUI = StorageUI;
 
-  const DOOR_UNLOCK_HOLD_S = 2.0;
-  const DOOR_TAP_MAX_S = 0.28;
-  let _doorUnlockHold = null;
+  const INTERACT_HOLD_S = 2.0;
+  const INTERACT_TAP_MAX_S = 0.28;
+  let _interactHold = null;
   let _doorHoldBar = null;
   let _doorHoldLabel = null;
+
+  function _isDesktopMode() {
+    return document.body.classList.contains('mode-desktop');
+  }
 
   function _hasDoorKey(lockId) {
     return ZS.Inventory?.hasDoorKey?.(lockId) || false;
@@ -978,7 +1048,7 @@
 
   function _canRemoveDoorLock(door) {
     if (!door?.locked) return false;
-    return door.lockOwner === _localUsername() || _hasDoorKey(door.lockId);
+    return _hasDoorKey(door.lockId);
   }
 
   function _ensureDoorHoldUi() {
@@ -1006,13 +1076,16 @@
     _doorHoldBar._fill = fill;
   }
 
-  function _showDoorHoldUi(progress) {
+  function _showHoldUi(progress, kind) {
     _ensureDoorHoldUi();
+    _doorHoldLabel.textContent = kind === 'storage-pickup'
+      ? 'Récupération du coffre…'
+      : 'Retrait du verrou…';
     _doorHoldBar.style.display = 'block';
     _doorHoldBar._fill.style.width = `${Math.round(Math.min(1, progress) * 100)}%`;
   }
 
-  function _hideDoorHoldUi() {
+  function _hideHoldUi() {
     if (_doorHoldBar) _doorHoldBar.style.display = 'none';
   }
 
@@ -1030,12 +1103,17 @@
     return true;
   }
 
+  function _openStorageById(decorId) {
+    if (!decorId) return false;
+    ZS.setDecorStorageState?.(decorId, true);
+    ZS.Network.requestStorageOpen(decorId);
+    return true;
+  }
+
   function _interactStorage() {
     const storage = ZS.findNearestDecorStorage?.(state.player.x, state.player.z, 2.8);
     if (!storage) return false;
-    ZS.setDecorStorageState?.(storage.decorId, true);
-    ZS.Network.requestStorageOpen(storage.decorId);
-    return true;
+    return _openStorageById(storage.decorId);
   }
 
   function _interactDoorTap() {
@@ -1049,41 +1127,52 @@
     return _toggleNearbyDoor(door);
   }
 
-  function _interactDoorHoldStart() {
-    if (_interactStorage()) return true;
+  function _interactHoldStart() {
+    const storage = ZS.findNearestDecorStorage?.(state.player.x, state.player.z, 2.8);
+    if (storage && _isDesktopMode() && !ZS.StorageUI?.isOpen?.()) {
+      if (_interactHold?.kind === 'storage-pickup' && _interactHold.decorId === storage.decorId) return true;
+      _interactHold = { kind: 'storage-pickup', decorId: storage.decorId, t: 0, started: performance.now() };
+      return true;
+    }
     const door = ZS.findNearestDecorDoor?.(state.player.x, state.player.z, 3.2);
     if (!door || !door.locked) return false;
     const active = ZS.Inventory?.getActiveItem?.();
     if (active?.type === 'tool_verrou') return false;
     if (!_canRemoveDoorLock(door)) return false;
-    _doorUnlockHold = { decorId: door.decorId, t: 0, started: performance.now() };
+    if (_interactHold?.kind === 'door-unlock' && _interactHold.decorId === door.decorId) return true;
+    _interactHold = { kind: 'door-unlock', decorId: door.decorId, t: 0, started: performance.now() };
     return true;
   }
 
-  function _interactDoorHoldEnd() {
-    if (!_doorUnlockHold) return;
-    const hold = _doorUnlockHold;
-    _doorUnlockHold = null;
-    _hideDoorHoldUi();
-    if (hold.t < DOOR_TAP_MAX_S) {
-      const door = ZS.findNearestDecorDoor?.(state.player.x, state.player.z, 3.2);
-      if (door && door.decorId === hold.decorId) _toggleNearbyDoor(door);
+  function _interactHoldEnd() {
+    if (!_interactHold) return;
+    const hold = _interactHold;
+    _interactHold = null;
+    _hideHoldUi();
+    if (hold.t >= INTERACT_HOLD_S) return;
+    if (hold.t < INTERACT_TAP_MAX_S) {
+      if (hold.kind === 'storage-pickup') _openStorageById(hold.decorId);
+      else if (hold.kind === 'door-unlock') {
+        const door = ZS.findNearestDecorDoor?.(state.player.x, state.player.z, 3.2);
+        if (door && door.decorId === hold.decorId) _toggleNearbyDoor(door);
+      }
     }
   }
 
-  function _updateDoorUnlockHold(dt) {
-    if (!_doorUnlockHold) return;
+  function _updateInteractHold(dt) {
+    if (!_interactHold) return;
     if (!state.keys['KeyE']) {
-      _interactDoorHoldEnd();
+      _interactHoldEnd();
       return;
     }
-    _doorUnlockHold.t += dt;
-    _showDoorHoldUi(_doorUnlockHold.t / DOOR_UNLOCK_HOLD_S);
-    if (_doorUnlockHold.t >= DOOR_UNLOCK_HOLD_S) {
-      const id = _doorUnlockHold.decorId;
-      _doorUnlockHold = null;
-      _hideDoorHoldUi();
-      ZS.Network?.requestDecorDoorUnlock?.(id);
+    _interactHold.t += dt;
+    _showHoldUi(_interactHold.t / INTERACT_HOLD_S, _interactHold.kind);
+    if (_interactHold.t >= INTERACT_HOLD_S) {
+      const { kind, decorId } = _interactHold;
+      _interactHold = null;
+      _hideHoldUi();
+      if (kind === 'door-unlock') ZS.Network?.requestDecorDoorUnlock?.(decorId);
+      else if (kind === 'storage-pickup') ZS.Network?.requestStoragePickup?.(decorId);
     }
   }
 
@@ -1097,9 +1186,13 @@
   }
 
   function _interactWorldKeyDown() {
-    if (_interactDoorHoldStart()) return true;
+    if (ZS.StorageUI?.isOpen?.()) return true;
+    if (_interactHoldStart()) return true;
     return _interactWorld();
   }
+
+  ZS.isInteractHoldActive = () => !!_interactHold;
+  ZS.isDoorUnlockHoldActive = ZS.isInteractHoldActive;
 
   function _updateDoorInteractUi() {
     const storage = ZS.findNearestDecorStorage?.(state.player.x, state.player.z, 2.8) || null;
@@ -1116,14 +1209,16 @@
     }
     const mobile = document.body.classList.contains('mode-mobile');
     let label;
-    if (storage) label = 'Coffre';
-    else if (door) {
+    if (storage) {
+      label = 'Coffre';
+      if (!mobile && !_interactHold) label += ' · maintenir E = ramasser';
+    } else if (door) {
       const active = ZS.Inventory?.getActiveItem?.();
       if (active?.type === 'tool_verrou' && !door.locked) label = 'Verrouiller';
-      else if (door.locked && !_hasDoorKey(door.lockId)) label = 'Verrouillée';
-      else if (door.locked && _canRemoveDoorLock(door)) {
+      else if (door.locked && !_hasDoorKey(door.lockId)) label = 'Verrouillée · frapper pour casser';
+      else if (door.locked && _hasDoorKey(door.lockId)) {
         label = door.open ? 'Fermer' : 'Ouvrir';
-        if (!mobile && !_doorUnlockHold) label += ' · maintenir E = retirer verrou';
+        if (!mobile && !_interactHold) label += ' · maintenir E = retirer verrou';
       }
       else label = door.open ? 'Fermer' : 'Ouvrir';
     }
@@ -1224,9 +1319,10 @@
     ZS.Zombies.tick(dt);
     ZS.Network.tick(dt);
     ZS.Inventory.tick(dt);
+    ZS.Craft.tick(dt);
     ZS.Survival.tick(dt);
     ZS.Map.tick();
-    _updateDoorUnlockHold(dt);
+    _updateInteractHold(dt);
     _updateDoorInteractUi();
     _cullLights();
 

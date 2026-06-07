@@ -1,66 +1,25 @@
-/** Rochers minables — placements seed serveur (clairière + forêt + secteurs). */
+/** Rochers minables — placements seed serveur (plage + forêt + secteurs). */
 
 import { TREE_EXCLUSIONS, SPAWN_TRAIL_PTS } from './tree-placements.mjs';
+import { BEACH_FOOTPRINT, isInBeachFootprint } from './beach-spawn.mjs';
 
-/** Clairière spawn — ellipse (alignée client proc_spawn). */
-export const CAMP_FOOTPRINT = Object.freeze({
-  cx: 0,
-  cz: -6,
-  rx: 5.8,
-  rz: 5.2,
-});
+/** Plage spawn — ellipse (alignée proc_spawn). */
+export const CAMP_FOOTPRINT = BEACH_FOOTPRINT;
 
-/** @returns {boolean} point dans l'ellipse camp (+ marge extérieure en mètres). */
-export function isInCampFootprint(x, z, margin = 0) {
-  const dx = (x - CAMP_FOOTPRINT.cx) / (CAMP_FOOTPRINT.rx + margin);
-  const dz = (z - CAMP_FOOTPRINT.cz) / (CAMP_FOOTPRINT.rz + margin);
-  return Math.hypot(dx, dz) <= 1;
+/** @returns {boolean} point dans l'ellipse plage (+ marge extérieure en mètres). */
+export const isInCampFootprint = isInBeachFootprint;
+
+/** Ancres camp retirées — spawn plage sans rochers fixes. */
+export const CAMP_ROCK_ANCHORS = Object.freeze([]);
+
+export function computeCampRockAnchors() {
+  return [];
 }
-
-/** Rochers fixes visibles au spawn — hors clairière / props (pas sur le camp). */
-export const CAMP_ROCK_ANCHORS = Object.freeze([
-  {
-    anchorId: 'starter_spawn_path',
-    prefabId: 'spawn_stone',
-    x: 22,
-    z: 6,
-    rotY: 0.35,
-    scale: 1.65,
-    rockSeed: 890100,
-  },
-  {
-    anchorId: 'starter_trail',
-    prefabId: 'rock_boulder',
-    x: -9,
-    z: 2,
-    rotY: 0.9,
-    scale: 2.15,
-    rockSeed: 890101,
-  },
-  {
-    anchorId: 'starter_camp_main',
-    prefabId: 'rock_boulder',
-    x: 16,
-    z: -5,
-    rotY: -0.4,
-    scale: 2.25,
-    rockSeed: 890102,
-  },
-  {
-    anchorId: 'starter_camp_side',
-    prefabId: 'rock_outcrop',
-    x: -11.5,
-    z: -9,
-    rotY: 0.55,
-    scale: 1.95,
-    rockSeed: 890103,
-  },
-]);
 
 /** Zones bâties / denses où on ne pose pas de rochers procéduraux. */
 export const ROCK_EXCLUSIONS = Object.freeze([
   ...TREE_EXCLUSIONS,
-  { cx: 0, cz: -6, r: 20 },
+  { cx: 252, cz: 8, r: 42 },
   { cx: -20, cz: -185, r: 58 },
   { cx: -200, cz: -160, r: 68 },
   { cx: -155, cz: 0, r: 22 },
@@ -69,12 +28,12 @@ export const ROCK_EXCLUSIONS = Object.freeze([
 
 export const ROCK_ZONES = Object.freeze([
   {
-    id: 'spawn_ring',
-    cx: 0,
-    cz: -6,
-    count: 8,
-    radius: 32,
-    boulderWeight: 0.68,
+    id: 'beach_ring',
+    cx: 252,
+    cz: 8,
+    count: 4,
+    radius: 48,
+    boulderWeight: 0.5,
     seed: 89001,
   },
   {
@@ -242,24 +201,12 @@ function _placementsForZone(zone) {
 }
 
 /** @returns {Array<{ kind: 'prefab', prefabId: string, x: number, z: number, rotY: number, scale: number, rockSeed: number, anchorId?: string, zoneId?: string }>} */
-export function computeCampRockAnchors() {
-  return CAMP_ROCK_ANCHORS.map((a) => ({
-    kind: 'prefab',
-    prefabId: a.prefabId,
-    x: a.x,
-    z: a.z,
-    rotY: a.rotY,
-    scale: a.scale,
-    rockSeed: a.rockSeed,
-    anchorId: a.anchorId,
-  }));
-}
-
-/** @returns {Array<{ kind: 'prefab', prefabId: string, x: number, z: number, rotY: number, scale: number, rockSeed: number, zoneId: string }>} */
 export function computeRockPlacements() {
   const out = [];
   for (const zone of ROCK_ZONES) {
-    out.push(..._placementsForZone(zone));
+    for (const r of _placementsForZone(zone)) {
+      out.push({ ...r, placementKey: rockPlacementKey(r) });
+    }
   }
   return out;
 }

@@ -77,13 +77,19 @@ export const ROAD_WRECK_TEMPLATES = Object.freeze([
 /**
  * @returns {Array<{ kind: 'prefab', prefabId: string, x: number, z: number, rotY: number, rotZ?: number, scale: number, wreckVariant?: string, wreckBurnt?: boolean, wreckTilt?: number, wreckWheels?: number, wreckSink?: number }>}
  */
+export function wreckPlacementKey(tpl, index = 0) {
+  if (!tpl) return '';
+  const side = tpl.side ?? 'center';
+  return `wreck:${tpl.road}:${tpl.t}:${side}:${tpl.prefabId}:${index}`;
+}
+
 export function computeRoadWreckPlacements() {
   const out = [];
-  for (const tpl of ROAD_WRECK_TEMPLATES) {
+  ROAD_WRECK_TEMPLATES.forEach((tpl, index) => {
     const pts = tpl.road === 'city_highway' ? CITY_HIGHWAY_PTS : TOWN_MAIN_PTS;
     const width = ROAD_WIDTH[tpl.road] || 8.4;
     const pos = _placeOnRoad(pts, width, tpl);
-    if (!pos) continue;
+    if (!pos) return;
     out.push({
       kind: 'prefab',
       prefabId: tpl.prefabId,
@@ -97,7 +103,8 @@ export function computeRoadWreckPlacements() {
       wreckTilt: tpl.tilt || 0,
       wreckWheels: tpl.wheels,
       wreckSink: tpl.sink || 0,
+      placementKey: wreckPlacementKey(tpl, index),
     });
-  }
+  });
   return out;
 }

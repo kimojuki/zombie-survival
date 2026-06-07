@@ -52,26 +52,8 @@ test('minable rock prefab detection', () => {
   assert.equal(isMinableRockPrefab('spawn_campfire'), false);
 });
 
-test('camp rock anchors sit near spawn trail', () => {
-  const anchors = computeCampRockAnchors();
-  assert.equal(anchors.length, 4);
-  for (const a of anchors) {
-    assert.ok(isMinableRockPrefab(a.prefabId));
-    assert.ok(a.anchorId);
-    assert.ok(a.z < 8, 'anchors should be south of player spawn (z≈7)');
-    assert.equal(isInCampFootprint(a.x, a.z, 1.5), false, `${a.anchorId} inside camp`);
-  }
-  assert.ok(anchors.some((a) => a.prefabId === 'spawn_stone' && a.anchorId === 'starter_spawn_path'));
-});
-
-test('camp rock anchors avoid spawn decor footprint', () => {
-  const campDecor = _campSpawnDecorForTests();
-  for (const a of computeCampRockAnchors()) {
-    assert.ok(
-      isRockAnchorClear(a.x, a.z, campDecor, { minGap: 2.8, rockScale: a.scale || 1.4 }),
-      `${a.anchorId} overlaps camp decor`,
-    );
-  }
+test('camp rock anchors removed with beach spawn', () => {
+  assert.deepEqual(computeCampRockAnchors(), []);
 });
 
 test('rock placements produce valid entries', () => {

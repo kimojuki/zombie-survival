@@ -17,7 +17,7 @@
   let   _timeOfDay  = 0.3;
   let   _dayCount   = 0;
   let   _moonPhaseIndex = -1;
-  const _DAY_LENGTH_SEC = 960;
+  const _DAY_LENGTH_SEC = 1800; // aligné serveur : 15 min jour + 15 min nuit
   const _terrainTex = new THREE.TextureLoader().load('/img/terrain_atlas.png');
   _terrainTex.wrapS = _terrainTex.wrapT = THREE.RepeatWrapping;
   _terrainTex.magFilter = THREE.NearestFilter;

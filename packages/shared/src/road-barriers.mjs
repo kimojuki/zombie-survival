@@ -113,14 +113,9 @@ function _buildTrailTowardRoad(mouth, roadPts) {
   return pts;
 }
 
-/** Gap barrières à la jonction sentier → town_main (rayon 7,5 m). */
+/** Gap barrières — plus de jonction sentier spawn (plage). */
 export function computeBarrierGaps() {
-  const trail = _buildTrailTowardRoad(SPAWN_TRAIL_MOUTH, TOWN_MAIN_PTS);
-  if (!trail || trail.length < 2) return [];
-  const end = trail[trail.length - 1];
-  const hit = _nearestOnPolyline(TOWN_MAIN_PTS, end[0], end[1]);
-  if (!hit) return [];
-  return [{ x: hit.x, z: hit.z, r: BARRIER_GAP_RADIUS }];
+  return [];
 }
 
 function _inGap(x, z, gaps) {
@@ -149,6 +144,7 @@ function _placementsForRoad(road, gaps) {
         posts.push(null);
         continue;
       }
+      const sideName = side < 0 ? 'left' : 'right';
       posts.push({
         kind: 'prefab',
         prefabId: 'road_barrier_post',
@@ -157,7 +153,8 @@ function _placementsForRoad(road, gaps) {
         rotY: 0,
         scale: 1,
         roadId: road.id,
-        side: side < 0 ? 'left' : 'right',
+        side: sideName,
+        placementKey: `barrier:${road.id}:${sideName}:post:${Math.round(d * 10)}`,
       });
     }
 
@@ -172,6 +169,7 @@ function _placementsForRoad(road, gaps) {
       const midX = (a.x + b.x) * 0.5;
       const midZ = (a.z + b.z) * 0.5;
       const rotY = Math.atan2(dx, dz);
+      const sideName = side < 0 ? 'left' : 'right';
       out.push({
         kind: 'prefab',
         prefabId: 'road_barrier_rail',
@@ -182,7 +180,8 @@ function _placementsForRoad(road, gaps) {
         scale: 1,
         railLen: len,
         roadId: road.id,
-        side: side < 0 ? 'left' : 'right',
+        side: sideName,
+        placementKey: `barrier:${road.id}:${sideName}:rail:${i}`,
       });
     }
 

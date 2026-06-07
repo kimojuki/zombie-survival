@@ -154,8 +154,7 @@
   }
 
   function _spawnTrailPoints() {
-    const [mx, mz] = getSpawnTrailMouth();
-    return [[mx, mz], [mx - 1, mz - 4], [mx - 4, mz - 10]];
+    return [];
   }
 
   const SPAWN_TRAIL_PTS = _spawnTrailPoints();
@@ -1086,6 +1085,56 @@
     return null;
   }
 
+  const _doorRayHits = [];
+
+  /** Visée écran → porte verrouillée (cabanes, etc. hors DECOR_BUILDS). */
+  function hitDecorDoorRay(raycaster, maxDist = 3.5) {
+    if (!raycaster) return null;
+    _doorRayHits.length = 0;
+    for (const [decorId, entry] of DECOR_DOORS) {
+      if (!entry.root?.parent || !entry.pivot) continue;
+      entry.pivot.traverse((o) => {
+        if (o.isMesh) {
+          o.userData.decorId = decorId;
+          _doorRayHits.push(o);
+        }
+      });
+    }
+    if (!_doorRayHits.length) return null;
+    const prevFar = raycaster.far;
+    raycaster.far = maxDist;
+    const hits = raycaster.intersectObjects(_doorRayHits, false);
+    raycaster.far = prevFar;
+    if (!hits.length) return null;
+    let node = hits[0].object;
+    while (node) {
+      const id = node.userData?.decorId;
+      const entry = id ? DECOR_DOORS.get(id) : null;
+      if (entry) {
+        return {
+          decorId: id,
+          dist: hits[0].distance,
+          prefabId: entry.root.userData.prefabId,
+          locked: !!entry.locked,
+          lockId: entry.lockId || null,
+        };
+      }
+      node = node.parent;
+    }
+    return null;
+  }
+
+  function getDecorDoorMeta(decorId) {
+    const entry = DECOR_DOORS.get(decorId);
+    if (!entry?.root?.parent) return null;
+    return {
+      decorId,
+      locked: !!entry.locked,
+      lockId: entry.lockId || null,
+      prefabId: entry.root.userData.prefabId,
+    };
+  }
+
   /** Plus bas vertex du visuel en coordonnées monde (respecte rotY / scale). */
   function _rockWorldBoundsY(root) {
     if (!root) return null;
@@ -1271,7 +1320,8 @@
         deckY = rawY ?? (terrainY + (buildLevel + 1) * 2.6);
       }
       opts = { ...opts, buildLevel };
-    } else if (prefab.buildKind === 'wall' || prefab.buildKind === 'door' || prefab.buildKind === 'stair') {
+    } else if (prefab.buildKind === 'wall' || prefab.buildKind === 'door' || prefab.buildKind === 'stair'
+        || prefabId === 'storage_chest') {
       const buildLevel = Number.isFinite(opts.buildLevel) ? Math.max(0, opts.buildLevel) : 0;
       const rawY = Number.isFinite(opts.baseY) ? opts.baseY : (Number.isFinite(y) ? y : terrainY);
       if (ZS.BuildAnchors?.resolveStructureBaseY) {
@@ -1291,9 +1341,13 @@
     }
     if (isBuildFloor && !ZS.BuildAnchors?.resolveFloorDeckY) {
       deckY = Number.isFinite(opts.baseY) ? opts.baseY : (terrainY + (opts.buildLevel || 0) * 2.6);
-    } else if ((prefab.buildKind === 'wall' || prefab.buildKind === 'door' || prefab.buildKind === 'stair')
+    } else if ((prefab.buildKind === 'wall' || prefab.buildKind === 'door' || prefab.buildKind === 'stair'
+        || prefabId === 'storage_chest')
         && !ZS.BuildAnchors?.resolveStructureBaseY
         && ZS.BuildAnchors?.clampStructureBaseY) {
+      const buildLevel = Number.isFinite(opts.buildLevel) ? Math.max(0, opts.buildLevel) : 0;
+      deckY = ZS.BuildAnchors.clampStructureBaseY(x || 0, z || 0, deckY, buildLevel);
+    } else if (prefabId === 'storage_chest' && ZS.BuildAnchors?.clampStructureBaseY) {
       const buildLevel = Number.isFinite(opts.buildLevel) ? Math.max(0, opts.buildLevel) : 0;
       deckY = ZS.BuildAnchors.clampStructureBaseY(x || 0, z || 0, deckY, buildLevel);
     }
@@ -1432,6 +1486,12 @@
           hi,
           alongZ ? 'z' : 'x'
         );
+      }
+    } else if (prefabId === 'storage_chest') {
+      const sentY = Number.isFinite(opts.baseY) ? opts.baseY : y;
+      if (Number.isFinite(sentY) && Math.abs(sentY - root.position.y) > 0.05) {
+        ZS.Network?.patchDecorFloorHeight?.(decorId, root.position.y);
+        ZS.Network?.syncDecorFloorHeight?.(decorId, root.position.y);
       }
     }
 
@@ -1773,6 +1833,8 @@
   ZS.hitDecorStorage        = hitDecorStorage;
   ZS.hitDecorBuild          = hitDecorBuild;
   ZS.hitDecorBuildRay       = hitDecorBuildRay;
+  ZS.hitDecorDoorRay        = hitDecorDoorRay;
+  ZS.getDecorDoorMeta       = getDecorDoorMeta;
   ZS.setDecorStorageState    = setDecorStorageState;
   ZS.unregisterDecorStorage  = unregisterDecorStorage;
   ZS.unregisterDecorBuild    = unregisterDecorBuild;

@@ -50,6 +50,148 @@ Copier dans la description de PR :
 
 ## 2026-06-07
 
+### Tuning — cycle jour/nuit 15 min / 15 min (2026-06-07)
+
+- **Durée** : cycle complet 30 min (`_DAY_DURATION` / `_DAY_LENGTH_SEC` = 1800 s) — soleil au-dessus de l'horizon ≈ 15 min, en dessous ≈ 15 min.
+- **Fichiers** : `apps/server/index.js`, `apps/client/public/js/world.js`, `docs/RCON.md`.
+- **Cache bust** : `20260607-daynight-15m-126` (redémarrer le serveur Node pour appliquer côté serveur).
+
+### Fix — panneau craft mobile transparent (2026-06-07)
+
+- **Cause** : refactor craft (styles déplacés en CSS) sans cache-bust sur `style.css` → panneau sans fond opaque côté mobile.
+- **Fix** : styles critiques réappliqués en inline sur `#craft-panel` / backdrop ; feuille mobile (bas d’écran, fond `#0a0906`) ; lignes recettes en classes CSS ; `style.css?v=…`.
+- **Cache bust** : `20260607-craft-mobile-fix-125`
+
+### Fix — coffre sur fondation : mesh dans le ciel (2026-06-07)
+
+- **Cause** : `storage_chest` ignorait `resolveStructureBaseY` / anti-ciel (réservé aux murs/portes).
+- **Fix** : même résolution hauteur que structures bois + sync `decor-floor-height` + clamp à la pose.
+- **Cache bust** : `20260607-chest-foundation-y-124`
+
+### Fix — verrou porte : clé au sol si inventaire plein (2026-06-07)
+
+- **Cause** : `item-add` avant retrait client du verrou → inventaire plein, clé perdue ; drop serveur parfois absent (stack verrou non vidé).
+- **Fix** : `_addStackToInv` + drop `struct_cle` au pied de la porte si reste ; sync `inventory-authoritative` ; notif « clé au sol ».
+- **Cache bust** : `20260607-door-key-drop-123`
+
+### UX — file craft mobile : HUD en haut (2026-06-07)
+
+- **Problème** : progression fabrication en bas à gauche, sur les boutons ⚒/🎒/🗺️.
+- **Fix** : `#craft-queue-hud` à droite des barres vie/faim/soif ; sous les barres sur très petit écran (<420px).
+- **Cache bust** : `20260607-craft-hud-top-122`
+
+### Completed — Persistance monde 100 % (BDD temps réel) (2026-06-07)
+
+- **Toutes les entités décor** (arbres, rochers, épaves, barrières, constructions, coffres) → `world_decor` avec IDs stables `seed_*` + `placementKey`.
+- **Arbres/rochers coupés/minés** : état sauvegardé ; suppressions enregistrées dans `world_meta.removedSeedKeys` (pas de respawn au reboot).
+- **Boot** : chargement BDD **en premier**, puis seed idempotent uniquement pour les placements manquants (plus de `force: true` rochers).
+- **Zombies** : table `world_zombies`, sync ~5 s + mort/spawn.
+- **Joueurs endormis** : table `world_sleepers` (corps + inventaire au sol).
+- **État monde** : colliders, eau, loot bâtiments, heure → `world_meta`.
+- **Flush** : 500 ms (au lieu de 1,5 s).
+- **Tests** : `tests/world-persist-full.test.mjs`.
+- **Schéma** : `world_zombies`, `world_sleepers` dans `database/schema.sql`.
+
+### Fix — déco joueur : doublon avatar debout + corps endormi (2026-06-07)
+
+- **Cause** : à la déconnexion avec vie > 0, le serveur émettait `player-sleep` mais pas `player-leave` → les autres clients gardaient l'avatar debout en plus du corps 💤.
+- **Fix serveur** : `player-leave` systématique avant `player-sleep` (sauf handoff / reconnexion même compte).
+- **Fix client** : sur `player-sleep`, retrait filet de sécurité de l'avatar remote par pseudo.
+- **Cache bust** : `20260607-sleep-leave-121`
+- **Test manuel** : 2 clients, le 2e quitte devant le 1er → un seul corps endormi, pas d'avatar debout.
+
+### Completed — Spawn plage (Rust) remplace camp forêt (2026-06-07)
+
+- **Retiré** : clairière camp `(0,-6)`, sentier `spawn_trail` → `town_main`, seed décor camp serveur.
+- **Nouveau** : plage côte **est** `(252, 8)` — sable + mer, spawn `(234, 8)` face l'intérieur.
+- **Shared** : `packages/shared/src/beach-spawn.mjs` ; exclusions arbres/rochers/barrières mises à jour.
+- **Serveur** : `BEACH_SPAWN` ; reset unique `.beach_spawn_v1_reset` pour téléporter les comptes existants.
+- **Tests** : `tests/beach-spawn.test.mjs`.
+- **Cache bust** : `20260607-beach-spawn-120`
+
+### UX — coffre PC : mode souris (2026-06-07)
+
+- **Ouverture coffre (E)** : `onUiPanelOpen` → quitte le pointer lock, curseur libre (comme inventaire/craft).
+- **Fermeture** (×, fond, Échap, ramassage coffre) : `onUiPanelClose` → retour mode jeu si aucun autre panneau ouvert.
+- **Cache bust** : `20260607-storage-mouse-mode-119`
+
+### Completed — Expiration loot au sol 30 min (2026-06-07)
+
+- **Butin de mort** : sac 30 min puis disparition (déjà en place, consolidé).
+- **Drops transitoires** : jet inventaire, drop zombie, overflow/casse coffre, clé/verrou → `expiresAt` +30 min dans `_addGroundItem` ; purge ~60 s + au boot BDD.
+- **Exception** : loot **bâtiments** (`loot: true`) — pas de timer, jusqu'au ramassage.
+- **Tests** : `tests/world-ground-items.test.mjs`.
+
+### Completed — Persistance constructions joueur en BDD (2026-06-07)
+
+- **Tables** : `world_decor` (prefabs posés : murs, sols, portes, coffres…), `world_structures` (fallback legacy), `world_items` (loot au sol), `world_meta` (compteurs).
+- **Sauvegarde** : debounce ~1,5 s sur pose, contenu coffre, verrous, dégâts, loot/drops, retrait ; flush à l'arrêt serveur.
+- **Boot** : seeds procéduraux d'abord, puis rechargement constructions + objets au sol ; pas de regen loot bâtiments si déjà en BDD.
+- **Exclus** : arbres, rochers, épaves, spawn camp (non rejoués depuis BDD) ; objets au sol **expirés** purgés au chargement.
+- **Fichiers** : `apps/server/src/world-persist.js`, `apps/server/src/db.js`, `database/schema.sql`
+- **MySQL prod** : `ensureWorldSchema()` crée les tables au démarrage si absentes.
+
+### Fix — ramassage coffre : inventaire non mis à jour (2026-06-07)
+
+- **Cause** : course `inventory-sync` / `storage-pickup` ; sync client surtout via event `inventory-authoritative` (parfois ignoré).
+- **Fix** : snapshot inv dans la requête (comme verrou porte) ; inventaire renvoyé dans l'ack + event ; `applyAuthoritativeInv` côté client.
+- **Cache bust** : `20260607-chest-pickup-sync-118`
+
+### Fix — retrait coffre plein : overflow au sol (2026-06-07)
+
+- **Ramassage coffre (E maintenu)** : plus besoin de vider le coffre ; contenu + coffre vont dans l'inventaire, le surplus est **droppé au sol** (persistant, visible).
+- **Serveur** : `_addStackToInv` partiel ; clés/durabilité conservées sur les drops.
+
+### Completed — Récupération coffre (maintenir E, PC) (2026-06-07)
+
+- **PC** : maintenir **E** ~2 s près d'un coffre vide → `struct_storage_chest` dans l'inventaire ; appui court = ouvrir (inchangé).
+- **Serveur** : socket `storage-pickup` (coffre vide, place inventaire, `decor-item-remove`).
+- **Client** : hold unifié verrou/coffre (`_interactHold`), barre « Récupération du coffre… », UI « maintenir E = ramasser ».
+- **Cache bust** : `20260607-storage-pickup-hold-116`
+
+### Fix — verrou : clé obligatoire + casser la porte sans clé (2026-06-07)
+
+- **Retrait verrou (E maintenu ~2 s)** : uniquement avec la **clé** correspondante (plus le propriétaire sans clé).
+- **Sans clé** : frapper la porte verrouillée (mêlée, outils, poings) — 50 PV, notif « Porte endommagée » puis destruction.
+- **Shared** : `getDoorBreakDamage`, `LOCKED_DOOR_BREAK_HP`, `isLockableDoorPrefab`.
+- **Serveur** : `build-hit` accepte portes verrouillées ; `decor-door-unlock` exige la clé.
+- **Client** : `hitDecorDoorRay` (cabanes), UI « Verrouillée · frapper pour casser ».
+- **Cache bust** : `20260607-door-key-break-115`
+
+### Fix — retrait verrou porte (barre qui se reset) (2026-06-07)
+
+- **Cause** : répétition auto de `KeyE` relançait `_interactDoorHoldStart()` → `_doorUnlockHold.t` remis à 0 ; inventaire appelait aussi `_useActiveItem()` à chaque repeat.
+- **Fix** : ignorer `e.repeat` pour le hold ; ne pas réinitialiser si même `decorId` ; `ZS.isDoorUnlockHoldActive()` pour bloquer l'usage inventaire pendant le maintien.
+- **Cache bust** : `20260607-door-unlock-hold-114`
+
+### Fix — Zombies à travers les murs (2026-06-07)
+
+- **Cause** : aggro/attaque basés sur la distance seule → dégâts et bras à travers les murs construits.
+- **Fix serveur** : ligne de vue via `hasLineOfSight` (colliders) ; aggro/perte de cible derrière mur ; portée mêlée 1,35 m ; flag `meleeReach` pour l'anim client.
+- **Shared** : `segmentBlockedByColliders` / `hasLineOfSight` dans `collider-resolve.mjs` + tests.
+- **Cache bust** : `20260607-zombie-los-113`
+
+### Completed — File de craft temporisée (2026-06-07)
+
+- **Fabrication** : plus instantanée — durée par catégorie (2,5–8 s), un objet à la fois.
+- **File** : bouton « File · Xs » consomme les ressources à l'ajout ; HUD compact + liste dans le panneau craft.
+- **Inventaire** : impossible d'ajouter en file sans place pour le résultat (y compris objets déjà en attente) ; livraison bloquée si inventaire rempli pendant le craft.
+- **Cache bust** : `20260607-craft-queue-112`
+
+### Completed — UI inventaire PC (2026-06-07)
+
+- **PC uniquement** : panneau ~860px, colonne équipement (Tête/Torso/Mains/Dos) + barre d'action avec touches 1–6 + sac en grille 8 colonnes scrollable.
+- **Mobile** : grille compacte inchangée visuellement (4 equip, 6 hotbar, 5 sac).
+- **Fichiers** : `apps/client/public/js/inventory.js`, `apps/client/public/css/style.css`
+- **Cache bust** : `20260607-inv-desktop-111`
+
+### Completed — UI craft PC avec onglets (2026-06-07)
+
+- **PC uniquement** (`mode-desktop`) : panneau élargi, barre latérale à onglets (Matériaux, Outils, Armes, Construction, Soins), grille de cartes recette avec badge « craftable ».
+- **Mobile** : liste plate inchangée (même rendu qu'avant).
+- **Fichiers** : `apps/client/public/js/craft.js`, `apps/client/public/css/style.css`
+- **Cache bust** : `20260607-craft-desktop-110`
+
 ### Fix — Coffre posé au sol au lieu de la fondation (2026-06-07)
 
 - **Cause** : `_placementTransform()` utilisait `getDecorGroundHeight` pour les coffres (`decorPrefab`), sans tenir compte des fondations enregistrées.

@@ -1724,16 +1724,26 @@ io.on('connection', async (socket) => {
     if (!d || typeof d.type !== 'string' || d.type.length > 60) return;
     const qty = Math.max(1, Math.min(999, Number(d.qty) || 1));
     const ang = Math.random() * Math.PI * 2;
-    const id  = ++itemIdCounter;
-    const drop = {
-      id, type: d.type, qty,
-      x: p.x + Math.cos(ang) * 1.0,   // position autoritative du joueur (+léger décalage)
-      z: p.z + Math.sin(ang) * 1.0,
-      // pas de loot:true → l'objet jeté n'est pas effacé au respawn horaire
-    };
-    items.set(id, drop);
-    io.emit('item-spawn', drop);
-    log.debug('items', 'drop', { player: p.username, type: d.type, qty, pos: { x: +drop.x.toFixed(1), z: +drop.z.toFixed(1) } });
+    const extra = {};
+    if (d.type === 'struct_cle') {
+      const lockId = typeof d.lockId === 'string' ? d.lockId.trim() : '';
+      if (!lockId || lockId.length > 80) return;
+      extra.lockId = lockId;
+    }
+    const drop = _dropWorldItem(
+      d.type,
+      qty,
+      p.x + Math.cos(ang) * 1.0,
+      p.z + Math.sin(ang) * 1.0,
+      extra,
+    );
+    log.debug('items', 'drop', {
+      player: p.username,
+      type: d.type,
+      qty,
+      lockId: drop.lockId || undefined,
+      pos: { x: +drop.x.toFixed(1), z: +drop.z.toFixed(1) },
+    });
   });
 
   // Récolte bois sur arbre prefab — sync multijoueur

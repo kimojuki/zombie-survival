@@ -150,7 +150,7 @@
       railLen: Number.isFinite(d.railLen) ? d.railLen : undefined,
       rotX: Number.isFinite(d.rotX) ? d.rotX : undefined,
       baseY: Number.isFinite(d.baseY) ? d.baseY
-        : (isBuildWood && Number.isFinite(d.y) ? d.y : undefined),
+        : ((isBuildWood || d.prefabId === 'storage_chest') && Number.isFinite(d.y) ? d.y : undefined),
       buildLevel: Number.isFinite(d.buildLevel) ? Math.max(0, Math.min(8, d.buildLevel)) : 0,
       supportGroundY: Number.isFinite(d.supportGroundY) ? d.supportGroundY : undefined,
       buildDamage: Number.isFinite(d.buildDamage) ? d.buildDamage : undefined,

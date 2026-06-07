@@ -50,6 +50,19 @@ Copier dans la description de PR :
 
 ## 2026-06-07
 
+### Fix — Coffre posé au sol au lieu de la fondation (2026-06-07)
+
+- **Cause** : `_placementTransform()` utilisait `getDecorGroundHeight` pour les coffres (`decorPrefab`), sans tenir compte des fondations enregistrées.
+- **Fix** : hauteur via `BuildAnchors.resolveStructureBaseY` (fondation sous la visée) ; spawn prefab respecte `opts.baseY` ; resync réseau coffre depuis `d.y`.
+- **Cache bust** : `20260607-chest-foundation-109`
+
+### Completed — Jet de clé au sol (2026-06-07)
+
+- **Jet** : bouton 🗑 Jeter conserve le `lockId` → objet ramassable multijoueur avec la bonne clé.
+- **Visuel** : modèle procédural doré posé à plat au sol (halo + rotation comme les autres loots).
+- **Serveur** : `item-drop` refuse une clé sans `lockId` ; spawn via `_dropWorldItem`.
+- **Cache bust** : `20260607-key-drop-108`
+
 ### Fix — verrou porte sans effet v2 (2026-06-07)
 
 - **Cause** : appel réseau silencieux (ack socket parfois absent) + inventaire non vu par un serveur non redémarré.

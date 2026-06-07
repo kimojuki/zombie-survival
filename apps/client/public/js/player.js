@@ -992,7 +992,7 @@
     const byCat = {
       firearm: 1.00, melee: 0.92, tool: 0.86,
       food: 0.42, medical: 0.42, ammo: 0.32, resource: 0.34,
-      equipment: 0.44, structure: 0.46,
+      equipment: 0.44, structure: 0.46, key: 0.52,
     };
     return byCat[cat] || 0.36;
   }

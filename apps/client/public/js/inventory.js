@@ -167,6 +167,25 @@
     return false;
   }
 
+  function _canAddDoorKey(lockId) {
+    if (!lockId) return false;
+    let hasEmpty = false;
+    for (const arr of [_hotbar, _bag]) {
+      for (const s of arr) {
+        if (!s) { hasEmpty = true; continue; }
+        if (s.type === DOOR_KEY_TYPE && s.lockId === lockId) return false;
+      }
+    }
+    return hasEmpty;
+  }
+
+  function _canPickupWorldItem(item) {
+    if (!item) return false;
+    if (item.bag) return true;
+    if (item.type === DOOR_KEY_TYPE) return _canAddDoorKey(item.lockId);
+    return _canAddItem(item.type);
+  }
+
   function canAddItem(type) {
     return _canAddItem(type);
   }
@@ -216,8 +235,8 @@
     if (!item) { _grabTargetId = null; return false; }
     // Inventaire plein → on refuse le ramassage (sinon l'objet serait perdu).
     // (Le butin de mort est toujours ramassable : récupération au mieux.)
-    if (!item.bag && !_canAddItem(item.type)) {
-      ZS.UI?.showNotif?.('Inventaire plein !');
+    if (!item.bag && !_canPickupWorldItem(item)) {
+      ZS.UI?.showNotif?.(item.type === DOOR_KEY_TYPE ? 'Inventaire plein ou clé déjà possédée' : 'Inventaire plein !');
       return false;
     }
     // Optimiste : on retire le mesh ; le serveur confirme (item-remove + item-add).
@@ -239,11 +258,11 @@
         btn.classList.remove('full');
       } else {
         const def = _def(item.type);
-        if (_canAddItem(item.type)) {
+        if (_canPickupWorldItem(item)) {
           btn.textContent = '✋ ' + (def?.label || 'Ramasser');
           btn.classList.remove('full');
         } else {
-          btn.textContent = '🎒 Inventaire plein';
+          btn.textContent = item.type === DOOR_KEY_TYPE ? '🔑 Clé déjà possédée' : '🎒 Inventaire plein';
           btn.classList.add('full');
         }
       }
@@ -381,10 +400,35 @@
     if (s?.kind === 'decorPrefab') {
       x = p.x - Math.sin(yaw) * 2.6;
       z = p.z - Math.cos(yaw) * 2.6;
-      const baseY = ZS.getDecorGroundHeight
-        ? ZS.getDecorGroundHeight(x, z)
-        : (ZS.getTerrainHeight ? ZS.getTerrainHeight(x, z) : 0);
-      return { x, z, rotY: yaw, baseY, level: 0 };
+      const terrainAt = (px, pz) => (ZS.getTerrainHeight
+        ? ZS.getTerrainHeight(px, pz)
+        : (ZS.getDecorGroundHeight ? ZS.getDecorGroundHeight(px, pz) : 0));
+      const fallbackY = terrainAt(x, z) + _buildLevel * LEVEL_H;
+      let baseY = fallbackY;
+      let level = _buildLevel;
+      let snapped = false;
+      if (ZS.BuildAnchors?.findFoundationUnderCell?.(x, z, _buildLevel)) {
+        snapped = true;
+      } else if (ZS.BuildAnchors?.findFoundationDeckNear?.(x, z, _buildLevel)) {
+        snapped = true;
+      }
+      if (ZS.BuildAnchors?.resolveStructureBaseY) {
+        baseY = ZS.BuildAnchors.resolveStructureBaseY(x, z, fallbackY, _buildLevel);
+        level = _buildLevel;
+      } else if (ZS.BuildAnchors?.findFoundationDeckNear) {
+        const deck = ZS.BuildAnchors.findFoundationDeckNear(x, z, _buildLevel);
+        if (deck) {
+          baseY = deck.baseY;
+          level = deck.level;
+        }
+      } else if (ZS.BuildAnchors?.clampStructureBaseY) {
+        baseY = ZS.BuildAnchors.clampStructureBaseY(x, z, baseY, level);
+      }
+      const supportGroundY = terrainAt(x, z);
+      return {
+        x, z, rotY: yaw, baseY, level, snapped,
+        supportGroundY, supportDrop: 0, floorsToLift: [],
+      };
     }
     const snap = (v) => Math.round(v / GX) * GX;
     const edge = (v) => Math.round((v - GX / 2) / GX) * GX + GX / 2;
@@ -813,7 +857,10 @@
     mesh.position.set(d.x, baseY, d.z);
     mesh.userData.baseY = baseY;
     _scene.add(mesh);
-    _worldItems.set(d.id, { mesh, type: d.type, x: d.x, z: d.z });
+    _worldItems.set(d.id, {
+      mesh, type: d.type, x: d.x, z: d.z,
+      lockId: d.lockId || null,
+    });
   }
 
   function removeWorldItem(id) {
@@ -1423,11 +1470,17 @@
     if (!_sel) return;
     const item = _getSlot(_sel.zone, _sel.idx);
     if (!item) { _sel = null; _renderInvPanel(); return; }
+    if (item.type === DOOR_KEY_TYPE && !item.lockId) {
+      ZS.UI?.showNotif?.('Cette clé est invalide');
+      return;
+    }
     const zone = _sel.zone, idx = _sel.idx;
     _setSlot(zone, idx, null);
     _sel = null;
     if (zone === 'equip' && idx === 'Dos') _resizeBag();   // sac retiré → réajuste
-    _socket.emit('item-drop', { type: item.type, qty: item.qty || 1 });
+    const dropPayload = { type: item.type, qty: item.qty || 1 };
+    if (item.lockId) dropPayload.lockId = item.lockId;
+    _socket.emit('item-drop', dropPayload);
     const def = _def(item.type);
     ZS.UI?.showNotif?.('Jeté : ' + (def?.label || item.type));
     _renderInvPanel();
@@ -1761,7 +1814,18 @@
     if (ZS.getItemModel) {
       ZS.getItemModel(type).then((obj) => {
         g.remove(placeholder);
-        g.add(obj);
+        if (type === DOOR_KEY_TYPE) {
+          const wrap = new THREE.Group();
+          wrap.add(obj);
+          wrap.rotation.x = -Math.PI / 2;
+          wrap.rotation.z = Math.random() * Math.PI * 2;
+          wrap.updateWorldMatrix(true, true);
+          const box = new THREE.Box3().setFromObject(wrap);
+          if (isFinite(box.min.y)) wrap.position.y = -box.min.y - 0.28;
+          g.add(wrap);
+        } else {
+          g.add(obj);
+        }
       }).catch(() => { /* on conserve le cube de remplacement */ });
     }
     return g;

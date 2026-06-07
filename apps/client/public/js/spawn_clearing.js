@@ -1280,7 +1280,7 @@
         deckY = rawY;
       }
       opts = { ...opts, buildLevel };
-    } else if (Number.isFinite(opts.baseY) && prefab.buildKind) {
+    } else if (Number.isFinite(opts.baseY)) {
       deckY = opts.baseY;
     } else if (Number.isFinite(y) && y > 0.25) {
       deckY = y;

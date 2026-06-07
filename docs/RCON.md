@@ -120,6 +120,7 @@ Erreurs : `403` (mauvais mot de passe), `503` (RCON non configuré ou serveur en
 |----------|-------------|
 | `zombies on` / `zombies off` | Active/désactive l'IA (freeze si off) |
 | `nospawn on` / `nospawn off` | Bloque/active le respawn après un kill |
+| `pvp on` / `pvp off` | Active/désactive les dégâts entre joueurs |
 | `clearzombies` | Supprime tous les zombies |
 | `zombieseed` | Complète la population jusqu'à 70 (prefabs par secteur) |
 | `zombieseed reset` | Vide puis repeuple (horde spawn + zones) |

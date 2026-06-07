@@ -407,8 +407,14 @@
       ZS.StorageUI.close();
       return;
     }
+    if (e.code === 'Escape' && ZS.SleepLoot?.isOpen?.()) {
+      e.preventDefault();
+      ZS.SleepLoot.closePanel();
+      return;
+    }
     if (e.code === 'KeyE') {
       state.keys[e.code] = true;
+      if (ZS.SleepLoot?.isOpen?.()) return;
       // key repeat remettait _doorUnlockHold.t à 0 → barre qui repart de zéro
       if (e.repeat) {
         if (_interactHold) e.preventDefault();
@@ -439,7 +445,7 @@
   function _blocksPointerLock(el) {
     if (!el || el === canvas) return false;
     return !!el.closest?.(
-      '#menu-panel, #menu-btn, #inv-panel, #craft-panel, #storage-panel, #storage-backdrop, #map-overlay, #death-screen, '
+      '#menu-panel, #menu-btn, #inv-panel, #craft-panel, #storage-panel, #storage-backdrop, #sleep-loot-panel, #sleep-loot-backdrop, #map-overlay, #group-backdrop, #death-screen, '
       + '#connecting-screen, #rcon-panel, #chat-wrap, #hotbar, #craft-btn, #inv-btn, #map-btn, #chat-btn, '
       + '#build-ctl, button, a, input, textarea, select, [contenteditable]'
     );
@@ -458,7 +464,10 @@
     if (craft && craft.classList.contains('is-open')) return true;
     const map = document.getElementById('map-overlay');
     if (map && map.style.display === 'flex') return true;
+    const groupBd = document.getElementById('group-backdrop');
+    if (groupBd && groupBd.style.display === 'flex') return true;
     if (ZS.StorageUI?.isOpen?.()) return true;
+    if (ZS.SleepLoot?.isOpen?.()) return true;
     return false;
   }
 
@@ -1182,6 +1191,11 @@
 
   function _interactWorldKeyDown() {
     if (ZS.StorageUI?.isOpen?.()) return true;
+    if (ZS.SleepLoot?.isPending?.()) return true;
+    if (!state.player.dead) {
+      const sleeper = ZS.SleepLoot?.getNearestForUi?.(state.player.x, state.player.z);
+      if (sleeper && ZS.SleepLoot?.tryInteract?.()) return true;
+    }
     if (_interactHoldStart()) return true;
     return _interactWorld();
   }
@@ -1194,7 +1208,6 @@
     const door = ZS.findNearestDecorDoor?.(state.player.x, state.player.z, 3.2) || null;
     const sleeper = (!storage && !door && !state.player.dead)
       ? ZS.SleepLoot?.getNearestForUi?.(state.player.x, state.player.z) : null;
-    if (!storage && !door && !sleeper && !_nearDoor && !_nearStorage) return;
     _nearStorage = storage;
     _nearDoor = door;
     const btn = _ensureDoorButton();
@@ -1254,16 +1267,8 @@
 
   // ── Respawn ───────────────────────────────────────────────────────────────
   function respawn() {
-    state.player.health    = 100;
-    state.player.dead      = false;
-    state.player.velocityY = 0;
-    state.player.onGround  = true;
-    // Réinit survie tout de suite — sinon infection/faim à 0 retue avant `respawn-at`.
-    ZS.Survival?.reset?.();
-    ZS.UI.setHealth(100);
-    ZS.UI.hideDeath();
-    // Le serveur fait autorité : il renvoie `respawn-at` avec la position (Start
-    // Forest), le kit de départ et la survie remis à neuf (cf. network.js).
+    // Ne pas réveiller le joueur ici : sinon la boucle envoie encore la position
+    // de mort au serveur avant `respawn-at` et annule le téléport plage.
     ZS.Network.sendRespawn();
   }
   state.onRespawn = respawn;
@@ -1314,6 +1319,7 @@
       _updateWaterEffect(state.player.x, state.player.z, state.player.y);
     }
     ZS.SpawnIntro?.tick?.(dt);
+    ZS.Scenario?.tick?.(dt);
     ZS.tickFPSArms(fpsArms, dt, {
       moving: !!state.player.isMoving,
       speed: state.player.moveSpeed || 0,
@@ -1439,6 +1445,11 @@
 
     if (ZS.Zombies.resolvePlayerCollision) {
       const out = ZS.Zombies.resolvePlayerCollision(newX, newZ, PLAYER_R);
+      newX = out.x;
+      newZ = out.z;
+    }
+    if (ZS.Network.resolveRemotePlayerCollision) {
+      const out = ZS.Network.resolveRemotePlayerCollision(newX, newZ, PLAYER_R);
       newX = out.x;
       newZ = out.z;
     }

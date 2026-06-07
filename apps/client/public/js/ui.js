@@ -29,8 +29,9 @@
     '#shoot-btn', '#jump-btn', '#reload-btn', '#use-btn', '#grab-btn',
     '#door-interact-btn', '#hotbar', '.hb-slot',
     '#inv-panel', '#inv-backdrop', '#craft-panel', '#craft-backdrop',
-    '#qa-backdrop', '#spawn-intro-overlay', '#map-overlay', '#death-screen',
-    '#rcon-panel', '#storage-panel', '#storage-backdrop', '.inv-slot', '#chat-input-row',
+    '#qa-backdrop', '#group-backdrop', '#spawn-intro-overlay', '#map-overlay', '#death-screen',
+    '#rcon-panel', '#storage-panel', '#storage-backdrop', '#sleep-loot-panel', '#sleep-loot-backdrop',
+    '.inv-slot', '#chat-input-row',
     '#chat-wrap', '#craft-queue-hud',
   ].join(',');
 

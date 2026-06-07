@@ -192,6 +192,13 @@
     </svg>
     Console dev
   </button>
+  <button id="menu-groups" class="menu-item menu-groups-item" type="button">
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/>
+      <path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>
+    </svg>
+    Groupe
+  </button>
   <button id="menu-logout" class="menu-item danger">
     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
       <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>
@@ -200,6 +207,24 @@
     </svg>
     Se déconnecter
   </button>
+</div>
+
+<!-- Gestion des groupes -->
+<div id="group-backdrop" style="display:none">
+  <div id="group-panel">
+    <div class="group-header">
+      <h2>Mon groupe</h2>
+      <button id="group-close-btn" type="button" aria-label="Fermer">✕</button>
+    </div>
+    <div id="group-invite-banner" class="group-invite-banner" style="display:none">
+      <p id="group-invite-text" class="group-invite-text"></p>
+      <div class="group-invite-banner-actions">
+        <button id="group-invite-accept" type="button" class="group-btn group-btn-primary group-btn-sm">Accepter</button>
+        <button id="group-invite-decline" type="button" class="group-btn group-btn-secondary group-btn-sm">Refuser</button>
+      </div>
+    </div>
+    <div id="group-panel-body" class="group-panel-body"></div>
+  </div>
 </div>
 
 <!-- QA checklist overlay (serveur QA) -->
@@ -362,7 +387,7 @@
     setConnectingMsg('Connexion au serveur…', 'Vérification de la version', 0);
     await waitForClientVersion();
     await waitForServer();
-    const { LEGACY_MODULES } = await import('/src/bootstrap/legacy-modules.js');
+    const { LEGACY_MODULES } = await import('/src/bootstrap/legacy-modules.js?v=' + encodeURIComponent(CACHE_BUST));
     const modules = LEGACY_MODULES.filter((src) => !src.includes('loading.js'));
     const scriptMin = 12;
     const scriptMax = 22;

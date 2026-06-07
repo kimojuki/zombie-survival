@@ -64,6 +64,14 @@
       entry.animTime += dt;
       const armTarget = entry.meleeReach ? entry.armPose : entry.armPose * 0.32;
 
+      if (entry.scenarioFrozen) {
+        limbs.lLeg.rotation.x *= 0.5;
+        limbs.rLeg.rotation.x *= 0.5;
+        limbs.lArm.rotation.x *= 0.5;
+        limbs.rArm.rotation.x *= 0.5;
+        return;
+      }
+
       if (entry.isMoving) {
         const freq = entry.speed * 2.2;
         const swing = Math.sin(entry.animTime * freq);
@@ -113,6 +121,42 @@
     return { x, z };
   }
 
+  function _applySilhouette(group) {
+    group.traverse((child) => {
+      if (!child.isMesh || !child.material) return;
+      if (!child.userData._scenarioOrigColor && child.material.color) {
+        child.userData._scenarioOrigColor = child.material.color.getHex();
+        child.userData._scenarioOrigEmissive = child.material.emissive?.getHex?.() ?? 0;
+      }
+      if (child.material.color) child.material.color.setHex(0x1a1520);
+      if (child.material.emissive) child.material.emissive.setHex(0x050508);
+    });
+  }
+
+  function _clearSilhouette(group) {
+    group.traverse((child) => {
+      if (!child.isMesh || !child.material || child.userData._scenarioOrigColor == null) return;
+      child.material.color.setHex(child.userData._scenarioOrigColor);
+      if (child.material.emissive) {
+        child.material.emissive.setHex(child.userData._scenarioOrigEmissive || 0);
+      }
+      delete child.userData._scenarioOrigColor;
+      delete child.userData._scenarioOrigEmissive;
+    });
+  }
+
+  function _setScenarioFrozen(entry, frozen) {
+    if (!entry) return;
+    entry.scenarioFrozen = !!frozen;
+    if (frozen) {
+      _applySilhouette(entry.group);
+      entry.hbGroup.visible = false;
+    } else {
+      _clearSilhouette(entry.group);
+      entry.hbGroup.visible = true;
+    }
+  }
+
   function _add(z) {
     const prefabId = z.prefabId || 'zombie_walker';
     const group = ZS.createZombieModel(prefabId);
@@ -146,9 +190,11 @@
       meleeReach:   !!z.meleeReach,
       prevX:        z.x,
       prevZ:        z.z,
+      scenarioFrozen: !!z.scenarioFrozen,
     };
     _updateHealthBar(entry, z.health != null ? z.health : maxHealth, maxHealth);
     entry.lastHealth = z.health != null ? z.health : maxHealth;
+    if (z.scenarioFrozen) _setScenarioFrozen(entry, true);
     zombieMeshes.set(z.id, entry);
     _scene.add(group);
   }
@@ -161,7 +207,11 @@
     const angleSame = z.angle == null || Math.abs(z.angle - entry.targetAngle) < 0.001;
     const healthSame = z.health == null || z.health === entry.lastHealth;
     const reachSame = z.meleeReach == null || !!z.meleeReach === !!entry.meleeReach;
-    if (moved < 0.0001 && angleSame && healthSame && reachSame) return;
+    const frozenSame = z.scenarioFrozen == null || !!z.scenarioFrozen === !!entry.scenarioFrozen;
+    if (moved < 0.0001 && angleSame && healthSame && reachSame && frozenSame) return;
+    if (z.scenarioFrozen != null && !!z.scenarioFrozen !== !!entry.scenarioFrozen) {
+      _setScenarioFrozen(entry, !!z.scenarioFrozen);
+    }
     entry.group.position.x = z.x;
     entry.group.position.z = z.z;
     if (moved > 0.08 || entry.lastTerrainX == null
@@ -194,13 +244,7 @@
   }
 
   function _flashRed(group) {
-    group.traverse((child) => {
-      if (child.isMesh && child.material?.color) {
-        const orig = child.material.color.getHex();
-        child.material.color.set(0xff4444);
-        setTimeout(() => child.material.color.setHex(orig), 100);
-      }
-    });
+    ZS.flashMeshMaterials?.(group, 0xff4444, 100);
   }
 
   function _makeHealthBar() {

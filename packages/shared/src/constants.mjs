@@ -13,6 +13,13 @@ export const SOCKET_EVENTS = Object.freeze({
   ZOMBIE_DIE: 'zombie-die',
   TAKE_DAMAGE: 'take-damage',
   GAME_INIT: 'game-init',
+  SCENARIO_ADVANCE: 'scenario-advance',
+  SCENARIO_UPDATE: 'scenario-update',
+  PLAYER_HIT: 'player-hit',
+  GROUP_STATE: 'group-state',
+  GROUP_INVITE: 'group-invite',
+  GROUP_UPDATE: 'group-update',
+  PLAYER_RESPAWN: 'player-respawn',
 });
 
 export const ROUTES = Object.freeze({

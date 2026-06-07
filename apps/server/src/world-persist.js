@@ -311,6 +311,8 @@ function createWorldPersist(db, log) {
           continue;
         }
         if (!sleep?.playerId) continue;
+        const pid = Number(sleep.playerId);
+        if (Number.isFinite(pid)) sleep.playerId = pid;
         sleepingPlayers.set(sleep.playerId, sleep);
         sleeperCount++;
       }

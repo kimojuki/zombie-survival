@@ -2,8 +2,13 @@
 (function () {
   'use strict';
 
-  const STORAGE_KEY = 'zs_intro_done';
   const STAND_MS = 1400;
+
+  const LINES = [
+    'Du sable. Des vagues. Aucun souvenir.',
+    'L\'océan à l\'est. La forêt… là-bas, à l\'ouest.',
+    'Personne en vue.',
+  ];
 
   let _active = false;
   let _phase = 'idle'; // idle | wake | stand
@@ -13,15 +18,6 @@
   let _btn = null;
   let _standT = 0;
   let _saved = null;
-
-  const LINES = [
-    'Tout est flou…',
-    'Du sable. Le grondement des vagues.',
-    'Tu ne te souviens de rien — ni d\'où tu viens, ni de ce jour où tout a basculé.',
-    'On parlait d\'une épidémie… puis le silence.',
-    'Il ne reste que les morts — et cette forêt, là-bas, à l\'ouest.',
-    'Tu dois survivre.',
-  ];
 
   function isActive() {
     return _active;
@@ -46,8 +42,7 @@
   }
 
   function _shouldPlay() {
-    if (localStorage.getItem(STORAGE_KEY) === '1') return false;
-    return true;
+    return ZS.Scenario?.needsWakeIntro?.() === true;
   }
 
   function _buildUi() {
@@ -84,7 +79,7 @@
     ].join(';');
 
     const title = document.createElement('div');
-    title.textContent = '…';
+    title.textContent = 'Réveil';
     title.style.cssText = 'font-weight:700;font-size:13px;letter-spacing:.12em;text-transform:uppercase;color:#c9a86a;margin-bottom:10px;';
     _bubble.appendChild(title);
 
@@ -150,12 +145,12 @@
     _standT = 0;
     if (_bubble) _bubble.style.opacity = '0.35';
     if (_btn) _btn.disabled = true;
+    ZS.Scenario?.advance?.('intro_stand');
   }
 
   function _finish() {
     _active = false;
     _phase = 'idle';
-    localStorage.setItem(STORAGE_KEY, '1');
     if (_overlay) _overlay.style.display = 'none';
     document.body.classList.remove('spawn-intro-active');
     if (_bubble) _bubble.style.opacity = '1';
@@ -164,6 +159,7 @@
     if (fps && _saved) fps.visible = _saved.fpsVisible !== false;
     ZS.shortcutsBlocked = null;
     if (ZS.onUiPanelClose) ZS.onUiPanelClose();
+    ZS.Scenario?.advance?.('breathe');
   }
 
   function tryStart(state) {

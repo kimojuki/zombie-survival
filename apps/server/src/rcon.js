@@ -281,6 +281,16 @@ function createRcon(ctx) {
     return ok(`IA zombies: ${ctx.flags.zombieAI ? 'ON' : 'OFF'}`);
   });
 
+  register('pvp', 'Combat joueur vs joueur [on|off]', (args) => {
+    if (!args[1]) return ok(`pvp = ${ctx.flags.pvp !== false ? 'on' : 'off'}`);
+    const v = args[1].toLowerCase();
+    if (v === 'on' || v === '1') ctx.flags.pvp = true;
+    else if (v === 'off' || v === '0') ctx.flags.pvp = false;
+    else return fail('Usage: pvp on|off');
+    broadcastFlags();
+    return ok(`PvP: ${ctx.flags.pvp !== false ? 'ON' : 'OFF'}`);
+  });
+
   register('nospawn', 'Désactive les respawns zombie [on|off]', (args) => {
     if (!args[1]) return ok(`nospawn = ${ctx.flags.zombieSpawn ? 'off' : 'on'} (spawn ${ctx.flags.zombieSpawn ? 'actif' : 'bloqué'})`);
     const v = args[1].toLowerCase();
@@ -460,6 +470,12 @@ function createRcon(ctx) {
     const target = args[1] ? findPlayer(args[1]) : meta.player;
     if (!target) return fail(`Joueur introuvable: ${args[1]}`);
     target.health = 100;
+    if (target._deathHandled) {
+      target._deathHandled = false;
+      delete target._deathInv;
+      delete target._deathPos;
+      delete target._deathEquipped;
+    }
     if (!target.survival) target.survival = {};
     target.survival.saignement = false;
     target.dirty = true;
@@ -506,6 +522,15 @@ function createRcon(ctx) {
     const on = ['on', '1', 'true'].includes((mode || '').toLowerCase());
     target.invincible = on;
     return ok(`Invincibilité ${target.username}: ${on ? 'ON' : 'OFF'}`);
+  });
+
+  register('scenario-reset', 'Réinitialise l\'intro plage [joueur]', async (args) => {
+    const target = findPlayer(args[1]);
+    if (!target) return fail('Usage: scenario-reset <joueur>');
+    if (!ctx.resetPlayerScenario) return fail('Module scénario indisponible');
+    const sock = ctx.io.sockets.sockets.get(target.socketId);
+    await ctx.resetPlayerScenario(target, sock);
+    return ok(`Intro plage réinitialisée pour ${target.username}`);
   });
 
   register('save', 'Force la sauvegarde de tous les joueurs', async () => {

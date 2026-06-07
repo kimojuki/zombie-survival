@@ -199,6 +199,37 @@ _registerClientStatic();
 const players         = new Map();
 const sleepingPlayers = new Map(); // playerId → corps endormi (déco)
 const SLEEP_LOOT_RADIUS = 3.5;
+
+/** Joueur endormi (déco) ou mort au sol — inventaire fouillable. */
+function _findLootTarget(targetId) {
+  const tid = _sleeperKey(targetId);
+  const sleep = _getSleepingPlayer(tid);
+  if (sleep) {
+    return {
+      kind: 'sleep',
+      playerId: tid,
+      username: sleep.username,
+      inv: sleep.inv,
+      x: sleep.x,
+      z: sleep.z,
+      afterTake: () => _saveSleepingToDb(sleep),
+    };
+  }
+  for (const pl of players.values()) {
+    if (_normPlayerId(pl.id) !== tid || !pl._deathHandled || !pl._deathInv) continue;
+    const pos = pl._deathPos || pl;
+    return {
+      kind: 'death',
+      playerId: tid,
+      username: pl.username,
+      inv: pl._deathInv,
+      x: pos.x,
+      z: pos.z,
+      afterTake: () => {},
+    };
+  }
+  return null;
+}
 let serverReady  = false;
 const bootStatus = { phase: 'starting', progress: 0 };
 
@@ -572,7 +603,18 @@ function ensureStarterTorch(p) {
   inv.bag.push(torch);
   return true;
 }
-const STARTING_SAVE = JSON.stringify({ ...STARTING_ITEMS, survival: DEFAULT_SURVIVAL });
+const STARTING_SAVE = JSON.stringify({
+  ...STARTING_ITEMS,
+  survival: DEFAULT_SURVIVAL,
+  scenario: {
+    act: 'beach',
+    step: 'intro_wake',
+    completed: false,
+    version: 2,
+    tutorialZombieId: null,
+    tutorialKilled: false,
+  },
+});
 const GROUND_ITEM_TTL_MS = 30 * 60 * 1000; // drops joueur / mort / zombie / coffre : 30 min
 
 // Sauvegarde combinée (objets + survie) écrite dans la colonne JSON `inventory`.
@@ -642,38 +684,89 @@ function _emitSurvivalUpdate(socket, p) {
   });
 }
 
+function _applyPlayerCombatDamage(attacker, target, dmg) {
+  if (!target || target.health <= 0 || target._deathHandled) return;
+  if (target.invincible) return;
+  target.health = Math.max(0, target.health - dmg);
+  if (!target.survival) target.survival = { ...DEFAULT_SURVIVAL };
+  const sv = target.survival;
+  if (dmg >= 8 && Math.random() < 0.2) sv.saignement = true;
+  if (Math.random() < 0.15) {
+    sv.infection = Math.min(100, (sv.infection || 0) + 5 + Math.random() * 10);
+  }
+  target.dirty = true;
+  const targetSock = io.sockets.sockets.get(target.socketId);
+  if (targetSock) {
+    targetSock.emit('take-damage', { dmg, health: target.health });
+    _emitSurvivalUpdate(targetSock, target);
+  }
+  io.emit('player-hit', { id: target.socketId, health: target.health });
+  if (target.health <= 0) {
+    _handlePlayerDeath(target);
+    if (attacker && attacker.socketId !== target.socketId) {
+      attacker.kills++;
+      const atkSock = io.sockets.sockets.get(attacker.socketId);
+      if (atkSock) atkSock.emit('score-update', { kills: attacker.kills });
+      log.info('combat', 'pvp kill', { killer: attacker.username, victim: target.username });
+    }
+  }
+}
+
+function _spawnDeathBagFromPlayer(p) {
+  const loot = flattenInv(p._deathInv);
+  const pos = p._deathPos;
+  if (!loot?.length || !pos) return;
+  _addGroundItem({
+    id: ++itemIdCounter,
+    type: 'death_bag',
+    bag: true,
+    x: pos.x,
+    z: pos.z,
+    items: loot,
+    expiresAt: Date.now() + GROUND_ITEM_TTL_MS,
+    owner: p.username,
+  });
+  log.info('death', 'death bag spawned on respawn', {
+    player: p.username,
+    items: loot.length,
+    pos: { x: +pos.x.toFixed(1), z: +pos.z.toFixed(1) },
+  });
+}
+
 function _handlePlayerDeath(p) {
   if (p.health > 0 || p._deathHandled) return;
   p._deathHandled = true;
-  const loot = flattenInv(p.inv);
+  p.health = 0;
+  if (p.inv?.scenario) {
+    p._scenarioKeep = { ...p.inv.scenario };
+  }
+  p._deathInv = _cloneInv(p.inv);
+  p._deathPos = { x: p.x, y: p.y, z: p.z, rotY: p.rotY };
+  p._deathEquipped = p.equipped || null;
   p.inv = _normalizeInv({
     hotbar: Array(6).fill(null),
     bag: [],
     equip: { Tête: null, Torso: null, Mains: null, Dos: null },
   });
   p.dirty = true;
-  if (loot.length) {
-    _addGroundItem({
-      id: ++itemIdCounter,
-      type: 'death_bag',
-      bag: true,
-      x: p.x,
-      z: p.z,
-      items: loot,
-      expiresAt: Date.now() + GROUND_ITEM_TTL_MS,
-      owner: p.username,
-    });
-    log.info('death', 'death bag spawned', {
-      player: p.username,
-      items: loot.length,
-      pos: { x: +p.x.toFixed(1), z: +p.z.toFixed(1) },
-    });
-  } else {
-    log.info('death', 'player died (empty inv)', { player: p.username });
-  }
+  log.info('death', 'player down', {
+    player: p.username,
+    lootItems: flattenInv(p._deathInv).length,
+    pos: { x: +p.x.toFixed(1), z: +p.z.toFixed(1) },
+  });
+  io.emit('player-death', {
+    id: p.socketId,
+    playerId: _normPlayerId(p.id),
+    username: p.username,
+    x: p.x,
+    y: p.y,
+    z: p.z,
+    rotY: p.rotY,
+    equipped: p._deathEquipped,
+    kills: p.kills,
+  });
   const sock = io.sockets.sockets.get(p.socketId);
   if (sock) {
-    sock.emit('player-death', { kills: p.kills });
     _emitInvAuth(sock, p);
     _emitSurvivalUpdate(sock, p);
   }
@@ -686,6 +779,21 @@ function _sleepBodyId(playerId) {
 function _normPlayerId(id) {
   const n = Number(id);
   return Number.isFinite(n) ? n : id;
+}
+
+function _sleeperKey(id) {
+  return _normPlayerId(id);
+}
+
+function _getSleepingPlayer(id) {
+  const key = _sleeperKey(id);
+  return sleepingPlayers.get(key) || null;
+}
+
+function _setSleepingPlayer(id, sleep) {
+  const key = _sleeperKey(id);
+  if (sleep) sleep.playerId = key;
+  sleepingPlayers.set(key, sleep);
 }
 
 /** Session encore ouverte (refresh : nouvelle socket avant déco de l'ancienne). */
@@ -773,10 +881,11 @@ function _hasPersistedBuildingLoot() {
   return false;
 }
 
-function _saveSleepingToDb(sleep) {
+async function _saveSleepingToDb(sleep) {
   if (!sleep?.playerId) return;
+  sleep.playerId = _sleeperKey(sleep.playerId);
   worldPersist?.scheduleUpsertSleeper?.(sleep);
-  savePlayerState(
+  await savePlayerState(
     sleep.playerId,
     sleep.x,
     sleep.y,
@@ -861,6 +970,44 @@ const _craftOps = {
   addStackToInv: _addStackToInv,
 };
 const RESOURCE_REGEN_URL = pathToFileURL(path.join(__dirname, 'src/resource-regen.mjs')).href;
+const SCENARIO_BEACH_URL = pathToFileURL(path.join(__dirname, 'src/scenario-beach.mjs')).href;
+const GROUPS_URL = pathToFileURL(path.join(__dirname, 'src/groups.mjs')).href;
+const COMBAT_URL = pathToFileURL(path.join(__dirname, '../../packages/shared/src/combat.mjs')).href;
+let _combatMod = null;
+const combatModPromise = import(COMBAT_URL).then((m) => { _combatMod = m; return m; });
+let scenarioBeach = null;
+const scenarioBeachModPromise = import(SCENARIO_BEACH_URL);
+let groupsManager = null;
+const groupsModPromise = import(GROUPS_URL);
+
+async function _getGroupsManager() {
+  if (groupsManager) return groupsManager;
+  const { createGroupsManager } = await groupsModPromise;
+  groupsManager = createGroupsManager({
+    io,
+    players,
+    log,
+    normPlayerId: _normPlayerId,
+  });
+  return groupsManager;
+}
+
+async function _getScenarioBeach() {
+  if (scenarioBeach) return scenarioBeach;
+  const { createScenarioBeach } = await scenarioBeachModPromise;
+  scenarioBeach = createScenarioBeach({
+    zombies,
+    players,
+    makeZombie,
+    compactZombiesForSync: _compactZombiesForSync,
+    addGroundItem: _addGroundItem,
+    getNextItemId: () => ++itemIdCounter,
+    worldPersist,
+    log,
+    normPlayerId: _normPlayerId,
+  });
+  return scenarioBeach;
+}
 const _TREE_WOOD_FALLBACK = { tree_oak: 8, tree_pine: 10, tree_birch: 6, tree_dead: 3, tree_palm: 6 };
 const _TREE_WOOD_RATIO = [0.1, 0.28, 0.5, 0.78, 1.0];
 const _ROCK_STONE_FALLBACK = { rock_boulder: 20, rock_outcrop: 14, spawn_stone: 8 };
@@ -1250,6 +1397,7 @@ const serverFlags = {
   zombieAI: true,
   zombieSpawn: true,
   lootEnabled: true,
+  pvp: true,
 };
 
 const adminSockets = new Set();
@@ -1414,7 +1562,7 @@ setInterval(() => {
   }
 }, 60 * 1000);
 
-const ZOMBIE_SYNC_KEYS = ['id', 'x', 'z', 'angle', 'speed', 'health', 'maxHealth', 'prefabId', 'meleeReach', 'collideRadius'];
+const ZOMBIE_SYNC_KEYS = ['id', 'x', 'z', 'angle', 'speed', 'health', 'maxHealth', 'prefabId', 'meleeReach', 'collideRadius', 'scenarioFrozen'];
 
 function _compactZombiesForSync(list) {
   const out = new Array(list.length);
@@ -1568,6 +1716,8 @@ async function ensureZombiePopulation(opts = {}) {
   return { added, total: zombies.size };
 }
 
+_getScenarioBeach().catch((err) => log.error('boot', 'scenario beach init failed', { err: err.message }));
+
 rcon = createRcon({
   io,
   players,
@@ -1604,6 +1754,10 @@ rcon = createRcon({
   addStackToInv: _addStackToInv,
   cloneInv: _cloneInv,
   handlePlayerDeath: _handlePlayerDeath,
+  resetPlayerScenario: async (target, sock) => {
+    const sc = await _getScenarioBeach();
+    sc.resetScenario(target, sock);
+  },
   emitSurvivalUpdate: (target) => {
     const sock = io.sockets.sockets.get(target.socketId);
     if (sock) _emitSurvivalUpdate(sock, target);
@@ -1660,11 +1814,22 @@ setInterval(() => {
   }
 
   zombies.forEach((z) => {
-    // Nearest player
-    let nearestDist = Infinity, nearestP = null;
-    for (const p of pList) {
-      const d = Math.hypot(p.x - z.x, p.z - z.z);
-      if (d < nearestDist) { nearestDist = d; nearestP = p; }
+    if (z.frozen) {
+      z.meleeReach = false;
+      return;
+    }
+    let nearestDist = Infinity;
+    let nearestP = null;
+    if (z.tutorial && z.ownerPlayerId != null && scenarioBeach) {
+      const near = scenarioBeach.getNearestForTutorial(z, pList);
+      nearestP = near.nearestP;
+      nearestDist = near.nearestDist;
+      if (scenarioBeach.shouldSkipZombieAi(z, pList)) return;
+    } else {
+      for (const pl of pList) {
+        const d = Math.hypot(pl.x - z.x, pl.z - z.z);
+        if (d < nearestDist) { nearestDist = d; nearestP = pl; }
+      }
     }
 
     const detectRange = z.detectRange || DETECT_RANGE;
@@ -1850,15 +2015,18 @@ io.on('connection', async (socket) => {
   const userId = _normPlayerId(socket.user.id);
   const liveSession = _takeoverLiveSession(userId, socket.id);
 
-  const priorSleep = sleepingPlayers.get(userId);
+  const priorSleep = _getSleepingPlayer(userId);
+  const wokeFromSleep = !!priorSleep;
   if (priorSleep) {
-    sleepingPlayers.delete(userId);
-    worldPersist?.scheduleDeleteSleeper?.(userId);
-    io.emit('player-wake', { playerId: userId });
+    sleepingPlayers.delete(_sleeperKey(userId));
+    worldPersist?.scheduleDeleteSleeper?.(_sleeperKey(userId));
+    io.emit('player-wake', { playerId: _sleeperKey(userId) });
   }
 
   const restore = liveSession || priorSleep || null;
   const dbId = saved?.id != null ? _normPlayerId(saved.id) : userId;
+  // Réveil depuis le corps endormi : inventaire du sleeper (post-fouille), pas la DB players.
+  const wakeInv = priorSleep ? _cloneInv(priorSleep.inv) : null;
   const p = {
     socketId: socket.id,
     id: dbId,
@@ -1869,7 +2037,7 @@ io.on('connection', async (socket) => {
     rotY: restore?.rotY ?? ((saved && saved.rot_y != null) ? saved.rot_y : BEACH_SPAWN.rotY),
     health: restore?.health ?? saved?.health ?? 100,
     kills:  restore?.kills ?? saved?.kills ?? 0,
-    inv: restore ? _cloneInv(restore.inv) : _save,
+    inv: wakeInv ?? (restore ? _cloneInv(restore.inv) : _save),
     survival: restore ? { ...(restore.survival || DEFAULT_SURVIVAL) } : _survival,
     equipped: restore?.equipped ?? null,
     dirty: true,
@@ -1883,9 +2051,25 @@ io.on('connection', async (socket) => {
   p.anchorX = p.x;
   p.anchorY = p.y;
   p.anchorZ = p.z;
-  setTimeout(() => { if (players.has(socket.id)) p.invincible = false; }, 5000);
-  if (ensureStarterRock(p)) p.dirty = true;
-  if (ensureStarterTorch(p)) p.dirty = true;
+  if (restore?._deathHandled && p.health <= 0) {
+    p._deathHandled = true;
+    p._deathInv = restore._deathInv ? _cloneInv(restore._deathInv) : undefined;
+    p._deathPos = restore._deathPos ? { ...restore._deathPos } : undefined;
+    p._deathEquipped = restore._deathEquipped ?? null;
+  }
+  const scenMod = await _getScenarioBeach();
+  scenMod.initPlayerScenario(p, _save);
+  scenMod.ensureTutorialZombie(p, socket);
+  if (!scenMod.isAct1Done(p.inv.scenario)) {
+    p.invincible = true;
+  } else {
+    setTimeout(() => { if (players.has(socket.id)) p.invincible = false; }, 5000);
+  }
+  // Pas de kit de départ si réveil après déco/fouille — inventaire vide = légitime.
+  if (!wokeFromSleep) {
+    if (ensureStarterRock(p)) p.dirty = true;
+    if (ensureStarterTorch(p)) p.dirty = true;
+  }
   players.set(socket.id, p);
   _persistPlayer(p);
   log.info('socket', 'connect', {
@@ -1904,7 +2088,7 @@ io.on('connection', async (socket) => {
     players: [...players.entries()]
       .filter(([sid]) => sid !== socket.id)
       .map(([sid, q]) => ({ id: sid, username: q.username, x: q.x, y: q.y, z: q.z, rotY: q.rotY, equipped: q.equipped })),
-    zombies: Array.from(zombies.values()),
+    zombies: scenMod.filterZombiesForPlayer(p, Array.from(zombies.values())),
     items:   Array.from(items.values()),
     decorItems: initDecor,
     structures: Array.from(structures.values()),
@@ -1919,7 +2103,9 @@ io.on('connection', async (socket) => {
     qaEnabled: isQaServer(),
     onlineCount: players.size,
     inventory: p.inv,
+    scenario:  p.inv.scenario,
     survival:  p.survival,
+    wokeFromSleep,
     sleeping: [...sleepingPlayers.values()].map((s) => ({
       id: _sleepBodyId(s.playerId),
       playerId: s.playerId,
@@ -1934,6 +2120,10 @@ io.on('connection', async (socket) => {
   socket.emit('craft-queue-state', craftQueueMod.getCraftQueueState(p));
   socket.broadcast.emit('player-join', { id: socket.id, username: p.username, x: p.x, y: p.y, z: p.z, rotY: p.rotY, equipped: p.equipped });
   _emitPlayersOnline();
+  _getGroupsManager().then((gm) => {
+    gm.onConnect(p);
+    gm.onRosterChange();
+  }).catch(() => {});
 
   // Le premier client transmet la géométrie de collision (murs, arbres, etc.).
   let _lastDecorColliderCount = 0;
@@ -1971,11 +2161,13 @@ io.on('connection', async (socket) => {
   });
 
   socket.on('move', (d) => {
+    if (p._deathHandled) return;
     if (!d || !Number.isFinite(d.x) || !Number.isFinite(d.z)) return;
     const now = Date.now();
     const dt = Math.max(0.05, (now - (p.lastMoveAt || now)) / 1000);
     const maxDelta = 11 * dt * 1.5;
-    if (p.lastMoveAt && Number.isFinite(p.lastX) && Number.isFinite(p.lastZ)) {
+    const respawnGrace = p._respawnGraceUntil && now < p._respawnGraceUntil;
+    if (!respawnGrace && p.lastMoveAt && Number.isFinite(p.lastX) && Number.isFinite(p.lastZ)) {
       const dist = Math.hypot(d.x - p.lastX, d.z - p.lastZ);
       if (dist > maxDelta) {
         socket.emit('move-correction', { x: p.x, y: p.y, z: p.z, rotY: p.rotY });
@@ -1988,6 +2180,7 @@ io.on('connection', async (socket) => {
     p.x = d.x; p.y = d.y; p.z = d.z; p.rotY = d.rotY; p.dirty = true;
     p.posSynced = true;
     socket.broadcast.emit('player-move', { id: socket.id, x: d.x, y: d.y, z: d.z, rotY: d.rotY });
+    _getScenarioBeach().then((sc) => sc.onMove(p, socket, d.rotY)).catch(() => {});
     if (log.isTrace()) {
       log.throttled(`move:${p.username}`, 1000, () => {
         log.trace('move', p.username, { x: +d.x.toFixed(1), y: +d.y.toFixed(1), z: +d.z.toFixed(1) });
@@ -2011,10 +2204,23 @@ io.on('connection', async (socket) => {
   });
 
   socket.on('request-zombie-sync', () => {
-    socket.emit('zombies-snapshot', _compactZombiesForSync(Array.from(zombies.values())));
+    _getScenarioBeach().then((sc) => {
+      const list = sc.filterZombiesForPlayer(p, Array.from(zombies.values()));
+      socket.emit('zombies-snapshot', _compactZombiesForSync(list));
+    }).catch(() => {
+      socket.emit('zombies-snapshot', _compactZombiesForSync(Array.from(zombies.values())));
+    });
+  });
+
+  socket.on('scenario-advance', (d) => {
+    const step = (d && typeof d.step === 'string') ? d.step.slice(0, 32) : null;
+    if (!step) return;
+    _getScenarioBeach().then((sc) => sc.handleClientAdvance(p, socket, step)).catch(() => {});
   });
 
   socket.on('shoot', async (d) => {
+    if (p._deathHandled) return;
+    const combatMod = _combatMod || await combatModPromise;
     const wmod = _weaponStatsMod || await weaponStatsModPromise;
     const len = Math.hypot(d.dx, d.dz);
     if (len < 0.001) return;
@@ -2064,18 +2270,44 @@ io.on('connection', async (socket) => {
     }
 
     const pellets = stats.pellets || 1;
-    for (let pellet = 0; pellet < pellets; pellet++) {
-      let hit = null; let minT = Infinity;
-      zombies.forEach((z) => {
-        const tx = z.x - ox, tz = z.z - oz;
-        const t = tx * nx + tz * nz;
-        if (t < 0 || t > range) return;
-        const hitR = z.hitRadius || radius;
-        if (Math.hypot(ox + nx * t - z.x, oz + nz * t - z.z) < hitR && t < minT) {
-          minT = t; hit = z;
-        }
-      });
+    const pvpTargets = serverFlags.pvp !== false
+      ? [...players.entries()].map(([sid, tp]) => ({
+        socketId: sid,
+        x: tp.x,
+        z: tp.z,
+        health: tp.health,
+        invincible: !!tp.invincible,
+        skip: sid === socket.id || !!tp._deathHandled,
+      }))
+      : [];
 
+    for (let pellet = 0; pellet < pellets; pellet++) {
+      const ray = { ox, oz, nx, nz, range, radius };
+      // PvP : joueurs d'abord — sinon un zombie plus proche sur le rayon bloque les dégâts.
+      let best = pvpTargets.length
+        ? combatMod.findPlayerShootTarget(ray, pvpTargets)
+        : null;
+      if (!best) {
+        best = combatMod.findShootTarget(ray, [...zombies.values()], []);
+      }
+      if (!best) continue;
+
+      if (best.kind === 'player') {
+        const victim = players.get(best.id);
+        if (victim) {
+          log.debug('combat', 'pvp hit', {
+            attacker: p.username,
+            victim: victim.username,
+            dmg,
+            weaponType,
+            healthLeft: Math.max(0, victim.health - dmg),
+          });
+          _applyPlayerCombatDamage(p, victim, dmg);
+        }
+        continue;
+      }
+
+      const hit = best.entity;
       if (hit) {
         hit.health -= dmg;
         log.debug('combat', 'shoot hit', {
@@ -2089,27 +2321,34 @@ io.on('connection', async (socket) => {
           log.info('combat', 'zombie kill', { player: p.username, zombieId: hit.id, kills: p.kills + 1 });
           io.emit('zombie-die', hit.id);
           worldPersist?.scheduleDeleteZombie?.(hit.id);
-          if (Math.random() < DROP_CHANCE) {
-            const type = DROP_TYPES[Math.floor(Math.random() * DROP_TYPES.length)];
-            _addGroundItem({
-              id: ++itemIdCounter,
-              type,
-              x: hit.x + (Math.random() - 0.5) * 1.6,
-              z: hit.z + (Math.random() - 0.5) * 1.6,
-            });
-          }
           zombies.delete(hit.id);
           p.kills++;
           io.to(socket.id).emit('score-update', { kills: p.kills });
-          if (serverFlags.zombieSpawn) {
-            setTimeout(() => {
-              const nz = makeZombie();
-              zombies.set(nz.id, nz);
-              worldPersist?.scheduleUpsertZombie?.(nz);
-              io.emit('zombie-spawn', nz);
-            }, 4000);
+          let tutorialHandled = false;
+          if (scenarioBeach) {
+            tutorialHandled = scenarioBeach.handleTutorialKill(p, socket, hit);
+          }
+          if (!tutorialHandled) {
+            if (Math.random() < DROP_CHANCE) {
+              const type = DROP_TYPES[Math.floor(Math.random() * DROP_TYPES.length)];
+              _addGroundItem({
+                id: ++itemIdCounter,
+                type,
+                x: hit.x + (Math.random() - 0.5) * 1.6,
+                z: hit.z + (Math.random() - 0.5) * 1.6,
+              });
+            }
+            if (serverFlags.zombieSpawn) {
+              setTimeout(() => {
+                const nz = makeZombie();
+                zombies.set(nz.id, nz);
+                worldPersist?.scheduleUpsertZombie?.(nz);
+                io.emit('zombie-spawn', nz);
+              }, 4000);
+            }
           }
         } else {
+          if (scenarioBeach) scenarioBeach.onTutorialZombieHit(hit);
           const kb = stats.kb || 0;
           if (kb > 0) {
             const zR = hit.collideRadius || ZOMBIE_R;
@@ -2164,6 +2403,7 @@ io.on('connection', async (socket) => {
     }
     p.dirty = true;
     _emitInvAuth(socket, p);
+    if (scenarioBeach) scenarioBeach.onPickup(p, socket, item.bag ? null : item.type);
     log.debug('items', 'pickup', { player: p.username, type: item.type, bag: !!item.bag });
     reply({ ok: true });
   });
@@ -2899,72 +3139,158 @@ io.on('connection', async (socket) => {
 
   socket.on('respawn', () => {
     if (p.health > 0 && !p._deathHandled) return;
+    _spawnDeathBagFromPlayer(p);
+    delete p._deathInv;
+    delete p._deathPos;
+    delete p._deathEquipped;
     p._deathHandled = false;
     p.health = 100;
     p.invincible = true;
     const kit = JSON.parse(JSON.stringify(STARTING_ITEMS));
+    const keepScenario = p._scenarioKeep || p.inv?.scenario;
     p.inv = kit;
+    if (keepScenario) {
+      p.inv.scenario = keepScenario;
+      delete p._scenarioKeep;
+    }
     p.survival = { ...DEFAULT_SURVIVAL };
-    p.x = BEACH_SPAWN.x; p.y = BEACH_SPAWN.y; p.z = BEACH_SPAWN.z; p.rotY = BEACH_SPAWN.rotY;
-    p.posSynced = false;
+    p.x = BEACH_SPAWN.x;
+    p.y = BEACH_SPAWN.y;
+    p.z = BEACH_SPAWN.z;
+    p.rotY = BEACH_SPAWN.rotY;
+    p.lastX = p.x;
+    p.lastZ = p.z;
+    p.lastMoveAt = Date.now();
+    p.posSynced = true;
+    p._respawnGraceUntil = Date.now() + 2500;
     p.dirty = true;
     setTimeout(() => { if (players.has(socket.id)) p.invincible = false; }, 3000);
     _emitSurvivalUpdate(socket, p);
-    socket.emit('respawn-at', { spawn: BEACH_SPAWN, inventory: kit, survival: { ...DEFAULT_SURVIVAL } });
+    _emitInvAuth(socket, p);
+    socket.emit('respawn-at', {
+      spawn: BEACH_SPAWN,
+      inventory: _cloneInv(p.inv),
+      survival: { ...DEFAULT_SURVIVAL },
+    });
+    socket.broadcast.emit('player-respawn', {
+      id: socket.id,
+      playerId: _normPlayerId(p.id),
+      username: p.username,
+      x: p.x,
+      y: p.y,
+      z: p.z,
+      rotY: p.rotY,
+      equipped: p.equipped || null,
+    });
+    if (scenarioBeach) scenarioBeach.onRespawnDuringIntro(p, socket);
     log.info('death', 'respawn', { player: p.username, spawn: BEACH_SPAWN, kit: 'caillou+torche' });
   });
 
-  // Fouille d'un joueur endormi (déconnecté)
+  // Fouille joueur endormi (déco) ou mort au sol
   socket.on('sleep-loot-open', (data, cb) => {
     if (typeof cb !== 'function') return;
-    const targetId = Number(data?.playerId);
-    const sleep = sleepingPlayers.get(targetId);
-    if (!sleep) return cb({ ok: false, error: 'Personne endormie ici' });
-    if (_distXZ(p.x, p.z, sleep.x, sleep.z) > SLEEP_LOOT_RADIUS) {
+    const targetId = _sleeperKey(data?.playerId);
+    const target = _findLootTarget(targetId);
+    if (!target) return cb({ ok: false, error: 'Personne à fouiller ici' });
+    if (_distXZ(p.x, p.z, target.x, target.z) > SLEEP_LOOT_RADIUS) {
       return cb({ ok: false, error: 'Trop loin' });
     }
     cb({
       ok: true,
-      playerId: targetId,
-      username: sleep.username,
-      inventory: _cloneInv(sleep.inv),
+      playerId: target.playerId,
+      username: target.username,
+      inventory: _cloneInv(target.inv),
+      kind: target.kind,
     });
   });
 
-  socket.on('sleep-loot-take', (data, cb) => {
+  socket.on('sleep-loot-take', async (data, cb) => {
     if (typeof cb !== 'function') return;
-    const targetId = Number(data?.playerId);
+    const targetId = _sleeperKey(data?.playerId);
     const zone = data?.zone;
     const index = data?.index;
-    const sleep = sleepingPlayers.get(targetId);
-    if (!sleep) return cb({ ok: false, error: 'Personne endormie ici' });
-    if (_distXZ(p.x, p.z, sleep.x, sleep.z) > SLEEP_LOOT_RADIUS) {
+    const target = _findLootTarget(targetId);
+    if (!target) return cb({ ok: false, error: 'Personne à fouiller ici' });
+    if (_distXZ(p.x, p.z, target.x, target.z) > SLEEP_LOOT_RADIUS) {
       return cb({ ok: false, error: 'Trop loin' });
     }
     if (!['hotbar', 'bag', 'equip'].includes(zone)) {
       return cb({ ok: false, error: 'Zone invalide' });
     }
-    const item = _takeInvSlot(sleep.inv, zone, index);
+    const item = _takeInvSlot(target.inv, zone, index);
     if (!item) return cb({ ok: false, error: 'Emplacement vide' });
     if (!_tryAddSlotToInv(p.inv, item)) {
-      const n = _normalizeInv(sleep.inv);
+      const n = _normalizeInv(target.inv);
       if (zone === 'equip') n.equip[String(index)] = item;
       else if (zone === 'bag') n.bag[Number(index)] = item;
       else n.hotbar[Number(index)] = item;
-      Object.assign(sleep.inv, n);
+      Object.assign(target.inv, n);
       return cb({ ok: false, error: 'Inventaire plein' });
     }
     p.dirty = true;
-    _saveSleepingToDb(sleep);
+    if (target.kind === 'sleep') {
+      await _saveSleepingToDb(_getSleepingPlayer(target.playerId));
+    } else {
+      target.afterTake?.();
+    }
     _emitInvAuth(socket, p);
-    io.emit('sleep-loot-update', { playerId: targetId, inventory: _cloneInv(sleep.inv) });
-    log.info('sleep', 'loot take', {
+    io.emit('sleep-loot-update', { playerId: target.playerId, inventory: _cloneInv(target.inv) });
+    log.info(target.kind === 'death' ? 'death' : 'sleep', 'loot take', {
       looter: p.username,
-      target: sleep.username,
+      target: target.username,
       type: item.type,
       qty: item.qty || 1,
     });
-    cb({ ok: true, inventory: _cloneInv(sleep.inv) });
+    cb({ ok: true, inventory: _cloneInv(target.inv) });
+  });
+
+  // ── Groupes joueurs ─────────────────────────────────────────────────────────
+  socket.on('group-create', (cb) => {
+    const player = players.get(socket.id);
+    if (!player) return typeof cb === 'function' && cb({ ok: false, error: 'Non connecté' });
+    _getGroupsManager().then((gm) => gm.handleCreate(player, cb)).catch((err) => {
+      if (typeof cb === 'function') cb({ ok: false, error: err.message });
+    });
+  });
+
+  socket.on('group-invite', (d, cb) => {
+    const player = players.get(socket.id);
+    if (!player) return typeof cb === 'function' && cb({ ok: false, error: 'Non connecté' });
+    _getGroupsManager().then((gm) => gm.handleInvite(player, d?.username, cb)).catch((err) => {
+      if (typeof cb === 'function') cb({ ok: false, error: err.message });
+    });
+  });
+
+  socket.on('group-invite-respond', (d, cb) => {
+    const player = players.get(socket.id);
+    if (!player) return typeof cb === 'function' && cb({ ok: false, error: 'Non connecté' });
+    _getGroupsManager().then((gm) => gm.handleInviteRespond(player, !!d?.accept, cb)).catch((err) => {
+      if (typeof cb === 'function') cb({ ok: false, error: err.message });
+    });
+  });
+
+  socket.on('group-kick', (d, cb) => {
+    const player = players.get(socket.id);
+    if (!player) return typeof cb === 'function' && cb({ ok: false, error: 'Non connecté' });
+    _getGroupsManager().then((gm) => gm.handleKick(player, d?.userId, cb)).catch((err) => {
+      if (typeof cb === 'function') cb({ ok: false, error: err.message });
+    });
+  });
+
+  socket.on('group-leave', (cb) => {
+    const player = players.get(socket.id);
+    if (!player) return typeof cb === 'function' && cb({ ok: false, error: 'Non connecté' });
+    _getGroupsManager().then((gm) => gm.handleLeave(player, cb)).catch((err) => {
+      if (typeof cb === 'function') cb({ ok: false, error: err.message });
+    });
+  });
+
+  socket.on('group-disband', (cb) => {
+    const player = players.get(socket.id);
+    if (!player) return typeof cb === 'function' && cb({ ok: false, error: 'Non connecté' });
+    _getGroupsManager().then((gm) => gm.handleDisband(player, cb)).catch((err) => {
+      if (typeof cb === 'function') cb({ ok: false, error: err.message });
+    });
   });
 
   // ── Chat joueurs ────────────────────────────────────────────────────────────
@@ -3044,6 +3370,7 @@ io.on('connection', async (socket) => {
     _pendingInvAuth.delete(socket.id);
     const leaving = players.get(socket.id);
     if (!leaving) return;
+    _getGroupsManager().then((gm) => gm.onDisconnect(leaving)).catch(() => {});
     players.delete(socket.id);
 
     const handoff = !!socket._handoff;
@@ -3061,16 +3388,13 @@ io.on('connection', async (socket) => {
       return;
     }
 
-    if (leaving.id) {
-      _persistPlayer(leaving);
-    }
-
     // Toujours retirer l'avatar debout des autres clients (évite doublon avec le corps endormi).
     io.emit('player-leave', socket.id);
+    _getGroupsManager().then((gm) => gm.onRosterChange()).catch(() => {});
 
     if (leaving.id && leaving.health > 0) {
       const sleep = {
-        playerId: _normPlayerId(leaving.id),
+        playerId: _sleeperKey(leaving.id),
         username: leaving.username,
         x: leaving.x,
         y: leaving.y,
@@ -3083,8 +3407,8 @@ io.on('connection', async (socket) => {
         equipped: leaving.equipped || null,
         since: Date.now(),
       };
-      sleepingPlayers.set(_normPlayerId(leaving.id), sleep);
-      worldPersist?.scheduleUpsertSleeper?.(sleep);
+      _setSleepingPlayer(leaving.id, sleep);
+      _saveSleepingToDb(sleep).catch(() => {});
       io.emit('player-sleep', {
         id: _sleepBodyId(leaving.id),
         playerId: _normPlayerId(leaving.id),
@@ -3095,6 +3419,8 @@ io.on('connection', async (socket) => {
         rotY: leaving.rotY,
         equipped: leaving.equipped || null,
       });
+    } else if (leaving.id) {
+      _persistPlayer(leaving);
     }
     _emitPlayersOnline();
   });

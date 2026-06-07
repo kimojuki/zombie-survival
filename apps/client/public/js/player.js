@@ -1853,8 +1853,42 @@
     }
   }
 
+  /** Flash rouge court — une seule restauration par material (évite le rouge permanent si meshes partagés). */
+  function flashMeshMaterials(group, flashHex = 0xff4444, ms = 120) {
+    if (!group) return;
+    if (group.userData._flashTimer) clearTimeout(group.userData._flashTimer);
+    const mats = new Set();
+    group.traverse((child) => {
+      if (!child.isMesh || !child.material) return;
+      const list = Array.isArray(child.material) ? child.material : [child.material];
+      for (const mat of list) {
+        if (mat.color) mats.add(mat);
+      }
+    });
+    for (const mat of mats) {
+      if (mat.userData._flashOrigColor == null) {
+        mat.userData._flashOrigColor = mat.color.getHex();
+      }
+      mat.color.setHex(flashHex);
+    }
+    group.userData._flashTimer = setTimeout(() => {
+      delete group.userData._flashTimer;
+      for (const mat of mats) {
+        if (mat.userData._flashOrigColor != null) {
+          mat.color.setHex(mat.userData._flashOrigColor);
+        }
+      }
+    }, ms);
+  }
+
+  function flashRemotePlayer(group) {
+    flashMeshMaterials(group);
+  }
+
   window.ZS = window.ZS || {};
   ZS.createPlayerModel = createPlayerModel;
+  ZS.flashRemotePlayer = flashRemotePlayer;
+  ZS.flashMeshMaterials = flashMeshMaterials;
   ZS.applySleepPose = applySleepPose;
   ZS.createZombieModel = createZombieModel;
   ZS.createHumanoidRig = _createHumanoidRig;

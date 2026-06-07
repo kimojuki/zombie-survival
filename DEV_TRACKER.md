@@ -50,6 +50,107 @@ Copier dans la description de PR :
 
 ## 2026-06-07
 
+### Completed — Fix fouille sleeper : caillou/torche recréés au réveil (2026-06-07)
+
+- **Bug** : après fouille totale du corps endormi, caillou + torche réapparaissaient à la reconnexion (autres items correctement retirés).
+- **Cause** : `ensureStarterRock` / `ensureStarterTorch` (serveur) et équivalents client sur inventaire vide.
+- **Fix** : flag `wokeFromSleep` dans `game-init` — pas de kit de départ au réveil depuis sleeper.
+- **Version** : `20260607-sleep-wake-no-starter-186`
+
+### Completed — Fix fouille sleeper : items restaurés à la reconnexion (2026-06-07)
+
+- **Bug** : après fouille du corps endormi (déco), le joueur reconnecté récupérait son inventaire d’origine.
+- **Cause** : `_persistPlayer` à la déco écrasait la DB après le loot ; reconnexion pouvait ignorer l’état sleeper.
+- **Fix** : inventaire sleeper autoritaire (`wakeInv`), pas de `_persistPlayer` à la déco si corps endormi, `_saveSleepingToDb` await au loot.
+
+### Completed — Fix PvP bloqué par les zombies (2026-06-07)
+
+- **Bug** : les dégâts entre joueurs ne passaient plus dès qu’un zombie était plus proche sur la ligne de tir (fréquent sur la plage).
+- **Fix** : raycast joueurs en priorité quand PvP actif (`findPlayerShootTarget`), puis zombies ; `heal` RCON réinitialise `_deathHandled` ; reconnexion préserve l’état cadavre.
+- **Tests** : `tests/combat.test.mjs` — joueur touché même si zombie plus proche sur le rayon.
+
+### Completed — Fix « Interface de fouille indisponible » (2026-06-07)
+
+- **Cause** : `chest_ui.js` parfois non chargé (cache bootstrap Vite) → `ZS.ChestUI` absent.
+- **Fix** : grille Minecraft intégrée dans `sleep_loot.js` ; cache-bust sur import `legacy-modules.js`.
+- **Version** : `20260607-loot-selfcontained-185`
+
+### Completed — Fix fouille E : panneau invisible (2026-06-07)
+
+- **Bug** : E libérait le curseur (écran gris) sans afficher le panneau — styles inline écrasés, toggle E fermait l'UI.
+- **Fix** : CSS `#sleep-loot-panel` + classe `is-open`, masquer `pc-play-hint`, fouille prioritaire sur E, Échap pour fermer.
+- **Version** : `20260607-loot-panel-fix-184`
+
+### Completed — Fix hint « E — Fouiller » persistant (2026-06-07)
+
+- **Bug** : le bouton restait affiché après respawn du corps (return anticipé sans masquer le bouton).
+- **Version** : `20260607-fouiller-hint-fix-183`
+
+### Completed — UI fouille style coffre Minecraft (2026-06-07)
+
+- **`chest_ui.js`** : grille 9×, slots gris biseautés, compteur quantité (style coffre).
+- **`sleep_loot.js`** : panneau haut = corps (équip + hotbar + sac), bas = votre inventaire ; clic pour prendre.
+- **Échap** ferme la fouille ; curseur libéré comme le coffre.
+- **Version** : `20260607-corpse-chest-ui-182`
+
+### Completed — Fouille corps mort au sol (2026-06-07)
+
+- **Mort** : inventaire conservé dans `_deathInv` — fouillable (E / bouton) avant respawn.
+- **Respawn** : sac au sol uniquement pour les objets restants après fouille.
+- **Client** : `findNearestLootable` (dormeurs + corps ☠), panneau fouille adapté.
+- **Version** : `20260607-corpse-loot-181`
+
+### Completed — Fix flash dégâts joueur (2026-06-07)
+
+- **Bug** : le joueur touché restait rouge (materials partagés entre meshes du rig).
+- **Fix** : `flashMeshMaterials` — une restauration par material unique, timer groupé.
+- **Version** : `20260607-hit-flash-180`
+
+### Completed — Mort : corps couché avant respawn (2026-06-07)
+
+- **Phase couchée** : à la mort, le joueur s'allonge au sol (pose `applySleepPose`) jusqu'au clic Respawn.
+- **Loot différé** : le sac `death_bag` apparaît au respawn, pas à la mort.
+- **Multijoueur** : `player-death` broadcast → retrait avatar debout + corps ☠ ; `player-respawn` au respawn.
+- **Version** : `20260607-death-corpse-179`
+
+### Completed — Système de groupes (2026-06-07)
+
+- **Serveur** : `apps/server/src/groups.mjs` — création, invitation, accept/refus, expulsion, quitter, dissoudre (max 6 membres).
+- **Client** : menu ☰ → Groupe ; panneau overlay avec liste membres, invite joueurs en ligne, bannière invitation.
+- **Events** : `group-create`, `group-invite`, `group-invite-respond`, `group-kick`, `group-leave`, `group-disband` ; sync `group-state`.
+- **Shared** : `packages/shared/src/groups.mjs` + tests.
+- **Version** : `20260607-groups-178`
+
+### Completed — PvP + collisions joueurs (2026-06-07)
+
+- **Collisions** : repoussement cylindrique entre joueurs locaux / distants / corps endormis (`resolveRemotePlayerCollision`).
+- **PvP serveur** : raycast `shoot` touche joueurs + zombies (cible la plus proche) ; mort, loot sac, kills.
+- **Shared** : `packages/shared/src/combat.mjs` + tests ; flag serveur `pvp` (RCON `pvp on|off`).
+- **Version** : `20260607-pvp-collide-177`
+
+### Completed — Fix respawn plage (2026-06-07)
+
+- **Bug** : le client se réveillait avant `respawn-at` et renvoyait la position de mort → respawn au même endroit.
+- **Fix** : attendre `respawn-at` côté client ; reset `lastX/lastZ` + grâce anti-cheat serveur ; scénario intro préservé à la mort.
+- **Version** : `20260607-respawn-beach-176`
+
+### Completed — Forêt : décor procédural dense (2026-06-07)
+
+- **Textures** : `forest_textures.js` — mousse, écorce, fougères, champignons, litière, aiguilles, baies, rochers moussus.
+- **Zone** : `forest_footprint.js` — ouest de la carte (hors plage, sentier, clairière, eau).
+- **Props** : `forest_decor.js` — ~105/205 groupes + litière/cailloux/glands instanciés ; fougères, rondins, souches, champignons, buissons, débris rares.
+- **Chargement** : différé en `requestIdleCallback` après la plage (`finishForestDecorAsync`).
+- **Version** : `20260607-forest-decor-175`
+
+### Completed — Intro plage Acte 1 : scénario guidé (2026-06-07)
+
+- **Narration** : 3 actes (rivage → silhouette → premier zombie) ; réveil, exploration safe, combat au caillou, bandage garanti, épilogue.
+- **Serveur** : `inventory.scenario` persisté ; zombie tutoriel gelé par joueur ; filtre sync plage ; pas de respawn après kill tutoriel.
+- **Client** : `spawn_scenario.js` (HUD, dialogues, flèche ouest) ; silhouette sombre dans `zombie.js` ; `spawn_intro.js` branché sur le serveur.
+- **Shared** : `packages/shared/src/scenario-beach.mjs` + tests ; events `scenario-advance` / `scenario-update`.
+- **RCON** : `scenario-reset <joueur>` pour QA.
+- **Version** : `20260607-beach-scenario-174`
+
 ### Completed — Chargement : terrain async à 32 % (2026-06-07)
 
 - **Terrain** : génération par lignes avec `await rAF` ; grille 28/44 (ex. 72) ; maillage indexé corrigé.

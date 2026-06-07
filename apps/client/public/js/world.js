@@ -278,6 +278,7 @@
     for (const c of buildingColliders) _colliders.push(c);
     tickDayNight(0);
     ZS.SpawnZone?.finishBeachDecorAsync?.();
+    ZS.finishForestDecorAsync?.(scene);
     return buildingColliders;
   }
 
@@ -401,6 +402,7 @@
       _lastFoliageDay = foliageDay;
       ZS.tickTreeLighting?.(foliageDay);
       ZS.tickBeachLighting?.(foliageDay);
+      ZS.tickForestLighting?.(foliageDay);
     }
     if (_waterSurfaces.length > 0) {
       _waterAnimTick++;

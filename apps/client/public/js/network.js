@@ -6,6 +6,7 @@
   const remotePlayers = new Map();
   const sleepingBodies = new Map(); // playerId -> { mesh, x, z, username, playerId }
   let _spawnReady = false; // false jusqu'à sync complète (game-init + décor rendu)
+  let _lastWorldTime = null;
   const decorItems = new Map();
   let _scene, _state, _socket, _localUsername = '';
   const _DOWN = (typeof THREE !== 'undefined') ? new THREE.Vector3(0, -1, 0) : null;
@@ -452,7 +453,10 @@
 
     socket.on('zombie-tick',  (d) => {
       ZS.Zombies.syncAll(d.zombies);
-      ZS.setWorldTime(d.time);
+      if (typeof d.time === 'number' && Math.abs(d.time - (_lastWorldTime ?? d.time)) > 0.0005) {
+        _lastWorldTime = d.time;
+        ZS.setWorldTime(d.time);
+      }
     });
 
     socket.on('world-time', (d) => {

@@ -50,6 +50,14 @@ Copier dans la description de PR :
 
 ## 2026-06-07
 
+### Completed — Audit pass 7 : cap zombie 70 + perf réseau (2026-06-07)
+
+- **Perf critique** : trim des zombies excédentaires (persist/RCON > 70) — les plus éloignés des joueurs retirés au boot et toutes les 2 min.
+- **Module** : `zombie-population.js` + tests unitaires.
+- **Client** : `setWorldTime` sur `zombie-tick` seulement si delta > 0.0005.
+- **Boot log** : affiche `zombies.size` réel + `zombieTarget`.
+- **Cache bust** : `20260607-server-authority-135`
+
 ### Completed — Audit pass 6 : RCON barrières + tests robustes (2026-06-07)
 
 - **RCON** : `road_barrier_post` / `road_barrier_rail` ajoutés à `decorprefabs`.

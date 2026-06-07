@@ -38,6 +38,7 @@ const {
 } = invOps;
 const { tickPlayerSurvival } = require('./src/survival-tick');
 const craftQueueMod = require('./src/craft-queue');
+const { pickZombiesToTrim } = require('./src/zombie-population');
 
 // Dev SQLite : mot de passe par défaut "dev" si RCON_PASSWORD absent (prod MySQL = désactivé)
 const RCON_PASSWORD = process.env.RCON_PASSWORD
@@ -1286,6 +1287,22 @@ function makeZombie(opts = {}) {
   };
 }
 
+function _trimZombiePopulation(target) {
+  if (zombies.size <= target) return 0;
+  const pList = Array.from(players.values());
+  const toRemove = pickZombiesToTrim(Array.from(zombies.values()), target, pList, BEACH_SPAWN);
+  for (const z of toRemove) {
+    if (!zombies.has(z.id)) continue;
+    zombies.delete(z.id);
+    worldPersist?.scheduleDeleteZombie?.(z.id);
+    if (players.size > 0) io.emit('zombie-die', z.id);
+  }
+  if (toRemove.length) {
+    log.info('world', 'zombies trimmed', { removed: toRemove.length, total: zombies.size, target });
+  }
+  return toRemove.length;
+}
+
 async function ensureZombiePopulation(opts = {}) {
   await loadZombiePrefabs();
   await loadColliderResolve();
@@ -1299,8 +1316,11 @@ async function ensureZombiePopulation(opts = {}) {
       worldPersist?.scheduleDeleteZombie?.(id);
       io.emit('zombie-die', id);
     }
-  } else if (zombies.size >= target) {
-    return { added: 0, total: zombies.size };
+  } else {
+    _trimZombiePopulation(target);
+    if (zombies.size >= target) {
+      return { added: 0, total: zombies.size };
+    }
   }
 
   let added = 0;
@@ -1513,10 +1533,16 @@ setInterval(() => {
   if (_tickStart) log.tickSummary(zombies, players, Date.now() - _tickStart);
 }, 100);
 
-// Maintient la population si des kills ont réduit le nombre sous la cible
+// Maintient la population autour de la cible (trim si excès RCON/persist, top-up si kills)
 setInterval(() => {
-  if (!serverFlags.zombieSpawn || zombies.size >= ZOMBIE_COUNT) return;
-  ensureZombiePopulation().catch((err) => log.error('ensureZombiePopulation periodic failed', err));
+  if (!serverFlags.zombieSpawn) return;
+  if (zombies.size > ZOMBIE_COUNT) {
+    _trimZombiePopulation(ZOMBIE_COUNT);
+    return;
+  }
+  if (zombies.size < ZOMBIE_COUNT) {
+    ensureZombiePopulation().catch((err) => log.error('ensureZombiePopulation periodic failed', err));
+  }
 }, 120000);
 
 if (log.PLAYER_SNAPSHOT_MS > 0) {
@@ -2926,7 +2952,8 @@ loadPersistedWorld()
         logLevel: log.level,
         playerSnapshotMs: log.PLAYER_SNAPSHOT_MS,
         serverStatsMs: log.SERVER_STATS_MS,
-        zombies: ZOMBIE_COUNT,
+        zombies: zombies.size,
+        zombieTarget: ZOMBIE_COUNT,
         rcon: !!(RCON_PASSWORD || ADMIN_USERS.size),
         admins: ADMIN_USERS.size,
         decor: _decorStats(),

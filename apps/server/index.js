@@ -320,7 +320,10 @@ const decorPrefabs = [
   'spawn_flat_stone',
   'storage_chest',
   'build_wall_wood',
+  'build_doorway_wood',
+  'build_large_doorway_wood',
   'build_floor_wood',
+  'build_ceiling_wood',
   'build_stair_wood',
   'build_door_wood',
   'build_large_door_wood',
@@ -335,7 +338,10 @@ const decorPrefabs = [
 const DECOR_PREFAB_BY_ITEM = {
   struct_storage_chest: 'storage_chest',
   struct_mur_bois: 'build_wall_wood',
+  struct_mur_embrasure_porte: 'build_doorway_wood',
+  struct_mur_embrasure_grande_porte: 'build_large_doorway_wood',
   struct_plancher_bois: 'build_floor_wood',
+  struct_plafond_bois: 'build_ceiling_wood',
   struct_escalier_bois: 'build_stair_wood',
   struct_porte_bois: 'build_door_wood',
   struct_grande_porte_bois: 'build_large_door_wood',
@@ -346,6 +352,7 @@ const STORAGE_CHEST_BREAK_HITS = 3;
 let zombieIdCounter    = 0;
 let itemIdCounter      = 0;
 let structureIdCounter = 0;
+let doorLockSeq        = 0;
 let worldWaterZones    = [];
 
 // ── Spawn / kit / survie ──────────────────────────────────────────────────────
@@ -383,12 +390,34 @@ function saveBlob(p) {
 // Aplati l'inventaire d'un joueur en liste d'objets pour le butin de mort.
 function flattenInv(inv) {
   const out = [];
+  const push = (s) => {
+    if (!s?.type) return;
+    const o = { type: s.type, qty: s.qty || 1 };
+    if (s.lockId) o.lockId = s.lockId;
+    if (s.durability != null) o.durability = s.durability;
+    if (s.ammo != null) o.ammo = s.ammo;
+    out.push(o);
+  };
   if (!inv || typeof inv !== 'object') return out;
-  const push = (s) => { if (s && s.type) out.push({ type: s.type, qty: s.qty || 1 }); };
   (Array.isArray(inv) ? inv : (inv.hotbar || [])).forEach(push);
   (inv.bag || []).forEach(push);
   if (inv.equip) for (const k of Object.keys(inv.equip)) push(inv.equip[k]);
   return out;
+}
+
+function _iterInvStacks(inv) {
+  if (!inv || typeof inv !== 'object') return [];
+  const hotbar = Array.isArray(inv) ? inv : (inv.hotbar || []);
+  const bag = Array.isArray(inv) ? [] : (inv.bag || []);
+  const equip = Array.isArray(inv) ? {} : (inv.equip || {});
+  return [...hotbar, ...bag, ...Object.values(equip)];
+}
+
+function _playerHasDoorKey(inv, lockId) {
+  if (!lockId) return false;
+  return _iterInvStacks(inv).some(
+    (s) => s && s.type === 'struct_cle' && s.lockId === lockId,
+  );
 }
 
 function _normalizeInv(inv) {
@@ -470,6 +499,17 @@ function _takeInvSlot(inv, zone, index) {
 function _tryAddSlotToInv(inv, item) {
   if (!item?.type) return false;
   const n = _normalizeInv(inv);
+  if (item.type === 'struct_cle' && item.lockId) {
+    for (const arr of [n.hotbar, n.bag]) {
+      for (let i = 0; i < arr.length; i++) {
+        if (arr[i]) continue;
+        arr[i] = JSON.parse(JSON.stringify({ ...item, qty: item.qty || 1 }));
+        Object.assign(inv, n);
+        return true;
+      }
+    }
+    return false;
+  }
   let left = item.qty || 1;
   const maxStack = 99;
   for (const arr of [n.hotbar, n.bag]) {
@@ -493,6 +533,58 @@ function _tryAddSlotToInv(inv, item) {
   if (left > 0) return false;
   Object.assign(inv, n);
   return true;
+}
+
+function _consumeInvType(inv, type, qty = 1) {
+  let left = qty;
+  const n = _normalizeInv(inv);
+  for (const arr of [n.hotbar, n.bag]) {
+    for (let i = 0; i < arr.length && left > 0; i++) {
+      if (!arr[i] || arr[i].type !== type) continue;
+      const have = arr[i].qty || 1;
+      if (have <= left) {
+        left -= have;
+        arr[i] = null;
+      } else {
+        arr[i].qty = have - left;
+        left = 0;
+      }
+    }
+  }
+  if (left > 0) return false;
+  Object.assign(inv, n);
+  return true;
+}
+
+function _consumeDoorKey(inv, lockId) {
+  if (!lockId) return false;
+  const n = _normalizeInv(inv);
+  for (const arr of [n.hotbar, n.bag]) {
+    for (let i = 0; i < arr.length; i++) {
+      const s = arr[i];
+      if (!s || s.type !== 'struct_cle' || s.lockId !== lockId) continue;
+      arr[i] = null;
+      Object.assign(inv, n);
+      return true;
+    }
+  }
+  return false;
+}
+
+function _getNearbyDoor(id, px, pz, maxDist = 6) {
+  if (!id || typeof id !== 'string') return null;
+  const item = decorItems.get(id);
+  if (!item || !DOOR_PREFABS.has(item.prefabId)) return null;
+  if (Math.hypot((item.x || 0) - px, (item.z || 0) - pz) > maxDist) return null;
+  return item;
+}
+
+function _dropWorldItem(type, qty, x, z, extra = {}) {
+  const id = ++itemIdCounter;
+  const drop = { id, type, qty, x, z, ...extra };
+  items.set(id, drop);
+  io.emit('item-spawn', drop);
+  return drop;
 }
 
 function _saveSleepingToDb(sleep) {
@@ -549,6 +641,8 @@ const TREE_PLACEMENTS_URL = pathToFileURL(path.join(__dirname, '../../packages/s
 const TREE_WOOD_URL = pathToFileURL(path.join(__dirname, '../../packages/shared/src/tree-wood.mjs')).href;
 const ROCK_STONE_URL = pathToFileURL(path.join(__dirname, '../../packages/shared/src/rock-stone.mjs')).href;
 const ROCK_PLACEMENTS_URL = pathToFileURL(path.join(__dirname, '../../packages/shared/src/rock-placements.mjs')).href;
+const BUILD_DAMAGE_URL = pathToFileURL(path.join(__dirname, '../../packages/shared/src/build-damage.mjs')).href;
+const buildDamageModPromise = import(BUILD_DAMAGE_URL);
 const RESOURCE_REGEN_URL = pathToFileURL(path.join(__dirname, 'src/resource-regen.mjs')).href;
 const _TREE_WOOD_FALLBACK = { tree_oak: 8, tree_pine: 10, tree_birch: 6, tree_dead: 3 };
 const _TREE_WOOD_RATIO = [0.1, 0.28, 0.5, 0.78, 1.0];
@@ -609,6 +703,10 @@ function _makeDecorItem(d) {
   if (_isMinableRockPrefab(item.prefabId) && item.stoneMax == null) {
     item.stoneMax = _ROCK_STONE_FALLBACK[item.prefabId] ?? 10;
     if (item.stoneRemaining == null) item.stoneRemaining = item.stoneMax;
+  }
+  if (item.prefabId?.startsWith('build_') && item.prefabId.endsWith('_wood')) {
+    if (item.buildDamage == null) item.buildDamage = 0;
+    if (item.buildMaxHp == null) item.buildMaxHp = 100;
   }
   decorItems.set(item.id, item);
   return item;
@@ -1615,6 +1713,8 @@ io.on('connection', async (socket) => {
     });
     if (item.bag) {
       socket.emit('bag-collect', { items: item.items || [] });  // butin : rend tout
+    } else if (item.type === 'struct_cle' && item.lockId) {
+      socket.emit('item-add', { slot: { type: item.type, qty: item.qty || 1, lockId: item.lockId } });
     } else {
       socket.emit('item-add', { type: item.type, qty: item.qty || 1 });
     }
@@ -1736,6 +1836,10 @@ io.on('connection', async (socket) => {
     const item = decorItems.get(id);
     if (!item || !DOOR_PREFABS.has(item.prefabId)) return;
     if (Math.hypot((item.x || 0) - p.x, (item.z || 0) - p.z) > 6) return;
+    if (item.locked && !_playerHasDoorKey(p.inv, item.lockId)) {
+      socket.emit('door-error', { message: 'Porte verrouillée — clé requise' });
+      return;
+    }
     item.doorOpen = !item.doorOpen;
     io.emit('decor-door-state', { id, open: !!item.doorOpen });
     log.debug('world', 'door toggled', {
@@ -1743,6 +1847,70 @@ io.on('connection', async (socket) => {
       decorId: id,
       open: !!item.doorOpen,
     });
+  });
+
+  socket.on('decor-door-lock', (d, cb) => {
+    const item = _getNearbyDoor(d?.id, p.x, p.z);
+    if (!item) {
+      if (typeof cb === 'function') cb({ ok: false, error: 'Porte introuvable' });
+      return;
+    }
+    if (item.locked) {
+      if (typeof cb === 'function') cb({ ok: false, error: 'Déjà verrouillée' });
+      return;
+    }
+    if (!_consumeInvType(p.inv, 'tool_verrou', 1)) {
+      if (typeof cb === 'function') cb({ ok: false, error: 'Pas de verrou' });
+      return;
+    }
+    const lockId = `lock_${Date.now()}_${++doorLockSeq}`;
+    item.locked = true;
+    item.lockId = lockId;
+    item.lockOwner = p.username;
+    p.dirty = true;
+    const key = { type: 'struct_cle', qty: 1, lockId };
+    if (!_tryAddSlotToInv(p.inv, key)) {
+      _dropWorldItem('struct_cle', 1, p.x + 0.4, p.z, { lockId });
+    } else {
+      socket.emit('item-add', { slot: key });
+    }
+    io.emit('door-lock-state', {
+      id: item.id,
+      locked: true,
+      lockId,
+      lockOwner: p.username,
+    });
+    log.info('world', 'door locked', { player: p.username, decorId: item.id, lockId });
+    if (typeof cb === 'function') cb({ ok: true, lockId });
+  });
+
+  socket.on('decor-door-unlock', (d, cb) => {
+    const item = _getNearbyDoor(d?.id, p.x, p.z);
+    if (!item || !item.locked) {
+      if (typeof cb === 'function') cb({ ok: false, error: 'Pas verrouillée' });
+      return;
+    }
+    const canRemove = item.lockOwner === p.username
+      || _playerHasDoorKey(p.inv, item.lockId);
+    if (!canRemove) {
+      if (typeof cb === 'function') cb({ ok: false, error: 'Pas autorisé' });
+      return;
+    }
+    const oldLockId = item.lockId;
+    item.locked = false;
+    item.lockId = null;
+    item.lockOwner = null;
+    _consumeDoorKey(p.inv, oldLockId);
+    p.dirty = true;
+    const verrou = { type: 'tool_verrou', qty: 1 };
+    if (!_tryAddSlotToInv(p.inv, verrou)) {
+      _dropWorldItem('tool_verrou', 1, p.x + 0.3, p.z);
+    } else {
+      socket.emit('item-add', { type: 'tool_verrou', qty: 1 });
+    }
+    io.emit('door-lock-state', { id: item.id, locked: false, lockId: null, lockOwner: null });
+    log.info('world', 'door unlocked', { player: p.username, decorId: item.id });
+    if (typeof cb === 'function') cb({ ok: true, lockId: oldLockId });
   });
 
   function _getNearbyStorage(id) {
@@ -1828,6 +1996,34 @@ io.on('connection', async (socket) => {
     });
   });
 
+  socket.on('build-hit', async (d) => {
+    const { getBuildDamage, getBuildMaxHp, isBuildPrefab } = await buildDamageModPromise;
+    const id = String(d?.id || '').slice(0, 80);
+    const toolType = String(d?.toolType || '').slice(0, 80);
+    const dmg = getBuildDamage(toolType);
+    if (dmg <= 0 || !id) return;
+    const item = decorItems.get(id);
+    if (!item || !isBuildPrefab(item.prefabId)) return;
+    if (Math.hypot((item.x || 0) - p.x, (item.z || 0) - p.z) > 4.5) return;
+    const maxHp = Number(item.buildMaxHp) || getBuildMaxHp(item.prefabId);
+    if (maxHp <= 0) return;
+    item.buildDamage = Math.min(maxHp, (Number(item.buildDamage) || 0) + dmg);
+    if (item.buildDamage < maxHp) {
+      io.emit('build-damage', { id: item.id, damage: item.buildDamage, maxHp, toolType });
+      return;
+    }
+    decorItems.delete(item.id);
+    io.emit('decor-item-remove', item.id);
+    io.emit('build-destroyed', { id: item.id, prefabId: item.prefabId });
+    log.info('build', 'wood structure destroyed', {
+      player: p.username,
+      decorId: item.id,
+      prefabId: item.prefabId,
+      toolType,
+      pos: { x: +(item.x || 0).toFixed(1), z: +(item.z || 0).toFixed(1) },
+    });
+  });
+
   socket.on('place-structure', (d) => {
     if (!d || typeof d.type !== 'string' || !d.type.startsWith('struct_')) return;
     const x = Number(d.x), z = Number(d.z), rotY = Number(d.rotY) || 0;
@@ -1867,6 +2063,9 @@ io.on('connection', async (socket) => {
     }
     const x = Number(d.x), z = Number(d.z), rotY = Number(d.rotY) || 0;
     const y = Number(d.y);
+    const baseY = Number(d.baseY);
+    const buildLevel = Number(d.buildLevel);
+    const supportGroundY = Number(d.supportGroundY);
     if (!isFinite(x) || !isFinite(z)) {
       reject('Position invalide');
       return;
@@ -1879,7 +2078,8 @@ io.on('connection', async (socket) => {
       kind: 'prefab',
       prefabId,
       x,
-      y: Number.isFinite(y) ? Math.max(-1, Math.min(30, y)) : 0,
+      y: Number.isFinite(baseY) ? Math.max(-1, Math.min(30, baseY))
+        : (Number.isFinite(y) ? Math.max(-1, Math.min(30, y)) : 0),
       z,
       rotX: 0,
       rotY,
@@ -1887,6 +2087,9 @@ io.on('connection', async (socket) => {
       scale: 1,
       createdBy: p.username,
       createdAt: Date.now(),
+      ...(Number.isFinite(baseY) ? { baseY: Math.max(-1, Math.min(30, baseY)) } : {}),
+      ...(Number.isFinite(buildLevel) ? { buildLevel: Math.max(0, Math.min(8, buildLevel)) } : {}),
+      ...(Number.isFinite(supportGroundY) ? { supportGroundY: Math.max(-1, Math.min(30, supportGroundY)) } : {}),
     });
     io.emit('decor-item-spawn', item);
     log.info('build', 'decor prefab placed', {
@@ -1896,6 +2099,15 @@ io.on('connection', async (socket) => {
       pos: { x: +x.toFixed(1), z: +z.toFixed(1) },
     });
     if (typeof cb === 'function') cb({ ok: true, id: item.id });
+  });
+
+  socket.on('decor-floor-height', (d) => {
+    const item = decorItems.get(String(d?.id || ''));
+    if (!item?.prefabId?.startsWith('build_') || !item.prefabId.endsWith('_wood')) return;
+    const y = Number(d.y);
+    if (!Number.isFinite(y)) return;
+    item.y = Math.max(-1, Math.min(30, y));
+    item.baseY = item.y;
   });
 
   socket.on('inventory-sync', (slots) => {

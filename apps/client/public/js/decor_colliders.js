@@ -46,24 +46,6 @@
     storage_chest: [
       { type: 'box', lx: 0, lz: 0, hw: 0.58, hd: 0.36, maxY: 0.62 },
     ],
-    build_wall_wood: [
-      { type: 'box', lx: 0, lz: 0, hw: 1.50, hd: 0.18, minY: -0.6, maxY: 2.6 },
-    ],
-    build_floor_wood: [],
-    build_stair_wood: [
-      { type: 'box', lx: -0.98, lz: 0, hw: 0.10, hd: 1.50, minY: -0.6, maxY: 2.6 },
-      { type: 'box', lx: 0.98, lz: 0, hw: 0.10, hd: 1.50, minY: -0.6, maxY: 2.6 },
-    ],
-    build_door_wood: [
-      { type: 'box', lx: -1.20, lz: 0, hw: 0.30, hd: 0.18, minY: -0.6, maxY: 2.6 },
-      { type: 'box', lx: 1.20, lz: 0, hw: 0.30, hd: 0.18, minY: -0.6, maxY: 2.6 },
-      { type: 'box', lx: 0, lz: -0.16, hw: 0.85, hd: 0.12, minY: -0.6, maxY: 2.1, door: true },
-    ],
-    build_large_door_wood: [
-      { type: 'box', lx: -1.35, lz: 0, hw: 0.15, hd: 0.18, minY: -0.6, maxY: 2.6 },
-      { type: 'box', lx: 1.35, lz: 0, hw: 0.15, hd: 0.18, minY: -0.6, maxY: 2.6 },
-      { type: 'box', lx: 0, lz: -0.16, hw: 1.15, hd: 0.12, minY: -0.6, maxY: 2.1, door: true },
-    ],
     building_survivor_shack: [
       { type: 'box', lx: 0, lz: 2.04, hw: 2.64, hd: 0.11 },
       { type: 'box', lx: -2.54, lz: 0, hw: 0.11, hd: 2.08 },
@@ -127,9 +109,60 @@
     res_planche: { type: 'box', lx: 0, lz: 0, hw: 0.20, hd: 0.08, maxY: 0.06, layFlat: true },
   };
 
+  function _doorFrameColliderDefs(gap) {
+    const w = 3.0;
+    const t = 0.36;
+    const h = 2.6;
+    const side = (w - gap) / 2;
+    const off = gap / 2 + side / 2;
+    return [
+      { type: 'box', lx: -off, lz: 0, hw: side / 2, hd: t / 2, maxY: h },
+      { type: 'box', lx: off, lz: 0, hw: side / 2, hd: t / 2, maxY: h },
+      { type: 'box', lx: 0, lz: 0, hw: w / 2, hd: t / 2, maxY: h, minY: h - 0.4 },
+    ];
+  }
+
+  /** Battant — actif fermé uniquement (`door: true` + `doorOpen` sur le spec). */
+  function _doorLeafColliderDef(gap) {
+    const doorW = Math.max(0.9, gap - 0.1);
+    return {
+      type: 'box',
+      lx: 0,
+      lz: -0.11,
+      hw: doorW / 2,
+      hd: 0.06,
+      minY: 0.08,
+      maxY: 2.12,
+      door: true,
+    };
+  }
+
+  function _buildDoorColliderDefs(gap) {
+    return [..._doorFrameColliderDefs(gap), _doorLeafColliderDef(gap)];
+  }
+
+  const BUILD_PREFAB_COLLIDERS = {
+    build_wall_wood: [
+      { type: 'box', lx: 0, lz: 0, hw: 1.5, hd: 0.18, maxY: 2.6 },
+    ],
+    build_door_wood: _buildDoorColliderDefs(1.8),
+    build_large_door_wood: _buildDoorColliderDefs(2.4),
+    build_doorway_wood: _doorFrameColliderDefs(1.8),
+    build_large_doorway_wood: _doorFrameColliderDefs(2.4),
+    build_stair_wood: [
+      { type: 'box', lx: -(1.8 / 2 + 0.08), lz: 0, hw: 0.10, hd: 3.0 / 2, maxY: 2.6 },
+      { type: 'box', lx: (1.8 / 2 + 0.08), lz: 0, hw: 0.10, hd: 3.0 / 2, maxY: 2.6 },
+    ],
+    build_ceiling_wood: [
+      { type: 'box', lx: 0, lz: 0, hw: 1.5, hd: 1.5, minY: 0, maxY: 0.18 },
+    ],
+  };
+
   function _defsForSpec(spec) {
     if (spec.kind === 'prefab') {
       if (spec.prefabId?.startsWith('wreck_')) return _wreckColliderDefs(spec.prefabId);
+      const buildCols = BUILD_PREFAB_COLLIDERS[spec.prefabId];
+      if (buildCols) return buildCols;
       const list = PREFAB_COLLIDERS[spec.prefabId];
       return list == null ? [] : list;
     }

@@ -334,6 +334,14 @@
       remote: { rArmRot: [0.75, 0, -0.45], handHolder: [0, -0.72, -0.12], lArmMode: 'aimAtHand' },
       anim: { melee: { style: 'swing_side', swingX: 0.48, swingZ: 0.12, dur: 0.34 } },
     }),
+    wpn_arc_artisanal: _grip({
+      twoHanded: true,
+      item: { x: 0.02, y: 0.04, z: 0.08, rx: 0.12, ry: 0, rz: 0 },
+      rArm: { style: 'grip', mcRotX: -8 },
+      lArm: { mcPostZ: -0.14, mcPostY: 0.04 },
+      remote: { rArmRot: [0.65, 0, -0.35], handHolder: [0, -0.68, -0.10], lArmMode: 'aimAtHand' },
+      anim: { melee: { style: 'swing_side', swingX: 0.32, swingZ: 0.08, dur: 0.28 } },
+    }),
     wpn_lance_artisanale: _grip({
       twoHanded: true,
       item: { x: 0, y: 0, z: 0.06, rx: 0.05, ry: 0, rz: 0 },
@@ -979,7 +987,7 @@
     if (type === 'tool_caillou') return 1.35;
     if (type === 'wpn_pistolet' || type === 'pistol') return 0.52;
     if (type === 'wpn_fusil_chasse')                  return 1.20;
-    if (type === 'wpn_barre_fer' || type === 'wpn_lance_artisanale') return 1.15;
+    if (type === 'wpn_barre_fer' || type === 'wpn_lance_artisanale' || type === 'wpn_arc_artisanal') return 1.15;
     const cat = ZS.ITEMS?.[type]?.category || '';
     const byCat = {
       firearm: 1.00, melee: 0.92, tool: 0.86,
@@ -1402,6 +1410,7 @@
       case 'wpn_hache_combat':              return _axe(0x887733);
       case 'wpn_barre_fer':                 return _ironBar();
       case 'wpn_machette':                  return _machette();
+      case 'wpn_arc_artisanal':             return _bow();
       case 'wpn_lance_artisanale':          return _spear();
       case 'wpn_lance_bois':                return _spear(0x886633);
       case 'wpn_lance_pierre':              return _spear(0x777766, true);
@@ -1447,9 +1456,15 @@
       case 'eq_petit_sac': case 'eq_sac_moyen': case 'eq_grand_sac':
                                             return _backpack(ZS.ITEMS?.[type]?.color||0x886633);
       // ── Structures ───────────────────────────────────────────────────────
-      case 'struct_mur_bois': case 'struct_porte_bois':
+      case 'struct_mur_bois':
+      case 'struct_mur_embrasure_porte':
+      case 'struct_mur_embrasure_grande_porte':
+      case 'struct_porte_bois':
       case 'struct_grande_porte_bois': case 'struct_plancher_bois':
+      case 'struct_plafond_bois':
       case 'struct_escalier_bois':          return _plank();
+      case 'tool_verrou':                   return _lockItem();
+      case 'struct_cle':                    return _keyItem();
       default: {
         const c = ZS.ITEMS?.[type]?.color || 0x888888;
         const g = new THREE.Group();
@@ -1537,6 +1552,16 @@
     addBox(g, m(woodColor || 0x885533), 0.036, 0.78, 0.036, 0, 0, 0);
     addBox(g, m(stoneTip ? 0x7a7468 : 0xccccaa), 0.026, 0.16, 0.058, 0, 0.43, 0);
     return _setGripPoint(g, 0, -0.18, 0);
+  }
+
+  function _bow() {
+    const g = new THREE.Group();
+    addBox(g, m(0x886633), 0.04, 0.62, 0.04, 0, 0.08, 0);
+    const limb = new THREE.Mesh(new THREE.BoxGeometry(0.03, 0.34, 0.03), m(0x775522));
+    limb.rotation.z = 0.55; limb.position.set(-0.12, 0.34, 0); g.add(limb);
+    const limb2 = limb.clone(); limb2.rotation.z = -0.55; limb2.position.set(0.12, 0.34, 0); g.add(limb2);
+    addBox(g, m(0xddddcc), 0.008, 0.52, 0.008, 0, 0.10, -0.02);
+    return _setGripPoint(g, 0, -0.12, 0.04);
   }
 
   function _bat() {
@@ -1704,6 +1729,21 @@
     addBox(g, m(0xbb8844), 0.22, 0.030, 0.088, 0, 0,  0);
     addBox(g, m(0x997733), 0.22, 0.008, 0.088, 0, 0.019, 0);
     return _setGripPoint(g, 0, 0, 0);
+  }
+
+  function _lockItem() {
+    const g = new THREE.Group();
+    addBox(g, m(0x555566), 0.08, 0.10, 0.04, 0, 0, 0);
+    addBox(g, m(0x777788), 0.05, 0.05, 0.02, 0, 0.06, 0.02);
+    return _setGripPoint(g, 0, -0.02, 0.04);
+  }
+
+  function _keyItem() {
+    const g = new THREE.Group();
+    addBox(g, m(0xccaa44), 0.06, 0.02, 0.02, 0.04, 0, 0);
+    addBox(g, m(0xccaa44), 0.025, 0.025, 0.015, -0.02, 0, 0);
+    addBox(g, m(0xaa8822), 0.012, 0.012, 0.012, -0.05, 0, 0);
+    return _setGripPoint(g, 0, -0.02, 0.02);
   }
 
   function _ingot(color) {

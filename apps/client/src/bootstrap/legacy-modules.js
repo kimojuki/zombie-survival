@@ -15,6 +15,7 @@ export const LEGACY_MODULES = [
   '/js/road_network.js',
   '/js/trails.js',
   '/js/spawn_clearing.js',
+  '/js/build_anchors.js',
   '/js/vehicle_prefabs.js',
   '/js/rock_prefab.js',
   '/js/rock_world_prefabs.js',

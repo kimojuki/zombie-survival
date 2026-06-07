@@ -7,7 +7,7 @@
   const sleepingBodies = new Map(); // playerId -> { mesh, x, z, username, playerId }
   let _spawnReady = false; // false jusqu'à sync complète (game-init + décor rendu)
   const decorItems = new Map();
-  let _scene, _state, _socket;
+  let _scene, _state, _socket, _localUsername = '';
   const _DOWN = (typeof THREE !== 'undefined') ? new THREE.Vector3(0, -1, 0) : null;
 
   function _loading() {
@@ -78,6 +78,8 @@
     ZS.removeDecorColliders?.(id);
     ZS.unregisterDecorDoor?.(id);
     ZS.unregisterDecorStorage?.(id);
+    ZS.unregisterDecorBuild?.(id);
+    ZS.BuildAnchors?.unregisterFoundation?.(id);
     ZS.removeChoppableTree?.(id);
     ZS.removeMinableRock?.(id);
     if (_colliderSyncDepth === 0) _syncWorldColliders();
@@ -114,6 +116,7 @@
     if (d.prefabId?.startsWith('road_barrier_')) return Promise.resolve(null);
     _removeDecorItem(d.id);
     const isPrefab = d.kind === 'prefab' || (d.prefabId && !d.type);
+    const isBuildWood = d.prefabId?.startsWith('build_') && d.prefabId.endsWith('_wood');
     const commonOpts = {
       decorId: d.id,
       rotX: d.rotX || 0,
@@ -133,6 +136,9 @@
         wreckSink: Number.isFinite(d.wreckSink) ? d.wreckSink : 0,
       treeSeed: Number.isFinite(d.treeSeed) ? d.treeSeed : undefined,
       doorOpen: !!d.doorOpen,
+      locked: !!d.locked,
+      lockId: d.lockId || undefined,
+      lockOwner: d.lockOwner || undefined,
       storageOpen: !!d.storageOpen,
       woodMax: Number.isFinite(d.woodMax) ? d.woodMax : undefined,
       woodRemaining: Number.isFinite(d.woodRemaining) ? d.woodRemaining : undefined,
@@ -143,7 +149,19 @@
       plantedAt: Number.isFinite(d.plantedAt) ? d.plantedAt : undefined,
       railLen: Number.isFinite(d.railLen) ? d.railLen : undefined,
       rotX: Number.isFinite(d.rotX) ? d.rotX : undefined,
+      baseY: Number.isFinite(d.baseY) ? d.baseY
+        : (isBuildWood && Number.isFinite(d.y) ? d.y : undefined),
+      buildLevel: Number.isFinite(d.buildLevel) ? Math.max(0, Math.min(8, d.buildLevel)) : 0,
+      supportGroundY: Number.isFinite(d.supportGroundY) ? d.supportGroundY : undefined,
+      buildDamage: Number.isFinite(d.buildDamage) ? d.buildDamage : undefined,
+      buildMaxHp: Number.isFinite(d.buildMaxHp) ? d.buildMaxHp : undefined,
     };
+    if (d.prefabId?.startsWith('build_') && d.prefabId.endsWith('_wood')) {
+      if (!Number.isFinite(commonOpts.buildDamage)) commonOpts.buildDamage = 0;
+      if (!Number.isFinite(commonOpts.buildMaxHp)) commonOpts.buildMaxHp = 100;
+      d.buildDamage = commonOpts.buildDamage;
+      d.buildMaxHp = commonOpts.buildMaxHp;
+    }
     const onRoot = (root) => {
       if (!root) return;
       root.userData.decorId = d.id;
@@ -186,7 +204,10 @@
     } else {
       localStorage.setItem('zombie_is_admin', '0');
     }
-    if (data.username) localStorage.setItem('zombie_username', data.username);
+    if (data.username) {
+      localStorage.setItem('zombie_username', data.username);
+      _localUsername = data.username;
+    }
     if (ZS.Chat?.setUsername) ZS.Chat.setUsername(data.username);
     if (ZS.Chat?.setSelfId) ZS.Chat.setSelfId(data.selfId);
     if (ZS.Chat?.setServerReady) ZS.Chat.setServerReady(data.features?.chat !== false);
@@ -243,6 +264,8 @@
     });
     ZS.setDeferRockSnap?.(false);
     ZS.resnapAllMinableRocks?.(_scene);
+    ZS.BuildAnchors?.syncRegistryFromDecor?.(decorList);
+    ZS.reconcileAllBuildFloors?.();
     _endColliderBatch();
 
     L?.setPhase?.('sync', 0.95, 'Synchronisation…', 'Rochers ancrés');
@@ -469,6 +492,19 @@
       const entry = decorItems.get(d.id);
       if (entry) entry.data.doorOpen = !!d.open;
     });
+    socket.on('door-lock-state', (d) => {
+      if (!d?.id) return;
+      ZS.setDecorDoorLockState?.(d.id, d);
+      const entry = decorItems.get(d.id);
+      if (entry?.data) {
+        entry.data.locked = !!d.locked;
+        entry.data.lockId = d.lockId || null;
+        entry.data.lockOwner = d.lockOwner || null;
+      }
+    });
+    socket.on('door-error', (d) => {
+      if (d?.message) ZS.UI?.showNotif?.(d.message);
+    });
     socket.on('storage-open', (d) => ZS.StorageUI?.open?.(d));
     socket.on('storage-update', (d) => ZS.StorageUI?.update?.(d));
     socket.on('storage-state', (d) => {
@@ -479,6 +515,18 @@
     });
     socket.on('storage-error', (d) => {
       if (d?.message) ZS.UI?.showNotif?.(d.message);
+    });
+    socket.on('build-damage', (d) => {
+      if (!d?.id) return;
+      const entry = decorItems.get(d.id);
+      if (entry?.data) {
+        entry.data.buildDamage = d.damage;
+        entry.data.buildMaxHp = d.maxHp;
+      }
+      ZS.UI?.showNotif?.(`Structure endommagée (${d.damage}/${d.maxHp})`);
+    });
+    socket.on('build-destroyed', () => {
+      ZS.UI?.showNotif?.('Structure détruite');
     });
     socket.on('decor-tree-chop', (d) => {
       if (!d?.id) return;
@@ -888,6 +936,28 @@
     _socket.emit('decor-door-toggle', { id: decorId });
   }
 
+  function requestDecorDoorLock(decorId, cb) {
+    if (!_socket || !decorId) return;
+    _socket.emit('decor-door-lock', { id: decorId }, (res) => {
+      if (res?.ok) ZS.Inventory?.removeItem?.('tool_verrou', 1);
+      else if (res?.error) ZS.UI?.showNotif?.(res.error);
+      if (typeof cb === 'function') cb(res);
+    });
+  }
+
+  function requestDecorDoorUnlock(decorId, cb) {
+    if (!_socket || !decorId) return;
+    _socket.emit('decor-door-unlock', { id: decorId }, (res) => {
+      if (res?.ok && res.lockId) ZS.Inventory?.removeDoorKey?.(res.lockId);
+      else if (!res?.ok && res?.error) ZS.UI?.showNotif?.(res.error);
+      if (typeof cb === 'function') cb(res);
+    });
+  }
+
+  function getLocalUsername() {
+    return _localUsername || localStorage.getItem('zombie_username') || '';
+  }
+
   function requestStorageOpen(decorId) {
     if (!_socket || !decorId) return;
     _socket.emit('storage-open', { id: decorId });
@@ -913,13 +983,39 @@
     _socket.emit('storage-hit', { id: decorId });
   }
 
+  function requestBuildHit(decorId, toolType) {
+    if (!_socket || !decorId || !toolType) return;
+    _socket.emit('build-hit', { id: decorId, toolType });
+  }
+
+  function _patchDecorFloorHeight(id, y) {
+    const entry = decorItems.get(id);
+    if (!entry?.data) return;
+    entry.data.y = y;
+    entry.data.baseY = y;
+  }
+
+  function syncDecorFloorHeight(id, y) {
+    if (!_socket || !id || !Number.isFinite(y)) return;
+    _socket.emit('decor-floor-height', { id, y });
+  }
+
+  function _getDecorRoot(id) {
+    return decorItems.get(id)?.root || null;
+  }
+
   window.ZS = window.ZS || {};
   ZS.Network = {
     init, tick, sendMove, sendShoot, sendRespawn, sendDied, sendSurvival, sendEquip, sendAttack,
-    notifyDecorChop, notifyDecorMine, requestDecorDoorToggle, syncWorldColliders: _syncWorldColliders,
+    notifyDecorChop, notifyDecorMine, requestDecorDoorToggle, requestDecorDoorLock, requestDecorDoorUnlock,
+    getLocalUsername, syncWorldColliders: _syncWorldColliders,
     findNearestSleeping,
     getSocket: () => _socket,
     isSpawnReady: () => _spawnReady,
     requestStorageOpen, requestStorageClose, requestStorageDeposit, requestStorageWithdraw, requestStorageHit,
+    requestBuildHit,
+    getDecorRoot: _getDecorRoot,
+    patchDecorFloorHeight: _patchDecorFloorHeight,
+    syncDecorFloorHeight,
   };
 }());

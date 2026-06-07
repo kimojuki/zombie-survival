@@ -1474,14 +1474,18 @@
     const dist = Math.hypot(wdx, wdz);
     if (dist >= playerR) return null;
     if (dist <= 0.001) {
-      const penX = (col.hw + playerR) - Math.abs(bx);
-      const penZ = (col.hd + playerR) - Math.abs(bz);
-      if (penX < penZ) {
-        const sx = bx < 0 ? -1 : 1;
-        return decorLocalToWorld((col.lx || 0) + sx * (col.hw + playerR), local.ly, local.lz, col);
-      }
-      const sz = bz < 0 ? -1 : 1;
-      return decorLocalToWorld(local.lx, local.ly, (col.lz || 0) + sz * (col.hd + playerR), col);
+      const penL = bx + col.hw;
+      const penR = col.hw - bx;
+      const penF = bz + col.hd;
+      const penB = col.hd - bz;
+      const m = Math.min(penL, penR, penF, penB);
+      let outBX = bx;
+      let outBZ = bz;
+      if (m === penL) outBX = -col.hw - playerR;
+      else if (m === penR) outBX = col.hw + playerR;
+      else if (m === penF) outBZ = -col.hd - playerR;
+      else outBZ = col.hd + playerR;
+      return decorLocalToWorld(outBX + (col.lx || 0), local.ly, outBZ + (col.lz || 0), col);
     }
 
     const pen = playerR - dist;

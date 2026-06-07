@@ -48,6 +48,161 @@ Copier dans la description de PR :
 
 ## 2026-06-06
 
+## 2026-06-07
+
+### Completed — Verrou & clé sur portes (2026-06-07)
+
+- **Items** : `tool_verrou` (craft ferraille + clous) et `struct_cle` (clé liée à un `lockId`, créée à la pose).
+- **Pose** : verrou en main + E près d'une porte (`build_door_wood` / grande porte) → consomme le verrou, accroche le cadenas, donne la clé au poseur.
+- **Ouverture** : porte verrouillée → clé correspondante requise (serveur `decor-door-toggle`).
+- **Retrait** : maintenir E ~2 s (propriétaire ou détenteur de la clé) → récupère le verrou, retire la clé matching.
+- **Mort** : `lockId` conservé dans le butin (`flattenInv`).
+- **Cache bust** : `20260607-door-lock-104`
+
+### Completed — Plafond en bois (2026-06-07)
+
+- **Item** : `struct_plafond_bois` (« Plafond en Bois ») — prefab `build_ceiling_wood`, craft 4 planches.
+- **Placement** : snap centre fondation, `baseY = fondation.baseY + LEVEL_H` (collé au sommet du mur).
+- **Ancrages** : repère vert au centre haut de chaque fondation ; `registerUpperFloor` + fondation niveau+1 au-dessus pour étage futur.
+- **Collider** : dalle horizontale 3×3 (bloque saut depuis l'intérieur).
+- **Cache bust** : `20260607-ceiling-wood-103`
+
+### Completed — Craft grande porte : planches seules (2026-06-07)
+
+- **Grande Porte** : 10 planches (plus de clous / ferraille).
+- **Cache bust** : `20260607-grande-porte-craft-102`
+
+### Completed — Fix collision porte build fermée (2026-06-07)
+
+- **Cause** : colliders = montants + linteau seulement ; ouverture 1,8 / 2,4 m libre ; boxes fines traversables de l'intérieur.
+- **Fix** : battant (`door: true`, retiré si `doorOpen`) ; repousse joueur depuis l'intérieur d'une box orientée ; resync colliders après toggle.
+- **Cache bust** : `20260607-door-collider-101`
+
+### Completed — Fix ancrage murs sur fondations voisines (2026-06-07)
+
+- **Cause** : fondation voisine surélevée (cluster unifié) rejetée par `_isCoherentDeck` → aucun snap sur ses bords ; repères verts affichés quand même.
+- **Fix** : accepter dalles alignées sur voisine ; snap perpendiculaire au bord + secours visée joueur ; bords partagés entre fondations masqués (pas de mur intérieur).
+- **Cache bust** : `20260607-wall-edge-snap-100`
+
+### Completed — Murs à embrasure (porte / grande porte) (2026-06-07)
+
+- **Items** : `struct_mur_embrasure_porte` (« Mur à embrasure (porte) ») et `struct_mur_embrasure_grande_porte` (« Mur à embrasure (grande porte) »).
+- **Prefabs** : `build_doorway_wood` (ouverture 1,8 m) et `build_large_doorway_wood` (2,4 m) — cadre sans battant, même snap/placement que les murs.
+- **Craft** : 5 planches (porte) / 7 planches (grande porte), entre mur plein et porte complète.
+- **Colliders** : montants + linteau (`decor_colliders.js`) ; passage libre au centre.
+- **Cache bust** : `20260607-doorway-walls-99`
+
+### Completed — Fix régression décor flottant (camp/arbres) (2026-06-07)
+
+- **Cause** : fallback `baseY` depuis `d.y` pour **tous** les prefabs → `y: 0` serveur ( défaut ) utilisé au lieu de `getDecorGroundHeight` (~9 m au-dessus du terrain spawn).
+- **Fix** : `baseY` explicite uniquement pour `build_*_wood` ; spawn ignore `opts.baseY` sans `buildKind`.
+- **Cache bust** : `20260607-decor-ground-fix-98`
+
+### Completed — Fix murs flottants au-dessus fondation (2026-06-07)
+
+- **Cause** : murs utilisaient `y` client / terrain sans reprendre la dalle ; snap renvoyait le `level` fondation corrompu ; `d.y > 0.25` ignorait les hauteurs négatives.
+- **Fix** : `resolveStructureBaseY` (fondation la plus proche) à la pose, au snap et au spawn ; sync hauteur serveur pour tous les `build_*_wood`.
+- **Cache bust** : `20260607-wall-foundation-deck-97`
+
+### Completed — Fix fondation ciel plafond absolu (2026-06-07)
+
+- **Cause racine** : `clampFloorDeckY` laissait passer y=18 si `buildLevel` élevé ; double enregistrement registre (spawn + callback) ; pas de plafond relief max (~7,5 m).
+- **Fix v3** : plafond `MAP_TERRAIN_MAX` ; `resolveFloorDeckY` unique (pose + spawn) ; callback inventaire sans re-registre ; sync `decor-floor-height` serveur.
+- **Cache bust** : `20260607-floor-hard-ceiling-96`
+
+### Completed — Fix régression fondation dans le ciel v2 (2026-06-07)
+
+- **Cause racine** : fondations corrompues en base (`y` ciel + `buildLevel` 6–8) restaient « cohérentes » ; le snap reprenait leur niveau et élevait les nouvelles dalles.
+- **Fix** : `_isCoherentDeck` sans confiance au `level` stocké ; `registerFoundation` recalcule le niveau depuis Y clampé ; snap/unified utilise l'étage UI (`_buildLevel`) ; spawn re-clamp avec niveau 0 si données serveur aberrantes ; `sanitizeAllFoundations` au sync.
+- **Cache bust** : `20260607-floor-sky-level-fix-95`
+
+### Completed — Fix régression fondation dans le ciel (2026-06-07)
+
+- **Cause** : fix murs (`_isCoherentDeck`) n’était pas appliqué aux clusters fondation ; `clampFloorDeckY` sauté si `snapped` ou `opts.baseY` ; `_clusterTargetY` utilisait `_effectiveFloorLevel` → terrain + niveau × 2,6 m.
+- **Fix** : filtre incohérent sur voisins/ancres/cluster ; clamp toujours à la pose et au spawn ; hauteur unifiée via `buildLevel` explicite (terrain max, pas inférence niveau voisin).
+- **Cache bust** : `20260607-floor-clamp-always-94`
+
+### Completed — Murs accrochés à la fondation (2026-06-07)
+
+- **Cause** : snap mur trop court (1,75 m), filtre `level` bloquait les fondations surélevées, `baseY` non envoyé au serveur pour les murs → respawn au sol.
+- **Fix v2** : fondations « ciel » ignorées (`_isCoherentDeck`) + `clampStructureBaseY` sur murs/portes (régression ciel).
+- **Cache bust** : `20260607-wall-sky-filter-93`
+
+### Completed — Fix hauteur voisin pente (2026-06-07)
+
+- **Cause** : `clampFloorDeckY` ramenait la 2ᵉ dalle à la hauteur **locale** du terrain, annulant l'unification avec la 1ʳᵉ fondation sur pente.
+- **Fix** : clamp anti-ciel seulement ; hauteur unifiée inclut le `baseY` des voisins cohérents ; pas de clamp après snap voisin.
+- **Cache bust** : `20260607-floor-slope-unify-91`
+
+### Completed — Fix fondation dans le ciel (2026-06-07)
+
+- **Cause** : `buildLevel` inféré depuis `y / 2.6` au chargement → niveau 6–8 → hauteur terrain + 15–20 m ; snap voisin reprenait ce `baseY`.
+- **Fix** : `clampFloorDeckY` + `_effectiveFloorLevel` ; plus d'inférence `y/2.6` ; clamp à la pose et au spawn.
+- **Cache bust** : `20260607-floor-sky-clamp-90`
+
+### Completed — Dégâts aux constructions en bois (2026-06-07)
+
+- **Résistance** : pièces `build_*_wood` — 100 PV (unité caillou) ; caillou +1/coup, hache pierre +2/coup → 100 ou 50 coups.
+- **Shared** : `packages/shared/src/build-damage.mjs` + tests `tests/build-damage.test.mjs`.
+- **Serveur** : socket `build-hit` (portée, validation outil, `build-damage` / `decor-item-remove`).
+- **Client** : détection `hitDecorBuildRay` (visée écran) **avant** récolte bois/pierre ; notif `Structure endommagée (x/100)`.
+- **Fix** : le caillou récoltait bois/pierre en cone XZ et bloquait les coups sur fondation.
+- **Cache bust** : `20260607-build-damage-ray-89`
+
+### Completed — Fix snap fondation sur pente (2026-06-07)
+
+- **Symptôme** : 2ᵉ fondation plus basse + décalée sur pente au lieu de s’aligner à la même hauteur.
+- **Cause** : rayon snap 1,75 m trop court (ancrages voisins à ±3 m) + grille monde avant snap + `const rotY` non réassignable.
+- **Fix v1** : snap directionnel depuis la fondation visée, rayon `SNAP_R_FLOOR` 4,5 m, essai sur visée brute avant grille.
+- **Fix v2 (hauteur)** : `findAdjacentFloorHeight` — cellule voisine reprend toujours le `baseY` du voisin ; enregistrement optimiste dès l’accusé serveur ; `registerFoundation` utilise `opts.baseY`.
+- **Fix v3 (spawn)** : `resolveFloorDeckY` appliqué dans `spawnDecorPrefab` + fantôme — le voisin déjà posé impose sa hauteur même si le client/envoi serveur avait la hauteur terrain ; supports calculés sur `getTerrainHeight`.
+- **Fix v4 (max unifié)** : fondations qui se touchent → hauteur = **max** du groupe connexe (terrain + voisins) ; les dalles plus basses sont remontées au spawn.
+- **Fix v5 (réconciliation globale)** : `reconcileAllFoundationHeights` remonte **toutes** les fondations existantes d’un même groupe (au chargement, à chaque pose, et tant qu’une fondation est en main).
+- **Fix v6 (hauteur sol)** : hauteur unifiée = **max du terrain** sous chaque cellule du groupe (plus de max des `baseY` stockés / raycast) ; réaligne aussi vers le bas les dalles trop hautes.
+- **Cache bust** : `20260607-floor-terrain-height-87`
+
+### Completed — Repères d'ancrage visibles en mode construction (2026-06-06)
+
+- **Piquets retirés** des fondations posées (prefab + fantôme).
+- **Affichage** : repères verts sur les bords des fondations proches uniquement avec mur/porte/fondation en main.
+- **Cache bust** : `20260606-anchor-guides-only-81`
+
+### Completed — Fondations voisines : même hauteur + armatures (2026-06-06)
+
+- **Snap hauteur** : une fondation collée à une autre reprend son `baseY` (plus le terrain local).
+- **Supports** : poteaux aux 4 coins + croisillons + diagonales si le vide sous la dalle > 20 cm.
+- **Sync** : `baseY` / `buildLevel` / `supportGroundY` envoyés au serveur pour le prefab `build_floor_wood`.
+- **Cache bust** : `20260606-foundation-supports-80`
+
+### Completed — Ancrages fondation (4 bords) (2026-06-06)
+
+- **Registre** : `build_anchors.js` — chaque fondation expose 4 points mur (milieu bord) + 4 points extension fondation voisine.
+- **Snap** : murs/portes sur bord ; nouvelles fondations sur centre adjacent ; fantôme vert si accroché.
+- **Visuel** : piquets bois au milieu de chaque bord sur le prefab fondation.
+- **Tests** : `tests/build-anchors.test.mjs`.
+- **Cache bust** : `20260606-build-anchors-79`
+
+### Completed — Fondation : 2 planches (2026-06-06)
+
+- **Craft** : `struct_plancher_bois` = **2 Planches** (plus 5 bois brut).
+- **Cache bust** : `20260606-craft-fondation-78`
+
+### Completed — Rééquilibrage recettes craft (2026-06-06)
+
+- **Outils** : lance bois 10 bois ; hache/pioche pierre 7 bois + 10 pierre ; torche 5 bois + 2 tissus.
+- **Matériaux** : corde = 5 tissus ; bandage = 2 tissus ; `res_chiffon` affiché « Tissu ».
+- **Arc artisanal** : remplace lance artisanale (15 bois + 1 corde) ; item `wpn_arc_artisanal`.
+- **Build** : fondation 2 planches ; coffre 15 bois (murs/portes/escalier restent en planches).
+- **Cache bust** : `20260606-craft-balance-77`
+
+### Completed — Build lvl 1 : planches seules (2026-06-06)
+
+- **Fondation** (`struct_plancher_bois`) : **5 Planches** — plus de clous ; label « Fondation (Planches) ».
+- **Mur / porte / escalier bois** : planches uniquement (6 / 4 / 8) ; grande porte + coffre gardent clous/ferraille.
+- **Pose** : prefab Georges `build_floor_wood` via `place-decor-prefab` ; aperçu fantôme grille 3×3 m.
+- **Contrôles** : hotbar → **Placer** (mobile) ; PC clic gauche ou clic droit ; **PageUp/Down** = étage.
+- **Cache bust** : `20260606-build-lvl1-planches-76`
+
 ### Completed — Merge dev Georges (construction + coffre) + UI PC local (2026-06-06)
 
 - **Remote** : `e90d2f0` coffre craftable/cassable + `2a61d0d` prefabs build/collisions (Georges).

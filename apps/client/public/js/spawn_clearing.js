@@ -537,6 +537,18 @@
     parent.userData.storageLidPivot = lidPivot;
   }
 
+  function _buildWoodCeiling(parent, x, y, z) {
+    const M = _campMats();
+    const plank = M ? M.woodFine(0xb5894e) : new THREE.MeshLambertMaterial({ color: 0xb5894e });
+    const trim = M ? M.woodDark(0x6a421d) : new THREE.MeshLambertMaterial({ color: 0x6a421d });
+    _add(parent, new THREE.BoxGeometry(3.0, 0.18, 3.0), plank, x, y + 0.09, z);
+    for (let i = -1; i <= 1; i++) {
+      _add(parent, new THREE.BoxGeometry(0.1, 0.08, 3.02), trim, x + i * 0.9, y + 0.02, z);
+    }
+    _add(parent, new THREE.BoxGeometry(3.02, 0.08, 0.1), trim, x, y + 0.02, z - 1.45);
+    _add(parent, new THREE.BoxGeometry(3.02, 0.08, 0.1), trim, x, y + 0.02, z + 1.45);
+  }
+
   function _buildWoodWall(parent, x, y, z) {
     const M = _campMats();
     const wallMat = M ? M.wood(0x9b6a3c) : new THREE.MeshLambertMaterial({ color: 0x9b6a3c });
@@ -549,10 +561,46 @@
     _add(parent, new THREE.BoxGeometry(3.05, 0.14, 0.40), trimMat, x, y + 0.2, z);
   }
 
-  function _buildWoodFloor(parent, x, y, z) {
+  function _buildFloorSupports(parent, x, yBottom, yTop, z) {
+    const gap = yTop - yBottom;
+    if (gap < 0.2) return;
+    const M = _campMats();
+    const beam = M ? M.woodDark(0x6a421d) : new THREE.MeshLambertMaterial({ color: 0x6a421d });
+    const brace = M ? M.wood(0x8a5a2e) : new THREE.MeshLambertMaterial({ color: 0x8a5a2e });
+    const midY = yBottom + gap / 2;
+    const postR = 0.08;
+    const corners = [[-1.35, -1.35], [1.35, -1.35], [-1.35, 1.35], [1.35, 1.35]];
+    for (const [px, pz] of corners) {
+      _add(parent, new THREE.BoxGeometry(postR, gap, postR), beam, x + px, yBottom + gap / 2, z + pz);
+    }
+    const ringY = yBottom + gap * 0.12;
+    _add(parent, new THREE.BoxGeometry(3.0, postR * 0.85, postR * 0.85), brace, x, ringY, z - 1.35);
+    _add(parent, new THREE.BoxGeometry(3.0, postR * 0.85, postR * 0.85), brace, x, ringY, z + 1.35);
+    _add(parent, new THREE.BoxGeometry(postR * 0.85, postR * 0.85, 3.0), brace, x - 1.35, ringY, z);
+    _add(parent, new THREE.BoxGeometry(postR * 0.85, postR * 0.85, 3.0), brace, x + 1.35, ringY, z);
+    _add(parent, new THREE.BoxGeometry(3.6, postR * 0.9, postR * 0.9), beam, x, midY, z);
+    _add(parent, new THREE.BoxGeometry(postR * 0.9, postR * 0.9, 3.6), beam, x, midY, z);
+    const mkDiag = (dx, dz) => {
+      const len = Math.hypot(dx, dz) * 1.35;
+      const m = new THREE.Mesh(new THREE.BoxGeometry(postR * 0.75, postR * 0.75, len), brace);
+      m.position.set(x + dx * 0.5, midY, z + dz * 0.5);
+      m.rotation.y = Math.atan2(dx, dz);
+      m.castShadow = true;
+      m.receiveShadow = true;
+      parent.add(m);
+    };
+    mkDiag(2.7, 2.7);
+    mkDiag(-2.7, 2.7);
+  }
+
+  function _buildWoodFloor(parent, x, y, z, opts = {}) {
     const M = _campMats();
     const plank = M ? M.woodFine(0xb5894e) : new THREE.MeshLambertMaterial({ color: 0xb5894e });
     const trim = M ? M.woodDark(0x6a421d) : new THREE.MeshLambertMaterial({ color: 0x6a421d });
+    const supportDrop = Number.isFinite(opts.supportDrop) ? opts.supportDrop : 0;
+    if (supportDrop > 0.2) {
+      _buildFloorSupports(parent, x, y - supportDrop, y, z);
+    }
     _add(parent, new THREE.BoxGeometry(3.0, 0.18, 3.0), plank, x, y + 0.09, z);
     for (let i = -1; i <= 1; i++) {
       _add(parent, new THREE.BoxGeometry(0.1, 0.2, 3.02), trim, x + i * 0.9, y + 0.11, z);
@@ -574,6 +622,20 @@
     }
     _add(parent, new THREE.BoxGeometry(0.14, 2.4, 3.0), b, x - 0.97, y + 1.2, z);
     _add(parent, new THREE.BoxGeometry(0.14, 2.4, 3.0), b, x + 0.97, y + 1.2, z);
+  }
+
+  function _buildWoodDoorway(parent, x, y, z, gap) {
+    const M = _campMats();
+    const wallMat = M ? M.wood(0x9b6a3c) : new THREE.MeshLambertMaterial({ color: 0x9b6a3c });
+    const trimMat = M ? M.woodDark(0x5a371d) : new THREE.MeshLambertMaterial({ color: 0x5a371d });
+    const side = (3.0 - gap) / 2;
+    for (const sgn of [-1, 1]) {
+      _add(parent, new THREE.BoxGeometry(side, 2.6, 0.36), wallMat, x + sgn * (gap / 2 + side / 2), y + 1.3, z);
+    }
+    _add(parent, new THREE.BoxGeometry(3.0, 0.4, 0.38), wallMat, x, y + 2.4, z);
+    _add(parent, new THREE.BoxGeometry(0.16, 2.45, 0.42), trimMat, x - gap / 2, y + 1.25, z - 0.02);
+    _add(parent, new THREE.BoxGeometry(0.16, 2.45, 0.42), trimMat, x + gap / 2, y + 1.25, z - 0.02);
+    _add(parent, new THREE.BoxGeometry(gap + 0.2, 0.14, 0.42), trimMat, x, y + 2.15, z - 0.02);
   }
 
   function _buildWoodDoor(parent, x, y, z, gap) {
@@ -728,6 +790,8 @@
 
   const DECOR_DOORS = new Map();
   const DECOR_STORAGES = new Map();
+  const DECOR_BUILDS = new Map();
+  const _buildRayHits = [];
   const DOOR_OPEN_ANGLE = -Math.PI * 0.52;
   const CHEST_OPEN_ANGLE = Math.PI * 0.62;
   const DOOR_ANIM_SPEED = 3.2;
@@ -756,7 +820,10 @@
     spawn_workbench: { build(root) { _buildWorkbench(root, 0, 0, 0, 0); } },
     storage_chest: { build(root) { _buildStorageChest(root, 0, 0, 0, 0); } },
     build_wall_wood: { build(root) { _buildWoodWall(root, 0, 0, 0); }, buildKind: 'wall', w: 3.0, h: 2.6, t: 0.36 },
-    build_floor_wood: { build(root) { _buildWoodFloor(root, 0, 0, 0); }, buildKind: 'floor', w: 3.0, h: 0.18, t: 3.0 },
+    build_doorway_wood: { build(root) { _buildWoodDoorway(root, 0, 0, 0, 1.8); }, buildKind: 'door', w: 3.0, h: 2.6, t: 0.36, gap: 1.8 },
+    build_large_doorway_wood: { build(root) { _buildWoodDoorway(root, 0, 0, 0, 2.4); }, buildKind: 'door', w: 3.0, h: 2.6, t: 0.36, gap: 2.4 },
+    build_floor_wood: { build(root, opts) { _buildWoodFloor(root, 0, 0, 0, opts); }, buildKind: 'floor', w: 3.0, h: 0.18, t: 3.0 },
+    build_ceiling_wood: { build(root) { _buildWoodCeiling(root, 0, 0, 0); }, buildKind: 'ceiling', w: 3.0, h: 0.18, t: 3.0 },
     build_stair_wood: { build(root) { _buildWoodStair(root, 0, 0, 0); }, buildKind: 'stair', w: 1.8, h: 2.6, t: 3.0 },
     build_door_wood: { build(root) { _buildWoodDoor(root, 0, 0, 0, 1.8); }, buildKind: 'door', w: 3.0, h: 2.6, t: 0.36 },
     build_large_door_wood: { build(root) { _buildWoodDoor(root, 0, 0, 0, 2.4); }, buildKind: 'door', w: 3.0, h: 2.6, t: 0.36 },
@@ -780,6 +847,7 @@
   function _registerDecorCollision(decorId, spec) {
     if (!decorId || !ZS.registerDecorColliders || !ZS.buildDecorColliders) return;
     ZS.registerDecorColliders(decorId, ZS.buildDecorColliders(spec));
+    ZS.Network?.syncWorldColliders?.();
   }
 
   function _refreshDecorCollision(root) {
@@ -803,6 +871,44 @@
       ZS.Audio?.door?.(wantOpen ? 1 : 0);
     }
     _refreshDecorCollision(entry.root);
+    return true;
+  }
+
+  function _ensureDoorLockMesh(entry) {
+    if (!entry?.pivot) return null;
+    if (!entry.lockMesh) {
+      const g = new THREE.Group();
+      g.name = 'door-lock';
+      const mat = new THREE.MeshLambertMaterial({ color: 0x666677 });
+      const body = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.16, 0.06), mat);
+      body.position.set(0.52, 1.02, 0.2);
+      g.add(body);
+      const shackle = new THREE.Mesh(
+        new THREE.TorusGeometry(0.055, 0.014, 6, 12, Math.PI),
+        mat,
+      );
+      shackle.rotation.z = Math.PI / 2;
+      shackle.position.set(0.52, 1.14, 0.2);
+      g.add(shackle);
+      entry.pivot.add(g);
+      entry.lockMesh = g;
+    }
+    return entry.lockMesh;
+  }
+
+  function setDecorDoorLockState(decorId, data = {}) {
+    const entry = DECOR_DOORS.get(decorId);
+    if (!entry || !entry.root.parent) return false;
+    entry.locked = !!data.locked;
+    entry.lockId = data.lockId || null;
+    entry.lockOwner = data.lockOwner || null;
+    if (entry.root.userData.decorSpec) {
+      entry.root.userData.decorSpec.locked = entry.locked;
+      entry.root.userData.decorSpec.lockId = entry.lockId;
+      entry.root.userData.decorSpec.lockOwner = entry.lockOwner;
+    }
+    const mesh = _ensureDoorLockMesh(entry);
+    if (mesh) mesh.visible = entry.locked;
     return true;
   }
 
@@ -859,6 +965,10 @@
     DECOR_STORAGES.delete(decorId);
   }
 
+  function unregisterDecorBuild(decorId) {
+    DECOR_BUILDS.delete(decorId);
+  }
+
   function setDecorStorageState(decorId, open, opts = {}) {
     const entry = DECOR_STORAGES.get(decorId);
     if (!entry || !entry.root.parent) return false;
@@ -883,7 +993,15 @@
       const dist = Math.hypot(pos.x - x, pos.z - z);
       if (dist > maxDist) continue;
       if (!best || dist < best.dist) {
-        best = { decorId, open: !!entry.open, dist, prefabId: entry.root.userData.prefabId };
+        best = {
+          decorId,
+          open: !!entry.open,
+          dist,
+          prefabId: entry.root.userData.prefabId,
+          locked: !!entry.locked,
+          lockId: entry.lockId || null,
+          lockOwner: entry.lockOwner || null,
+        };
       }
     }
     return best;
@@ -918,6 +1036,54 @@
       }
     }
     return best;
+  }
+
+  function hitDecorBuild(ox, oz, dx, dz, maxDist = 2.6) {
+    const len = Math.hypot(dx, dz) || 1;
+    const nx = dx / len;
+    const nz = dz / len;
+    let best = null;
+    for (const [decorId, entry] of DECOR_BUILDS) {
+      if (!entry.root?.parent) continue;
+      const vx = entry.root.position.x - ox;
+      const vz = entry.root.position.z - oz;
+      const forward = vx * nx + vz * nz;
+      if (forward < -0.35 || forward > maxDist) continue;
+      const lateral = Math.abs(vx * nz - vz * nx);
+      const reach = Math.max(entry.hw || 1.5, entry.hd || 1.5) + 0.65;
+      if (lateral > reach) continue;
+      if (!best || forward < best.dist) {
+        best = { decorId, dist: forward, prefabId: entry.prefabId };
+      }
+    }
+    return best;
+  }
+
+  /** Visée écran → mesh construction (prioritaire sur la récolte cone XZ). */
+  function hitDecorBuildRay(raycaster, maxDist = 3.5) {
+    if (!raycaster) return null;
+    _buildRayHits.length = 0;
+    for (const entry of DECOR_BUILDS.values()) {
+      if (!entry.root?.parent) continue;
+      entry.root.traverse((o) => {
+        if (o.isMesh) _buildRayHits.push(o);
+      });
+    }
+    if (!_buildRayHits.length) return null;
+    const prevFar = raycaster.far;
+    raycaster.far = maxDist;
+    const hits = raycaster.intersectObjects(_buildRayHits, false);
+    raycaster.far = prevFar;
+    if (!hits.length) return null;
+    let node = hits[0].object;
+    while (node) {
+      const id = node.userData?.decorId;
+      if (id && DECOR_BUILDS.has(id)) {
+        return { decorId: id, dist: hits[0].distance, prefabId: DECOR_BUILDS.get(id).prefabId };
+      }
+      node = node.parent;
+    }
+    return null;
   }
 
   /** Plus bas vertex du visuel en coordonnées monde (respecte rotY / scale). */
@@ -1004,6 +1170,61 @@
     });
   }
 
+  function _disposeObject3D(o) {
+    if (!o) return;
+    o.traverse((c) => {
+      if (c.geometry) c.geometry.dispose();
+      if (c.material) {
+        if (Array.isArray(c.material)) c.material.forEach((m) => m.dispose?.());
+        else c.material.dispose?.();
+      }
+    });
+  }
+
+  /** Remonte une fondation existante + recalcule supports/collisions/registre. */
+  function _resyncBuildFloorMesh(root, targetY) {
+    const prefab = DECOR_PREFABS.build_floor_wood;
+    if (!root || !prefab) return;
+    const x = root.position.x;
+    const z = root.position.z;
+    const decorId = root.userData.decorId;
+    const terrainY = ZS.getTerrainHeight ? ZS.getTerrainHeight(x, z) : 0;
+    const supportDrop = Math.max(0, targetY - terrainY);
+    while (root.children.length) {
+      const c = root.children[0];
+      root.remove(c);
+      _disposeObject3D(c);
+    }
+    root.position.y = targetY;
+    prefab.build(root, { supportDrop });
+    if (root.userData.decorSpec) root.userData.decorSpec.baseY = targetY;
+    ZS.registerUpperFloor?.(x, z, prefab.w / 2, prefab.t / 2, targetY + prefab.h);
+    ZS.BuildAnchors?.registerFoundation(decorId, x, z, targetY, {
+      hw: prefab.w / 2,
+      hd: prefab.t / 2,
+      level: 0,
+    });
+    _refreshDecorCollision(root);
+    ZS.Network?.patchDecorFloorHeight?.(decorId, targetY);
+  }
+
+  function _liftBuildFloors(toLift, targetY) {
+    if (!toLift?.length || !Number.isFinite(targetY)) return;
+    for (const f of toLift) {
+      const root = ZS.Network?.getDecorRoot?.(f.id);
+      if (root) _resyncBuildFloorMesh(root, targetY);
+    }
+  }
+
+  /** Aligne visuellement toutes les fondations connexes à la hauteur max du groupe. */
+  function reconcileAllBuildFloors() {
+    const lifts = ZS.BuildAnchors?.reconcileAllFoundationHeights?.() || [];
+    for (const l of lifts) {
+      const root = ZS.Network?.getDecorRoot?.(l.id);
+      if (root) _resyncBuildFloorMesh(root, l.targetY);
+    }
+  }
+
   function spawnDecorPrefab(scene, prefabId, x, y, z, opts = {}) {
     const prefab = DECOR_PREFABS[prefabId];
     if (!scene || !prefab) return null;
@@ -1017,11 +1238,72 @@
     let groundLift = Number.isFinite(opts.groundLift) ? opts.groundLift : null;
     if (isMinableRock && groundLift == null) groundLift = 0;
     if (groundLift == null) groundLift = 0;
+    const isBuildFloor = prefab.buildKind === 'floor';
+    const isBuildCeiling = prefab.buildKind === 'ceiling';
+    const terrainY = ZS.getTerrainHeight
+      ? ZS.getTerrainHeight(x || 0, z || 0)
+      : groundAt(x || 0, z || 0);
+    const groundY = terrainY;
+    let deckY;
+    if (isBuildFloor) {
+      let buildLevel = Number.isFinite(opts.buildLevel) ? Math.max(0, opts.buildLevel) : 0;
+      const rawY = Number.isFinite(opts.baseY) ? opts.baseY : (Number.isFinite(y) ? y : null);
+      if (ZS.BuildAnchors?.resolveFloorDeckY) {
+        deckY = ZS.BuildAnchors.resolveFloorDeckY(
+          x || 0, z || 0,
+          rawY ?? (terrainY + buildLevel * 2.6),
+          opts.decorId || null,
+          buildLevel,
+        );
+        buildLevel = Math.max(0, Math.min(8, Math.floor(Number(opts.buildLevel) || 0)));
+      } else {
+        deckY = rawY ?? (terrainY + buildLevel * 2.6);
+      }
+      opts = { ...opts, buildLevel };
+    } else if (isBuildCeiling) {
+      const buildLevel = Number.isFinite(opts.buildLevel) ? Math.max(0, opts.buildLevel) : 0;
+      const rawY = Number.isFinite(opts.baseY) ? opts.baseY : (Number.isFinite(y) ? y : null);
+      if (ZS.BuildAnchors?.resolveCeilingDeckY) {
+        deckY = ZS.BuildAnchors.resolveCeilingDeckY(x || 0, z || 0, buildLevel)
+          ?? rawY
+          ?? (terrainY + (buildLevel + 1) * 2.6);
+      } else {
+        deckY = rawY ?? (terrainY + (buildLevel + 1) * 2.6);
+      }
+      opts = { ...opts, buildLevel };
+    } else if (prefab.buildKind === 'wall' || prefab.buildKind === 'door' || prefab.buildKind === 'stair') {
+      const buildLevel = Number.isFinite(opts.buildLevel) ? Math.max(0, opts.buildLevel) : 0;
+      const rawY = Number.isFinite(opts.baseY) ? opts.baseY : (Number.isFinite(y) ? y : terrainY);
+      if (ZS.BuildAnchors?.resolveStructureBaseY) {
+        deckY = ZS.BuildAnchors.resolveStructureBaseY(x || 0, z || 0, rawY, buildLevel);
+      } else {
+        deckY = rawY;
+      }
+      opts = { ...opts, buildLevel };
+    } else if (Number.isFinite(opts.baseY) && prefab.buildKind) {
+      deckY = opts.baseY;
+    } else if (Number.isFinite(y) && y > 0.25) {
+      deckY = y;
+    } else if (opts.grounded !== false && !isWreck) {
+      deckY = getDecorGroundHeight(x || 0, z || 0, { groundLift });
+    } else {
+      deckY = y || 0;
+    }
+    if (isBuildFloor && !ZS.BuildAnchors?.resolveFloorDeckY) {
+      deckY = Number.isFinite(opts.baseY) ? opts.baseY : (terrainY + (opts.buildLevel || 0) * 2.6);
+    } else if ((prefab.buildKind === 'wall' || prefab.buildKind === 'door' || prefab.buildKind === 'stair')
+        && !ZS.BuildAnchors?.resolveStructureBaseY
+        && ZS.BuildAnchors?.clampStructureBaseY) {
+      const buildLevel = Number.isFinite(opts.buildLevel) ? Math.max(0, opts.buildLevel) : 0;
+      deckY = ZS.BuildAnchors.clampStructureBaseY(x || 0, z || 0, deckY, buildLevel);
+    }
+    const supportGroundY = Number.isFinite(opts.supportGroundY) ? opts.supportGroundY : terrainY;
+    const supportDrop = isBuildFloor
+      ? Math.max(0, deckY - supportGroundY)
+      : 0;
     const groundedY = isWreck
-      ? groundAt(x || 0, z || 0) - sink
-      : (opts.grounded !== false
-        ? getDecorGroundHeight(x || 0, z || 0, { groundLift })
-        : (y || 0));
+      ? groundY - sink
+      : deckY;
     const root = new THREE.Group();
     root.position.set(x || 0, groundedY, z || 0);
     root.rotation.set(opts.rotX || 0, opts.rotY || 0, opts.rotZ || 0);
@@ -1033,7 +1315,7 @@
     root.userData.decorId = decorId;
 
     scene.add(root);
-    prefab.build(root, opts);
+    prefab.build(root, isBuildFloor ? { supportDrop } : opts);
 
     const decorSpec = {
         decorId,
@@ -1059,9 +1341,19 @@
         open: !!opts.doorOpen,
         targetOpen: !!opts.doorOpen,
         openAngle: 0,
+        locked: !!opts.locked,
+        lockId: opts.lockId || null,
+        lockOwner: opts.lockOwner || null,
       };
       DECOR_DOORS.set(decorId, entry);
       _setDoorVisual(entry, !!opts.doorOpen, { instant: true });
+      if (opts.locked) {
+        setDecorDoorLockState(decorId, {
+          locked: true,
+          lockId: opts.lockId,
+          lockOwner: opts.lockOwner,
+        });
+      }
     }
     if (root.userData.isStorage) {
       const entry = {
@@ -1075,27 +1367,72 @@
       setDecorStorageState(decorId, !!opts.storageOpen, { instant: true });
     }
 
+    if (prefab.buildKind) {
+      DECOR_BUILDS.set(decorId, {
+        root,
+        prefabId,
+        hw: (prefab.w || 3) / 2,
+        hd: (prefab.t || prefab.w || 3) / 2,
+      });
+      root.traverse((o) => {
+        if (o.isMesh) o.userData.decorId = decorId;
+      });
+    }
+
     if (opts.collide !== false && !isMinableRock) {
       _registerDecorCollision(decorId, decorSpec);
     }
 
     if (prefab.buildKind === 'floor') {
       ZS.registerUpperFloor?.(root.position.x, root.position.z, prefab.w / 2, prefab.t / 2, root.position.y + prefab.h);
-    } else if (prefab.buildKind === 'stair') {
-      const rotY = root.rotation.y || 0;
-      const alongZ = Math.abs(Math.cos(rotY)) > 0.5;
-      const sign = alongZ ? Math.cos(rotY) : Math.sin(rotY);
-      const lo = sign >= 0 ? root.position.y : root.position.y + prefab.h;
-      const hi = sign >= 0 ? root.position.y + prefab.h : root.position.y;
-      ZS.registerRamp?.(
-        root.position.x,
-        root.position.z,
-        alongZ ? prefab.w / 2 : prefab.t / 2,
-        alongZ ? prefab.t / 2 : prefab.w / 2,
-        lo,
-        hi,
-        alongZ ? 'z' : 'x'
+      const buildLevel = Number.isFinite(opts.buildLevel)
+        ? Math.max(0, opts.buildLevel)
+        : 0;
+      ZS.BuildAnchors?.registerFoundation(decorId, root.position.x, root.position.z, root.position.y, {
+        hw: prefab.w / 2,
+        hd: prefab.t / 2,
+        level: buildLevel,
+      });
+      const sentY = Number.isFinite(opts.baseY) ? opts.baseY : y;
+      if (Number.isFinite(sentY) && Math.abs(sentY - root.position.y) > 0.05) {
+        ZS.Network?.patchDecorFloorHeight?.(decorId, root.position.y);
+        ZS.Network?.syncDecorFloorHeight?.(decorId, root.position.y);
+      }
+      reconcileAllBuildFloors();
+    } else if (prefab.buildKind === 'ceiling') {
+      ZS.registerUpperFloor?.(
+        root.position.x, root.position.z,
+        prefab.w / 2, prefab.t / 2,
+        root.position.y + prefab.h,
       );
+      const buildLevel = Number.isFinite(opts.buildLevel) ? Math.max(0, opts.buildLevel) : 0;
+      ZS.BuildAnchors?.registerFoundation(decorId, root.position.x, root.position.z, root.position.y + prefab.h, {
+        hw: prefab.w / 2,
+        hd: prefab.t / 2,
+        level: buildLevel + 1,
+      });
+    } else if (prefab.buildKind === 'wall' || prefab.buildKind === 'door' || prefab.buildKind === 'stair') {
+      const sentY = Number.isFinite(opts.baseY) ? opts.baseY : y;
+      if (Number.isFinite(sentY) && Math.abs(sentY - root.position.y) > 0.05) {
+        ZS.Network?.patchDecorFloorHeight?.(decorId, root.position.y);
+        ZS.Network?.syncDecorFloorHeight?.(decorId, root.position.y);
+      }
+      if (prefab.buildKind === 'stair') {
+        const rotY = root.rotation.y || 0;
+        const alongZ = Math.abs(Math.cos(rotY)) > 0.5;
+        const sign = alongZ ? Math.cos(rotY) : Math.sin(rotY);
+        const lo = sign >= 0 ? root.position.y : root.position.y + prefab.h;
+        const hi = sign >= 0 ? root.position.y + prefab.h : root.position.y;
+        ZS.registerRamp?.(
+          root.position.x,
+          root.position.z,
+          alongZ ? prefab.w / 2 : prefab.t / 2,
+          alongZ ? prefab.t / 2 : prefab.w / 2,
+          lo,
+          hi,
+          alongZ ? 'z' : 'x'
+        );
+      }
     }
 
     if (prefabId.startsWith('tree_') && ZS.registerChoppableTree) {
@@ -1429,15 +1766,22 @@
   ZS.registerDecorPrefab = registerDecorPrefab;
   ZS.listDecorPrefabs   = listDecorPrefabs;
   ZS.findNearestDecorDoor = findNearestDecorDoor;
+  ZS.setDecorDoorLockState = setDecorDoorLockState;
   ZS.setDecorDoorState    = setDecorDoorState;
   ZS.unregisterDecorDoor  = unregisterDecorDoor;
   ZS.findNearestDecorStorage = findNearestDecorStorage;
   ZS.hitDecorStorage        = hitDecorStorage;
+  ZS.hitDecorBuild          = hitDecorBuild;
+  ZS.hitDecorBuildRay       = hitDecorBuildRay;
   ZS.setDecorStorageState    = setDecorStorageState;
   ZS.unregisterDecorStorage  = unregisterDecorStorage;
+  ZS.unregisterDecorBuild    = unregisterDecorBuild;
   ZS.tickDecorDoors       = tickDecorDoors;
   ZS.getDecorGroundHeight = getDecorGroundHeight;
   ZS.getDecorSurfaceLift  = getDecorSurfaceLift;
+  ZS.resyncBuildFloorMesh = _resyncBuildFloorMesh;
+  ZS.reconcileAllBuildFloors = reconcileAllBuildFloors;
+  ZS.buildFloorSupports   = _buildFloorSupports;
   ZS.resnapMinableRock    = resnapMinableRock;
   ZS.resnapAllMinableRocks = resnapAllMinableRocks;
   ZS.setDeferRockSnap = setDeferRockSnap;

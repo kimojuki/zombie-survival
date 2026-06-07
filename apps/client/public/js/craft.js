@@ -3,25 +3,31 @@
   'use strict';
 
   const RECIPES = [
-    // Progression Rust-like au spawn (caillou → bois + pierre → premiers outils)
-    { result: 'wpn_lance_bois', qty: 1, ingredients: { res_bois_brut: 3 } },
-    { result: 'tool_hache_pierre', qty: 1, ingredients: { res_bois_brut: 2, res_pierre: 3 } },
-    { result: 'tool_pioche_pierre', qty: 1, ingredients: { res_bois_brut: 2, res_pierre: 3 } },
+    // Outils & armes de départ
+    { result: 'wpn_lance_bois', qty: 1, ingredients: { res_bois_brut: 10 } },
+    { result: 'tool_hache_pierre', qty: 1, ingredients: { res_bois_brut: 7, res_pierre: 10 } },
+    { result: 'tool_pioche_pierre', qty: 1, ingredients: { res_bois_brut: 7, res_pierre: 10 } },
     { result: 'wpn_lance_pierre', qty: 1, ingredients: { wpn_lance_bois: 1, res_pierre: 2 } },
-    // Transformation de base du bois brut
+    // Matériaux
     { result: 'res_planche', qty: 2, ingredients: { res_bois_brut: 1 } },
-    { result: 'tool_torche', qty: 1, ingredients: { res_bois_brut: 2 } },
-    // Soins artisanaux — le chiffon sert à fabriquer des bandages
+    { result: 'res_corde', qty: 1, ingredients: { res_chiffon: 5 } },
+    // Soins & lumière
+    { result: 'tool_torche', qty: 1, ingredients: { res_bois_brut: 5, res_chiffon: 2 } },
     { result: 'med_bandage', qty: 1, ingredients: { res_chiffon: 2 } },
     // Armes artisanales
-    { result: 'wpn_lance_artisanale', qty: 1, ingredients: { res_bois_brut: 2, res_corde: 1 } },
-    { result: 'wpn_batte_cloutee',    qty: 1, ingredients: { res_planche: 1, res_clous: 10 } },
-    { result: 'struct_mur_bois',       qty: 1, ingredients: { res_planche: 6, res_clous: 12 } },
-    { result: 'struct_porte_bois',     qty: 1, ingredients: { res_planche: 4, res_clous: 8, res_ferraille: 2 } },
-    { result: 'struct_grande_porte_bois', qty: 1, ingredients: { res_planche: 10, res_clous: 20, res_ferraille: 4 } },
-    { result: 'struct_plancher_bois',  qty: 1, ingredients: { res_planche: 5, res_clous: 10 } },
-    { result: 'struct_escalier_bois',  qty: 1, ingredients: { res_planche: 8, res_clous: 16 } },
-    { result: 'struct_storage_chest',  qty: 1, ingredients: { res_planche: 8, res_clous: 12, res_ferraille: 2 } },
+    { result: 'wpn_arc_artisanal', qty: 1, ingredients: { res_bois_brut: 15, res_corde: 1 } },
+    { result: 'wpn_batte_cloutee', qty: 1, ingredients: { res_planche: 1, res_clous: 10 } },
+    // Structures
+    { result: 'struct_plancher_bois', qty: 1, ingredients: { res_planche: 2 } },
+    { result: 'struct_plafond_bois', qty: 1, ingredients: { res_planche: 4 } },
+    { result: 'struct_mur_bois', qty: 1, ingredients: { res_planche: 6 } },
+    { result: 'struct_mur_embrasure_porte', qty: 1, ingredients: { res_planche: 5 } },
+    { result: 'struct_mur_embrasure_grande_porte', qty: 1, ingredients: { res_planche: 7 } },
+    { result: 'struct_porte_bois', qty: 1, ingredients: { res_planche: 4 } },
+    { result: 'struct_escalier_bois', qty: 1, ingredients: { res_planche: 8 } },
+    { result: 'struct_grande_porte_bois', qty: 1, ingredients: { res_planche: 10 } },
+    { result: 'tool_verrou', qty: 1, ingredients: { res_ferraille: 2, res_clous: 4 } },
+    { result: 'struct_storage_chest', qty: 1, ingredients: { res_bois_brut: 15 } },
   ];
 
   let _panel    = null;

@@ -90,6 +90,11 @@
       icon: '⚔️', color: 0xaaaaaa,
       degats_impact: 28, portee_metre: 2.8, cadence_attaque: 0.6, durabilite_max: 120,
     },
+    wpn_arc_artisanal: {
+      label: 'Arc Artisanal', category: 'melee', maxStack: 1,
+      icon: '🏹', color: 0x886633,
+      degats_impact: 20, portee_metre: 4.0, cadence_attaque: 0.9, durabilite_max: 45,
+    },
     wpn_lance_artisanale: {
       label: 'Lance Artisanale', category: 'melee', maxStack: 1,
       icon: '🏹', color: 0x886633,
@@ -185,7 +190,7 @@
     res_metal:         { label: 'Métal',         category: 'resource', maxStack: 100, icon: '🔩', color: 0xaaaaaa },
     res_clous:         { label: 'Clous',         category: 'resource', maxStack: 500, icon: '📌', color: 0xcccccc },
     res_ruban_adhesif: { label: 'Ruban Adhésif', category: 'resource', maxStack: 50,  icon: '🩹', color: 0xffcc00 },
-    res_chiffon:       { label: 'Chiffon',       category: 'resource', maxStack: 100, icon: '🧣', color: 0xdddddd },
+    res_chiffon:       { label: 'Tissu',         category: 'resource', maxStack: 100, icon: '🧣', color: 0xdddddd },
     res_corde:         { label: 'Corde',         category: 'resource', maxStack: 50,  icon: '🪢', color: 0xbb9944 },
 
     // ── OUTILS ──────────────────────────────────────────────────────────────
@@ -239,6 +244,14 @@
       label: 'Mur en Bois', category: 'structure', maxStack: 5,
       icon: '🧱', color: 0xbb8844, prefabId: 'build_wall_wood', points_structure_hp: 500,
     },
+    struct_mur_embrasure_porte: {
+      label: 'Mur à embrasure (porte)', category: 'structure', maxStack: 5,
+      icon: '🪟', color: 0xbb8844, prefabId: 'build_doorway_wood', points_structure_hp: 450,
+    },
+    struct_mur_embrasure_grande_porte: {
+      label: 'Mur à embrasure (grande porte)', category: 'structure', maxStack: 5,
+      icon: '🪟', color: 0xaa7733, prefabId: 'build_large_doorway_wood', points_structure_hp: 550,
+    },
     struct_porte_bois: {
       label: 'Porte en Bois', category: 'structure', maxStack: 5,
       icon: '🚪', color: 0xaa7733, prefabId: 'build_door_wood', points_structure_hp: 350,
@@ -248,8 +261,12 @@
       icon: '🚪', color: 0x996622, prefabId: 'build_large_door_wood', points_structure_hp: 800,
     },
     struct_plancher_bois: {
-      label: 'Plancher en Bois', category: 'structure', maxStack: 5,
+      label: 'Fondation', category: 'structure', maxStack: 5,
       icon: '📦', color: 0xcc9955, prefabId: 'build_floor_wood', points_structure_hp: 400,
+    },
+    struct_plafond_bois: {
+      label: 'Plafond en Bois', category: 'structure', maxStack: 5,
+      icon: '🏠', color: 0xaa8844, prefabId: 'build_ceiling_wood', points_structure_hp: 350,
     },
     struct_escalier_bois: {
       label: 'Escalier en Bois', category: 'structure', maxStack: 3,
@@ -258,6 +275,14 @@
     struct_storage_chest: {
       label: 'Coffre', category: 'structure', maxStack: 3,
       icon: '📦', color: 0xb47a42, prefabId: 'storage_chest', points_structure_hp: 250,
+    },
+    tool_verrou: {
+      label: 'Verrou', category: 'tool', maxStack: 5,
+      icon: '🔒', color: 0x777788,
+    },
+    struct_cle: {
+      label: 'Clé', category: 'key', maxStack: 1,
+      icon: '🗝️', color: 0xccaa44,
     },
 
     // ── LEGACY (compat sauvegardes existantes) ───────────────────────────────

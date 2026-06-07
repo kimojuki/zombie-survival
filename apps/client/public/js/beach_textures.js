@@ -47,9 +47,11 @@
       map: getSandTexture(),
       color: color || 0xffffff,
       flatShading: false,
+      depthWrite: true,
+      depthTest: true,
       polygonOffset: true,
-      polygonOffsetFactor: -4,
-      polygonOffsetUnits: -8,
+      polygonOffsetFactor: -12,
+      polygonOffsetUnits: -24,
     });
   }
 

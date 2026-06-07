@@ -4,8 +4,10 @@ import { clampGrowthPhase, getTreeScale, getTreeWoodForPhase, nextGrowthDueAt, T
 import {
   REGEN_CONFIG,
   findRandomTreeSpawn,
+  findRandomPalmSpawn,
   findRandomRockSpawn,
-  countStandingTrees,
+  countStandingForestTrees,
+  countStandingPalms,
   countWorldRocks,
 } from '../../../packages/shared/src/resource-spawn.mjs';
 import { getRockStoneMax } from '../../../packages/shared/src/rock-stone.mjs';
@@ -15,6 +17,7 @@ import { getRockStoneMax } from '../../../packages/shared/src/rock-stone.mjs';
  */
 export function createResourceRegen(ctx) {
   let lastTreeSpawnTick = 0;
+  let lastPalmSpawnTick = 0;
   let lastRockSpawnTick = 0;
 
   function _decorList() {
@@ -51,7 +54,7 @@ export function createResourceRegen(ctx) {
     if (now - lastTreeSpawnTick < REGEN_CONFIG.treeIntervalMs) return 0;
     lastTreeSpawnTick = now;
     const decors = _decorList();
-    const standing = countStandingTrees(decors);
+    const standing = countStandingForestTrees(decors);
     const need = REGEN_CONFIG.treeTargetStanding - standing;
     if (need <= 0) return 0;
     const batch = Math.min(REGEN_CONFIG.treesPerTick, need);
@@ -73,7 +76,37 @@ export function createResourceRegen(ctx) {
       ctx.io.emit('decor-item-spawn', item);
       added++;
     }
-    if (added) ctx.log?.info?.('regen', 'trees spawned', { added, standing: standing + added });
+    if (added) ctx.log?.info?.('regen', 'forest trees spawned', { added, standing: standing + added });
+    return added;
+  }
+
+  function tickPalmSpawn(now = Date.now()) {
+    if (now - lastPalmSpawnTick < REGEN_CONFIG.palmIntervalMs) return 0;
+    lastPalmSpawnTick = now;
+    const decors = _decorList();
+    const standing = countStandingPalms(decors);
+    const need = REGEN_CONFIG.palmTargetStanding - standing;
+    if (need <= 0) return 0;
+    const batch = Math.min(REGEN_CONFIG.palmsPerTick, need);
+    let added = 0;
+    for (let i = 0; i < batch; i++) {
+      const spot = findRandomPalmSpawn(decors, now + i * 7727);
+      if (!spot) break;
+      const startPhase = clampGrowthPhase(REGEN_CONFIG.palmRegenStartPhase ?? 2);
+      const woodMax = getTreeWoodForPhase(spot.prefabId, startPhase);
+      const item = ctx.makeDecorItem({
+        ...spot,
+        growthPhase: startPhase,
+        plantedAt: now - startPhase * GROWTH_PHASE_MS,
+        woodMax,
+        woodRemaining: woodMax,
+        treeScale: getTreeScale(startPhase),
+      });
+      decors.push(item);
+      ctx.io.emit('decor-item-spawn', item);
+      added++;
+    }
+    if (added) ctx.log?.info?.('regen', 'palms spawned', { added, standing: standing + added });
     return added;
   }
 
@@ -106,8 +139,9 @@ export function createResourceRegen(ctx) {
   function tick(now = Date.now()) {
     tickTreeGrowth(now);
     tickTreeSpawn(now);
+    tickPalmSpawn(now);
     tickRockSpawn(now);
   }
 
-  return { tick, tickTreeGrowth, tickTreeSpawn, tickRockSpawn };
+  return { tick, tickTreeGrowth, tickTreeSpawn, tickPalmSpawn, tickRockSpawn };
 }

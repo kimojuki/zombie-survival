@@ -50,6 +50,79 @@ Copier dans la description de PR :
 
 ## 2026-06-07
 
+### Completed — Joystick : capture pointer globale (tablette) (2026-06-07)
+
+- **Cause** : touches captées par le canvas plein écran — `#left-zone` jamais atteinte.
+- **Fix** : `pointerdown/move/up` en capture sur `document` (gauche 44 % = move, droite = visée) ; détection `maxTouchPoints` prioritaire ; boot au 1er toucher.
+- **Version** : `20260607-touch-capture-158`
+
+### Completed — Fix joystick tablette (mode hybride) (2026-06-07)
+
+- **Cause** : `input-touch` parfois absent sur tablette → `_setupJoystick` ne s’exécutait pas.
+- **Fix** : `needsTouchControls()` / `detectTabletDevice()` ; init forcée si `mode-tablet` ; z-index zones tactiles ; CSS `display:flex` boutons tir.
+- **Version** : `20260607-tablet-joyfix-157`
+
+### Completed — Tablette hybride : contrôles tactiles + UI PC (2026-06-07)
+
+- **Séparation** : `input-touch` (joystick, visée, boutons) vs `mode-desktop` / `mode-mobile` (inventaire, craft, chat).
+- **Tablette** (`mode-tablet`) : `input-touch` + `mode-desktop` — pas le layout téléphone.
+- **CSS** : zones tactiles liées à `.input-touch` ; chat/craft/inv restent PC sur tablette.
+- **Version** : `20260607-tablet-hybrid-156`
+
+### Completed — Tablette : contrôles tactiles + chargement allégé (2026-06-07)
+
+- **Cause** : tablettes paysage (>900 px) ou iPadOS (UA « Macintosh ») classées en `mode-desktop` → joysticks/boutons masqués, hint « Cliquez pour jouer ».
+- **Fix** : `device.js` + `detectTouchGameMode()` (iPad `maxTouchPoints`, Android tablette, tactile sans hover).
+- **Filet** : `ui.js` force `mode-mobile` si tactile détecté après coup ; CSS masque `#pc-play-hint` en mobile.
+- **Perf tactile** : terrain SEG 48, pas d’ombres ni étoiles, routes différées (`requestIdleCallback`), `shadowMap` off.
+- **Version** : `20260607-tablet-touch-155`
+
+### Completed — Chargement mobile : scripts parallèles + game-init allégé (2026-06-07)
+
+- **Scripts** : fetch parallèle des 42 modules legacy puis exécution ordonnée (vs 42 allers-retours séquentiels).
+- **Serveur** : `game-init` n’envoie plus tous les arbres — proches spawn seulement (100 m mobile / 180 m desktop) ; reste via `GET /api/world/decor-trees`.
+- **Socket** : `auth.client = mobile|desktop` pour adapter le rayon côté serveur.
+- **Mobile** : terrain SEG 64, ombres 512, moins d’étoiles/nuages, plage moins dense, lots décor 40.
+- **Version** : `20260607-load-mobile-154`
+
+### Completed — Chargement : terrain allégé + décors progressifs (2026-06-07)
+
+- **Terrain** : `SEG` 144 → 96 (~55 % moins de sommets) ; cache `beachCoastWeight` par vertex.
+- **Sync décor** : rochers/bâtiments/arbres proches spawn en priorité ; arbres lointains (>180 m) en arrière-plan après `_spawnReady`.
+- **Batch** : chunks 128, `requestAnimationFrame` tous les 2 lots (au lieu de 64 + rAF à chaque lot).
+- **Debug** : `window.__ZS_PERF = true` → logs `[world] terrain|buildings|roads` dans la console.
+- **Version** : `20260607-load-opt-153`
+
+### Completed — Palmiers plage `tree_palm` (2026-06-07)
+
+- **Prefab** : `buildPalm` — tronc + frondes, choppable comme les arbres (`tree_*` pipeline).
+- **Plage uniquement** : `palm-placements.mjs` — seed ~20, repousse cible 16–28, bois max 6.
+- **Serveur** : `ensureBeachPalms`, `tickPalmSpawn`, compteurs forêt/palmiers séparés.
+- **RCON** : `decorseed palms [reset]`, `decorprefabs palm`, `decoradd prefab tree_palm`.
+- **Version** : `20260607-beach-palms-152`
+
+### Completed — Plage : dalle sable épaisse 35 cm (2026-06-07)
+
+- **Visuel** : couche 2 = volume (top + bottom + côtés), plus un plan fin — terrain couche 1 enfoncé sous la plage.
+- **Collisions** : joueur sur le dessus de la dalle ; `getVisibleTerrainHeight` inclut l'enfoncement.
+- **Z-fight** : `renderOrder` sable 8/9, terrain 0, polygonOffset renforcé.
+- **Version** : `20260607-beach-slab-151`
+
+### Completed — Plage : marche sur le mesh sable (couche 2) (2026-06-07)
+
+- **Cause** : joueur posé sur le terrain herbe (couche 1) — mesh sable non enregistré comme sol.
+- **Fix** : `getBeachSurfaceHeight()` + `registerGroundMesh` sable/rivage ; `getDecorGroundHeight` prend le max terrain/sable.
+- **Version** : `20260607-beach-ground-150`
+
+### Completed — Plage naturelle : bords adoucis + rivage opaque (2026-06-07)
+
+- **Forme** : `beachCoastWeight()` — croissant côte est (fins N/S courbes, pas d'angle droit).
+- **Couleur terrain** : dégradé sable/herbe ; plus de bande verte/brune entre océan et plage.
+- **Rivage mouillé** : sable opaque (plus de transparence sur l'herbe).
+- **Mesh sable** : vertices masqués hors croissant ; patch terrain sans clearing disc (évite terre marron).
+- **Fichiers** : `beach_coast.js`, `beach-spawn.mjs`, `proc_spawn.js`, `world.js`, `noise.js`.
+- **Version** : `20260607-beach-natural-149`
+
 ### Completed — Torche au kit de départ (2026-06-07)
 
 - **Serveur** : `STARTING_ITEMS` hotbar slot 2 = `tool_torche` ; `ensureStarterTorch()` à la connexion si absent (rejoin de nuit).

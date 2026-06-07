@@ -171,7 +171,10 @@ Objets visibles par tous les joueurs, synchronisés via `decorItems` au `game-in
 | `decorseed wrecks` | Ajoute les épaves seed si absentes (sans redémarrer le serveur) |
 | `decorseed wrecks reset` | Supprime toutes les épaves seed et les replace aux positions du gabarit |
 | `decorseed trees` | Ajoute les arbres prefab forêt si absents (~63) |
-| `decorseed trees reset` | Supprime les arbres seed et les replace |
+| `decorseed trees reset` | Supprime les arbres seed et les replace (hors palmiers) |
+| `decorseed palms` | Ajoute les palmiers plage (`tree_palm`) si absents (~20) |
+| `decorseed palms reset` | Supprime les palmiers seed et les replace sur le sable |
+| `decoradd prefab tree_palm [here\|x z] [rotY] [scale]` | Pose un palmier — récoltable (bois), croissance progressive |
 | `decoradd <type> [x z] [rotY] [scale]` | Pose un item de jeu comme prop (`food_conserves`, `tool_hachette`, …) — modèle 3D `getItemModel()` |
 | `decorlist` | Liste les décors actifs (id, kind, position) |
 | `decorremove <id>` | Supprime un décor par id |

@@ -25,6 +25,39 @@
       });
     }
 
+    (function zsTouchDetect() {
+      var ua = navigator.userAgent || '';
+      var maxTouch = navigator.maxTouchPoints || 0;
+      var hasTouch = maxTouch > 0 || 'ontouchstart' in window;
+      var coarse = window.matchMedia && window.matchMedia('(pointer: coarse)').matches;
+      var fine = window.matchMedia && window.matchMedia('(pointer: fine)').matches;
+      var canHover = window.matchMedia && window.matchMedia('(hover: hover)').matches;
+      var touch = false;
+      if (maxTouch > 0 || 'ontouchstart' in window) touch = true;
+      else if (/iPhone|iPod|Mobile|Silk/i.test(ua)) touch = true;
+      else if (/iPad/i.test(ua)) touch = true;
+      else if (navigator.platform === 'MacIntel' && maxTouch > 1) touch = true;
+      else if (/Android/i.test(ua)) touch = true;
+      else if (hasTouch && coarse && !canHover) touch = true;
+      else if (hasTouch && maxTouch > 1 && !fine) touch = true;
+      else if (hasTouch && maxTouch > 1 && coarse) touch = true;
+      else if (coarse && window.matchMedia('(max-width: 900px)').matches) touch = true;
+      var tablet = false;
+      if (touch) {
+        if (/iPad/i.test(ua)) tablet = true;
+        else if (navigator.platform === 'MacIntel' && maxTouch > 1) tablet = true;
+        else if (/Android/i.test(ua) && !/Mobile/i.test(ua)) tablet = true;
+        else {
+          var minScreen = Math.min(window.screen.width || 0, window.screen.height || 0);
+          if (minScreen >= 600 && maxTouch > 1) tablet = true;
+          else if (window.matchMedia('(min-width: 900px)').matches && maxTouch > 1) tablet = true;
+        }
+      }
+      window.__ZS_TOUCH_MODE = touch;
+      window.__ZS_TABLET = tablet;
+      window.__ZS_MOBILE = touch;
+    })();
+
     function applyVersion(v) {
       window.__ZS_CLIENT_VERSION = v;
       var css = document.getElementById('zs-css');
@@ -333,22 +366,26 @@
     const modules = LEGACY_MODULES.filter((src) => !src.includes('loading.js'));
     const scriptMin = 12;
     const scriptMax = 22;
+    const bust = (src) => src + (src.includes('?') ? '&' : '?') + 'v=' + CACHE_BUST;
+    const texts = new Array(modules.length);
+    let fetched = 0;
+    await Promise.all(modules.map((src, i) =>
+      fetch(bust(src), { cache: 'no-store', credentials: 'same-origin' })
+        .then((r) => {
+          if (!r.ok) throw new Error('Échec du chargement de ' + src);
+          return r.text();
+        })
+        .then((code) => {
+          texts[i] = code;
+          fetched++;
+          const pct = scriptMin + (scriptMax - scriptMin) * (fetched / modules.length);
+          setConnectingMsg('Chargement des modules…', `${fetched} / ${modules.length}`, pct);
+        }),
+    ));
     for (let i = 0; i < modules.length; i++) {
-      const src = modules[i];
-      const local = (i + 1) / modules.length;
-      const pct = scriptMin + (scriptMax - scriptMin) * local;
-      setConnectingMsg(
-        'Chargement des modules…',
-        `${i + 1} / ${modules.length}`,
-        pct,
-      );
-      await new Promise((resolve, reject) => {
-        const s = document.createElement('script');
-        s.src = src + (src.includes('?') ? '&' : '?') + 'v=' + CACHE_BUST;
-        s.onload = resolve;
-        s.onerror = () => reject(new Error('Échec du chargement de ' + src));
-        document.body.appendChild(s);
-      });
+      const s = document.createElement('script');
+      s.textContent = texts[i] + '\n//# sourceURL=' + modules[i];
+      document.body.appendChild(s);
     }
     window.ZS?.Loading?.setPhase?.('scripts', 1, 'Modules chargés', '');
   })().catch(err => {

@@ -130,6 +130,60 @@
     root.userData.treeKind = 'birch';
   }
 
+  function buildPalm(root, opts) {
+    const rng = _rngFromOpts(opts);
+    const lean = (rng() - 0.5) * 0.12;
+    const h = 4.2 + rng() * 2.8;
+    const trunkR = 0.14 + rng() * 0.06;
+    const trunkMat = new THREE.MeshLambertMaterial({ map: _barkTex, color: 0xb8a070 });
+    const trunk = new THREE.Mesh(
+      new THREE.CylinderGeometry(trunkR * 0.72, trunkR * 1.15, h, 8), trunkMat);
+    trunk.position.y = h / 2;
+    trunk.rotation.z = lean;
+    trunk.castShadow = true;
+    root.add(trunk);
+
+    const ringY = h * (0.88 + rng() * 0.06);
+    const ring = new THREE.Mesh(
+      new THREE.CylinderGeometry(trunkR * 1.35, trunkR * 1.2, 0.18, 8), trunkMat);
+    ring.position.y = ringY;
+    ring.rotation.z = lean * 0.6;
+    root.add(ring);
+
+    const frondCols = [0x4a8a38, 0x5a9a42, 0x3d7a32, 0x6aaa48];
+    const frondN = 4 + Math.floor(rng() * 3);
+    for (let i = 0; i < frondN; i++) {
+      const ang = (i / frondN) * Math.PI * 2 + rng() * 0.35;
+      const len = 1.6 + rng() * 1.4;
+      const fMat = new THREE.MeshLambertMaterial({
+        map: _leafTex,
+        color: frondCols[Math.floor(rng() * frondCols.length)],
+        side: THREE.DoubleSide,
+      });
+      const frond = new THREE.Mesh(new THREE.PlaneGeometry(len, 0.42 + rng() * 0.18, 1, 1), fMat);
+      frond.position.set(
+        Math.cos(ang) * 0.12,
+        ringY + 0.08,
+        Math.sin(ang) * 0.12,
+      );
+      frond.rotation.order = 'YXZ';
+      frond.rotation.y = ang;
+      frond.rotation.x = -0.55 - rng() * 0.35;
+      frond.rotation.z = lean * 0.4;
+      frond.castShadow = true;
+      root.add(frond);
+      if (rng() < 0.55) {
+        const sub = frond.clone();
+        sub.material = fMat.clone();
+        sub.rotation.x -= 0.22 + rng() * 0.18;
+        sub.rotation.y += (rng() - 0.5) * 0.4;
+        sub.scale.setScalar(0.72 + rng() * 0.2);
+        root.add(sub);
+      }
+    }
+    root.userData.treeKind = 'palm';
+  }
+
   function buildDead(root, opts) {
     const rng = _rngFromOpts(opts);
     const h = 3.0 + rng() * 3.2;
@@ -157,6 +211,7 @@
     tree_pine: { build: buildPine, label: 'Pin' },
     tree_birch: { build: buildBirch, label: 'Bouleau' },
     tree_dead: { build: buildDead, label: 'Arbre mort' },
+    tree_palm: { build: buildPalm, label: 'Palmier' },
   };
 
   function listTreePrefabIds() {
@@ -173,6 +228,9 @@
   registerTreePrefabs();
 
   window.ZS = window.ZS || {};
-  ZS.TreePrefabs = { listTreePrefabIds, TREE_PREFABS, buildOak, buildPine, buildBirch, buildDead };
+  ZS.TreePrefabs = {
+    listTreePrefabIds, TREE_PREFABS,
+    buildOak, buildPine, buildBirch, buildDead, buildPalm,
+  };
 }());
 

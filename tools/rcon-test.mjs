@@ -102,6 +102,7 @@ async function main() {
   results.push(await expectOk('decorprefabs', 'decorprefabs', (t) => t.includes('spawn_campfire')));
   results.push(await expectOk('decorprefabs wreck', 'decorprefabs wreck', (t) => t.includes('wreck_sedan')));
   results.push(await expectOk('decorprefabs tree', 'decorprefabs tree', (t) => t.includes('tree_oak')));
+  results.push(await expectOk('decorprefabs palm', 'decorprefabs palm', (t) => t.includes('tree_palm')));
   results.push(await expectOk('decorprefabs barrier', 'decorprefabs barrier', (t) => t.includes('road_barrier_post')));
   results.push(await expectOk('decorprefabs filter', 'decorprefabs stump', (t) => t.includes('spawn_stump')));
   results.push(await expectOk('decorprefabs building', 'decorprefabs building', (t) => t.includes('building_survivor_shack')));
@@ -142,6 +143,12 @@ async function main() {
   results.push(await expectOk(
     'decorseed trees idle',
     'decorseed trees',
+    (t) => t.includes('déjà') || t.includes('présents') || t.includes('ajouté'),
+  ));
+
+  results.push(await expectOk(
+    'decorseed palms idle',
+    'decorseed palms',
     (t) => t.includes('déjà') || t.includes('présents') || t.includes('ajouté'),
   ));
 

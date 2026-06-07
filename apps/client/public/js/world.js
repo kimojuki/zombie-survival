@@ -174,6 +174,9 @@
   // ── API ──────────────────────────────────────────────────────────────────────
 
   function buildWorld(scene) {
+    const _perf = typeof performance !== 'undefined' && window.__ZS_PERF;
+    const _t0 = _perf ? performance.now() : 0;
+    let _t = _t0;
     _scene = scene;
     _skyRoot = new THREE.Group();
     _skyRoot.name = 'skyRoot';
@@ -188,10 +191,12 @@
     _hemiLight = new THREE.HemisphereLight(0x87ceeb, 0x2a4a18, 0.30);
     scene.add(_hemiLight);
 
+    const _mobileBuild = _isMobileBuild();
     _sunLight = new THREE.DirectionalLight(0xfff5dd, 1.4);
-    _sunLight.castShadow = true;
-    _sunLight.shadow.mapSize.width  = 1024;
-    _sunLight.shadow.mapSize.height = 1024;
+    _sunLight.castShadow = !_mobileBuild;
+    const _shadowMap = _mobileBuild ? 512 : 1024;
+    _sunLight.shadow.mapSize.width  = _shadowMap;
+    _sunLight.shadow.mapSize.height = _shadowMap;
     _sunLight.shadow.camera.near    = 1;
     _sunLight.shadow.camera.far     = 220;
     // Frustum d'ombre serré qui SUIT le joueur (voir setShadowCenter) → passe d'ombre
@@ -223,18 +228,32 @@
     _moonSprite.frustumCulled = false;
     _moonSprite.renderOrder = 0;
     scene.add(_moonSprite);
-    spawnStars();
+    if (!_mobileBuild) spawnStars();
     spawnClouds();
 
     if (ZS.SpawnZone?.registerTerrain) ZS.SpawnZone.registerTerrain();
     if (ZS.Roads?.registerTerrain) ZS.Roads.registerTerrain();
     if (ZS.Buildings?.applyRoadFlattening) ZS.Buildings.applyRoadFlattening();
     buildTerrain(scene);
+    if (_perf) { console.log('[world] terrain', Math.round(performance.now() - _t), 'ms'); _t = performance.now(); }
     const buildingColliders = ZS.Buildings.buildAll(scene);
+    if (_perf) { console.log('[world] buildings', Math.round(performance.now() - _t), 'ms'); _t = performance.now(); }
     if (ZS.RoadNetwork?.buildMeshes) {
-      ZS.BarrierPrefabs?.resetBarrierColliders?.();
-      ZS.RoadNetwork.buildMeshes(scene, ZS.B.M);
+      const _buildRoadMeshes = () => {
+        ZS.BarrierPrefabs?.resetBarrierColliders?.();
+        ZS.RoadNetwork.buildMeshes(scene, ZS.B.M);
+        if (_perf) console.log('[world] roads', Math.round(performance.now() - _t), 'ms');
+      };
+      if (_mobileBuild) {
+        const idle = typeof requestIdleCallback === 'function'
+          ? (fn) => requestIdleCallback(fn, { timeout: 2500 })
+          : (fn) => setTimeout(fn, 80);
+        idle(_buildRoadMeshes);
+      } else {
+        _buildRoadMeshes();
+      }
     }
+    if (_perf) console.log('[world] total', Math.round(performance.now() - _t0), 'ms');
     for (const c of buildingColliders) _colliders.push(c);
     tickDayNight(0);
   }
@@ -431,7 +450,7 @@
 
   function spawnStars() {
     if (!_skyRoot) return;
-    const count = 240;
+    const count = _isMobileBuild() ? 64 : 240;
     const radius = 168;
     const pos = new Float32Array(count * 3);
     const sizes = new Float32Array(count);
@@ -537,18 +556,26 @@
     return _cT.getHex();
   }
 
+  function _isMobileBuild() {
+    return !!(ZS.detectTouchInput?.() || window.__ZS_TOUCH_MODE || window.ZS?._touchInput || window.ZS?._isMobile);
+  }
+
   function buildTerrain(scene) {
-    const SIZE = 600, SEG = 144;
+    const SIZE = 600, SEG = _isMobileBuild() ? 48 : 96;
     const geo  = new THREE.PlaneGeometry(SIZE, SIZE, SEG, SEG).toNonIndexed();
     geo.rotateX(-Math.PI / 2);
     const pos = geo.attributes.position;
     const uvs  = new Float32Array(pos.count * 2);
     const cols = new Float32Array(pos.count * 3);
+    const beachW = new Float32Array(pos.count);
     const col  = new THREE.Color();
     for (let i = 0; i < pos.count; i++) {
       const vx = pos.getX(i), vz = pos.getZ(i);
       let h = ZS.getTerrainHeight(vx, vz);
       if (ZS.isInClearingDisc?.(vx, vz, 0.12)) h -= 0.14;
+      const bw = ZS.beachCoastWeight?.(vx, vz) ?? 0;
+      beachW[i] = bw;
+      if (bw > 0.06 && ZS.beachTerrainSink) h -= ZS.beachTerrainSink(bw);
       pos.setY(i, h);
     }
 
@@ -568,11 +595,12 @@
       const slope = 1 - Math.max(0, nrm.y);
       const avgH = (a.y + b.y + c.y) / 3;
       const cx = (a.x + b.x + c.x) / 3, cz = (a.z + b.z + c.z) / 3;
-      const inBeach = ZS.isInBeachFootprint?.(cx, cz, 0.35) ?? false;
+      const beachWTri = (beachW[i] + beachW[i + 1] + beachW[i + 2]) / 3;
+      const inBeach = beachWTri >= 0.38;
       const inRiver = ZS.isInRiverChannel?.(cx, cz, 0) ?? false;
-      const inClearing = !inBeach && (ZS.isInClearingDisc?.(cx, cz, 0.25) ?? false);
+      const inClearing = beachWTri < 0.06 && !inBeach && (ZS.isInClearingDisc?.(cx, cz, 0.25) ?? false);
       const onRoad  = ZS.isInRoadCorridor?.(cx, cz, 0.8) ?? ZS.isNearRoad?.(cx, cz, 1.2) ?? false;
-      const useDirt = !inBeach && (inRiver || onRoad || inClearing || slope > 0.22 || avgH > 13.5);
+      const useDirt = beachWTri < 0.08 && !inBeach && (inRiver || onRoad || inClearing || slope > 0.22 || avgH > 13.5);
       const uBase = useDirt ? 0.52 : 0.02;
       const uSpan = 0.46;
 
@@ -581,8 +609,19 @@
         const vx = pos.getX(idx), vy = pos.getY(idx), vz = pos.getZ(idx);
         uvs[idx * 2] = uBase + frac((vx + 300) / tileScale) * uSpan;
         uvs[idx * 2 + 1] = frac((vz + 300) / tileScale);
-        if (inBeach) col.setHex(_beachSandColor(vx, vz));
-        else col.setHex(_terrainTint(vx, vz, vy, slope, useDirt));
+        const bwCorner = beachW[idx];
+        if (bwCorner > 0.03) {
+          const sandHex = _beachSandColor(vx, vz);
+          if (bwCorner >= 0.92) {
+            col.setHex(sandHex);
+          } else {
+            col.setHex(_terrainTint(vx, vz, vy, slope, useDirt));
+            _cD.setHex(sandHex);
+            col.lerp(_cD, Math.min(1, bwCorner * 1.08));
+          }
+        } else {
+          col.setHex(_terrainTint(vx, vz, vy, slope, useDirt));
+        }
         cols[idx * 3] = col.r; cols[idx * 3 + 1] = col.g; cols[idx * 3 + 2] = col.b;
       }
     }
@@ -594,8 +633,12 @@
       map: _terrainTex,
       vertexColors: true,
       flatShading: true,
+      polygonOffset: true,
+      polygonOffsetFactor: 4,
+      polygonOffsetUnits: 8,
     }));
     mesh.receiveShadow = true;
+    mesh.renderOrder = 0;
     scene.add(mesh);
     _terrainMesh = mesh;
     registerGroundMesh(mesh);
@@ -611,6 +654,8 @@
     if (!Number.isFinite(x) || !Number.isFinite(z)) return 0;
     let h = ZS.getTerrainHeight ? ZS.getTerrainHeight(x, z) : 0;
     if (ZS.isInClearingDisc?.(x, z, 0.12)) h -= 0.14;
+    const bw = ZS.beachCoastWeight?.(x, z) ?? 0;
+    if (bw > 0.06 && ZS.beachTerrainSink) h -= ZS.beachTerrainSink(bw);
     return h;
   }
 
@@ -770,7 +815,8 @@
       depthTest: true,
     });
 
-    for (let i = 0; i < 16; i++) {
+    const cloudCount = _isMobileBuild() ? 4 : 16;
+    for (let i = 0; i < cloudCount; i++) {
       const sprite = new THREE.Sprite(_cloudMat);
       const az0 = _rng() * Math.PI * 2;
       const el = 0.34 + _rng() * 0.20;

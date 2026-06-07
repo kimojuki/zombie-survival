@@ -2,7 +2,12 @@
 
 import { TREE_ZONES, TREE_EXCLUSIONS, SPAWN_TRAIL_PTS } from './tree-placements.mjs';
 import { ROCK_ZONES, ROCK_EXCLUSIONS, isInCampFootprint } from './rock-placements.mjs';
-import { isInBeachFootprint } from './beach-spawn.mjs';
+import {
+  BEACH_SPAWN,
+  beachCoastWeight,
+  isInBeachFootprint,
+} from './beach-spawn.mjs';
+import { PALM_ZONES } from './palm-placements.mjs';
 import { getTreeScale } from './tree-growth.mjs';
 
 export const REGEN_CONFIG = Object.freeze({
@@ -12,13 +17,20 @@ export const REGEN_CONFIG = Object.freeze({
   rocksPerTick: 3,
   /** Phase initiale des arbres regen (0–4) — évite les pousses quasi inutilisables. */
   regenTreeStartPhase: 2,
-  /** Arbres debout ciblés (seed + repousse). */
+  /** Arbres forêt debout ciblés (seed + repousse, hors palmiers). */
   treeTargetStanding: 220,
+  /** Palmiers plage — repousse 16–28 (cible médiane 22). */
+  palmIntervalMs: 12_000,
+  palmsPerTick: 3,
+  palmTargetStanding: 22,
+  palmRegenStartPhase: 2,
+  palmMinCoastWeight: 0.35,
   /** Rochers monde (hors ancres camp fixes). */
   rockTargetWorld: 75,
   spawnAttempts: 80,
   minClearance: 2.2,
   minTreeGap: 2.8,
+  minPalmGap: 2.2,
   minRockGap: 3.2,
 });
 
@@ -204,6 +216,41 @@ export function findRandomRockSpawn(decors, seed = Date.now()) {
   return null;
 }
 
+function _nearSpawn(x, z, margin = 8) {
+  return Math.hypot(x - BEACH_SPAWN.x, z - BEACH_SPAWN.z) < margin;
+}
+
+/** @returns {object|null} placement palmier regen plage ou null */
+export function findRandomPalmSpawn(decors, seed = Date.now()) {
+  const rng = _mulberry32((seed + 4421) >>> 0);
+  const zones = PALM_ZONES;
+  if (!zones.length) return null;
+  for (let attempt = 0; attempt < REGEN_CONFIG.spawnAttempts; attempt++) {
+    const zone = zones[Math.floor(rng() * zones.length)];
+    const ang = rng() * Math.PI * 2;
+    const dist = Math.sqrt(rng());
+    const x = zone.cx + Math.cos(ang) * dist * zone.radiusX;
+    const z = zone.cz + Math.sin(ang) * dist * zone.radiusZ;
+    if (beachCoastWeight(x, z) < (zone.minCoastWeight ?? REGEN_CONFIG.palmMinCoastWeight)) continue;
+    if (!isInBeachFootprint(x, z, 0)) continue;
+    if (_nearTrail(x, z, 2.5)) continue;
+    if (_nearSpawn(x, z)) continue;
+    if (!isSpawnPointClear(x, z, decors, { minGap: REGEN_CONFIG.minPalmGap })) continue;
+    return {
+      kind: 'prefab',
+      prefabId: 'tree_palm',
+      x,
+      z,
+      rotY: rng() * Math.PI * 2,
+      scale: 0.92 + rng() * 0.22,
+      treeSeed: Math.floor(rng() * 0xffffff),
+      zoneId: 'regen_palm',
+      regen: true,
+    };
+  }
+  return null;
+}
+
 /**
  * Seed monde : cherche des emplacements libres zone par zone (déterministe).
  * @returns {Array<object>} placements à ajouter (max `target`)
@@ -246,8 +293,20 @@ export function seedWorldRockPlacements(decors, {
   return out;
 }
 
+export function countStandingPalms(decors) {
+  return decors.filter((d) => d.prefabId === 'tree_palm' && !d.falling).length;
+}
+
+export function countStandingForestTrees(decors) {
+  return decors.filter((d) => {
+    if (!d.prefabId?.startsWith('tree_') || d.falling) return false;
+    return d.prefabId !== 'tree_palm';
+  }).length;
+}
+
+/** Tous les arbres debout (forêt + palmiers). */
 export function countStandingTrees(decors) {
-  return decors.filter((d) => d.prefabId?.startsWith('tree_') && !d.falling).length;
+  return countStandingForestTrees(decors) + countStandingPalms(decors);
 }
 
 /** Rochers monde regen (pas les ancres camp fixes). */

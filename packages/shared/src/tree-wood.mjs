@@ -5,6 +5,7 @@ export const TREE_WOOD_STOCK = Object.freeze({
   tree_pine: 10,
   tree_birch: 6,
   tree_dead: 3,
+  tree_palm: 6,
 });
 
 /** Délai serveur avant suppression du tronc au sol (ms). */

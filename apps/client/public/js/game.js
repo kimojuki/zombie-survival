@@ -64,20 +64,18 @@
 
   // ── Three.js ──────────────────────────────────────────────────────────────
   const canvas   = document.getElementById('game-canvas');
-  function _detectMobile() {
-    const ua = /Android|iPhone|iPad|iPod|Mobile|Silk/i.test(navigator.userAgent);
-    const coarse = window.matchMedia('(pointer: coarse)').matches;
-    const narrow = window.matchMedia('(max-width: 900px)').matches;
-    // PC avec écran tactile : pointer fine + large → mode souris/clavier
-    return ua || (coarse && narrow);
-  }
-  const _isMobile = _detectMobile();
-  document.body.classList.add(_isMobile ? 'mode-mobile' : 'mode-desktop');
+  ZS.applyDeviceBodyClasses?.();
+  const _touchInput = ZS._touchInput
+    ?? ZS.needsTouchControls?.()
+    ?? ZS.detectTouchInput?.()
+    ?? !!window.__ZS_TOUCH_MODE;
+  const _isPhone = ZS._isPhone ?? false;
+  const _isMobile = _touchInput;
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: false, powerPreference: 'high-performance' });
   // Pixel ratio plafonné : énorme gain mobile (moins de fragments → moins de chauffe).
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, _isMobile ? 1.25 : 1.75));
   renderer.setSize(window.innerWidth, window.innerHeight);
-  renderer.shadowMap.enabled = true;
+  renderer.shadowMap.enabled = !_isMobile;
   renderer.shadowMap.type = THREE.PCFShadowMap;     // moins cher que PCFSoft
   renderer.shadowMap.autoUpdate = false;            // ombres mises à jour par intermittence
   renderer.shadowMap.needsUpdate = true;
@@ -164,7 +162,7 @@
   // ── Socket.io ─────────────────────────────────────────────────────────────
   window.ZS?.Loading?.setPhase?.('world', 1, 'Monde prêt', 'Connexion multijoueur…');
   const socket = io({
-    auth: { token },
+    auth: { token, client: _isMobile ? 'mobile' : 'desktop' },
     transports: ['polling', 'websocket'],
     reconnectionAttempts: 8,
   });
@@ -495,14 +493,6 @@
       if (_blocksPointerLock(e.target)) return;
       _requestPointerLock();
     }, true);
-  } else {
-    document.addEventListener('click', (e) => {
-      if (pointerLocked) return;
-      if (ZS.Rcon?.isOpen?.()) return;
-      if (e.target.closest?.('#rcon-panel')) return;
-      if (e.target !== canvas && e.target !== document.body) return;
-      canvas.requestPointerLock();
-    });
   }
 
   document.addEventListener('pointerlockchange', _syncPointerLockUi);
@@ -1205,7 +1195,7 @@
       btn.style.display = 'none';
       return;
     }
-    const mobile = document.body.classList.contains('mode-mobile');
+    const mobile = document.body.classList.contains('input-touch');
     let label;
     if (storage) {
       label = 'Coffre';

@@ -5,14 +5,18 @@ import {
   isRockSpawnClear,
   decorSpawnRadius,
   findRandomTreeSpawn,
+  findRandomPalmSpawn,
   findRandomRockSpawn,
   seedWorldRockPlacements,
   countStandingTrees,
+  countStandingForestTrees,
+  countStandingPalms,
   countWorldRocks,
   REGEN_CONFIG,
 } from '../packages/shared/src/resource-spawn.mjs';
 import { computeTreePlacements } from '../packages/shared/src/tree-placements.mjs';
 import { isInCampFootprint } from '../packages/shared/src/rock-placements.mjs';
+import { isInBeachFootprint } from '../packages/shared/src/beach-spawn.mjs';
 
 test('spawn point rejects overlap with decor', () => {
   const decors = [{ prefabId: 'rock_boulder', x: 10, z: 10, growthPhase: 4 }];
@@ -30,7 +34,16 @@ test('find random tree spawn returns valid placement', () => {
   assert.ok(spot);
   assert.equal(spot.kind, 'prefab');
   assert.ok(spot.prefabId.startsWith('tree_'));
+  assert.notEqual(spot.prefabId, 'tree_palm');
   assert.equal(spot.growthPhase, undefined);
+  assert.equal(spot.regen, true);
+});
+
+test('find random palm spawn returns beach palm only', () => {
+  const spot = findRandomPalmSpawn([], 42);
+  assert.ok(spot);
+  assert.equal(spot.prefabId, 'tree_palm');
+  assert.ok(isInBeachFootprint(spot.x, spot.z, 0));
   assert.equal(spot.regen, true);
 });
 
@@ -43,12 +56,20 @@ test('find random rock spawn returns adult rock', () => {
 test('count helpers filter correctly', () => {
   const decors = [
     { prefabId: 'tree_oak', falling: false },
+    { prefabId: 'tree_palm', falling: false },
     { prefabId: 'tree_pine', falling: true },
     { prefabId: 'rock_boulder', anchorId: 'starter_trail' },
     { prefabId: 'rock_outcrop', zoneId: 'regen_rock' },
   ];
-  assert.equal(countStandingTrees(decors), 1);
+  assert.equal(countStandingForestTrees(decors), 1);
+  assert.equal(countStandingPalms(decors), 1);
+  assert.equal(countStandingTrees(decors), 2);
   assert.equal(countWorldRocks(decors), 1);
+});
+
+test('palm regen config targets 16-28 standing', () => {
+  assert.ok(REGEN_CONFIG.palmTargetStanding >= 16);
+  assert.ok(REGEN_CONFIG.palmTargetStanding <= 28);
 });
 
 test('seed world rocks fills map without decor overlap', () => {

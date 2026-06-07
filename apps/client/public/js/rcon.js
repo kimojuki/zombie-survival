@@ -13,10 +13,7 @@
   const _els = {};
 
   function _isMobile() {
-    if (window.ZS?._isMobile) return true;
-    if (window.matchMedia('(pointer: coarse)').matches) return true;
-    if (navigator.maxTouchPoints > 0 && window.innerWidth < 1280) return true;
-    return /Android|iPhone|iPad|iPod|Mobile|Silk/i.test(navigator.userAgent);
+    return !!window.ZS?._isPhone;
   }
 
   function _esc(s) {

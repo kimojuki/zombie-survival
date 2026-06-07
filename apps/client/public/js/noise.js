@@ -45,12 +45,10 @@
 
   function _rawHeight(x, z) {
     let h = _rawHeightCore(x, z);
-    // Plage est — relief adouci (spawn Rust-like)
-    const md = Math.hypot((x - 252) * 0.42, (z - 8) * 0.38);
-    const BEACH_R = 42;
-    if (md < BEACH_R) {
-      const w = Math.pow(1 - md / BEACH_R, 1.6);
-      h = h * (1 - w * 0.88) + _BEACH_REF_Y * w * 0.88;
+    const bw = ZS.beachCoastWeight ? ZS.beachCoastWeight(x, z) : 0;
+    if (bw > 0.02) {
+      const w = Math.pow(bw, 0.82);
+      h = h * (1 - w * 0.92) + _BEACH_REF_Y * w * 0.92;
     }
     return h;
   }

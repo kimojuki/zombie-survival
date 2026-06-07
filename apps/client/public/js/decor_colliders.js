@@ -73,6 +73,7 @@
     tree_pine: [{ type: 'cyl', lx: 0, lz: 0, r: 0.52 }],
     tree_birch: [{ type: 'cyl', lx: 0, lz: 0, r: 0.50 }],
     tree_dead: [{ type: 'cyl', lx: 0, lz: 0, r: 0.25 }],
+    tree_palm: [{ type: 'cyl', lx: 0, lz: 0, r: 0.38 }],
   };
 
   /** Dimensions épaves — miroir de vehicle_prefabs.js BODY (carrosserie + habitacle). */

@@ -620,7 +620,7 @@ function createRcon(ctx) {
     return ok('=== Prefabs décor ===', ...list.map((id) => `  ${id}`));
   });
 
-  register('decorseed', 'Seed décor manquant — decorseed wrecks|trees|barriers|rocks [reset]', async (args) => {
+  register('decorseed', 'Seed décor manquant — decorseed wrecks|trees|palms|barriers|rocks [reset]', async (args) => {
     const kind = (args[1] || '').toLowerCase();
     const reset = (args[2] || '').toLowerCase() === 'reset';
     if (kind === 'wrecks') {
@@ -634,6 +634,12 @@ function createRcon(ctx) {
       const n = await ctx.ensureWorldTrees({ broadcast: true, reset });
       if (!n && !reset) return ok('Arbres déjà présents — rien à ajouter.');
       return ok(`${n} arbre(s) prefab ${reset ? 'repositionnée(s)' : 'ajouté(s)'} et synchronisé(s).`);
+    }
+    if (kind === 'palms') {
+      if (!ctx.ensureBeachPalms) return fail('ensureBeachPalms indisponible');
+      const n = await ctx.ensureBeachPalms({ broadcast: true, reset });
+      if (!n && !reset) return ok('Palmiers déjà présents — rien à ajouter.');
+      return ok(`${n} palmier(s) plage ${reset ? 'repositionnée(s)' : 'ajouté(s)'} et synchronisé(s).`);
     }
     if (kind === 'barriers') {
       if (!ctx.ensureRoadBarriers) return fail('ensureRoadBarriers indisponible');
@@ -650,7 +656,7 @@ function createRcon(ctx) {
       if (!n && !reset) return ok('Rochers déjà présents — rien à ajouter.');
       return ok(`${n} rocher(s) minable(s) ${reset ? 'repositionné(s)' : 'ajouté(s)'} (camp: ${camp}, monde: ${world}).`);
     }
-    return fail('Usage: decorseed wrecks|trees|barriers|rocks [reset]');
+    return fail('Usage: decorseed wrecks|trees|palms|barriers|rocks [reset]');
   });
 
   register('decoritems', 'Liste les items posables comme décor [filtre]', (args) => {

@@ -3,7 +3,7 @@
 /** Limite joueur / bord carte (sync game.js). */
 export const MAP_EAST_X = 295;
 
-/** Rectangle côte est — sable sec jusqu'au bord map (plus d'herbe entre sable/eau). */
+/** Rectangle legacy (tests / docs). */
 export const BEACH_COAST_RECT = Object.freeze({
   xWest: 244,
   xEast: MAP_EAST_X,
@@ -13,7 +13,7 @@ export const BEACH_COAST_RECT = Object.freeze({
 
 export const BEACH_CENTER = Object.freeze({
   cx: (BEACH_COAST_RECT.xWest + BEACH_COAST_RECT.xEast) * 0.5,
-  cz: (BEACH_COAST_RECT.zSouth + BEACH_COAST_RECT.zNorth) * 0.5,
+  cz: -8,
 });
 
 /** Ellipse legacy (exclusions rochers / compat). */
@@ -50,7 +50,7 @@ export const BEACH_ZOMBIE_RING = Object.freeze({
   rMax: 130,
 });
 
-/** Océan — chevauche légèrement le sable côté est (plus de bande herbe). */
+/** Océan — chevauche légèrement le sable côté est. */
 export const BEACH_SEA = Object.freeze({
   cx: 338,
   cz: -8,
@@ -60,15 +60,52 @@ export const BEACH_SEA = Object.freeze({
 });
 
 /** Ligne côte sable → eau. */
-export const BEACH_SHORE_X = BEACH_COAST_RECT.xEast - 2;
+export const BEACH_SHORE_X = MAP_EAST_X - 1;
 
-/** @returns {boolean} point dans la bande plage (+ marge). */
+function _smoothstep(edge0, edge1, x) {
+  const t = Math.max(0, Math.min(1, (x - edge0) / (edge1 - edge0)));
+  return t * t * (3 - 2 * t);
+}
+
+/**
+ * Poids 0–1 d'appartenance à la plage — forme en croissant le long de la côte est.
+ * Bords adoucis : pas d'angle droit N/S, pas de bande herbe entre sable et eau.
+ */
+export function beachCoastWeight(x, z) {
+  const cz = -8;
+  const halfLen = 86;
+
+  const zRel = Math.abs(z - cz);
+  const zT = zRel / halfLen;
+  if (zT > 1.1) return 0;
+
+  const zEnv = zT <= 0.58 ? 1 : _smoothstep(1.1, 0.58, zT);
+  if (zEnv < 0.004) return 0;
+
+  const crescent = 0.3 + 0.7 * zEnv;
+  const westCore = BEACH_COAST_RECT.xWest;
+  const westTip = westCore + 30 * (1 - zEnv);
+  const westX = westCore + (westTip - westCore) * Math.pow(Math.min(1, zT), 1.35);
+  const eastX = MAP_EAST_X + 6;
+  const westFeather = 17 * crescent;
+
+  if (x < westX - westFeather - 2 || x > eastX + 2) return 0;
+
+  let w = zEnv;
+
+  w *= _smoothstep(westX - westFeather, westX + 2, x);
+
+  if (x > MAP_EAST_X + 1) {
+    w *= _smoothstep(eastX + 2, MAP_EAST_X, x);
+  }
+
+  return Math.max(0, Math.min(1, w));
+}
+
+/** @returns {boolean} point dans la plage (+ marge extérieure en mètres). */
 export function isInBeachFootprint(x, z, margin = 0) {
-  const m = margin;
-  return x >= BEACH_COAST_RECT.xWest - m
-    && x <= BEACH_COAST_RECT.xEast + m
-    && z >= BEACH_COAST_RECT.zSouth - m
-    && z <= BEACH_COAST_RECT.zNorth + m;
+  const cut = Math.max(0.03, 0.11 - margin * 0.045);
+  return beachCoastWeight(x, z) >= cut;
 }
 
 /** Alias legacy (exclusions rochers). */

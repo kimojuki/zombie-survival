@@ -10,6 +10,7 @@ import {
 test('tree prefabs expose wood stock', () => {
   assert.equal(getTreeWoodMax('tree_oak'), TREE_WOOD_STOCK.tree_oak);
   assert.equal(getTreeWoodMax('tree_pine'), 10);
+  assert.equal(getTreeWoodMax('tree_palm'), 6);
   assert.equal(getTreeWoodMax('tree_unknown'), 6);
 });
 

@@ -112,8 +112,17 @@
     return Math.abs(da) >= CAMP_GAP_WIDTH;
   }
 
-  /** Relèvement décor au-dessus du terrain brut (couche 2 camp, sentier, etc.). */
+  /** Relèvement décor au-dessus du terrain brut (couche 2 camp, sentier, plage, etc.). */
   function getDecorSurfaceLift(x, z) {
+    if (ZS.getBeachSurfaceHeight) {
+      const sandY = ZS.getBeachSurfaceHeight(x, z);
+      if (sandY !== null) {
+        const base = ZS.getVisibleTerrainHeight
+          ? ZS.getVisibleTerrainHeight(x, z)
+          : (ZS.getTerrainHeight ? ZS.getTerrainHeight(x, z) : 0);
+        return Math.max(0, sandY - base);
+      }
+    }
     if (_onCampGroundPatch(x, z, SPAWN_CX, SPAWN_CZ)) return CAMP_GROUND_LIFT;
     if (ZS.Trails?.isNear && ZS.SPAWN_TRAIL_PTS
         && ZS.Trails.isNear(ZS.SPAWN_TRAIL_PTS, x, z, 0.75)) {
@@ -136,14 +145,21 @@
         : (ZS.getTerrainHeight ? ZS.getTerrainHeight(x, z) : 0);
       return base + getDecorSurfaceLift(x, z) + lift;
     }
+    let h;
     if (ZS.raycastGroundHeight) {
-      return ZS.raycastGroundHeight(x, z) + lift;
+      h = ZS.raycastGroundHeight(x, z);
+    } else {
+      const base = ZS.getVisibleTerrainHeight
+        ? ZS.getVisibleTerrainHeight(x, z)
+        : (ZS.getTerrainHeight ? ZS.getTerrainHeight(x, z) : 0);
+      const surface = opts.layer === 'terrain' ? 0 : getDecorSurfaceLift(x, z);
+      h = base + surface;
     }
-    const base = ZS.getVisibleTerrainHeight
-      ? ZS.getVisibleTerrainHeight(x, z)
-      : (ZS.getTerrainHeight ? ZS.getTerrainHeight(x, z) : 0);
-    const surface = opts.layer === 'terrain' ? 0 : getDecorSurfaceLift(x, z);
-    return base + surface + lift;
+    if (ZS.getBeachSurfaceHeight) {
+      const sandY = ZS.getBeachSurfaceHeight(x, z);
+      if (sandY !== null && sandY > h) h = sandY;
+    }
+    return h + lift;
   }
 
   /** Bouche sud du sentier (languette camp) — tracé complet généré dans proc_roads.js */

@@ -1,9 +1,11 @@
 // Single source of truth for the legacy ZS script order.
 // Refonte progressive : spawn + sentier + RN nationale + épaves prefab.
 export const LEGACY_MODULES = [
+  '/js/device.js',
   '/js/items.js',
   '/js/survival.js',
   '/js/craft.js',
+  '/js/beach_coast.js',
   '/js/noise.js',
   '/js/camp_textures.js',
   '/js/buildings.js',

@@ -8,6 +8,7 @@ import {
   BEACH_SHORE_X,
   BEACH_COAST_RECT,
   MAP_EAST_X,
+  beachCoastWeight,
   isInBeachFootprint,
   pickBeachSpawn,
 } from '../packages/shared/src/beach-spawn.mjs';
@@ -17,11 +18,19 @@ test('beach spawn faces inland from east coast', () => {
   assert.equal(BEACH_SPAWN.rotY, Math.PI / 2);
 });
 
-test('beach coast rect reaches map east edge', () => {
+test('beach coast reaches map east edge without grass gap', () => {
   assert.equal(BEACH_COAST_RECT.xEast, MAP_EAST_X);
-  assert.ok(BEACH_SHORE_X >= MAP_EAST_X - 4);
+  assert.ok(BEACH_SHORE_X >= MAP_EAST_X - 3);
   assert.ok(isInBeachFootprint(BEACH_SPAWN.x, BEACH_SPAWN.z, 0));
-  assert.ok(isInBeachFootprint(MAP_EAST_X, 0, 0));
+  assert.ok(beachCoastWeight(MAP_EAST_X, 0) > 0.7);
+  assert.ok(beachCoastWeight(MAP_EAST_X - 2, -8) > 0.85);
+});
+
+test('beach tapers naturally at north and south tips', () => {
+  assert.ok(beachCoastWeight(260, 0) > 0.75);
+  assert.ok(beachCoastWeight(260, 72) < beachCoastWeight(260, 0));
+  assert.ok(beachCoastWeight(260, 98) < 0.12);
+  assert.ok(!isInBeachFootprint(260, 105, 0));
 });
 
 test('beach trail starts at sand edge and reaches forest clearing', () => {

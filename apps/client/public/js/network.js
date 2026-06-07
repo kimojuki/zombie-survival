@@ -181,17 +181,55 @@
     });
   }
 
-  async function _spawnDecorBatch(list, onProgress) {
-    const CHUNK = 64;
+  function _deferTreeRadius() {
+    return ZS._isMobile ? 100 : 180;
+  }
+
+  async function _spawnDecorBatch(list, onProgress, opts = {}) {
+    if (!list.length) return;
+    const CHUNK = opts.chunk ?? 128;
+    const rafEvery = opts.rafEvery ?? 1;
     const pending = [];
+    let chunks = 0;
     for (let i = 0; i < list.length; i++) {
       pending.push(_spawnDecorItem(list[i]));
       const flush = pending.length >= CHUNK || i === list.length - 1;
       if (!flush) continue;
       await Promise.all(pending);
       pending.length = 0;
+      chunks++;
       if (onProgress) onProgress(i + 1, list.length);
-      await new Promise((r) => requestAnimationFrame(r));
+      if (rafEvery > 0 && chunks % rafEvery === 0) {
+        await new Promise((r) => requestAnimationFrame(r));
+      }
+    }
+  }
+
+  function _spawnDeferredDecor(list) {
+    if (!list.length) return;
+    const mobile = !!ZS._isMobile;
+    const t0 = performance.now();
+    _beginColliderBatch();
+    _spawnDecorBatch(list, null, { chunk: mobile ? 28 : 80, rafEvery: mobile ? 2 : 1 })
+      .then(() => {
+        _endColliderBatch();
+        console.info('[sync] arbres lointains', list.length, Math.round(performance.now() - t0), 'ms');
+      })
+      .catch((e) => console.warn('[sync] deferred decor', e));
+  }
+
+  async function _fetchDeferredTrees(sx, sz) {
+    const minR = _deferTreeRadius();
+    try {
+      const res = await fetch(
+        `/api/world/decor-trees?x=${encodeURIComponent(sx)}&z=${encodeURIComponent(sz)}&minR=${minR}`,
+      );
+      if (!res.ok) return;
+      const json = await res.json();
+      const list = (json.items || []).filter((d) => d?.id && !decorItems.has(d.id));
+      _spawnDeferredDecor(list);
+    } catch (e) {
+      console.warn('[sync] fetch arbres lointains', e);
     }
   }
 
@@ -253,7 +291,12 @@
     );
     const itemList = data.items || [];
     const structList = data.structures || [];
+    const spawnX = spawn?.x ?? _state.player.x ?? 0;
+    const spawnZ = spawn?.z ?? _state.player.z ?? 0;
+    const mobile = !!ZS._isMobile;
     const syncTotal = decorList.length + itemList.length + structList.length + 2;
+    const tSync = performance.now();
+    const batchOpts = mobile ? { chunk: 40, rafEvery: 1 } : { chunk: 128, rafEvery: 2 };
 
     for (const item of itemList) {
       ZS.Inventory.spawnWorldItem(item);
@@ -265,7 +308,8 @@
       const done = itemList.length + n;
       const t = syncTotal > 0 ? done / syncTotal : 1;
       L?.setPhase?.('sync', t, 'Synchronisation…', `${done} / ${syncTotal} objets`);
-    });
+    }, batchOpts);
+    console.info('[sync] décor', decorList.length, Math.round(performance.now() - tSync), 'ms');
     ZS.setDeferRockSnap?.(false);
     ZS.resnapAllMinableRocks?.(_scene);
     ZS.BuildAnchors?.syncRegistryFromDecor?.(decorList);
@@ -310,6 +354,7 @@
 
     L?.setPhase?.('finalize', 1, 'Prêt', '');
     _connecting(false);
+    _fetchDeferredTrees(spawnX, spawnZ);
   }
 
   function init(socket, scene, state) {

@@ -258,6 +258,49 @@ app.get('/api/servers', (req, res) => {
   res.json(resolveServersForClient(config, origin));
 });
 
+const GAME_INIT_TREE_RADIUS = Object.freeze({ mobile: 100, desktop: 180 });
+
+function _gameInitTreeRadius(clientKind) {
+  return clientKind === 'mobile' ? GAME_INIT_TREE_RADIUS.mobile : GAME_INIT_TREE_RADIUS.desktop;
+}
+
+/** Arbres proches du spawn dans game-init ; le reste via GET /api/world/decor-trees. */
+function decorItemsForGameInit(px, pz, clientKind) {
+  const r2 = _gameInitTreeRadius(clientKind) ** 2;
+  const out = [];
+  for (const d of decorItems.values()) {
+    if (d.prefabId?.startsWith('road_barrier_')) continue;
+    if (!d.prefabId?.startsWith('tree_')) {
+      out.push(d);
+      continue;
+    }
+    const dx = d.x - px;
+    const dz = d.z - pz;
+    if (dx * dx + dz * dz <= r2) out.push(d);
+  }
+  return out;
+}
+
+/** Arbres lointains (chargement différé client). */
+app.get('/api/world/decor-trees', (req, res) => {
+  if (!serverReady) return res.status(503).json({ ok: false, ready: false });
+  const sx = parseFloat(req.query.x);
+  const sz = parseFloat(req.query.z);
+  const minR = parseFloat(req.query.minR);
+  const minR2 = Number.isFinite(minR) && minR > 0 ? minR * minR : null;
+  const items = [];
+  for (const d of decorItems.values()) {
+    if (!d.prefabId?.startsWith('tree_')) continue;
+    if (minR2 != null && Number.isFinite(sx) && Number.isFinite(sz)) {
+      const dx = d.x - sx;
+      const dz = d.z - sz;
+      if (dx * dx + dz * dz <= minR2) continue;
+    }
+    items.push(d);
+  }
+  res.json({ ok: true, count: items.length, items });
+});
+
 /** Rochers monde synchronisables (debug + resync client). */
 app.get('/api/world/decor-rocks', (req, res) => {
   if (!serverReady) return res.status(503).json({ ok: false, ready: false });
@@ -447,6 +490,7 @@ const decorPrefabs = [
   'tree_pine',
   'tree_birch',
   'tree_dead',
+  'tree_palm',
   'road_barrier_post',
   'road_barrier_rail',
   'building_survivor_shack',
@@ -785,6 +829,7 @@ function _spawnWorldDrop(type, qty, x, z, extra = {}) {
 const ROAD_WRECKS_URL = pathToFileURL(path.join(__dirname, '../../packages/shared/src/road-wrecks.mjs')).href;
 const ROAD_BARRIERS_URL = pathToFileURL(path.join(__dirname, '../../packages/shared/src/road-barriers.mjs')).href;
 const TREE_PLACEMENTS_URL = pathToFileURL(path.join(__dirname, '../../packages/shared/src/tree-placements.mjs')).href;
+const PALM_PLACEMENTS_URL = pathToFileURL(path.join(__dirname, '../../packages/shared/src/palm-placements.mjs')).href;
 const TREE_WOOD_URL = pathToFileURL(path.join(__dirname, '../../packages/shared/src/tree-wood.mjs')).href;
 const ROCK_STONE_URL = pathToFileURL(path.join(__dirname, '../../packages/shared/src/rock-stone.mjs')).href;
 const ROCK_PLACEMENTS_URL = pathToFileURL(path.join(__dirname, '../../packages/shared/src/rock-placements.mjs')).href;
@@ -816,7 +861,7 @@ const _craftOps = {
   addStackToInv: _addStackToInv,
 };
 const RESOURCE_REGEN_URL = pathToFileURL(path.join(__dirname, 'src/resource-regen.mjs')).href;
-const _TREE_WOOD_FALLBACK = { tree_oak: 8, tree_pine: 10, tree_birch: 6, tree_dead: 3 };
+const _TREE_WOOD_FALLBACK = { tree_oak: 8, tree_pine: 10, tree_birch: 6, tree_dead: 3, tree_palm: 6 };
 const _TREE_WOOD_RATIO = [0.1, 0.28, 0.5, 0.78, 1.0];
 const _ROCK_STONE_FALLBACK = { rock_boulder: 20, rock_outcrop: 14, spawn_stone: 8 };
 
@@ -843,7 +888,8 @@ function _decorStats() {
   const list = Array.from(decorItems.values());
   return {
     total: list.length,
-    trees: list.filter((d) => d.prefabId?.startsWith('tree_')).length,
+    trees: list.filter((d) => d.prefabId?.startsWith('tree_') && d.prefabId !== 'tree_palm').length,
+    palms: list.filter((d) => d.prefabId === 'tree_palm').length,
     worldRocks: list.filter((d) => _isMinableRockPrefab(d.prefabId) && !d.anchorId).length,
     campRocks: list.filter((d) => _isMinableRockPrefab(d.prefabId) && d.anchorId).length,
   };
@@ -987,7 +1033,7 @@ function ensureRoadBarriers({ broadcast = false, reset = false } = {}) {
 function ensureWorldTrees({ broadcast = false, reset = false } = {}) {
   if (reset) {
     for (const [id, d] of decorItems) {
-      if (!d.prefabId?.startsWith('tree_')) continue;
+      if (!d.prefabId?.startsWith('tree_') || d.prefabId === 'tree_palm') continue;
       _removeDecorItem(id, { emit: broadcast });
     }
   }
@@ -1007,6 +1053,32 @@ function ensureWorldTrees({ broadcast = false, reset = false } = {}) {
     }
     return added.length;
   }));
+}
+
+/** Palmiers plage — seed initial + RCON decorseed palms. */
+function ensureBeachPalms({ broadcast = false, reset = false } = {}) {
+  if (reset) {
+    for (const [id, d] of decorItems) {
+      if (d.prefabId !== 'tree_palm') continue;
+      _removeDecorItem(id, { emit: broadcast });
+    }
+  }
+  return import(PALM_PLACEMENTS_URL).then(({ computePalmPlacements }) =>
+    import(TREE_WOOD_URL).then(({ getTreeWoodMax }) => {
+      const added = [];
+      for (const p of computePalmPlacements()) {
+        const woodMax = getTreeWoodMax(p.prefabId);
+        const item = _trySeedDecor(p, { woodMax, woodRemaining: woodMax });
+        if (item) added.push(item);
+      }
+      if (added.length) {
+        log.info('seed', 'beach palms added', { count: added.length });
+        if (broadcast && rcon?.broadcastDecorSpawn) {
+          for (const item of added) rcon.broadcastDecorSpawn(item);
+        }
+      }
+      return added.length;
+    }));
 }
 
 /** Rochers fixes au spawn — ancres stables, complétées si manquantes. */
@@ -1525,6 +1597,7 @@ rcon = createRcon({
   ensureRoadWrecks,
   ensureRoadBarriers,
   ensureWorldTrees,
+  ensureBeachPalms,
   ensureCampRocks,
   ensureWorldRocks,
   itemTypes: ALL_ITEMS,
@@ -1823,6 +1896,8 @@ io.on('connection', async (socket) => {
     kills: p.kills,
   });
 
+  const clientKind = socket.handshake.auth?.client === 'mobile' ? 'mobile' : 'desktop';
+  const initDecor = decorItemsForGameInit(p.x, p.z, clientKind);
   socket.emit('game-init', {
     selfId: socket.id,
     spawn: { x: p.x, y: p.y, z: p.z, rotY: p.rotY },
@@ -1831,7 +1906,7 @@ io.on('connection', async (socket) => {
       .map(([sid, q]) => ({ id: sid, username: q.username, x: q.x, y: q.y, z: q.z, rotY: q.rotY, equipped: q.equipped })),
     zombies: Array.from(zombies.values()),
     items:   Array.from(items.values()),
-    decorItems: Array.from(decorItems.values()),
+    decorItems: initDecor,
     structures: Array.from(structures.values()),
     worldTime: _worldTime,
     serverFlags: { ...serverFlags },
@@ -3097,11 +3172,13 @@ loadPersistedWorld()
   .catch((err) => log.error('ensureWorldRocks failed', err))
   .then(() => { _setBoot('world_rocks', 10); return ensureWorldTrees(); })
   .catch((err) => log.error('ensureWorldTrees failed', err))
-  .then(() => { _setBoot('world_trees', 12); return ensureZombiePopulation(); })
+  .then(() => { _setBoot('world_trees', 12); return ensureBeachPalms(); })
+  .catch((err) => log.error('ensureBeachPalms failed', err))
+  .then(() => { _setBoot('beach_palms', 13); return ensureZombiePopulation(); })
   .catch((err) => log.error('ensureZombiePopulation failed', err))
-  .then(() => { _setBoot('zombies', 13); })
+  .then(() => { _setBoot('zombies', 14); })
   .finally(() => {
-    _setBoot('listening', 14);
+    _setBoot('listening', 15);
     server.listen(PORT, HOST, () => {
       serverReady = true;
       log.info('boot', 'server started', {

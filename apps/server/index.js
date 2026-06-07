@@ -2255,7 +2255,7 @@ io.on('connection', async (socket) => {
         item.falling = true;
         item.fellAt = Date.now();
         _touchDecorItem(item);
-        socket.broadcast.emit('decor-tree-fell', {
+        io.emit('decor-tree-fell', {
           ...base,
           fallDirX: Number(d.dirX) || 0,
           fallDirZ: Number(d.dirZ) || 1,
@@ -2265,7 +2265,7 @@ io.on('connection', async (socket) => {
         }, TREE_FALL_LINGER_MS);
       } else {
         _touchDecorItem(item);
-        socket.broadcast.emit('decor-tree-chop', base);
+        io.emit('decor-tree-chop', base);
       }
       log.debug('world', 'tree chop', {
         player: p.username,

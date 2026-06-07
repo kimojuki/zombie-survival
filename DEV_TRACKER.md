@@ -50,6 +50,107 @@ Copier dans la description de PR :
 
 ## 2026-06-07
 
+### Completed — Chargement : terrain async à 32 % (2026-06-07)
+
+- **Terrain** : génération par lignes avec `await rAF` ; grille 28/44 (ex. 72) ; maillage indexé corrigé.
+- **Routes/eau** : tests rivière/route une fois par cellule (pas par triangle erroné).
+- **Version** : `20260607-terrain-async-173`
+
+### Completed — Chargement : plus de freeze à 22 % (2026-06-07)
+
+- **Scripts** : injection par paires avec `rAF` entre chaque lot (Chrome ne bloque plus sur 46 modules d’un coup).
+- **Monde** : `buildWorldAsync` avec yields ; décor plage en `requestIdleCallback` après le sable/mer.
+- **Routes desktop** : `buildMeshes` aussi différé en idle.
+- **Version** : `20260607-load-yield-172`
+
+### Completed — Perf client : réduction lag (2026-06-07)
+
+- **Terrain** : géométrie indexée, SEG 40/72 (ex. 55k verts non-indexés).
+- **Eau** : normales recalculées 1×/5 frames ; éclairage foliage seulement si delta > 0.025.
+- **Colliders** : cache par frame (`ZS._frameId`) — plus de double `slice()` par tick.
+- **Lumières** : tri des PointLights max 1×/4 frames si caméra stable.
+- **Plage** : pool 10 galets / 6 bois, géos partagées, ~60 % moins de props/instances.
+- **Arbres** : LOD mesh (~22–48 % moins de feuillage selon plateforme).
+- **Rendu** : pixel ratio 1.15 mobile / 1.5 desktop ; sync décor par chunks plus petits.
+- **Version** : `20260607-perf-opt-171`
+
+### Completed — Plage : petits détails texturés (2026-06-07)
+
+- **Textures** : coquillages, bois/rondins, galets, herbes, algues, tissu, caisses, filets, rouille, corail, déchets, verre de mer, dollars des sables.
+- **Densité** : ~280 groupes + ~940 instances (coquillages/galets/éclats bois) desktop ; allégé mobile.
+- **Nouveaux props** : rondins courts, éclats bois, déchets (bouteille, canette, plastique), corde, verre poli.
+- **Version** : `20260607-beach-detail-tex-170`
+
+### Completed — Plage : texture sable + décor enrichi (2026-06-07)
+
+- **Sable** : texture 256px procédurale, UV monde sur la dalle, bande rivage humide, sync jour/nuit.
+- **Décor** : ~165 props (88 mobile) — surfboards, transats, mares, filets, barils, feu de camp, épave.
+- **Version** : `20260607-beach-sand-decor-169`
+
+### Completed — Arbres : plus de glow la nuit (2026-06-07)
+
+- **Cause** : `emissive` fixe sur feuillage/troncs — visible dans le noir.
+- **Fix** : registre `_litMats` + `tickTreeLighting(dayBlend)` appelé depuis `tickDayNight` ; emissive à 0 la nuit.
+- **Version** : `20260607-tree-night-fix-168`
+
+### Completed — Forêt : arbres plus détaillés (2026-06-07)
+
+- **Chêne** : tronc segmenté, racines, branches latérales, hub de feuillage, touffes basses.
+- **Pin** : étages décalés, branchettes latérales, cime, racines.
+- **Bouleau** : écorce marquée, rameaux pendouillards, plus de masses foliaires.
+- **Mort** : tronc segmenté + branches croisées.
+- **Version** : `20260607-forest-trees-detail-167`
+
+### Completed — Forêt : arbres plus lumineux (2026-06-07)
+
+- **Chêne / pin / bouleau** : feuillage vert clair + emissive ; troncs éclaircis ; pas d'ombre portée sur le feuillage.
+- **Arbre mort** : brun un peu plus lisible (emissive léger).
+- **Helpers** : `_trunkMat` / `_leafMat` partagés avec les palmiers.
+- **Version** : `20260607-forest-trees-light-166`
+
+### Completed — Palmiers : jointures tronc sans espacement (2026-06-07)
+
+- **Cause** : segments à 90 % de hauteur + anneaux scar dans le vide entre les morceaux.
+- **Fix** : cylindres empilés pleine hauteur, rayons alignés joint à joint, scar fin en chevauchement.
+- **Version** : `20260607-palm-trunk-fix-165`
+
+### Completed — Palmiers + décor plage (2026-06-07)
+
+- **Palmiers** : tronc clair segmenté, frondes lumineuses (emissive), noix de coco, herbes à la base.
+- **Décor** : `beach_decor.js` — ~118 props (62 mobile) : coquillages, galets, bois flotté, parasols, serviettes, bouée, caisses, algues, etc.
+- **Version** : `20260607-beach-palm-decor-164`
+
+### Completed — Plage : sable invisible / terrain sombre (2026-06-07)
+
+- **Cause** : normales inversées sur la couverture sable ; terre foncée sous la dalle ; enfoncement excessif ; double sink dans `proc_spawn`.
+- **Fix** : hauteurs simplifiées (`BEACH_CAP_LIFT`) ; winding corrigé ; sable peint sur le terrain en secours ; emissive léger ; `minBw` 0.08.
+- **Version** : `20260607-beach-visible-163`
+
+### Completed — Plage : fix z-fight couche 1 / couche 2 (2026-06-07)
+
+- **Cause** : fond de dalle sable coplanaire avec le terrain + 2e dalle rivage + `polygonOffset` ; sable peint sur le terrain sous la dalle.
+- **Fix** : dalle = surface seule ; terrain enfoui avec marge (`BEACH_TERRAIN_GAP`) ; 1 seule couverture ; terre sous dalle (pas sable) ; hauteur plage sans double sink.
+- **Version** : `20260607-beach-layer-fix-162`
+
+### Completed — Palmiers : récolte bois jusqu'à l'abattage (2026-06-07)
+
+- **Cause** : sync `decor-tree-chop` / `decor-tree-fell` en broadcast seulement — le joueur local gardait l'arbre debout avec `woodRemaining = 0` (coups sans loot).
+- **Fix** : `io.emit` côté serveur ; chute forcée si bois épuisé (`applyRemoteTreeChop`) ; anti-doublon `registerChoppableTree` ; `tree_palm` dans `TREE_WOOD_MAX`.
+- **Version** : `20260607-palm-chop-fix-161`
+
+### Completed — Torche : éclairage réaliste renforcé (2026-06-07)
+
+- **Faisceau** : `SpotLight` directionnel (cone ~35°, portée 32 m) là où le joueur regarde.
+- **Halo** : `PointLight` proche (int. 18) + pool doux (int. 3.2, 44 m) ; flamme légèrement agrandie.
+- **Culling** : lumières `playerTorch` toujours actives ; monde limité à N lumières.
+- **Version** : `20260607-torch-light-160`
+
+### Completed — Fix boutons HUD tablette (joystick vs UI) (2026-06-07)
+
+- **Cause** : zones `#left-zone` / `#right-zone` en z-index 240 interceptaient les touches avant les boutons.
+- **Fix** : zones en `pointer-events: none` ; `elementFromPoint` + rectangles HUD exclus du handler move/look.
+- **Version** : `20260607-touch-ui-fix-159`
+
 ### Completed — Joystick : capture pointer globale (tablette) (2026-06-07)
 
 - **Cause** : touches captées par le canvas plein écran — `#left-zone` jamais atteinte.

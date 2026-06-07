@@ -4,8 +4,10 @@
 
   const MAP_EAST_X = 295;
   const COAST_X_W = 244;
-  /** Épaisseur dalle sable (couche 2) — terrain enfoncé en dessous. */
-  const BEACH_SAND_THICKNESS = 0.35;
+  /** Enfoncement du terrain sous la plage (aplatit la zone). */
+  const BEACH_SAND_THICKNESS = 0.26;
+  /** Hauteur de la couverture sable au-dessus du terrain enfoncé. */
+  const BEACH_CAP_LIFT = 0.05;
 
   function _smoothstep(edge0, edge1, x) {
     const t = Math.max(0, Math.min(1, (x - edge0) / (edge1 - edge0)));
@@ -48,39 +50,29 @@
     return beachCoastWeight(x, z) >= cut;
   }
 
-  /** Enfoncement terrain (couche 1) sous la dalle sable. */
   function beachTerrainSink(bw) {
     if (bw < 0.06) return 0;
-    return BEACH_SAND_THICKNESS * 0.92 * Math.min(1, bw * 1.12);
+    const t = Math.min(1, (bw - 0.06) / 0.94);
+    return BEACH_SAND_THICKNESS * t;
   }
 
-  function _terrainBase(x, z) {
-    return ZS.getVisibleTerrainHeight
-      ? ZS.getVisibleTerrainHeight(x, z)
-      : (ZS.getTerrainHeight ? ZS.getTerrainHeight(x, z) : 0);
+  function _rawTerrainBase(x, z) {
+    let h = ZS.getTerrainHeight ? ZS.getTerrainHeight(x, z) : 0;
+    if (ZS.isInClearingDisc?.(x, z, 0.12)) h -= 0.14;
+    return h;
   }
 
-  /** Hauteur du dessus de la dalle sable — null hors plage. */
+  /** Hauteur du dessus de la couverture sable — null hors plage. */
   function getBeachSurfaceHeight(x, z) {
     const bw = beachCoastWeight(x, z);
-    const base = _terrainBase(x, z);
-    const sunk = base - beachTerrainSink(bw);
-
-    if (bw < 0.12) {
-      if (bw >= 0.08 && x >= MAP_EAST_X - 14) {
-        return sunk + BEACH_SAND_THICKNESS * 0.88;
-      }
-      return null;
-    }
-
-    const raw = ZS.getTerrainHeight ? ZS.getTerrainHeight(x, z) : base;
-    const westT = Math.max(0, Math.min(1, (x - 236) / 18));
-    const micro = (raw - base) * (1 - westT) * 0.06 * bw;
-    return sunk + BEACH_SAND_THICKNESS + micro;
+    if (bw < 0.08) return null;
+    const base = _rawTerrainBase(x, z);
+    return base - beachTerrainSink(bw) + BEACH_CAP_LIFT;
   }
 
   window.ZS = window.ZS || {};
   ZS.BEACH_SAND_THICKNESS = BEACH_SAND_THICKNESS;
+  ZS.BEACH_CAP_LIFT = BEACH_CAP_LIFT;
   ZS.beachCoastWeight = beachCoastWeight;
   ZS.beachTerrainSink = beachTerrainSink;
   ZS.isInBeachFootprint = isInBeachFootprint;

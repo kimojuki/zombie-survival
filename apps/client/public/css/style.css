@@ -897,13 +897,14 @@ body.mode-mobile.chat-open.chat-keyboard #chat-log {
 }
 
 /* ── Mobile controls ────────────────────────────────────────── */
+/* Zones tactiles : hit-test désactivé (le handler global gère move/look). */
 body.input-touch #left-zone,
 body.input-touch #right-zone,
 body.mode-tablet #left-zone,
 body.mode-tablet #right-zone {
   display: block !important;
-  pointer-events: auto !important;
-  z-index: 54;
+  pointer-events: none !important;
+  z-index: 1;
 }
 
 #left-zone {

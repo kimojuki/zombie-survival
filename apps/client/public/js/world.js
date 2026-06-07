@@ -7,6 +7,10 @@
   const _billboards = [];
   const _billboardVec = new THREE.Vector3();
   const _waterSurfaces = [];
+  let _waterAnimTick = 0;
+  let _lastFoliageDay = -1;
+  let _colliderCache = null;
+  let _colliderCacheFrame = -1;
   const _waterMats  = []; // matériaux de surface d'eau → animés chaque frame
   const _colliders  = [];
   const _decorColliders = new Map(); // decorId -> collider[]
@@ -173,7 +177,13 @@
 
   // ── API ──────────────────────────────────────────────────────────────────────
 
-  function buildWorld(scene) {
+  function _yieldFrame() {
+    return new Promise((resolve) => {
+      requestAnimationFrame(() => setTimeout(resolve, 0));
+    });
+  }
+
+  async function _buildWorldCore(scene, onProgress, asyncMode) {
     const _perf = typeof performance !== 'undefined' && window.__ZS_PERF;
     const _t0 = _perf ? performance.now() : 0;
     let _t = _t0;
@@ -231,12 +241,20 @@
     if (!_mobileBuild) spawnStars();
     spawnClouds();
 
+    onProgress?.(0.08, 'Ciel et éclairage');
     if (ZS.SpawnZone?.registerTerrain) ZS.SpawnZone.registerTerrain();
     if (ZS.Roads?.registerTerrain) ZS.Roads.registerTerrain();
     if (ZS.Buildings?.applyRoadFlattening) ZS.Buildings.applyRoadFlattening();
-    buildTerrain(scene);
+    onProgress?.(0.22, 'Terrain');
+    if (asyncMode) {
+      await buildTerrainAsync(scene, (t) => onProgress?.(0.22 + t * 0.28, 'Terrain'));
+    } else {
+      await buildTerrainAsync(scene);
+    }
     if (_perf) { console.log('[world] terrain', Math.round(performance.now() - _t), 'ms'); _t = performance.now(); }
-    const buildingColliders = ZS.Buildings.buildAll(scene);
+    if (asyncMode) await _yieldFrame();
+    onProgress?.(0.55, 'Plage et camp');
+    const buildingColliders = ZS.Buildings.buildAll(scene, { deferBeachDecor: true });
     if (_perf) { console.log('[world] buildings', Math.round(performance.now() - _t), 'ms'); _t = performance.now(); }
     if (ZS.RoadNetwork?.buildMeshes) {
       const _buildRoadMeshes = () => {
@@ -250,12 +268,30 @@
           : (fn) => setTimeout(fn, 80);
         idle(_buildRoadMeshes);
       } else {
-        _buildRoadMeshes();
+        const idle = typeof requestIdleCallback === 'function'
+          ? (fn) => requestIdleCallback(fn, { timeout: 1200 })
+          : (fn) => setTimeout(fn, 0);
+        idle(_buildRoadMeshes);
       }
     }
     if (_perf) console.log('[world] total', Math.round(performance.now() - _t0), 'ms');
     for (const c of buildingColliders) _colliders.push(c);
     tickDayNight(0);
+    ZS.SpawnZone?.finishBeachDecorAsync?.();
+    return buildingColliders;
+  }
+
+  function buildWorld(scene) {
+    _buildWorldCore(scene, null, false);
+  }
+
+  async function buildWorldAsync(scene, onProgress) {
+    onProgress?.(0, 'Préparation');
+    await _yieldFrame();
+    await _buildWorldCore(scene, onProgress, true);
+    onProgress?.(0.92, 'Finalisation');
+    await _yieldFrame();
+    onProgress?.(1, 'Monde prêt');
   }
 
   function setWorldTime(t) { _timeOfDay = t; }
@@ -359,8 +395,17 @@
       const dBr = 0.35 + k.ambI * 0.65; // plus brillant de jour
       for (const m of _waterMats) m.emissiveIntensity = rip * dBr;
     }
+
+    const foliageDay = Math.max(0, Math.min(1, (sunY + 0.06) / 0.48));
+    if (Math.abs(foliageDay - _lastFoliageDay) > 0.025) {
+      _lastFoliageDay = foliageDay;
+      ZS.tickTreeLighting?.(foliageDay);
+      ZS.tickBeachLighting?.(foliageDay);
+    }
     if (_waterSurfaces.length > 0) {
+      _waterAnimTick++;
       const wt = Date.now() * 0.001;
+      const doNormals = _waterAnimTick % 5 === 0;
       for (const ws of _waterSurfaces) {
         const pos = ws.mesh.geometry.attributes.position;
         const base = ws.base;
@@ -374,7 +419,7 @@
           pos.setY(i, by + wave);
         }
         pos.needsUpdate = true;
-        ws.mesh.geometry.computeVertexNormals();
+        if (doNormals) ws.mesh.geometry.computeVertexNormals();
       }
     }
 
@@ -547,11 +592,12 @@
 
   function _beachSandColor(x, z) {
     const n = _tvn(x * 0.07, z * 0.07);
-    _cT.setHex(0xd4bc94);
+    const nearShore = x > 278;
+    _cT.setHex(nearShore ? 0xc8b080 : 0xdcc8a0);
     if (n > 0.62) {
-      _cD.setHex(0xc4a878); _cT.lerp(_cD, 0.22);
+      _cD.setHex(nearShore ? 0xb0a070 : 0xc8b888); _cT.lerp(_cD, 0.2);
     } else if (n < 0.32) {
-      _cD.setHex(0xe8d8b8); _cT.lerp(_cD, 0.18);
+      _cD.setHex(nearShore ? 0xd8c8a8 : 0xf0e4c8); _cT.lerp(_cD, 0.18);
     }
     return _cT.getHex();
   }
@@ -560,69 +606,129 @@
     return !!(ZS.detectTouchInput?.() || window.__ZS_TOUCH_MODE || window.ZS?._touchInput || window.ZS?._isMobile);
   }
 
-  function buildTerrain(scene) {
-    const SIZE = 600, SEG = _isMobileBuild() ? 48 : 96;
-    const geo  = new THREE.PlaneGeometry(SIZE, SIZE, SEG, SEG).toNonIndexed();
+  function _terrainSeg() {
+    return _isMobileBuild() ? 28 : 44;
+  }
+
+  function _triSlope(pa, i0, i1, i2) {
+    const ax = pa[i0 * 3], ay = pa[i0 * 3 + 1], az = pa[i0 * 3 + 2];
+    const bx = pa[i1 * 3], by = pa[i1 * 3 + 1], bz = pa[i1 * 3 + 2];
+    const cx = pa[i2 * 3], cy = pa[i2 * 3 + 1], cz = pa[i2 * 3 + 2];
+    const abx = bx - ax, aby = by - ay, abz = bz - az;
+    const acx = cx - ax, acy = cy - ay, acz = cz - az;
+    const nx = aby * acz - abz * acy;
+    const ny = abz * acx - abx * acz;
+    const nz = abx * acy - aby * acx;
+    const len = Math.hypot(nx, ny, nz) || 1;
+    return 1 - Math.max(0, ny / len);
+  }
+
+  function _paintVert(pa, beachW, cols, uvs, col, idx, slope, useDirt, uBase, uSpan, tileScale) {
+    const vx = pa[idx * 3];
+    const vy = pa[idx * 3 + 1];
+    const vz = pa[idx * 3 + 2];
+    const frac = (v) => v - Math.floor(v);
+    uvs[idx * 2] = uBase + frac((vx + 300) / tileScale) * uSpan;
+    uvs[idx * 2 + 1] = frac((vz + 300) / tileScale);
+    const bwCorner = beachW[idx];
+    if (bwCorner > 0.03) {
+      const sandHex = _beachSandColor(vx, vz);
+      if (bwCorner >= 0.85) {
+        col.setHex(sandHex);
+      } else {
+        col.setHex(_terrainTint(vx, vz, vy, slope, useDirt));
+        _cD.setHex(sandHex);
+        col.lerp(_cD, Math.min(1, bwCorner * 1.05));
+      }
+    } else {
+      col.setHex(_terrainTint(vx, vz, vy, slope, useDirt));
+    }
+    cols[idx * 3] = col.r;
+    cols[idx * 3 + 1] = col.g;
+    cols[idx * 3 + 2] = col.b;
+  }
+
+  async function buildTerrainAsync(scene, onChunk) {
+    const SIZE = 600;
+    const SEG = _terrainSeg();
+    const VX = SEG + 1;
+    const geo = new THREE.PlaneGeometry(SIZE, SIZE, SEG, SEG);
     geo.rotateX(-Math.PI / 2);
     const pos = geo.attributes.position;
-    const uvs  = new Float32Array(pos.count * 2);
+    const pa = pos.array;
+    const uvs = new Float32Array(pos.count * 2);
     const cols = new Float32Array(pos.count * 3);
     const beachW = new Float32Array(pos.count);
-    const col  = new THREE.Color();
-    for (let i = 0; i < pos.count; i++) {
-      const vx = pos.getX(i), vz = pos.getZ(i);
-      let h = ZS.getTerrainHeight(vx, vz);
-      if (ZS.isInClearingDisc?.(vx, vz, 0.12)) h -= 0.14;
-      const bw = ZS.beachCoastWeight?.(vx, vz) ?? 0;
-      beachW[i] = bw;
-      if (bw > 0.06 && ZS.beachTerrainSink) h -= ZS.beachTerrainSink(bw);
-      pos.setY(i, h);
+    const col = new THREE.Color();
+    const tileScale = 6.0;
+    const yieldRows = _isMobileBuild() ? 2 : 3;
+
+    for (let iz = 0; iz <= SEG; iz++) {
+      for (let ix = 0; ix <= SEG; ix++) {
+        const i = iz * VX + ix;
+        const vx = pa[i * 3];
+        const vz = pa[i * 3 + 2];
+        let h = ZS.getTerrainHeight(vx, vz);
+        if (ZS.isInClearingDisc?.(vx, vz, 0.12)) h -= 0.14;
+        const bw = ZS.beachCoastWeight?.(vx, vz) ?? 0;
+        beachW[i] = bw;
+        if (bw > 0.06 && ZS.beachTerrainSink) h -= ZS.beachTerrainSink(bw);
+        pa[i * 3 + 1] = h;
+      }
+      if (onChunk && iz % yieldRows === 0) {
+        onChunk(iz / (SEG * 2));
+        await _yieldFrame();
+      }
+    }
+    pos.needsUpdate = true;
+
+    const cellDirt = new Uint8Array(SEG * SEG);
+    for (let iz = 0; iz < SEG; iz++) {
+      for (let ix = 0; ix < SEG; ix++) {
+        const i00 = iz * VX + ix;
+        const i10 = i00 + 1;
+        const i01 = i00 + VX;
+        const i11 = i01 + 1;
+        const cx = (pa[i00 * 3] + pa[i10 * 3] + pa[i01 * 3] + pa[i11 * 3]) * 0.25;
+        const cz = (pa[i00 * 3 + 2] + pa[i10 * 3 + 2] + pa[i01 * 3 + 2] + pa[i11 * 3 + 2]) * 0.25;
+        const avgH = (pa[i00 * 3 + 1] + pa[i10 * 3 + 1] + pa[i01 * 3 + 1] + pa[i11 * 3 + 1]) * 0.25;
+        const beachWCell = (beachW[i00] + beachW[i10] + beachW[i01] + beachW[i11]) * 0.25;
+        const inBeach = beachWCell >= 0.38;
+        const inRiver = ZS.isInRiverChannel?.(cx, cz, 0) ?? false;
+        const inClearing = beachWCell < 0.06 && !inBeach && (ZS.isInClearingDisc?.(cx, cz, 0.25) ?? false);
+        const onRoad = ZS.isInRoadCorridor?.(cx, cz, 0.8) ?? ZS.isNearRoad?.(cx, cz, 1.2) ?? false;
+        const slope = Math.max(
+          _triSlope(pa, i00, i11, i10),
+          _triSlope(pa, i00, i01, i11),
+        );
+        cellDirt[iz * SEG + ix] = beachWCell < 0.08 && !inBeach
+          && (inRiver || onRoad || inClearing || slope > 0.22 || avgH > 13.5) ? 1 : 0;
+      }
+      if (onChunk && iz % yieldRows === 0) {
+        onChunk(0.5 + iz / (SEG * 2));
+        await _yieldFrame();
+      }
     }
 
-    const a = new THREE.Vector3(), b = new THREE.Vector3(), c = new THREE.Vector3();
-    const ab = new THREE.Vector3(), ac = new THREE.Vector3(), nrm = new THREE.Vector3();
-    const tileScale = 6.0;
-    const frac = v => v - Math.floor(v);
-
-    for (let i = 0; i < pos.count; i += 3) {
-      a.set(pos.getX(i), pos.getY(i), pos.getZ(i));
-      b.set(pos.getX(i + 1), pos.getY(i + 1), pos.getZ(i + 1));
-      c.set(pos.getX(i + 2), pos.getY(i + 2), pos.getZ(i + 2));
-      ab.subVectors(b, a);
-      ac.subVectors(c, a);
-      nrm.crossVectors(ab, ac).normalize();
-
-      const slope = 1 - Math.max(0, nrm.y);
-      const avgH = (a.y + b.y + c.y) / 3;
-      const cx = (a.x + b.x + c.x) / 3, cz = (a.z + b.z + c.z) / 3;
-      const beachWTri = (beachW[i] + beachW[i + 1] + beachW[i + 2]) / 3;
-      const inBeach = beachWTri >= 0.38;
-      const inRiver = ZS.isInRiverChannel?.(cx, cz, 0) ?? false;
-      const inClearing = beachWTri < 0.06 && !inBeach && (ZS.isInClearingDisc?.(cx, cz, 0.25) ?? false);
-      const onRoad  = ZS.isInRoadCorridor?.(cx, cz, 0.8) ?? ZS.isNearRoad?.(cx, cz, 1.2) ?? false;
-      const useDirt = beachWTri < 0.08 && !inBeach && (inRiver || onRoad || inClearing || slope > 0.22 || avgH > 13.5);
-      const uBase = useDirt ? 0.52 : 0.02;
-      const uSpan = 0.46;
-
-      for (let k = 0; k < 3; k++) {
-        const idx = i + k;
-        const vx = pos.getX(idx), vy = pos.getY(idx), vz = pos.getZ(idx);
-        uvs[idx * 2] = uBase + frac((vx + 300) / tileScale) * uSpan;
-        uvs[idx * 2 + 1] = frac((vz + 300) / tileScale);
-        const bwCorner = beachW[idx];
-        if (bwCorner > 0.03) {
-          const sandHex = _beachSandColor(vx, vz);
-          if (bwCorner >= 0.92) {
-            col.setHex(sandHex);
-          } else {
-            col.setHex(_terrainTint(vx, vz, vy, slope, useDirt));
-            _cD.setHex(sandHex);
-            col.lerp(_cD, Math.min(1, bwCorner * 1.08));
-          }
-        } else {
-          col.setHex(_terrainTint(vx, vz, vy, slope, useDirt));
-        }
-        cols[idx * 3] = col.r; cols[idx * 3 + 1] = col.g; cols[idx * 3 + 2] = col.b;
+    for (let iz = 0; iz < SEG; iz++) {
+      for (let ix = 0; ix < SEG; ix++) {
+        const i00 = iz * VX + ix;
+        const i10 = i00 + 1;
+        const i01 = i00 + VX;
+        const i11 = i01 + 1;
+        const useDirt = cellDirt[iz * SEG + ix] === 1;
+        const uBase = useDirt ? 0.52 : 0.02;
+        const uSpan = 0.46;
+        const slope1 = _triSlope(pa, i00, i11, i10);
+        const slope2 = _triSlope(pa, i00, i01, i11);
+        _paintVert(pa, beachW, cols, uvs, col, i00, slope1, useDirt, uBase, uSpan, tileScale);
+        _paintVert(pa, beachW, cols, uvs, col, i10, slope1, useDirt, uBase, uSpan, tileScale);
+        _paintVert(pa, beachW, cols, uvs, col, i11, slope1, useDirt, uBase, uSpan, tileScale);
+        _paintVert(pa, beachW, cols, uvs, col, i01, slope2, useDirt, uBase, uSpan, tileScale);
+      }
+      if (onChunk && iz % yieldRows === 0) {
+        onChunk(0.75 + iz / (SEG * 4));
+        await _yieldFrame();
       }
     }
 
@@ -633,15 +739,17 @@
       map: _terrainTex,
       vertexColors: true,
       flatShading: true,
-      polygonOffset: true,
-      polygonOffsetFactor: 4,
-      polygonOffsetUnits: 8,
     }));
     mesh.receiveShadow = true;
     mesh.renderOrder = 0;
     scene.add(mesh);
     _terrainMesh = mesh;
     registerGroundMesh(mesh);
+    if (onChunk) onChunk(1);
+  }
+
+  function buildTerrain(scene) {
+    buildTerrainAsync(scene);
   }
 
   function registerGroundMesh(mesh) {
@@ -815,7 +923,7 @@
       depthTest: true,
     });
 
-    const cloudCount = _isMobileBuild() ? 4 : 16;
+    const cloudCount = _isMobileBuild() ? 4 : 10;
     for (let i = 0; i < cloudCount; i++) {
       const sprite = new THREE.Sprite(_cloudMat);
       const az0 = _rng() * Math.PI * 2;
@@ -832,7 +940,7 @@
   // ── Arbres améliorés ─────────────────────────────────────────────────────────
 
   const TREE_WOOD_MAX = {
-    tree_oak: 8, tree_pine: 10, tree_birch: 6, tree_dead: 3,
+    tree_oak: 8, tree_pine: 10, tree_birch: 6, tree_dead: 3, tree_palm: 6,
   };
   const TREE_FALL_LINGER_MS = 90_000;
   const TREE_FALL_ANIM_SEC = 1.15;
@@ -894,6 +1002,7 @@
   }
 
   function registerChoppableTree(scene, group, x, z, decorId, opts = {}) {
+    if (decorId) removeChoppableTree(decorId);
     if (opts.baseScale == null) opts.baseScale = group.scale.x || 1;
     return _registerTree(scene, group, x, z, { decorId }, decorId, opts);
   }
@@ -932,12 +1041,18 @@
     }, TREE_FALL_LINGER_MS);
   }
 
-  function applyRemoteTreeChop(decorId, woodRemaining, woodMax) {
+  function applyRemoteTreeChop(decorId, woodRemaining, woodMax, extra = {}) {
     const tree = _findTreeByDecorId(decorId);
     if (!tree || tree.state !== 'standing') return;
     if (Number.isFinite(woodMax)) tree.woodMax = woodMax;
     if (Number.isFinite(woodRemaining)) tree.woodRemaining = woodRemaining;
+    if (Number.isFinite(extra.growthPhase)) tree.growthPhase = extra.growthPhase;
     _shakeTree(tree);
+    if (tree.woodRemaining <= 0) {
+      const dx = Number(extra.fallDirX);
+      const dz = Number(extra.fallDirZ);
+      _startTreeFall(tree, Number.isFinite(dx) ? dx : 0, Number.isFinite(dz) ? dz : 1);
+    }
   }
 
   function applyRemoteTreeGrow(decorId, data = {}) {
@@ -992,6 +1107,18 @@
       if (perp < _treeHitRadius(t) && proj < bestT) { bestT = proj; best = t; }
     }
     if (!best) return null;
+    if (best.woodRemaining <= 0) {
+      _startTreeFall(best, dirX, dirZ);
+      return {
+        hit: true,
+        felled: true,
+        woodTaken: 0,
+        woodRemaining: 0,
+        x: best.x,
+        z: best.z,
+        decorId: best.decorId || null,
+      };
+    }
     const yieldAmt = Math.max(1, woodYield || 1);
     const woodTaken = Math.min(yieldAmt, best.woodRemaining);
     best.woodRemaining -= woodTaken;
@@ -1435,6 +1562,7 @@
 
   window.ZS = window.ZS || {};
   ZS.buildWorld        = buildWorld;
+  ZS.buildWorldAsync   = buildWorldAsync;
   ZS.registerGroundMesh      = registerGroundMesh;
   ZS.getVisibleTerrainHeight = getVisibleTerrainHeight;
   ZS.raycastTerrainHeight    = raycastTerrainHeight;
@@ -1446,28 +1574,42 @@
     if (!id) return;
     if (!colliders || !colliders.length) {
       _decorColliders.delete(id);
+      invalidateColliderCache();
       return;
     }
     _decorColliders.set(id, colliders);
+    invalidateColliderCache();
   }
 
   function removeDecorColliders(id) {
     if (id) _decorColliders.delete(id);
+    invalidateColliderCache();
   }
 
   function clearDecorColliders() {
     _decorColliders.clear();
+    invalidateColliderCache();
   }
 
   function getColliders() {
+    const frame = ZS._frameId ?? -1;
+    if (_colliderCache && _colliderCacheFrame === frame) return _colliderCache;
     const out = _colliders.slice();
     const barriers = ZS.getBarrierColliders?.();
     if (barriers?.length) out.push(...barriers);
-    if (!_decorColliders.size) return out;
-    for (const cols of _decorColliders.values()) {
-      for (const c of cols) out.push(c);
+    if (_decorColliders.size) {
+      for (const cols of _decorColliders.values()) {
+        for (const c of cols) out.push(c);
+      }
     }
+    _colliderCache = out;
+    _colliderCacheFrame = frame;
     return out;
+  }
+
+  function invalidateColliderCache() {
+    _colliderCache = null;
+    _colliderCacheFrame = -1;
   }
 
   // Hauteur max montable d'un bond (JUMP_V=8, GRAVITY=22 → ~1.45 m)
@@ -1635,6 +1777,7 @@
   }
 
   ZS.getColliders           = getColliders;
+  ZS.invalidateColliderCache = invalidateColliderCache;
   ZS.getBarrierColliders     = () => (ZS.BarrierPrefabs?.getBarrierColliders?.() || []);
   ZS.registerDecorColliders = registerDecorColliders;
   ZS.removeDecorColliders   = removeDecorColliders;

@@ -296,7 +296,7 @@
     const mobile = !!ZS._isMobile;
     const syncTotal = decorList.length + itemList.length + structList.length + 2;
     const tSync = performance.now();
-    const batchOpts = mobile ? { chunk: 40, rafEvery: 1 } : { chunk: 128, rafEvery: 2 };
+    const batchOpts = mobile ? { chunk: 36, rafEvery: 2 } : { chunk: 56, rafEvery: 2 };
 
     for (const item of itemList) {
       ZS.Inventory.spawnWorldItem(item);
@@ -599,7 +599,7 @@
     });
     socket.on('decor-tree-chop', (d) => {
       if (!d?.id) return;
-      ZS.applyRemoteTreeChop?.(d.id, d.woodRemaining, d.woodMax);
+      ZS.applyRemoteTreeChop?.(d.id, d.woodRemaining, d.woodMax, d);
     });
     socket.on('decor-tree-grow', (d) => {
       if (!d?.id) return;

@@ -73,7 +73,7 @@
   const _isMobile = _touchInput;
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: false, powerPreference: 'high-performance' });
   // Pixel ratio plafonné : énorme gain mobile (moins de fragments → moins de chauffe).
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio, _isMobile ? 1.25 : 1.75));
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio, _isMobile ? 1.15 : 1.5));
   renderer.setSize(window.innerWidth, window.innerHeight);
   renderer.shadowMap.enabled = !_isMobile;
   renderer.shadowMap.type = THREE.PCFShadowMap;     // moins cher que PCFSoft
@@ -116,13 +116,20 @@
   // ── Build world ───────────────────────────────────────────────────────────
   window.ZS?.Loading?.setPhase?.('world', 0, 'Construction du monde…', 'Terrain et routes');
   const _tWorld = performance.now();
-  ZS.buildWorld(scene);
+  if (ZS.buildWorldAsync) {
+    await ZS.buildWorldAsync(scene, (p, detail) => {
+      window.ZS?.Loading?.setPhase?.('world', p, 'Construction du monde…', detail || '');
+    });
+  } else {
+    ZS.buildWorld(scene);
+    window.ZS?.Loading?.setPhase?.('world', 0.72, 'Construction du monde…', 'Végétation et camp');
+  }
   console.log('[world] build', Math.round(performance.now() - _tWorld), 'ms');
-  window.ZS?.Loading?.setPhase?.('world', 0.72, 'Construction du monde…', 'Végétation et camp');
 
-  // Lumières ponctuelles — collectées une fois (évite scene.traverse chaque frame)
-  const _pointLights = [];
-  scene.traverse((o) => { if (o.isPointLight) _pointLights.push(o); });
+  const _worldLights = [];
+  scene.traverse((o) => {
+    if ((o.isPointLight || o.isSpotLight) && !o.userData.playerTorch) _worldLights.push(o);
+  });
   ZS.Zombies.init(scene);
 
   // Local proxy rig (invisible) + viewmodel FPS sur camera.
@@ -1267,20 +1274,37 @@
   // lumières → coût majeur sur mobile). Le compte reste constant = pas de recompile.
   const MAX_ACTIVE_LIGHTS = _isMobile ? 5 : 8;
   let _bbCamX = NaN, _bbCamZ = NaN;
+  let _lightCullCamX = NaN, _lightCullCamZ = NaN;
+  let _lightCullTick = 0;
   const _lp = new THREE.Vector3();
   function _cullLights() {
-    const n = _pointLights.length;
-    if (n <= MAX_ACTIVE_LIGHTS) { for (const l of _pointLights) l.visible = true; return; }
+    scene.traverse((o) => {
+      if ((o.isPointLight || o.isSpotLight) && o.userData.playerTorch) o.visible = true;
+    });
+    const n = _worldLights.length;
+    if (n <= MAX_ACTIVE_LIGHTS) {
+      for (const l of _worldLights) l.visible = true;
+      return;
+    }
     const cx = _cameraWorldPos();
-    for (const l of _pointLights) { l.getWorldPosition(_lp); l.userData._d = _lp.distanceToSquared(cx); }
-    _pointLights.sort((a, b) => a.userData._d - b.userData._d);
-    for (let i = 0; i < n; i++) _pointLights[i].visible = i < MAX_ACTIVE_LIGHTS;
+    const camMoved = Math.hypot(cx.x - _lightCullCamX, cx.z - _lightCullCamZ) > 4;
+    if (!camMoved && ++_lightCullTick < 4) return;
+    _lightCullTick = 0;
+    _lightCullCamX = cx.x;
+    _lightCullCamZ = cx.z;
+    for (const l of _worldLights) {
+      l.getWorldPosition(_lp);
+      l.userData._d = _lp.distanceToSquared(cx);
+    }
+    _worldLights.sort((a, b) => a.userData._d - b.userData._d);
+    for (let i = 0; i < n; i++) _worldLights[i].visible = i < MAX_ACTIVE_LIGHTS;
   }
 
   let _shadowTick = 0;
   const _SHADOW_INTERVAL = _isMobile ? 24 : 18;
   function loop(timestamp) {
     requestAnimationFrame(loop);
+    ZS._frameId = (ZS._frameId | 0) + 1;
     const dt = Math.min((timestamp - state.lastTime) / 1000, 0.05);
     state.lastTime = timestamp;
 

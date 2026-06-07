@@ -468,8 +468,8 @@
     return o;
   }
 
-  function buildAll(scene) {
-    for (const s of _spawnSectors) s.build(scene);
+  function buildAll(scene, opts) {
+    for (const s of _spawnSectors) s.build(scene, opts);
     return _colliders;
   }
 

@@ -26,6 +26,7 @@ export const LEGACY_MODULES = [
   '/js/barrier_prefabs.js',
   '/js/proc_roads.js',
   '/js/beach_textures.js',
+  '/js/beach_decor.js',
   '/js/proc_spawn.js',
   '/js/world.js',
   '/js/player.js',

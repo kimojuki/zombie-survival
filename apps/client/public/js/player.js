@@ -1292,12 +1292,11 @@
     }
   }
 
-  // ── Torche enflammée : flamme animée + lumière à la pointe ──────────────────
+  // ── Torche enflammée : flamme + faisceau directionnel + halo ───────────────
   function _addTorchFx(holder, model) {
     const old = holder.getObjectByName('torchFx');
     if (old) holder.remove(old);
 
-    // Sommet du modèle (= bout de la torche), exprimé dans l'espace local du holder
     holder.updateWorldMatrix(true, true);
     const box = new THREE.Box3().setFromObject(model);
     box.applyMatrix4(new THREE.Matrix4().copy(holder.matrixWorld).invert());
@@ -1313,25 +1312,44 @@
       color, transparent: true, opacity: op,
       blending: THREE.AdditiveBlending, depthWrite: false,
     });
-    const outer = new THREE.Mesh(new THREE.ConeGeometry(0.06, 0.20, 8), flameMat(0xff5512, 0.7));
-    outer.position.y = 0.10;
-    const inner = new THREE.Mesh(new THREE.ConeGeometry(0.034, 0.13, 8), flameMat(0xffdd55, 0.95));
-    inner.position.y = 0.075;
-    fx.add(outer); fx.add(inner);
+    const outer = new THREE.Mesh(new THREE.ConeGeometry(0.07, 0.24, 8), flameMat(0xff5512, 0.82));
+    outer.position.y = 0.11;
+    const inner = new THREE.Mesh(new THREE.ConeGeometry(0.04, 0.15, 8), flameMat(0xffdd55, 0.98));
+    inner.position.y = 0.08;
+    fx.add(outer, inner);
 
-    const light = new THREE.PointLight(0xffa540, 7.0, 34, 2);
-    light.position.y = 0.06;
-    fx.add(light);
+    const spot = new THREE.SpotLight(0xff9520, 68, 32, Math.PI / 5.2, 0.44, 1.1);
+    spot.position.set(0, 0.05, 0);
+    const spotTgt = new THREE.Object3D();
+    spotTgt.position.set(0, -0.03, -10);
+    fx.add(spotTgt);
+    spot.target = spotTgt;
+    spot.userData.playerTorch = true;
+    fx.add(spot);
 
-    // Scintillement (exécuté à chaque rendu via le mesh extérieur)
+    const core = new THREE.PointLight(0xffb040, 18, 18, 1.2);
+    core.position.y = 0.06;
+    core.userData.playerTorch = true;
+    fx.add(core);
+
+    const pool = new THREE.PointLight(0xffa868, 3.2, 44, 1.55);
+    pool.position.y = -0.12;
+    pool.userData.playerTorch = true;
+    fx.add(pool);
+
+    const base = { spot: 68, core: 18, pool: 3.2 };
     let t = Math.random() * 10;
     outer.onBeforeRender = () => {
       t += 0.08;
-      const f = 0.85 + Math.sin(t * 7.3) * 0.10 + Math.sin(t * 13.1) * 0.05;
-      light.intensity = 7.0 * f;
-      const sy = 0.85 + Math.sin(t * 9.0) * 0.15;
+      const f = 0.9 + Math.sin(t * 7.3) * 0.07 + Math.sin(t * 13.1) * 0.04;
+      const sway = Math.sin(t * 5.5) * 0.025;
+      spot.intensity = base.spot * f;
+      spot.angle = Math.PI / 5.2 + sway;
+      core.intensity = base.core * f;
+      pool.intensity = base.pool * (0.94 + Math.sin(t * 4.2) * 0.06);
+      const sy = 0.88 + Math.sin(t * 9.0) * 0.12;
       outer.scale.set(1, sy, 1);
-      inner.scale.set(1, 1.85 - sy, 1);
+      inner.scale.set(1, 1.82 - sy, 1);
     };
 
     holder.add(fx);

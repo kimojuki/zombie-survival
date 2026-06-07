@@ -382,10 +382,17 @@
           setConnectingMsg('Chargement des modules…', `${fetched} / ${modules.length}`, pct);
         }),
     ));
+    const yieldToMain = () => new Promise((resolve) => {
+      requestAnimationFrame(() => setTimeout(resolve, 0));
+    });
     for (let i = 0; i < modules.length; i++) {
       const s = document.createElement('script');
       s.textContent = texts[i] + '\n//# sourceURL=' + modules[i];
       document.body.appendChild(s);
+      const done = i + 1;
+      const pct = scriptMin + (scriptMax - scriptMin) * (done / modules.length);
+      setConnectingMsg('Initialisation…', `${done} / ${modules.length}`, pct);
+      if (done % 2 === 0 || done === modules.length) await yieldToMain();
     }
     window.ZS?.Loading?.setPhase?.('scripts', 1, 'Modules chargés', '');
   })().catch(err => {

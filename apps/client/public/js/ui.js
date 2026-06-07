@@ -23,18 +23,53 @@
       || 'ontouchstart' in window);
   }
 
+  const _UI_ROOT_SEL = [
+    'button', 'input', 'textarea', 'select', 'a', 'label',
+    '#menu-btn', '#menu-panel', '#craft-btn', '#inv-btn', '#map-btn', '#chat-btn',
+    '#shoot-btn', '#jump-btn', '#reload-btn', '#use-btn', '#grab-btn',
+    '#door-interact-btn', '#hotbar', '.hb-slot',
+    '#inv-panel', '#inv-backdrop', '#craft-panel', '#craft-backdrop',
+    '#qa-backdrop', '#spawn-intro-overlay', '#map-overlay', '#death-screen',
+    '#rcon-panel', '#storage-panel', '#storage-backdrop', '.inv-slot', '#chat-input-row',
+    '#chat-wrap', '#craft-queue-hud',
+  ].join(',');
+
   function _isPanelTarget(el) {
-    return !!el?.closest?.(
-      'button,input,textarea,select,a,label,'
-      + '#inv-panel,#craft-panel,#menu-panel,#qa-backdrop,#spawn-intro-overlay,'
-      + '#map-overlay,#death-screen,#rcon-panel,#storage-panel,.inv-slot,#chat-input-row',
-    );
+    return !!el?.closest?.(_UI_ROOT_SEL);
   }
 
-  function _inActionCluster(x, y) {
+  function _elementUnderTouch(x, y) {
+    const mask = ['left-zone', 'right-zone'];
+    const saved = [];
+    for (const id of mask) {
+      const el = document.getElementById(id);
+      if (!el) continue;
+      saved.push([el, el.style.pointerEvents]);
+      el.style.pointerEvents = 'none';
+    }
+    const hit = document.elementFromPoint(x, y);
+    for (const [el, pe] of saved) el.style.pointerEvents = pe;
+    return hit;
+  }
+
+  function _isInteractiveAt(x, y, target) {
+    if (_isPanelTarget(target)) return true;
+    const under = _elementUnderTouch(x, y);
+    if (_isPanelTarget(under)) return true;
+    return _inUiChromeRect(x, y);
+  }
+
+  /** Rectangles HUD / boutons fixes (filet si elementFromPoint tombe sur le canvas). */
+  function _inUiChromeRect(x, y) {
     const w = window.innerWidth;
     const h = window.innerHeight;
-    return (x > w - 120 && y > h - 210) || (y > h - 88 && x > w * 0.28 && x < w * 0.72);
+    if (x > w - 130 && y > h - 220) return true;
+    if (y > h - 95 && x > w * 0.22 && x < w * 0.78) return true;
+    if (x < 76 && y > h - 330) return true;
+    if (x > w - 56 && y < 58) return true;
+    if (y < 110 && x < 210) return true;
+    if (x > w - 210 && y < 110 && y > h - 200) return true;
+    return false;
   }
 
   function _ensureJoyVisual() {
@@ -60,19 +95,6 @@
     }
   }
 
-  function _liftTouchZones() {
-    const left = document.getElementById('left-zone');
-    const right = document.getElementById('right-zone');
-    if (left) {
-      left.style.zIndex = '240';
-      document.body.appendChild(left);
-    }
-    if (right) {
-      right.style.zIndex = '240';
-      document.body.appendChild(right);
-    }
-  }
-
   function _setupGlobalTouchInput() {
     if (document.body.dataset.globalTouch === '1') return;
     document.body.dataset.globalTouch = '1';
@@ -82,8 +104,7 @@
       if (!_state) return;
       if (e.pointerType === 'mouse' && !ZS._touchInput) return;
       if (ZS.SpawnIntro?.blocksInput?.()) return;
-      if (_isPanelTarget(e.target)) return;
-      if (_inActionCluster(e.clientX, e.clientY)) return;
+      if (_isInteractiveAt(e.clientX, e.clientY, e.target)) return;
 
       const ratio = e.clientX / Math.max(1, window.innerWidth);
       if (ratio < _MOVE_FRAC) {
@@ -169,114 +190,9 @@
     if (!_wantsTouchControls()) return;
     document.body.classList.add('input-touch');
     document.body.classList.remove('input-desktop');
-    _liftTouchZones();
     if (!_state) return;
     _setupGlobalTouchInput();
-    _setupJoystick();
-    _setupLookZone();
     _touchControlsReady = true;
-  }
-
-  // ── Joystick (left zone) — native touch, no nipplejs ────────────────────
-
-  function _setupJoystick() {
-    const zone = document.getElementById('left-zone');
-    if (!zone || zone.dataset.joyReady === '1') return;
-    zone.dataset.joyReady = '1';
-    const MAX_DIST = 60;
-    let   originX  = 0, originY = 0, activeId = null;
-
-    // Joystick visible flottant (apparaît où l'on pose le doigt)
-    const base  = document.createElement('div'); base.id = 'joy-base';
-    const thumb = document.createElement('div'); thumb.id = 'joy-thumb';
-    base.appendChild(thumb);
-    base.style.display = 'none';
-    document.body.appendChild(base);
-
-    function _reset() {
-      activeId = null;
-      _state.input.moveX = 0;
-      _state.input.moveZ = 0;
-      base.style.display = 'none';
-      thumb.style.transform = 'translate(-50%, -50%)';
-    }
-
-    zone.addEventListener('touchstart', (e) => {
-      e.preventDefault();
-      if (activeId !== null) return;
-      const t  = e.changedTouches[0];
-      activeId = t.identifier;
-      originX  = t.clientX;
-      originY  = t.clientY;
-      base.style.left = originX + 'px';
-      base.style.top  = originY + 'px';
-      base.style.display = 'block';
-      thumb.style.transform = 'translate(-50%, -50%)';
-    }, { passive: false });
-
-    zone.addEventListener('touchmove', (e) => {
-      e.preventDefault();
-      for (const t of e.changedTouches) {
-        if (t.identifier !== activeId) continue;
-        const dx  = t.clientX - originX;
-        const dy  = t.clientY - originY;
-        const len = Math.hypot(dx, dy) || 1;
-        const clamped = Math.min(len, MAX_DIST);
-        const nx = dx / len, ny = dy / len;
-        _state.input.moveX = nx * (clamped / MAX_DIST);
-        _state.input.moveZ = ny * (clamped / MAX_DIST);
-        thumb.style.transform = `translate(calc(-50% + ${nx * clamped}px), calc(-50% + ${ny * clamped}px))`;
-      }
-    }, { passive: false });
-
-    // Réinitialise si le doigt suivi est relâché OU s'il ne reste aucun toucher
-    // (sécurité : évite l'état « bloqué » qui empêche de se déplacer ensuite).
-    function _end(e) {
-      let released = (e.touches && e.touches.length === 0);
-      for (const t of e.changedTouches) if (t.identifier === activeId) released = true;
-      if (released) _reset();
-    }
-    zone.addEventListener('touchend',    _end, { passive: false });
-    zone.addEventListener('touchcancel', _end, { passive: false });
-  }
-
-  // ── Look zone (right half) ───────────────────────────────────────────────
-
-  function _setupLookZone() {
-    const zone = document.getElementById('right-zone');
-    if (!zone || zone.dataset.lookReady === '1') return;
-    zone.dataset.lookReady = '1';
-    const SENS = 0.004;
-    let lastX = null, lastY = null, activeId = null;
-
-    zone.addEventListener('touchstart', (e) => {
-      e.preventDefault();
-      if (activeId !== null) return;
-      const t  = e.changedTouches[0];
-      activeId = t.identifier;
-      lastX = t.clientX; lastY = t.clientY;
-    }, { passive: false });
-
-    zone.addEventListener('touchmove', (e) => {
-      e.preventDefault();
-      for (const t of e.changedTouches) {
-        if (t.identifier !== activeId) continue;
-        const dx = t.clientX - lastX;
-        const dy = t.clientY - lastY;
-        _state.camera.yaw   -= dx * SENS;
-        _state.camera.pitch -= dy * SENS;
-        _state.camera.pitch = Math.max(-Math.PI / 2 + 0.05, Math.min(Math.PI / 2 - 0.05, _state.camera.pitch));
-        lastX = t.clientX; lastY = t.clientY;
-      }
-    }, { passive: false });
-
-    function _end(e) {
-      for (const t of e.changedTouches) {
-        if (t.identifier === activeId) { activeId = null; lastX = null; lastY = null; }
-      }
-    }
-    zone.addEventListener('touchend',    _end, { passive: false });
-    zone.addEventListener('touchcancel', _end, { passive: false });
   }
 
   // ── Shoot button ─────────────────────────────────────────────────────────

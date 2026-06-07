@@ -981,8 +981,6 @@
       if (res?.ok) {
         if (res.inventory && ZS.Inventory?.applyAuthoritativeInv) {
           ZS.Inventory.applyAuthoritativeInv(res.inventory);
-        } else {
-          ZS.Inventory?.removeItem?.('tool_verrou', 1);
         }
         if (res.keyDropped) {
           ZS.UI?.showNotif?.('Porte verrouillée — clé au sol (inventaire plein)');

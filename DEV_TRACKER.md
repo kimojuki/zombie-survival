@@ -50,6 +50,13 @@ Copier dans la description de PR :
 
 ## 2026-06-07
 
+### Completed — Audit pass 6 : RCON barrières + tests robustes (2026-06-07)
+
+- **RCON** : `road_barrier_post` / `road_barrier_rail` ajoutés à `decorprefabs`.
+- **Client** : retrait fallback `removeItem('tool_verrou')` dans `network.js`.
+- **Tests** : `rcon-test.mjs` — `decorremove` dynamique (id issu de `decoradd`).
+- **Cache bust** : `20260607-server-authority-134`
+
 ### Completed — Audit pass 5 : nettoyage client + test survie (2026-06-07)
 
 - **Verrou porte** : retrait du fallback client `removeItem('tool_verrou')` — inventaire serveur uniquement.

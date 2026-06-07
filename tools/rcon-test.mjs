@@ -115,16 +115,22 @@ async function main() {
     (t) => t.includes('wreck_sedan') && t.includes('decor_'),
   ));
 
+  const wreckAdd = await rcon('decoradd prefab wreck_sedan 12 -8 0.5 1 rust 0.12 2');
+  const wreckId = (wreckAdd.lines || []).join(' ').match(/decor_\d+/)?.[0];
+  if (wreckId) {
+    results.push(await expectOk(
+      'decorremove wreck by id',
+      `decorremove ${wreckId}`,
+      (t) => t.includes(wreckId) || t.includes('wreck_sedan'),
+    ));
+  } else {
+    results.push(fail('decorremove wreck by id', 'decor id introuvable dans la réponse decoradd'));
+  }
+
   results.push(await expectOk(
     'decoradd prefab spawn_lantern',
     'decoradd prefab spawn_lantern 12 -8 0.5 1.2',
     (t) => t.includes('spawn_lantern') && t.includes('decor_'),
-  ));
-
-  results.push(await expectOk(
-    'decorremove wreck nearest',
-    'decorremove decor_92',
-    (t) => t.includes('decor_92') || t.includes('wreck_sedan'),
   ));
 
   results.push(await expectOk(

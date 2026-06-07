@@ -358,6 +358,8 @@ const decorPrefabs = [
   'tree_pine',
   'tree_birch',
   'tree_dead',
+  'road_barrier_post',
+  'road_barrier_rail',
   'building_survivor_shack',
 ];
 const DECOR_PREFAB_BY_ITEM = {

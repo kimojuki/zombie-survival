@@ -119,7 +119,6 @@
     const isBuildWood = d.prefabId?.startsWith('build_') && d.prefabId.endsWith('_wood');
     const commonOpts = {
       decorId: d.id,
-      rotX: d.rotX || 0,
       rotY: d.rotY || 0,
       rotZ: d.rotZ || 0,
       scale: Number.isFinite(d.scale) ? d.scale : 1,
@@ -565,18 +564,60 @@
     });
     socket.on('item-spawn',  (d)  => ZS.Inventory.spawnWorldItem(d));
     socket.on('item-remove', (id) => ZS.Inventory.removeWorldItem(id));
-    socket.on('item-add',    (d) => {
-      if (d?.slot && ZS.Inventory?.addItemSlot) ZS.Inventory.addItemSlot(d.slot);
-      else ZS.Inventory.receivePickup(d.type, d.qty);
-    });
     socket.on('inventory-authoritative', (inv) => {
       if (inv && ZS.Inventory?.applyAuthoritativeInv) {
+        const prevActive = ZS.Inventory.getActiveItem?.()?.type;
         ZS.Inventory.applyAuthoritativeInv(inv);
+        const next = ZS.Inventory.getActiveItem?.();
+        if (prevActive && !next && prevActive !== '__fist__') {
+          const def = ZS.ITEMS?.[prevActive];
+          ZS.UI?.showNotif?.((def?.label || prevActive) + ' cassé(e) !');
+          ZS.setHandItem?.(null);
+        }
       } else if (inv && ZS.Inventory?.loadFromSave) {
         ZS.Inventory.loadFromSave(inv, { fullReset: true });
       }
     });
-    socket.on('bag-collect', (d)  => ZS.Inventory.collectBag(d.items));
+    socket.on('survival-update', (d) => {
+      if (!d) return;
+      const prevInf = ZS.Survival?.get?.()?.infection ?? 0;
+      ZS.Survival?.applyServerState?.(d);
+      if (typeof d.infection === 'number' && d.infection > prevInf + 5) {
+        ZS.UI?.showNotif?.('⚠ Morsure infectée !');
+      }
+      if (typeof d.health === 'number' && _state?.player) {
+        _state.player.health = d.health;
+        ZS.UI.setHealth(Math.floor(d.health), ZS.Inventory?.getMaxHealth?.() || 100);
+      }
+    });
+
+    socket.on('player-death', (d) => {
+      if (!_state?.player || _state.player.dead) return;
+      _state.player.dead = true;
+      _state.player.health = 0;
+      ZS.UI.setHealth(0);
+      ZS.UI.showDeath(d?.kills ?? _state.player.kills);
+    });
+
+    socket.on('move-correction', (d) => {
+      if (!_state?.player || !d) return;
+      _state.player.x = d.x;
+      _state.player.y = d.y;
+      _state.player.z = d.z;
+      _state.player.rotY = d.rotY;
+      if (ZS._camera) {
+        ZS._camera.position.set(d.x, d.y, d.z);
+        ZS._camera.rotation.y = d.rotY ?? _state.camera.yaw;
+      }
+    });
+
+    socket.on('craft-queue-state', (d) => {
+      ZS.Craft?.applyServerQueue?.(d);
+    });
+
+    socket.on('craft-complete', (d) => {
+      ZS.Craft?.onServerComplete?.(d);
+    });
 
     // Respawn autoritaire : position serveur (d.spawn), pas le SpawnZone local.
     socket.on('respawn-at', (d) => {
@@ -615,31 +656,17 @@
 
     socket.on('take-damage', (d) => {
       if (!_spawnReady) return;
+      if (state.player.dead) return;
       const maxHp = ZS.Inventory?.getMaxHealth?.() || 100;
-      let dmg;
-      if (typeof d.dmg === 'number') {
-        // Dégâts zombie (montant) → appliqués sur la vie client (armure incluse)
-        if (state.player.dead) return;
-        dmg = d.dmg;
-        state.player.health = Math.max(0, state.player.health - dmg);
-      } else {
-        // Valeur absolue (respawn / compat)
-        dmg = state.player.health - d.health;
+      const dmg = typeof d.dmg === 'number' ? d.dmg : 0;
+      if (typeof d.health === 'number') {
         state.player.health = d.health;
+      } else if (dmg > 0) {
+        state.player.health = Math.max(0, state.player.health - dmg);
       }
       ZS.UI.setHealth(Math.floor(state.player.health), maxHp);
-      if (state.player.health <= 0 && !state.player.dead) {
-        state.player.dead = true;
-        sendDied();
-        ZS.UI.showDeath(state.player.kills);
-      } else if (state.player.health > 0) {
-        state.player.dead = false;
-        ZS.UI.hideDeath();
-        if (dmg > 0) {
-          ZS.UI.flashDamage();
-          ZS.Survival.applyDamage(dmg);
-        }
-      }
+      if (dmg > 0 && state.player.health > 0) ZS.UI.flashDamage();
+      /* mort UI via player-death (serveur authoritatif) */
     });
 
     socket.on('score-update', (d) => {
@@ -786,9 +813,9 @@
     sendMove(p.x, p.y, p.z, p.rotY ?? _state.camera?.yaw ?? 0, true);
   }
 
-  function sendShoot(ox, oz, dx, dz, dmg, range, radius, kb) {
+  function sendShoot(ox, oz, dx, dz, weaponType) {
     if (!_spawnReady || !_socket) return;
-    _socket.emit('shoot', { ox, oz, dx, dz, dmg, range, radius, kb: kb || 0 });
+    _socket.emit('shoot', { ox, oz, dx, dz, weaponType: weaponType || ZS.Inventory?.getActiveItem?.()?.type || '__fist__' });
   }
 
   // Item en main — diffusé aux autres joueurs (dédupliqué : envoi au changement).
@@ -805,18 +832,14 @@
     if (_socket) _socket.emit('attack', { kind: kind === 'recoil' ? 'recoil' : 'melee' });
   }
 
-  let _diedSent = false;
   function sendDied() {
-    if (_diedSent || !_socket) return;
-    _diedSent = true;
-    _socket.emit('player-died');
+    /* mort déclenchée par le serveur (player-death) */
   }
   function sendRespawn() {
-    _diedSent = false;
     if (_socket) _socket.emit('respawn');
   }
-  function sendSurvival(sv) {
-    if (_socket) _socket.emit('survival-sync', sv);
+  function sendSurvival() {
+    /* survie authoritaire serveur */
   }
 
   // Volume (0–1) selon la distance à la caméra + panoramique stéréo (-1 G … +1 D)
@@ -935,22 +958,16 @@
     return sprite;
   }
 
-  function notifyDecorChop(decorId, woodTaken, dirX, dirZ) {
+  function notifyDecorChop(decorId, dirX, dirZ) {
     if (!_socket || !decorId) return;
-    _socket.emit('decor-chop', {
-      id: decorId,
-      yield: woodTaken,
-      dirX,
-      dirZ,
-    });
+    const toolType = ZS.Inventory?.getActiveItem?.()?.type || 'tool_caillou';
+    _socket.emit('decor-chop', { id: decorId, toolType, dirX, dirZ });
   }
 
-  function notifyDecorMine(decorId, stoneTaken) {
+  function notifyDecorMine(decorId) {
     if (!_socket || !decorId) return;
-    _socket.emit('decor-mine', {
-      id: decorId,
-      yield: stoneTaken,
-    });
+    const toolType = ZS.Inventory?.getActiveItem?.()?.type || 'tool_caillou';
+    _socket.emit('decor-mine', { id: decorId, toolType });
   }
 
   function requestDecorDoorToggle(decorId) {
@@ -960,9 +977,7 @@
 
   function requestDecorDoorLock(decorId, cb) {
     if (!_socket || !decorId) return;
-    const inv = ZS.Inventory?.getInvSnapshot?.();
-    ZS.Inventory?.syncToServer?.();
-    _socket.emit('decor-door-lock', { id: decorId, inv }, (res) => {
+    _socket.emit('decor-door-lock', { id: decorId }, (res) => {
       if (res?.ok) {
         if (res.inventory && ZS.Inventory?.applyAuthoritativeInv) {
           ZS.Inventory.applyAuthoritativeInv(res.inventory);
@@ -983,14 +998,34 @@
 
   function requestDecorDoorUnlock(decorId, cb) {
     if (!_socket || !decorId) return;
-    const inv = ZS.Inventory?.getInvSnapshot?.();
-    ZS.Inventory?.syncToServer?.();
-    _socket.emit('decor-door-unlock', { id: decorId, inv }, (res) => {
-      if (res?.ok && res.lockId) ZS.Inventory?.removeDoorKey?.(res.lockId);
-      else if (!res?.ok) ZS.UI?.showNotif?.(res?.error || 'Retrait du verrou impossible');
-      else if (res?.ok) ZS.UI?.showNotif?.('Verrou retiré');
+    _socket.emit('decor-door-unlock', { id: decorId }, (res) => {
+      if (res?.ok) {
+        if (res.inventory && ZS.Inventory?.applyAuthoritativeInv) {
+          ZS.Inventory.applyAuthoritativeInv(res.inventory);
+        }
+        ZS.UI?.showNotif?.('Verrou retiré');
+      } else {
+        ZS.UI?.showNotif?.(res?.error || 'Retrait du verrou impossible');
+      }
       if (typeof cb === 'function') cb(res);
     });
+  }
+
+  function requestUseItem(zone, index) {
+    if (!_socket) return;
+    _socket.emit('use-item', { zone, index });
+  }
+
+  function requestCraftQueue(recipeId) {
+    if (!_socket) return Promise.resolve({ ok: false });
+    return new Promise((resolve) => {
+      _socket.emit('craft-queue', { recipeId }, (res) => resolve(res || { ok: false }));
+    });
+  }
+
+  function requestCraftCancel(jobId) {
+    if (!_socket) return;
+    _socket.emit('craft-cancel', { jobId });
   }
 
   function getLocalUsername() {
@@ -1009,7 +1044,12 @@
 
   function requestStorageDeposit(decorId, stack) {
     if (!_socket || !decorId || !stack?.type) return;
-    _socket.emit('storage-deposit', { id: decorId, type: stack.type, qty: stack.qty || 1 });
+    _socket.emit('storage-deposit', {
+      id: decorId,
+      zone: stack.zone,
+      index: stack.idx,
+      qty: stack.qty || 1,
+    });
   }
 
   function requestStorageWithdraw(decorId, slot) {
@@ -1078,6 +1118,7 @@
     isSpawnReady: () => _spawnReady,
     requestStorageOpen, requestStorageClose, requestStorageDeposit, requestStorageWithdraw, requestStorageHit,
     requestStoragePickup,
+    requestUseItem, requestCraftQueue, requestCraftCancel,
     requestBuildHit,
     getDecorRoot: _getDecorRoot,
     patchDecorFloorHeight: _patchDecorFloorHeight,

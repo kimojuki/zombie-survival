@@ -460,9 +460,10 @@ function createRcon(ctx) {
     const target = args[1] ? findPlayer(args[1]) : meta.player;
     if (!target) return fail(`Joueur introuvable: ${args[1]}`);
     target.health = 100;
+    if (!target.survival) target.survival = {};
+    target.survival.saignement = false;
     target.dirty = true;
-    const sock = ctx.io.sockets.sockets.get(target.socketId);
-    if (sock) sock.emit('take-damage', { health: 100 });
+    ctx.emitSurvivalUpdate?.(target);
     return ok(`${target.username} soigné (100 HP)`);
   });
 
@@ -470,8 +471,7 @@ function createRcon(ctx) {
     const target = findPlayer(args[1]);
     if (!target) return fail(`Joueur introuvable: ${args[1] || '?'}`);
     target.health = 0;
-    const sock = ctx.io.sockets.sockets.get(target.socketId);
-    if (sock) sock.emit('take-damage', { dmg: 9999 });
+    ctx.handlePlayerDeath?.(target);
     return ok(`${target.username} tué`);
   });
 
@@ -480,9 +480,16 @@ function createRcon(ctx) {
     const type = args[2];
     const qty = Math.max(1, Math.min(999, parseInt(args[3], 10) || 1));
     if (!target || !type) return fail('Usage: give <joueur> <type> [qty]');
+    if (!target.inv) target.inv = { hotbar: [], bag: [], equip: {} };
+    const add = ctx.addStackToInv?.(target.inv, { type, qty });
+    if (!add || add.added <= 0) return fail(`Inventaire plein pour ${target.username}`);
+    target.dirty = true;
     const sock = ctx.io.sockets.sockets.get(target.socketId);
-    if (sock) sock.emit('item-add', { type, qty });
-    return ok(`${qty}x ${type} → ${target.username}`);
+    if (sock && ctx.cloneInv) {
+      sock.emit('inventory-authoritative', ctx.cloneInv(target.inv));
+    }
+    const left = add?.leftover || 0;
+    return ok(`${qty - left}x ${type} → ${target.username}${left > 0 ? ` (${left} au sol — inv plein)` : ''}`);
   });
 
   register('god', 'Invincibilité [on|off] [joueur]', (args, meta) => {

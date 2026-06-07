@@ -94,7 +94,6 @@
     if (_lockPending) return true;
 
     const inv = getInvSnapshot();
-    _syncToServer();
     ZS.UI?.showNotif?.('Verrouillage…');
     _lockPending = {
       decorId: door.decorId,
@@ -104,7 +103,7 @@
         ZS.UI?.showNotif?.('Pas de réponse serveur — redémarrez Node (npm run dev:server)');
       }, 3500),
     };
-    _socket.emit('decor-door-lock', { id: door.decorId, inv }, (res) => {
+    _socket.emit('decor-door-lock', { id: door.decorId }, (res) => {
       _finishDoorLockAttempt({ ...res, id: door.decorId });
     });
     return true;
@@ -247,12 +246,18 @@
       ZS.UI?.showNotif?.(item.type === DOOR_KEY_TYPE ? 'Inventaire plein ou clé déjà possédée' : 'Inventaire plein !');
       return false;
     }
-    // Optimiste : on retire le mesh ; le serveur confirme (item-remove + item-add).
-    _scene.remove(item.mesh);
-    _worldItems.delete(_grabTargetId);
-    _socket.emit('item-pickup', { id: _grabTargetId });
-    _grabTargetId = null;
-    _updateGrabUI(null);
+    // Attendre confirmation serveur avant de retirer le mesh.
+    const pickedId = _grabTargetId;
+    _socket.emit('item-pickup', { id: pickedId }, (res) => {
+      if (res?.ok) {
+        _scene.remove(item.mesh);
+        _worldItems.delete(pickedId);
+      } else {
+        ZS.UI?.showNotif?.('Ramassage impossible');
+      }
+      _grabTargetId = null;
+      _updateGrabUI(null);
+    });
     return true;
   }
 
@@ -737,19 +742,20 @@
   }
 
   function _placeLegacyStructure(type, t, s) {
-    removeItem(type, 1);
     _socket.emit('place-structure', {
       type, x: t.x, y: t.baseY, z: t.z, rotY: t.rotY,
       colliders: _structureColliders(type, t.x, t.z, t.rotY, t.baseY, t.level),
+    }, (res) => {
+      if (res?.ok) {
+        if (!_hotbar[_active] || !_isStructure(_hotbar[_active].type)) _removeGhost();
+      } else {
+        ZS.UI?.showNotif?.(res?.err || 'Placement refusé');
+      }
     });
-    if (!_hotbar[_active] || !_isStructure(_hotbar[_active].type)) _removeGhost();
   }
 
   function _fallbackBuildPlacement(type, t, s) {
-    if (!s || s.kind === 'decorPrefab') return false;
-    _clearPlacePending();
-    _placeLegacyStructure(type, t, s);
-    return true;
+    return false;
   }
 
   // Pose la structure active devant le joueur (consomme 1, sync serveur).
@@ -767,11 +773,9 @@
       if (_placePendingTimer) clearTimeout(_placePendingTimer);
       _placePendingTimer = setTimeout(() => {
         if (!_placePending || _placePendingType !== type) return;
-        if (!_fallbackBuildPlacement(type, t, s)) {
-          _clearPlacePending();
-          ZS.UI?.showNotif?.('Placement sans réponse serveur');
-        }
-      }, 2500);
+        _clearPlacePending();
+        ZS.UI?.showNotif?.('Placement sans réponse serveur');
+      }, 3500);
       const payload = {
         itemType: type,
         prefabId: s.prefabId,
@@ -787,12 +791,9 @@
       _socket.emit('place-decor-prefab', payload, (res) => {
         _clearPlacePending();
         if (!res?.ok) {
-          if (!_fallbackBuildPlacement(type, t, s)) {
-            ZS.UI?.showNotif?.(res?.error || 'Placement refusé');
-          }
+          ZS.UI?.showNotif?.(res?.error || 'Placement refusé');
           return;
         }
-        removeItem(type, 1);
         if (!_hotbar[_active] || !_isStructure(_hotbar[_active].type)) _removeGhost();
       });
       return true;
@@ -897,6 +898,16 @@
   }
 
   // ── Inventory API (utilisé par Craft + Survival) ───────────────────────────
+
+  function findItemSlot(type) {
+    for (let i = 0; i < _hotbar.length; i++) {
+      if (_hotbar[i]?.type === type) return { zone: 'hotbar', idx: i };
+    }
+    for (let i = 0; i < _bag.length; i++) {
+      if (_bag[i]?.type === type) return { zone: 'bag', idx: i };
+    }
+    return null;
+  }
 
   function countItem(type) {
     return [..._hotbar, ..._bag].reduce((n, s) => n + (s && s.type === type ? s.qty : 0), 0);
@@ -1094,10 +1105,14 @@
     if (!s) return;
     const def = _def(s.type);
     if (!def || def.category !== 'firearm') return;
+    const cap = def.capacite_chargeur || 12;
+    if ((s.ammo || 0) >= cap) return;
+    if (_socket?.connected) {
+      _socket.emit('weapon-reload', { weaponType: s.type });
+      return;
+    }
     const ammoId = def.type_munition_accepte || 'ammo_pistolet';
-    const cap    = def.capacite_chargeur || 12;
-    const need   = cap - (s.ammo || 0);
-    if (need <= 0) return;
+    const need = cap - (s.ammo || 0);
     const load = Math.min(countItem(ammoId), need);
     if (load > 0) {
       removeItem(ammoId, load);
@@ -1107,23 +1122,9 @@
     }
   }
 
-  // Usure de l'arme de mêlée active : -1 durabilité par coup, casse à 0.
+  // Usure outil/mêlée — serveur authoritatif (voir shoot / decor-chop / build-hit).
   function wearActiveWeapon() {
-    const s = _hotbar[_active];
-    if (!s) return;
-    const def = _def(s.type);
-    if (!def || (def.category !== 'melee' && def.category !== 'tool')) return;
-    const max = def.durabilite_max;
-    if (max == null || max === Infinity) return;
-    if (s.durability == null) s.durability = max;
-    s.durability -= 1;
-    if (s.durability <= 0) {
-      _hotbar[_active] = null;
-      ZS.UI.showNotif((def.label || 'Arme') + ' cassé(e) !');
-      _renderHotbar();
-      _syncToServer();
-      ZS.setHandItem?.(null);
-    }
+    /* no-op client — durabilité gérée serveur */
   }
 
   function getArmorValue() {
@@ -1186,8 +1187,10 @@
 
     if (opts.fullReset) _setActiveSlot(0);
 
-    _renderHotbar();
-    if (_panelOpen) _renderInvPanel();
+    if (!opts.skipRender) {
+      _renderHotbar();
+      if (_panelOpen) _renderInvPanel();
+    }
     if (!opts.fullReset) {
       ZS.setHandItem?.(_hotbar[_active]?.type || null);
       ZS.UI?.setWeaponUI?.(_hotbar[_active]?.type || null);
@@ -1195,11 +1198,71 @@
     _syncArmor(false);
   }
 
+  function _sameStack(a, b) {
+    if (!a && !b) return true;
+    if (!a || !b) return false;
+    return a.type === b.type
+      && (a.qty || 1) === (b.qty || 1)
+      && (a.ammo ?? -1) === (b.ammo ?? -1)
+      && (a.durability ?? -1) === (b.durability ?? -1)
+      && (a.lockId || '') === (b.lockId || '');
+  }
+
+  function _renderOneHotbarSlot(i) {
+    const bar = document.getElementById('hotbar');
+    if (!bar || i < 0 || i >= HOTBAR_SIZE) return;
+    const el = bar.children[i];
+    if (!el) return;
+    const item = _hotbar[i];
+    const hint = el.querySelector('.hb-key');
+    const name = el.querySelector('.hb-name');
+    el.replaceChildren();
+    if (hint) el.appendChild(hint);
+    if (name) el.appendChild(name);
+    if (item) {
+      const def  = _def(item.type);
+      const icon = document.createElement('span');
+      icon.className   = 'hb-icon';
+      Object.assign(icon.style, {
+        width: '42px', height: '42px', display: 'flex',
+        alignItems: 'center', justifyContent: 'center',
+      });
+      icon.textContent = def ? def.icon : '?';
+      ZS.Icons?.apply(icon, item.type);
+      const count = document.createElement('span');
+      count.className   = 'hb-count';
+      if (def?.category === 'firearm') {
+        count.textContent = (item.ammo ?? 0) + '/' + (def.capacite_chargeur || 0);
+      } else {
+        count.textContent = item.qty > 1 ? item.qty : '';
+      }
+      el.appendChild(icon);
+      el.appendChild(count);
+    }
+    if (i === _active) {
+      const active = _hotbar[_active];
+      if (active && _def(active.type)?.category === 'firearm') {
+        ZS.UI.setAmmo(active.ammo ?? 0);
+      }
+      ZS.setHandItem?.(_hotbar[_active]?.type || null);
+      ZS.UI?.setWeaponUI?.(_hotbar[_active]?.type || null);
+    }
+  }
+
   function applyAuthoritativeInv(data) {
-    loadFromSave(data, { fullReset: true });
-    ZS.setHandItem?.(_hotbar[_active]?.type || null);
-    ZS.UI?.setWeaponUI?.(_hotbar[_active]?.type || null);
-    _syncToServer();
+    if (!data) return;
+    const before = _hotbar.map((s) => (s ? { ...s } : null));
+    loadFromSave(data, { fullReset: false, skipRender: true });
+    let slotDirty = false;
+    for (let i = 0; i < HOTBAR_SIZE; i++) {
+      if (!_sameStack(before[i], _hotbar[i])) {
+        _renderOneHotbarSlot(i);
+        slotDirty = true;
+      }
+    }
+    if (slotDirty) _updateUseBtn();
+    if (_panelOpen) _renderInvPanel();
+    _syncArmor(false);
   }
 
   const STARTER_CAILLOU = { type: 'tool_caillou', qty: 1, durability: 80 };
@@ -1248,7 +1311,7 @@
   }
 
   function _syncToServer() {
-    if (_socket) _socket.emit('inventory-sync', { hotbar: _hotbar, bag: _bag, equip: _equip });
+    /* inventaire authoritaire serveur — plus de push client */
   }
 
   // ── Hotbar DOM ─────────────────────────────────────────────────────────────
@@ -1271,42 +1334,8 @@
   function _renderHotbar() {
     const bar = document.getElementById('hotbar');
     if (!bar) return;
-    for (let i = 0; i < HOTBAR_SIZE; i++) {
-      const el   = bar.children[i];
-      const item = _hotbar[i];
-      const hint = el.querySelector('.hb-key');
-      const name = el.querySelector('.hb-name');   // conserve le libellé en cours d'affichage
-      el.replaceChildren();
-      if (hint) el.appendChild(hint);
-      if (name) el.appendChild(name);
-      if (item) {
-        const def  = _def(item.type);
-        const icon = document.createElement('span');
-        icon.className   = 'hb-icon';
-        Object.assign(icon.style, {
-          width: '42px', height: '42px', display: 'flex',
-          alignItems: 'center', justifyContent: 'center',
-        });
-        icon.textContent = def ? def.icon : '?';
-        ZS.Icons?.apply(icon, item.type);
-        const count = document.createElement('span');
-        count.className   = 'hb-count';
-        if (def?.category === 'firearm') {
-          count.textContent = (item.ammo ?? 0) + '/' + (def.capacite_chargeur || 0);
-        } else {
-          count.textContent = item.qty > 1 ? item.qty : '';
-        }
-        el.appendChild(icon);
-        el.appendChild(count);
-      }
-    }
+    for (let i = 0; i < HOTBAR_SIZE; i++) _renderOneHotbarSlot(i);
     _updateUseBtn();
-    const active = _hotbar[_active];
-    if (active && _def(active.type)?.category === 'firearm') {
-      ZS.UI.setAmmo(active.ammo ?? 0);
-    }
-    ZS.setHandItem?.(_hotbar[_active]?.type || null);
-    ZS.UI?.setWeaponUI?.(_hotbar[_active]?.type || null);
     _syncToServer();
   }
 
@@ -1400,11 +1429,7 @@
     const def  = _def(item.type);
     if (!def || def.category !== 'equipment') return;
     const slotName = def.slot_equipement;
-    const prev = _equip[slotName];
-    _equip[slotName] = { type: item.type, qty: 1 };
-    _hotbar[idx] = prev;
-    if (slotName === 'Dos') _resizeBag();
-    _syncArmor(true);
+    _moveOrSwap({ zone: 'hotbar', idx }, { zone: 'equip', idx: slotName });
     _renderHotbar();
     if (_panelOpen) _renderInvPanel();
     ZS.UI.showNotif(def.label + ' équipé');
@@ -1439,6 +1464,7 @@
     const src = _getSlot(from.zone, from.idx);
     if (!src) return;
     const dst = _getSlot(to.zone, to.idx);
+    const preMove = getInvSnapshot();
 
     // Validation des emplacements d'équipement (slot précis requis)
     if (to.zone === 'equip') {
@@ -1462,7 +1488,7 @@
         dst.qty = Math.min(max, total);
         const rest = total - dst.qty;
         _setSlot(from.zone, from.idx, rest > 0 ? { ...src, qty: rest } : null);
-        _afterMove(from, to);
+        _afterMove(from, to, preMove);
         return;
       }
     }
@@ -1470,15 +1496,23 @@
     // Échange
     _setSlot(to.zone, to.idx, src);
     _setSlot(from.zone, from.idx, dst || null);
-    _afterMove(from, to);
+    _afterMove(from, to, preMove);
   }
 
-  function _afterMove(from, to) {
+  function _afterMove(from, to, preMove) {
     const touchedDos = (from.zone === 'equip' && from.idx === 'Dos')
                     || (to.zone === 'equip' && to.idx === 'Dos');
     if (touchedDos) _resizeBag();
     if (from.zone === 'equip' || to.zone === 'equip') _syncArmor(true);
-    _syncToServer();
+    if (_socket?.connected) {
+      _socket.emit('inventory-move', { from: { zone: from.zone, index: from.idx }, to: { zone: to.zone, index: to.idx } }, (res) => {
+        if (res?.ok) return;
+        if (preMove) applyAuthoritativeInv(preMove);
+        _renderInvPanel();
+        _renderHotbar();
+        ZS.UI?.showNotif?.('Déplacement refusé');
+      });
+    }
   }
 
   // Jette au sol l'objet sélectionné (hotbar, sac ou équipement) → redevient ramassable.
@@ -1491,17 +1525,21 @@
       return;
     }
     const zone = _sel.zone, idx = _sel.idx;
-    _setSlot(zone, idx, null);
-    _sel = null;
-    if (zone === 'equip' && idx === 'Dos') _resizeBag();   // sac retiré → réajuste
-    const dropPayload = { type: item.type, qty: item.qty || 1 };
+    const dropPayload = { zone, index: idx, type: item.type, qty: item.qty || 1 };
     if (item.lockId) dropPayload.lockId = item.lockId;
-    _socket.emit('item-drop', dropPayload);
-    const def = _def(item.type);
-    ZS.UI?.showNotif?.('Jeté : ' + (def?.label || item.type));
-    _renderInvPanel();
-    _renderHotbar();
-    _syncToServer();
+    _socket.emit('item-drop', dropPayload, (res) => {
+      if (res?.ok) {
+        _setSlot(zone, idx, null);
+        _sel = null;
+        if (zone === 'equip' && idx === 'Dos') _resizeBag();
+        const def = _def(item.type);
+        ZS.UI?.showNotif?.('Jeté : ' + (def?.label || item.type));
+        _renderInvPanel();
+        _renderHotbar();
+      } else {
+        ZS.UI?.showNotif?.('Impossible de jeter l\'objet');
+      }
+    });
   }
 
   // ── Panneau inventaire ─────────────────────────────────────────────────────
@@ -1864,7 +1902,7 @@
   ZS.Inventory = {
     init, tick,
     spawnWorldItem, removeWorldItem, receivePickup, spawnStructure, collectBag,
-    countItem, addItem, addItemSlot, removeItem, removeStack, getStorageStacks, getStorageSlots, canAddItem, canAddStack, consumeOne,
+    countItem, findItemSlot, addItem, addItemSlot, removeItem, removeStack, getStorageStacks, getStorageSlots, canAddItem, canAddStack, consumeOne,
     getInvSnapshot, syncToServer, applyAuthoritativeInv,
     placeActiveStructure, getActiveItem, hasDoorKey, removeDoorKey, installDoorLockOnNearestDoor, getWeaponAmmo, decrementAmmo, reloadWeapon, wearActiveWeapon,
     getArmorValue, getMaxHealth, togglePanel, loadFromSave, loadRespawnKit, ensureStarterCaillou, clear,

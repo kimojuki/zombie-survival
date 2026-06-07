@@ -533,11 +533,11 @@
     ZS.muzzleFlash(holder);
   }
 
-  function _sendShot(baseDir, disp, dmg, range, radius) {
+  function _sendShot(baseDir, disp, weaponType) {
     const dx = baseDir.x + (Math.random() - 0.5) * disp;
     const dz = baseDir.z + (Math.random() - 0.5) * disp;
     const cam = _cameraWorldPos();
-    ZS.Network.sendShoot(cam.x, cam.z, dx, dz, dmg, range, radius);
+    ZS.Network.sendShoot(cam.x, cam.z, dx, dz, weaponType);
   }
 
   function _startReload(def) {
@@ -563,7 +563,6 @@
       return;
     }
     _lastAttack = n;
-    ZS.Inventory.decrementAmmo();
     _muzzleFlash();
     ZS.Audio.gunshot(item.type);
     _playSwing('recoil', item.type);
@@ -571,9 +570,9 @@
     const dir = raycaster.ray.direction.clone();
     const disp = def.dispersion_balle || 0.05;
     if (item.type === 'wpn_fusil_pompe') {
-      for (let i = 0; i < 8; i++) _sendShot(dir, Math.max(disp, 0.25), def.degats_par_balle || 12, 40, 0.9);
+      for (let i = 0; i < 8; i++) _sendShot(dir, Math.max(disp, 0.25), item.type);
     } else {
-      _sendShot(dir, disp, def.degats_par_balle || 25, 90, 0.8);
+      _sendShot(dir, disp, item.type);
     }
     if ((item.ammo || 0) <= 0 && ZS.Inventory.countItem(def.type_munition_accepte) > 0) _startReload(def);
   }
@@ -594,8 +593,7 @@
     }
     const hitDist = ZS.Zombies.nearestDist(cam.x, cam.z);
     ZS.Audio.melee(hitDist < FIST.portee_metre + 0.8 ? 0.9 : 0.4);
-    ZS.Network.sendShoot(cam.x, cam.z, dir.x, dir.z,
-                         FIST.degats_impact, FIST.portee_metre, 1.4, 0.5);
+    ZS.Network.sendShoot(cam.x, cam.z, dir.x, dir.z, '__fist__');
   }
 
   function _canHarvestWood(type, def) {
@@ -703,12 +701,11 @@
         harvested = true;
         ZS.Audio.chopWood(0.95);
         if (mine.stoneTaken > 0) {
-          ZS.Inventory.addItem('res_pierre', mine.stoneTaken);
           ZS.UI.showNotif('+' + mine.stoneTaken + ' Pierre');
         }
         if (mine.depleted) ZS.UI.showNotif('Rocher épuisé');
         if (mine.decorId) {
-          ZS.Network.notifyDecorMine(mine.decorId, mine.stoneTaken);
+          ZS.Network.notifyDecorMine(mine.decorId);
         }
       }
     }
@@ -724,12 +721,11 @@
         harvested = true;
         ZS.Audio.chopWood(1.0);
         if (chop.woodTaken > 0) {
-          ZS.Inventory.addItem('res_bois_brut', chop.woodTaken);
           ZS.UI.showNotif('+' + chop.woodTaken + ' Bois brut');
         }
         if (chop.felled) ZS.UI.showNotif('Arbre abattu');
         if (chop.decorId) {
-          ZS.Network.notifyDecorChop(chop.decorId, chop.woodTaken, dir.x, dir.z);
+          ZS.Network.notifyDecorChop(chop.decorId, dir.x, dir.z);
         }
       }
     }
@@ -741,7 +737,7 @@
 
     // Frappe les zombies dans la portée (rayon latéral large = coup de mêlée balayant)
     // + recul : un coup au corps à corps repousse le zombie en arrière.
-    ZS.Network.sendShoot(cam.x, cam.z, dir.x, dir.z, def.degats_impact || 10, range, 1.6, def.recul_metre || 1.2);
+    ZS.Network.sendShoot(cam.x, cam.z, dir.x, dir.z, item.type);
     ZS.Inventory.wearActiveWeapon();
   }
 
@@ -960,9 +956,8 @@
             ZS.UI?.showNotif?.('Coffre plein');
             return;
           }
-          const removed = ZS.Inventory.removeStack(slot.zone, slot.idx, slot.qty);
-          if (!removed) return;
-          ZS.Network.requestStorageDeposit(state.id, removed);
+          if (!slot?.type) return;
+          ZS.Network.requestStorageDeposit(state.id, slot);
         }));
       }
       panel.appendChild(invGrid);
@@ -975,9 +970,8 @@
             ZS.UI?.showNotif?.('Coffre plein');
             return;
           }
-          const removed = ZS.Inventory.removeStack(slot.zone, slot.idx, slot.qty);
-          if (!removed) return;
-          ZS.Network.requestStorageDeposit(state.id, removed);
+          if (!slot?.type) return;
+          ZS.Network.requestStorageDeposit(state.id, slot);
         }));
       }
       panel.appendChild(hotbarGrid);

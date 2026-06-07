@@ -188,3 +188,64 @@ En dev : `LOG_LEVEL=debug` recommandé.
 - `.inventory_reset_*_done` (marqueurs one-shot)
 
 Voir `.gitignore`.
+
+---
+
+## Server authority (anti-cheat)
+
+Depuis 2026-06-07, le serveur est **source de vérité** pour l'inventaire, la survie, le craft, le combat et la récolte.
+
+### Pattern intent → validate → snapshot
+
+```
+Client emit(intent) → Serveur valide → mute p.inv / p.survival
+                  → inventory-authoritative / survival-update
+```
+
+| Domaine | Events client | Réponse serveur |
+|---------|---------------|-----------------|
+| Inventaire | `item-pickup`, `item-drop`, `inventory-move`, `use-item`, `weapon-reload` | `inventory-authoritative` |
+| Survie | *(aucun push)* | `survival-update` (tick 1 s) |
+| Craft | `craft-queue`, `craft-cancel` | `craft-queue-state`, `craft-complete` |
+| Combat | `shoot` + `weaponType`, `weapon-reload` | stats `weapon-stats.mjs` ; usure via `wearInvTool` |
+| Récolte | `decor-chop`, `decor-mine` + `toolType` | grant items serveur |
+| Construction | `place-structure`, `place-decor-prefab` | consume inv avant spawn |
+| Mort | *(serveur only)* | `player-death` |
+
+### Rejetés / ignorés
+
+- `inventory-sync` — log debug, ignoré
+- `survival-sync` — ignoré
+- `player-died` client — ignoré (mort via tick survie / zombies)
+- Snapshot `inv` dans lock/unlock porte — supprimé
+
+### Modules
+
+| Fichier | Rôle |
+|---------|------|
+| `apps/server/src/inventory-ops.js` | `_addStackToInv`, `_removeFromSlot`, etc. |
+| `apps/server/src/survival-tick.js` | Faim/soif/infection/dégâts |
+| `apps/server/src/craft-queue.js` | File craft par joueur |
+| `packages/shared/src/item-effects.mjs` | Effets consommables |
+| `packages/shared/src/craft-recipes.mjs` | Recettes partagées |
+| `packages/shared/src/weapon-stats.mjs` | Dégâts/portée/cadence |
+
+### Mouvement
+
+`move` : anti-teleport léger (max ~11 u/s × 1.5). Rejet → `move-correction`. Client envoie max 20 Hz.
+
+### Performance réseau / client
+
+| Optimisation | Détail |
+|--------------|--------|
+| Inventaire | `_scheduleInvAuth` coalesce les emits dans le même tick Node |
+| Tir / récolte | ammo + usure outil → un seul `inventory-authoritative` |
+| Client inv | `applyAuthoritativeInv` préserve le slot hotbar actif (pas de reset UI) |
+| Zombies | `zombie-tick` payload compact ; client throttle hauteur terrain |
+| Survie | dégâts faim/soif via `survival-update` (pas de double `take-damage`) |
+| Morsure zombie | infection/saignement roll serveur + `survival-update` immédiat |
+
+### Monde
+
+`world-colliders` : terrain first-client only ; plus de merge décor client.
+

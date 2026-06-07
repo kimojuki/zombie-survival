@@ -16,6 +16,28 @@ const log = require('./src/logger');
 const { createRcon } = require('./src/rcon');
 const { createWorldPersist } = require('./src/world-persist');
 const worldPersist = createWorldPersist(db, log);
+const invOps = require('./src/inventory-ops');
+const {
+  normalizeInv: _normalizeInv,
+  cloneInv: _cloneInv,
+  flattenInv,
+  iterInvStacks: _iterInvStacks,
+  playerHasDoorKey: _playerHasDoorKey,
+  takeInvSlot: _takeInvSlot,
+  removeFromSlot: _removeFromSlot,
+  addStackToInv: _addStackToInv,
+  addStackToInvOnce: _addStackToInvOnce,
+  tryAddSlotToInv: _tryAddSlotToInv,
+  removeStackFromInv: _removeStackFromInv,
+  consumeInvType: _consumeInvType,
+  consumeDoorKey: _consumeDoorKey,
+  countInvType: _countInvType,
+  playerOwnsItemType: _playerOwnsItemType,
+  moveInvSlot: _moveInvSlot,
+  wearInvTool: _wearInvTool,
+} = invOps;
+const { tickPlayerSurvival } = require('./src/survival-tick');
+const craftQueueMod = require('./src/craft-queue');
 
 // Dev SQLite : mot de passe par défaut "dev" si RCON_PASSWORD absent (prod MySQL = désactivé)
 const RCON_PASSWORD = process.env.RCON_PASSWORD
@@ -390,53 +412,102 @@ function saveBlob(p) {
   return JSON.stringify({ ...base, survival: p.survival || DEFAULT_SURVIVAL });
 }
 
-// Aplati l'inventaire d'un joueur en liste d'objets pour le butin de mort.
-function flattenInv(inv) {
-  const out = [];
-  const push = (s) => {
-    if (!s?.type) return;
-    const o = { type: s.type, qty: s.qty || 1 };
-    if (s.lockId) o.lockId = s.lockId;
-    if (s.durability != null) o.durability = s.durability;
-    if (s.ammo != null) o.ammo = s.ammo;
-    out.push(o);
-  };
-  if (!inv || typeof inv !== 'object') return out;
-  (Array.isArray(inv) ? inv : (inv.hotbar || [])).forEach(push);
-  (inv.bag || []).forEach(push);
-  if (inv.equip) for (const k of Object.keys(inv.equip)) push(inv.equip[k]);
-  return out;
+function _emitInvAuth(socket, p) {
+  _scheduleInvAuth(socket, p);
 }
 
-function _iterInvStacks(inv) {
-  if (!inv || typeof inv !== 'object') return [];
-  const hotbar = Array.isArray(inv) ? inv : (inv.hotbar || []);
-  const bag = Array.isArray(inv) ? [] : (inv.bag || []);
-  const equip = Array.isArray(inv) ? {} : (inv.equip || {});
-  return [...hotbar, ...bag, ...Object.values(equip)];
+const _pendingInvAuth = new Map();
+
+function _scheduleInvAuth(socket, p) {
+  if (!socket?.id || !p) return;
+  p.dirty = true;
+  if (_pendingInvAuth.has(socket.id)) return;
+  _pendingInvAuth.set(socket.id, { socket, p });
+  setImmediate(() => {
+    const pending = _pendingInvAuth.get(socket.id);
+    _pendingInvAuth.delete(socket.id);
+    if (!pending?.socket?.connected) return;
+    const pl = players.get(pending.socket.id);
+    if (!pl) return;
+    pending.socket.emit('inventory-authoritative', _cloneInv(pl.inv));
+  });
 }
 
-function _playerHasDoorKey(inv, lockId) {
-  if (!lockId) return false;
-  return _iterInvStacks(inv).some(
-    (s) => s && s.type === 'struct_cle' && s.lockId === lockId,
-  );
-}
-
-function _normalizeInv(inv) {
-  if (!inv || typeof inv !== 'object') {
-    return { hotbar: [], bag: [], equip: { Tête: null, Torso: null, Mains: null, Dos: null } };
+function _wearPlayerToolInv(p, toolType, wmod) {
+  if (!toolType || toolType === '__fist__') return { worn: false, broken: false };
+  const max = wmod.getWeaponStats(toolType).durabilityMax;
+  if (max == null || max === Infinity || !Number.isFinite(max)) {
+    return { worn: false, broken: false };
   }
-  if (Array.isArray(inv)) return { hotbar: inv, bag: [], equip: { Tête: null, Torso: null, Mains: null, Dos: null } };
-  return {
-    hotbar: inv.hotbar || [],
-    bag: inv.bag || [],
-    equip: inv.equip || { Tête: null, Torso: null, Mains: null, Dos: null },
-  };
+  return _wearInvTool(p.inv, toolType, max);
 }
 
-function _cloneInv(inv) {
-  return JSON.parse(JSON.stringify(_normalizeInv(inv)));
+async function _wearPlayerTool(socket, p, toolType) {
+  const wmod = _weaponStatsMod || await weaponStatsModPromise;
+  const res = _wearPlayerToolInv(p, toolType, wmod);
+  if (res.worn) _scheduleInvAuth(socket, p);
+  return res;
+}
+
+function _emitSurvivalUpdate(socket, p) {
+  const sv = p.survival || {};
+  const snap = {
+    f: Math.floor(sv.faim ?? 80),
+    s: Math.floor(sv.soif ?? 80),
+    i: Math.floor(sv.infection ?? 0),
+    b: !!sv.saignement,
+    h: Math.floor(p.health ?? 100),
+  };
+  const prev = p._svBroadcastSnap;
+  p._svBroadcastSnap = snap;
+  if (prev && prev.f === snap.f && prev.s === snap.s && prev.i === snap.i
+    && prev.b === snap.b && prev.h === snap.h) {
+    return;
+  }
+  socket.emit('survival-update', {
+    faim: sv.faim ?? 80,
+    soif: sv.soif ?? 80,
+    infection: sv.infection ?? 0,
+    saignement: !!sv.saignement,
+    health: p.health,
+  });
+}
+
+function _handlePlayerDeath(p) {
+  if (p.health > 0 || p._deathHandled) return;
+  p._deathHandled = true;
+  const loot = flattenInv(p.inv);
+  p.inv = _normalizeInv({
+    hotbar: Array(6).fill(null),
+    bag: [],
+    equip: { Tête: null, Torso: null, Mains: null, Dos: null },
+  });
+  p.dirty = true;
+  if (loot.length) {
+    _addGroundItem({
+      id: ++itemIdCounter,
+      type: 'death_bag',
+      bag: true,
+      x: p.x,
+      z: p.z,
+      items: loot,
+      expiresAt: Date.now() + GROUND_ITEM_TTL_MS,
+      owner: p.username,
+    });
+    log.info('death', 'death bag spawned', {
+      player: p.username,
+      items: loot.length,
+      pos: { x: +p.x.toFixed(1), z: +p.z.toFixed(1) },
+    });
+  } else {
+    log.info('death', 'player died (empty inv)', { player: p.username });
+  }
+  const sock = io.sockets.sockets.get(p.socketId);
+  if (sock) {
+    sock.emit('player-death', { kills: p.kills });
+    _emitInvAuth(sock, p);
+    _emitSurvivalUpdate(sock, p);
+  }
 }
 
 function _sleepBodyId(playerId) {
@@ -479,84 +550,6 @@ function _distXZ(ax, az, bx, bz) {
   return Math.hypot(ax - bx, az - bz);
 }
 
-function _takeInvSlot(inv, zone, index) {
-  const n = _normalizeInv(inv);
-  if (zone === 'equip') {
-    const key = String(index);
-    const item = n.equip[key];
-    if (!item || !item.type) return null;
-    n.equip[key] = null;
-    Object.assign(inv, n);
-    return JSON.parse(JSON.stringify(item));
-  }
-  const arr = zone === 'bag' ? n.bag : n.hotbar;
-  const i = Number(index);
-  if (!Number.isFinite(i) || i < 0 || i >= arr.length) return null;
-  const item = arr[i];
-  if (!item || !item.type) return null;
-  arr[i] = null;
-  Object.assign(inv, n);
-  return JSON.parse(JSON.stringify(item));
-}
-
-function _tryAddSlotToInv(inv, item) {
-  const r = _addStackToInv(inv, item);
-  return r.added > 0 && r.leftover === 0;
-}
-
-/** Ajoute autant que possible ; retourne le reste non placé. */
-function _addStackToInv(inv, item) {
-  if (!item?.type) return { added: 0, leftover: 0 };
-  const qty = Math.max(1, Math.min(999, Number(item.qty) || 1));
-  if (item.type === 'struct_cle' && item.lockId) {
-    if (qty !== 1) return { added: 0, leftover: qty };
-    const clone = JSON.parse(JSON.stringify({ ...item, qty: 1 }));
-    if (_addStackToInvOnce(inv, clone)) return { added: 1, leftover: 0 };
-    return { added: 0, leftover: 1 };
-  }
-  const n = _normalizeInv(inv);
-  let left = qty;
-  const maxStack = 99;
-  for (const arr of [n.hotbar, n.bag]) {
-    for (let i = 0; i < arr.length && left > 0; i++) {
-      if (!arr[i] || arr[i].type !== item.type) continue;
-      if (item.lockId && arr[i].lockId !== item.lockId) continue;
-      const room = maxStack - (arr[i].qty || 1);
-      if (room <= 0) continue;
-      const add = Math.min(room, left);
-      arr[i].qty = (arr[i].qty || 1) + add;
-      left -= add;
-    }
-  }
-  for (const arr of [n.hotbar, n.bag]) {
-    for (let i = 0; i < arr.length && left > 0; i++) {
-      if (arr[i]) continue;
-      const add = Math.min(maxStack, left);
-      arr[i] = JSON.parse(JSON.stringify({ ...item, qty: add }));
-      left -= add;
-    }
-  }
-  Object.assign(inv, n);
-  return { added: qty - left, leftover: left };
-}
-
-function _addStackToInvOnce(inv, item) {
-  if (!item?.type) return false;
-  const n = _normalizeInv(inv);
-  if (item.type === 'struct_cle' && item.lockId) {
-    for (const arr of [n.hotbar, n.bag]) {
-      for (let i = 0; i < arr.length; i++) {
-        if (arr[i]) continue;
-        arr[i] = JSON.parse(JSON.stringify({ ...item, qty: item.qty || 1 }));
-        Object.assign(inv, n);
-        return true;
-      }
-    }
-    return false;
-  }
-  return _addStackToInv(inv, item).leftover === 0;
-}
-
 function _spawnChestOverflowDrop(type, qty, baseX, baseZ, extra, idx) {
   const a = (idx / Math.max(1, idx + 1)) * Math.PI * 2 + idx * 0.4;
   const r = 0.4 + (idx % 4) * 0.22;
@@ -567,42 +560,6 @@ function _spawnChestOverflowDrop(type, qty, baseX, baseZ, extra, idx) {
     baseZ + Math.sin(a) * r,
     extra,
   );
-}
-
-function _consumeInvType(inv, type, qty = 1) {
-  let left = qty;
-  const n = _normalizeInv(inv);
-  for (const arr of [n.hotbar, n.bag]) {
-    for (let i = 0; i < arr.length && left > 0; i++) {
-      if (!arr[i] || arr[i].type !== type) continue;
-      const have = arr[i].qty || 1;
-      if (have <= left) {
-        left -= have;
-        arr[i] = null;
-      } else {
-        arr[i].qty = have - left;
-        left = 0;
-      }
-    }
-  }
-  if (left > 0) return false;
-  Object.assign(inv, n);
-  return true;
-}
-
-function _consumeDoorKey(inv, lockId) {
-  if (!lockId) return false;
-  const n = _normalizeInv(inv);
-  for (const arr of [n.hotbar, n.bag]) {
-    for (let i = 0; i < arr.length; i++) {
-      const s = arr[i];
-      if (!s || s.type !== 'struct_cle' || s.lockId !== lockId) continue;
-      arr[i] = null;
-      Object.assign(inv, n);
-      return true;
-    }
-  }
-  return false;
 }
 
 function _getNearbyDoor(id, px, pz, maxDist = 6) {
@@ -707,14 +664,27 @@ const TREE_WOOD_URL = pathToFileURL(path.join(__dirname, '../../packages/shared/
 const ROCK_STONE_URL = pathToFileURL(path.join(__dirname, '../../packages/shared/src/rock-stone.mjs')).href;
 const ROCK_PLACEMENTS_URL = pathToFileURL(path.join(__dirname, '../../packages/shared/src/rock-placements.mjs')).href;
 const BUILD_DAMAGE_URL = pathToFileURL(path.join(__dirname, '../../packages/shared/src/build-damage.mjs')).href;
+const ITEM_EFFECTS_URL = pathToFileURL(path.join(__dirname, '../../packages/shared/src/item-effects.mjs')).href;
+const CRAFT_RECIPES_URL = pathToFileURL(path.join(__dirname, '../../packages/shared/src/craft-recipes.mjs')).href;
+const WEAPON_STATS_URL = pathToFileURL(path.join(__dirname, '../../packages/shared/src/weapon-stats.mjs')).href;
 const buildDamageModPromise = import(BUILD_DAMAGE_URL);
+const itemEffectsModPromise = import(ITEM_EFFECTS_URL);
+const craftRecipesModPromise = import(CRAFT_RECIPES_URL);
+const weaponStatsModPromise = import(WEAPON_STATS_URL);
+let _weaponStatsMod = null;
+weaponStatsModPromise.then((m) => { _weaponStatsMod = m; }).catch(() => {});
+const _craftOps = {
+  countInvType: _countInvType,
+  removeStackFromInv: _removeStackFromInv,
+  addStackToInv: _addStackToInv,
+};
 const RESOURCE_REGEN_URL = pathToFileURL(path.join(__dirname, 'src/resource-regen.mjs')).href;
 const _TREE_WOOD_FALLBACK = { tree_oak: 8, tree_pine: 10, tree_birch: 6, tree_dead: 3 };
 const _TREE_WOOD_RATIO = [0.1, 0.28, 0.5, 0.78, 1.0];
 const _ROCK_STONE_FALLBACK = { rock_boulder: 20, rock_outcrop: 14, spawn_stone: 8 };
 
 function _treeWoodForPhase(prefabId, phase) {
-  const p = Math.max(0, Math.min(4, Math.floor(Number(phase) ?? 4)));
+  const p = Math.max(0, Math.min(4, Math.floor(phase ?? 4)));
   const adult = _TREE_WOOD_FALLBACK[prefabId] ?? 6;
   return Math.max(1, Math.floor(adult * _TREE_WOOD_RATIO[p]));
 }
@@ -1227,7 +1197,23 @@ setInterval(() => {
   }
 }, 60 * 1000);
 
-const DETECT_RANGE   = 12;   // défaut si prefab sans detectRange
+const ZOMBIE_SYNC_KEYS = ['id', 'x', 'z', 'angle', 'speed', 'health', 'maxHealth', 'prefabId', 'meleeReach', 'collideRadius'];
+
+function _compactZombiesForSync(list) {
+  const out = new Array(list.length);
+  for (let i = 0; i < list.length; i++) {
+    const z = list[i];
+    const row = {};
+    for (let k = 0; k < ZOMBIE_SYNC_KEYS.length; k++) {
+      const key = ZOMBIE_SYNC_KEYS[k];
+      const val = z[key];
+      if (val != null) row[key] = val;
+    }
+    out[i] = row;
+  }
+  return out;
+}
+const DETECT_RANGE   = 12;
 const AGGRO_MEMORY   = 5;
 const AGGRO_LOST_SIGHT_DRAIN = 4;
 const ZOMBIE_ATTACK_RANGE = 1.35;
@@ -1378,6 +1364,13 @@ rcon = createRcon({
   ensureCampRocks,
   ensureWorldRocks,
   itemTypes: ALL_ITEMS,
+  addStackToInv: _addStackToInv,
+  cloneInv: _cloneInv,
+  handlePlayerDeath: _handlePlayerDeath,
+  emitSurvivalUpdate: (target) => {
+    const sock = io.sockets.sockets.get(target.socketId);
+    if (sock) _emitSurvivalUpdate(sock, target);
+  },
   log,
 });
 
@@ -1424,7 +1417,7 @@ setInterval(() => {
   const DT = _TICK_DT;
 
   if (!serverFlags.zombieAI) {
-    io.emit('zombie-tick', { zombies: Array.from(zombies.values()), time: _worldTime });
+    io.emit('zombie-tick', { zombies: _compactZombiesForSync(Array.from(zombies.values())), time: _worldTime });
     return;
   }
 
@@ -1436,12 +1429,11 @@ setInterval(() => {
       if (d < nearestDist) { nearestDist = d; nearestP = p; }
     }
 
-    const hasLOS = nearestP
+    const detectRange = z.detectRange || DETECT_RANGE;
+    const losRange = detectRange * 1.25;
+    const hasLOS = nearestP && nearestDist < losRange
       ? _zombieHasLineOfSight(z.x, z.z, nearestP.x, nearestP.z)
       : false;
-
-    // Aggro: détection seulement avec ligne de vue ; perte rapide derrière un mur
-    const detectRange = z.detectRange || DETECT_RANGE;
     if (nearestDist < detectRange && hasLOS) {
       z.aggroTimer = AGGRO_MEMORY;
     } else if (z.aggroTimer > 0 && nearestDist < detectRange * 1.25 && !hasLOS) {
@@ -1467,13 +1459,25 @@ setInterval(() => {
       const zDmg = z.damage || ZOMBIE_DMG;
       const zCd = z.attackCd || ZOMBIE_ATTACK_CD;
       const hitDist = Math.hypot(nearestP.x - z.x, nearestP.z - z.z);
-      const hitLOS = _zombieHasLineOfSight(z.x, z.z, nearestP.x, nearestP.z);
+      const hitLOS = hitDist < detectRange * 1.5 ? hasLOS : false;
       z.meleeReach = hitDist < ZOMBIE_ATTACK_RANGE + 0.15 && hitLOS;
       if (hitDist < ZOMBIE_ATTACK_RANGE && hitLOS
           && !nearestP.invincible && nearestP.posSynced && z.attackTimer <= 0) {
         z.attackTimer = zCd;
         nearestP.health = Math.max(0, nearestP.health - zDmg);
-        io.to(nearestP.socketId).emit('take-damage', { dmg: zDmg });
+        if (!nearestP.survival) nearestP.survival = { ...DEFAULT_SURVIVAL };
+        const zSv = nearestP.survival;
+        if (!zSv.saignement && zDmg >= 10 && Math.random() < 0.25) zSv.saignement = true;
+        if (Math.random() < 0.25) {
+          zSv.infection = Math.min(100, (zSv.infection || 0) + 8 + Math.random() * 12);
+        }
+        nearestP.dirty = true;
+        const hitSock = io.sockets.sockets.get(nearestP.socketId);
+        if (hitSock) {
+          hitSock.emit('take-damage', { dmg: zDmg, health: nearestP.health });
+          _emitSurvivalUpdate(hitSock, nearestP);
+        }
+        if (nearestP.health <= 0) _handlePlayerDeath(nearestP);
         log.throttled(`zombie-hit:${nearestP.username}`, 2000, () => {
           log.debug('combat', 'zombie hit player', {
             player: nearestP.username,
@@ -1503,7 +1507,7 @@ setInterval(() => {
     }
   });
 
-  io.emit('zombie-tick', { zombies: Array.from(zombies.values()), time: _worldTime });
+  io.emit('zombie-tick', { zombies: _compactZombiesForSync(Array.from(zombies.values())), time: _worldTime });
   if (_tickStart) log.tickSummary(zombies, players, Date.now() - _tickStart);
 }, 100);
 
@@ -1541,6 +1545,37 @@ setInterval(() => {
     _persistPlayer(p).then(() => { p.dirty = false; _lastPosSave.set(p.id, now); });
   });
 }, 5000);
+
+// Survie authoritaire (tick 1 s)
+setInterval(async () => {
+  const itemFx = await itemEffectsModPromise;
+  const getMaxHp = (inv) => itemFx.getMaxHealthFromInv(inv, _normalizeInv);
+  players.forEach((p) => {
+    const sock = io.sockets.sockets.get(p.socketId);
+    if (!sock || p.health <= 0 || p._deathHandled) return;
+    const { dmg, died } = tickPlayerSurvival(p, 1, getMaxHp);
+    if (died) _handlePlayerDeath(p);
+    else if (dmg > 0) p.dirty = true;
+    _emitSurvivalUpdate(sock, p);
+  });
+}, 1000);
+
+// File craft authoritaire (tick 100 ms)
+setInterval(() => {
+  craftQueueMod.tickCraftQueues(players, 0.1, _craftOps);
+  players.forEach((p) => {
+    if (!p._craftPendingComplete) return;
+    const sock = io.sockets.sockets.get(p.socketId);
+    const pending = p._craftPendingComplete;
+    p._craftPendingComplete = null;
+    p.dirty = true;
+    if (sock) {
+      _emitInvAuth(sock, p);
+      sock.emit('craft-complete', pending.job);
+      sock.emit('craft-queue-state', craftQueueMod.getCraftQueueState(p));
+    }
+  });
+}, 100);
 
 // ── Socket.io ────────────────────────────────────────────────────────────────
 
@@ -1644,6 +1679,7 @@ io.on('connection', async (socket) => {
       equipped: s.equipped || null,
     })),
   });
+  socket.emit('craft-queue-state', craftQueueMod.getCraftQueueState(p));
   socket.broadcast.emit('player-join', { id: socket.id, username: p.username, x: p.x, y: p.y, z: p.z, rotY: p.rotY, equipped: p.equipped });
   _emitPlayersOnline();
 
@@ -1652,25 +1688,10 @@ io.on('connection', async (socket) => {
   socket.on('world-colliders', (cols) => {
     if (!Array.isArray(cols)) return;
     const terrain = cols.filter((c) => c && c.minY === undefined && !c.decorId);
-    const decor = cols.filter((c) => c && c.decorId);
-    if (worldColliders.length === 0) {
+    if (worldColliders.length === 0 && terrain.length) {
       worldColliders = terrain;
       log.info('world', 'colliders loaded', { terrain: terrain.length, from: p.username });
       worldPersist?.scheduleWorldState?.({ worldColliders });
-    } else {
-      worldColliders = worldColliders.filter((c) => !c.decorId);
-    }
-    if (decor.length) {
-      worldColliders = worldColliders.concat(decor);
-      worldPersist?.scheduleWorldState?.({ worldColliders });
-      if (decor.length !== _lastDecorColliderCount) {
-        _lastDecorColliderCount = decor.length;
-        log.info('world', 'decor colliders merged', {
-          decor: decor.length,
-          total: worldColliders.length,
-          from: p.username,
-        });
-      }
     }
   });
 
@@ -1699,6 +1720,19 @@ io.on('connection', async (socket) => {
 
   socket.on('move', (d) => {
     if (!d || !Number.isFinite(d.x) || !Number.isFinite(d.z)) return;
+    const now = Date.now();
+    const dt = Math.max(0.05, (now - (p.lastMoveAt || now)) / 1000);
+    const maxDelta = 11 * dt * 1.5;
+    if (p.lastMoveAt && Number.isFinite(p.lastX) && Number.isFinite(p.lastZ)) {
+      const dist = Math.hypot(d.x - p.lastX, d.z - p.lastZ);
+      if (dist > maxDelta) {
+        socket.emit('move-correction', { x: p.x, y: p.y, z: p.z, rotY: p.rotY });
+        return;
+      }
+    }
+    p.lastMoveAt = now;
+    p.lastX = d.x;
+    p.lastZ = d.z;
     p.x = d.x; p.y = d.y; p.z = d.z; p.rotY = d.rotY; p.dirty = true;
     p.posSynced = true;
     socket.broadcast.emit('player-move', { id: socket.id, x: d.x, y: d.y, z: d.z, rotY: d.rotY });
@@ -1712,6 +1746,7 @@ io.on('connection', async (socket) => {
   // Item tenu en main → visible des autres joueurs (arme, torche, outil…).
   socket.on('equip', (d) => {
     const type = (d && typeof d.type === 'string' && d.type.length <= 60) ? d.type : null;
+    if (type && !_playerOwnsItemType(p.inv, type) && type !== p.equipped) return;
     if (type === p.equipped) return;
     p.equipped = type;
     socket.broadcast.emit('player-equip', { id: socket.id, type });
@@ -1724,24 +1759,30 @@ io.on('connection', async (socket) => {
   });
 
   socket.on('request-zombie-sync', () => {
-    socket.emit('zombies-snapshot', Array.from(zombies.values()));
+    socket.emit('zombies-snapshot', _compactZombiesForSync(Array.from(zombies.values())));
   });
 
-  socket.on('shoot', (d) => {
+  socket.on('shoot', async (d) => {
+    const wmod = _weaponStatsMod || await weaponStatsModPromise;
     const len = Math.hypot(d.dx, d.dz);
     if (len < 0.001) return;
     const nx = d.dx / len, nz = d.dz / len;
+    const weaponType = String(d.weaponType || p.equipped || '__fist__').slice(0, 60);
+    const stats = wmod.getWeaponStats(weaponType);
+    if (!wmod.playerHasWeapon(p.inv, weaponType, _iterInvStacks)) return;
+    const now = Date.now();
+    const minInterval = (stats.fireRate || 0.5) * 1000;
+    if (p.lastShotAt && now - p.lastShotAt < minInterval * 0.85) return;
+    p.lastShotAt = now;
 
-    // Dégâts/portée/rayon fournis par le client (arme), bornés côté serveur.
-    const dmg    = Math.max(1, Math.min(250, Number(d.dmg)    || 34));
-    const range  = Math.max(0.5, Math.min(120, Number(d.range)  || 80));
-    const radius = Math.max(0.4, Math.min(2.0, Number(d.radius) || 0.8));
+    const dmg = stats.dmg;
+    const range = stats.range;
+    const radius = stats.radius;
 
     let ox = Number(d.ox);
     let oz = Number(d.oz);
     if (!Number.isFinite(ox)) ox = p.x;
     if (!Number.isFinite(oz)) oz = p.z;
-    // Mêlée : origine = position serveur (évite les miss pendant la sync client).
     if (range <= 3.5) {
       ox = p.x;
       oz = p.z;
@@ -1750,122 +1791,167 @@ io.on('connection', async (socket) => {
       oz = p.z;
     }
 
-    let hit = null, minT = Infinity;
-    zombies.forEach((z) => {
-      const tx = z.x - ox, tz = z.z - oz;
-      const t = tx * nx + tz * nz;
-      if (t < 0 || t > range) return;
-      const hitR = z.hitRadius || radius;
-      if (Math.hypot(ox + nx * t - z.x, oz + nz * t - z.z) < hitR && t < minT) {
-        minT = t; hit = z;
+    let invDirty = false;
+    if (stats.ammoType) {
+      const n = _normalizeInv(p.inv);
+      let fired = false;
+      for (const arr of [n.hotbar, n.bag]) {
+        for (let i = 0; i < arr.length; i++) {
+          const s = arr[i];
+          if (!s || s.type !== weaponType) continue;
+          if ((s.ammo ?? 0) <= 0) return;
+          s.ammo = (s.ammo ?? 0) - 1;
+          fired = true;
+          break;
+        }
+        if (fired) break;
       }
-    });
+      if (!fired) return;
+      Object.assign(p.inv, n);
+      invDirty = true;
+    }
 
-    if (hit) {
-      hit.health -= dmg;
-      log.debug('combat', 'shoot hit', {
-        player: p.username,
-        zombieId: hit.id,
-        dmg,
-        healthLeft: hit.health,
-        pos: { x: +hit.x.toFixed(1), z: +hit.z.toFixed(1) },
+    const pellets = stats.pellets || 1;
+    for (let pellet = 0; pellet < pellets; pellet++) {
+      let hit = null; let minT = Infinity;
+      zombies.forEach((z) => {
+        const tx = z.x - ox, tz = z.z - oz;
+        const t = tx * nx + tz * nz;
+        if (t < 0 || t > range) return;
+        const hitR = z.hitRadius || radius;
+        if (Math.hypot(ox + nx * t - z.x, oz + nz * t - z.z) < hitR && t < minT) {
+          minT = t; hit = z;
+        }
       });
-      if (hit.health <= 0) {
-        log.info('combat', 'zombie kill', { player: p.username, zombieId: hit.id, kills: p.kills + 1 });
-        io.emit('zombie-die', hit.id);
-        worldPersist?.scheduleDeleteZombie?.(hit.id);
-        // Random drop
-        if (Math.random() < DROP_CHANCE) {
-          const type   = DROP_TYPES[Math.floor(Math.random() * DROP_TYPES.length)];
-          const dropId = ++itemIdCounter;
-          _addGroundItem({
-            id: dropId,
-            type,
-            x: hit.x + (Math.random() - 0.5) * 1.6,
-            z: hit.z + (Math.random() - 0.5) * 1.6,
-          });
+
+      if (hit) {
+        hit.health -= dmg;
+        log.debug('combat', 'shoot hit', {
+          player: p.username,
+          zombieId: hit.id,
+          dmg,
+          weaponType,
+          healthLeft: hit.health,
+        });
+        if (hit.health <= 0) {
+          log.info('combat', 'zombie kill', { player: p.username, zombieId: hit.id, kills: p.kills + 1 });
+          io.emit('zombie-die', hit.id);
+          worldPersist?.scheduleDeleteZombie?.(hit.id);
+          if (Math.random() < DROP_CHANCE) {
+            const type = DROP_TYPES[Math.floor(Math.random() * DROP_TYPES.length)];
+            _addGroundItem({
+              id: ++itemIdCounter,
+              type,
+              x: hit.x + (Math.random() - 0.5) * 1.6,
+              z: hit.z + (Math.random() - 0.5) * 1.6,
+            });
+          }
+          zombies.delete(hit.id);
+          p.kills++;
+          io.to(socket.id).emit('score-update', { kills: p.kills });
+          if (serverFlags.zombieSpawn) {
+            setTimeout(() => {
+              const nz = makeZombie();
+              zombies.set(nz.id, nz);
+              worldPersist?.scheduleUpsertZombie?.(nz);
+              io.emit('zombie-spawn', nz);
+            }, 4000);
+          }
+        } else {
+          const kb = stats.kb || 0;
+          if (kb > 0) {
+            const zR = hit.collideRadius || ZOMBIE_R;
+            const pushed = resolveZombieCollision(hit.x + nx * kb, hit.z + nz * kb, zR);
+            hit.x = pushed[0];
+            hit.z = pushed[1];
+          }
+          io.emit('zombie-hit', { id: hit.id, health: hit.health, maxHealth: hit.maxHealth || hit.health });
         }
-        zombies.delete(hit.id);
-        p.kills++;
-        io.to(socket.id).emit('score-update', { kills: p.kills });
-        if (serverFlags.zombieSpawn) {
-          setTimeout(() => {
-            const nz = makeZombie();
-            zombies.set(nz.id, nz);
-            worldPersist?.scheduleUpsertZombie?.(nz);
-            io.emit('zombie-spawn', nz);
-          }, 4000);
-        }
-      } else {
-        // Recul (mêlée) : on repousse le zombie en arrière le long du coup, en
-        // respectant les collisions (murs/objets). Diffusé au prochain zombie-tick.
-        const kb = Math.max(0, Math.min(3, Number(d.kb) || 0));
-        if (kb > 0) {
-          const zR = hit.collideRadius || ZOMBIE_R;
-          const pushed = resolveZombieCollision(hit.x + nx * kb, hit.z + nz * kb, zR);
-          hit.x = pushed[0];
-          hit.z = pushed[1];
-        }
-        io.emit('zombie-hit', { id: hit.id, health: hit.health, maxHealth: hit.maxHealth || hit.health });
       }
     }
+    const wearRes = _wearPlayerToolInv(p, weaponType, wmod);
+    if (invDirty || wearRes.worn) _scheduleInvAuth(socket, p);
   });
 
-  socket.on('item-pickup', (d) => {
-    const item = items.get(d.id);
-    if (!item) return; // already taken
-    // Proximity guard — reject if player is too far (3 units tolerance for latency)
+  socket.on('item-pickup', (d, cb) => {
+    const reply = (payload) => { if (typeof cb === 'function') cb(payload); };
+    const item = items.get(d?.id);
+    if (!item) {
+      reply({ ok: false, err: 'gone' });
+      return;
+    }
     if (Math.hypot(item.x - p.x, item.z - p.z) > 3.0) {
-      log.throttled(`pickup-far:${p.username}`, 3000, () => {
-        log.debug('items', 'pickup rejected (too far)', {
-          player: p.username,
-          itemId: d.id,
-          dist: +Math.hypot(item.x - p.x, item.z - p.z).toFixed(1),
-        });
-      });
+      reply({ ok: false, err: 'too_far' });
       return;
     }
     _removeGroundItem(d.id);
-    log.debug('items', 'pickup', {
-      player: p.username,
-      type: item.type,
-      qty: item.qty || 1,
-      bag: !!item.bag,
-      pos: { x: +item.x.toFixed(1), z: +item.z.toFixed(1) },
-    });
     if (item.bag) {
-      socket.emit('bag-collect', { items: item.items || [] });  // butin : rend tout
-    } else if (item.type === 'struct_cle' && item.lockId) {
-      socket.emit('item-add', { slot: { type: item.type, qty: item.qty || 1, lockId: item.lockId } });
+      for (const it of (item.items || [])) {
+        if (!it?.type) continue;
+        const res = _addStackToInv(p.inv, it);
+        if (res.leftover > 0) {
+          _dropWorldItem(it.type, res.leftover, item.x, item.z, {
+            ...(it.lockId ? { lockId: it.lockId } : {}),
+          });
+        }
+      }
     } else {
-      socket.emit('item-add', { type: item.type, qty: item.qty || 1 });
+      const stack = {
+        type: item.type,
+        qty: item.qty || 1,
+        ...(item.lockId ? { lockId: item.lockId } : {}),
+        ...(item.durability != null ? { durability: item.durability } : {}),
+        ...(item.ammo != null ? { ammo: item.ammo } : {}),
+      };
+      const res = _addStackToInv(p.inv, stack);
+      if (res.leftover > 0) {
+        _dropWorldItem(item.type, res.leftover, item.x, item.z, {
+          ...(item.lockId ? { lockId: item.lockId } : {}),
+        });
+      }
     }
+    p.dirty = true;
+    _emitInvAuth(socket, p);
+    log.debug('items', 'pickup', { player: p.username, type: item.type, bag: !!item.bag });
+    reply({ ok: true });
   });
 
-  socket.on('item-drop', (d) => {
-    if (!d || typeof d.type !== 'string' || d.type.length > 60) return;
+  socket.on('item-drop', (d, cb) => {
+    const reply = (payload) => { if (typeof cb === 'function') cb(payload); };
+    if (!d || typeof d.type !== 'string' || d.type.length > 60) {
+      reply({ ok: false, err: 'invalid' });
+      return;
+    }
     const qty = Math.max(1, Math.min(999, Number(d.qty) || 1));
+    const zone = d.zone === 'bag' || d.zone === 'hotbar' ? d.zone : null;
+    const idx = Number(d.index);
+    let removed = false;
+    if (zone != null && Number.isFinite(idx)) {
+      const slot = _removeFromSlot(p.inv, zone, idx, qty);
+      removed = !!slot && slot.type === d.type;
+    } else {
+      removed = _removeStackFromInv(p.inv, d.type, qty, {
+        lockId: d.type === 'struct_cle' ? d.lockId : undefined,
+      });
+    }
+    if (!removed) {
+      reply({ ok: false, err: 'no_item' });
+      return;
+    }
     const ang = Math.random() * Math.PI * 2;
     const extra = {};
     if (d.type === 'struct_cle') {
       const lockId = typeof d.lockId === 'string' ? d.lockId.trim() : '';
-      if (!lockId || lockId.length > 80) return;
+      if (!lockId || lockId.length > 80) {
+        reply({ ok: false, err: 'invalid_key' });
+        return;
+      }
       extra.lockId = lockId;
     }
-    const drop = _dropWorldItem(
-      d.type,
-      qty,
-      p.x + Math.cos(ang) * 1.0,
-      p.z + Math.sin(ang) * 1.0,
-      extra,
-    );
-    log.debug('items', 'drop', {
-      player: p.username,
-      type: d.type,
-      qty,
-      lockId: drop.lockId || undefined,
-      pos: { x: +drop.x.toFixed(1), z: +drop.z.toFixed(1) },
-    });
+    _dropWorldItem(d.type, qty, p.x + Math.cos(ang) * 1.0, p.z + Math.sin(ang) * 1.0, extra);
+    p.dirty = true;
+    _emitInvAuth(socket, p);
+    reply({ ok: true });
   });
 
   // Récolte bois sur arbre prefab — sync multijoueur
@@ -1877,14 +1963,27 @@ io.on('connection', async (socket) => {
     if (item.falling) return;
     if (Math.hypot(item.x - p.x, item.z - p.z) > 6) return;
 
-    import(TREE_WOOD_URL).then(({ TREE_FALL_LINGER_MS }) => {
+    import(TREE_WOOD_URL).then(async ({ TREE_FALL_LINGER_MS, getChopWoodYield }) => {
       const woodMax = item.woodMax ?? _treeWoodForPhase(item.prefabId, item.growthPhase ?? 4);
       item.woodMax = woodMax;
       if (item.woodRemaining == null) item.woodRemaining = woodMax;
 
-      const yieldReq = Math.max(1, Math.min(4, Number(d.yield) || 1));
+      const toolType = String(d.toolType || p.equipped || 'tool_caillou').slice(0, 60);
+      const yieldReq = Math.max(1, Math.min(4, getChopWoodYield(toolType) || 1));
       const woodTaken = Math.min(yieldReq, item.woodRemaining);
       item.woodRemaining -= woodTaken;
+
+      let invDirty = false;
+      if (woodTaken > 0) {
+        const res = _addStackToInv(p.inv, { type: 'res_bois_brut', qty: woodTaken });
+        invDirty = true;
+        if (res.leftover > 0) {
+          _dropWorldItem('res_bois_brut', res.leftover, p.x, p.z);
+        }
+      }
+      const wmod = _weaponStatsMod || await weaponStatsModPromise;
+      const wearRes = _wearPlayerToolInv(p, toolType, wmod);
+      if (invDirty || wearRes.worn) _scheduleInvAuth(socket, p);
 
       const base = {
         id,
@@ -1928,14 +2027,27 @@ io.on('connection', async (socket) => {
     if (!_isMinableRockPrefab(item?.prefabId)) return;
     if (Math.hypot(item.x - p.x, item.z - p.z) > 6) return;
 
-    import(ROCK_STONE_URL).then(({ getRockStoneMax }) => {
+    import(ROCK_STONE_URL).then(async ({ getRockStoneMax, getMineStoneYield }) => {
       const stoneMax = item.stoneMax ?? getRockStoneMax(item.prefabId);
       item.stoneMax = stoneMax;
       if (item.stoneRemaining == null) item.stoneRemaining = stoneMax;
 
-      const yieldReq = Math.max(1, Math.min(6, Number(d.yield) || 1));
+      const toolType = String(d.toolType || p.equipped || 'tool_caillou').slice(0, 60);
+      const yieldReq = Math.max(1, Math.min(6, getMineStoneYield(toolType) || 1));
       const stoneTaken = Math.min(yieldReq, item.stoneRemaining);
       item.stoneRemaining -= stoneTaken;
+
+      let invDirty = false;
+      if (stoneTaken > 0) {
+        const res = _addStackToInv(p.inv, { type: 'res_pierre', qty: stoneTaken });
+        invDirty = true;
+        if (res.leftover > 0) {
+          _dropWorldItem('res_pierre', res.leftover, p.x, p.z);
+        }
+      }
+      const wmod = _weaponStatsMod || await weaponStatsModPromise;
+      const wearRes = _wearPlayerToolInv(p, toolType, wmod);
+      if (invDirty || wearRes.worn) _scheduleInvAuth(socket, p);
 
       const base = {
         id,
@@ -1986,10 +2098,6 @@ io.on('connection', async (socket) => {
       socket.emit('door-lock-result', { ...payload, id: d?.id || null });
       if (typeof cb === 'function') cb(payload);
     };
-    if (d?.inv && typeof d.inv === 'object') {
-      p.inv = _normalizeInv(d.inv);
-      p.dirty = true;
-    }
     const item = _getNearbyDoor(d?.id, p.x, p.z);
     if (!item) {
       reply({ ok: false, error: 'Porte introuvable' });
@@ -2041,10 +2149,6 @@ io.on('connection', async (socket) => {
   });
 
   socket.on('decor-door-unlock', (d, cb) => {
-    if (d?.inv && typeof d.inv === 'object') {
-      p.inv = _normalizeInv(d.inv);
-      p.dirty = true;
-    }
     const item = _getNearbyDoor(d?.id, p.x, p.z);
     if (!item || !item.locked) {
       if (typeof cb === 'function') cb({ ok: false, error: 'Pas verrouillée' });
@@ -2061,15 +2165,15 @@ io.on('connection', async (socket) => {
     _consumeDoorKey(p.inv, oldLockId);
     p.dirty = true;
     const verrou = { type: 'tool_verrou', qty: 1 };
-    if (!_tryAddSlotToInv(p.inv, verrou)) {
-      _dropWorldItem('tool_verrou', 1, p.x + 0.3, p.z);
-    } else {
-      socket.emit('item-add', { type: 'tool_verrou', qty: 1 });
+    const vres = _addStackToInv(p.inv, verrou);
+    if (vres.leftover > 0) {
+      _dropWorldItem('tool_verrou', vres.leftover, p.x + 0.3, p.z);
     }
+    _emitInvAuth(socket, p);
     io.emit('door-lock-state', { id: item.id, locked: false, lockId: null, lockOwner: null });
     _touchDecorItem(item);
     log.info('world', 'door unlocked', { player: p.username, decorId: item.id });
-    if (typeof cb === 'function') cb({ ok: true, lockId: oldLockId });
+    if (typeof cb === 'function') cb({ ok: true, lockId: oldLockId, inventory: _cloneInv(p.inv) });
   });
 
   function _getNearbyStorage(id) {
@@ -2097,37 +2201,61 @@ io.on('connection', async (socket) => {
     io.emit('storage-state', { id: item.id, open: false });
   });
 
-  socket.on('storage-deposit', (d) => {
+  socket.on('storage-deposit', (d, cb) => {
+    const reply = (payload) => { if (typeof cb === 'function') cb(payload); };
     const item = _getNearbyStorage(d?.id);
-    const type = String(d?.type || '').slice(0, 60);
+    const zone = d?.zone === 'bag' || d?.zone === 'hotbar' ? d.zone : null;
+    const idx = Number(d?.index);
     const qty = Math.max(1, Math.min(999, Number(d?.qty) || 1));
-    const refund = () => socket.emit('item-add', { type, qty });
-    if (!item || !type) {
-      if (type) refund();
+    if (!item || zone == null || !Number.isFinite(idx)) {
+      reply({ ok: false, err: 'invalid' });
+      return;
+    }
+    const stack = _removeFromSlot(p.inv, zone, idx, qty);
+    if (!stack?.type) {
+      reply({ ok: false, err: 'no_item' });
       return;
     }
     if (item.storage.length >= STORAGE_CHEST_CAPACITY) {
-      refund();
+      _addStackToInv(p.inv, stack);
+      _emitInvAuth(socket, p);
       socket.emit('storage-error', { message: 'Coffre plein' });
+      reply({ ok: false, err: 'full' });
       return;
     }
-    item.storage.push({ type, qty });
+    item.storage.push({ type: stack.type, qty: stack.qty || 1 });
     _emitStorageUpdate(item);
     _touchDecorItem(item);
-    log.debug('storage', 'deposit', { player: p.username, decorId: item.id, type, qty });
+    p.dirty = true;
+    _emitInvAuth(socket, p);
+    log.debug('storage', 'deposit', { player: p.username, decorId: item.id, type: stack.type, qty: stack.qty });
+    reply({ ok: true });
   });
 
-  socket.on('storage-withdraw', (d) => {
+  socket.on('storage-withdraw', (d, cb) => {
+    const reply = (payload) => { if (typeof cb === 'function') cb(payload); };
     const item = _getNearbyStorage(d?.id);
-    if (!item) return;
+    if (!item) {
+      reply({ ok: false, err: 'not_found' });
+      return;
+    }
     const slot = Math.max(0, Math.floor(Number(d?.slot) || 0));
     const stack = item.storage[slot];
-    if (!stack?.type) return;
+    if (!stack?.type) {
+      reply({ ok: false, err: 'empty' });
+      return;
+    }
     item.storage.splice(slot, 1);
-    socket.emit('item-add', { type: stack.type, qty: stack.qty || 1 });
+    const res = _addStackToInv(p.inv, { type: stack.type, qty: stack.qty || 1 });
+    p.dirty = true;
+    _emitInvAuth(socket, p);
+    if (res.leftover > 0) {
+      item.storage.push({ type: stack.type, qty: res.leftover });
+    }
     _emitStorageUpdate(item);
     _touchDecorItem(item);
-    log.debug('storage', 'withdraw', { player: p.username, decorId: item.id, type: stack.type, qty: stack.qty || 1 });
+    log.debug('storage', 'withdraw', { player: p.username, decorId: item.id, type: stack.type });
+    reply({ ok: true, leftover: res.leftover });
   });
 
   socket.on('storage-hit', (d) => {
@@ -2161,10 +2289,6 @@ io.on('connection', async (socket) => {
 
   socket.on('storage-pickup', (d, cb) => {
     const reply = (payload) => { if (typeof cb === 'function') cb(payload); };
-    if (d?.inv && typeof d.inv === 'object') {
-      p.inv = _normalizeInv(d.inv);
-      p.dirty = true;
-    }
     const item = _getNearbyStorage(d?.id);
     if (!item) {
       reply({ ok: false, error: 'Coffre introuvable' });
@@ -2242,6 +2366,7 @@ io.on('connection', async (socket) => {
       return;
     }
     if (dmg <= 0 || maxHp <= 0) return;
+    _wearPlayerTool(socket, p, toolType);
 
     const field = lockedDoor ? 'doorBreakDamage' : 'buildDamage';
     item[field] = Math.min(maxHp, (Number(item[field]) || 0) + dmg);
@@ -2267,13 +2392,28 @@ io.on('connection', async (socket) => {
     });
   });
 
-  socket.on('place-structure', (d) => {
-    if (!d || typeof d.type !== 'string' || !d.type.startsWith('struct_')) return;
+  socket.on('place-structure', (d, cb) => {
+    const reply = (payload) => { if (typeof cb === 'function') cb(payload); };
+    if (!d || typeof d.type !== 'string' || !d.type.startsWith('struct_')) {
+      reply({ ok: false, err: 'invalid' });
+      return;
+    }
+    if (!_removeStackFromInv(p.inv, d.type, 1)) {
+      reply({ ok: false, err: 'no_item' });
+      return;
+    }
     const x = Number(d.x), z = Number(d.z), rotY = Number(d.rotY) || 0;
     const y = Number(d.y);
-    if (!isFinite(x) || !isFinite(z)) return;
-    // Anti-triche léger : pose seulement à portée raisonnable du joueur
-    if (Math.hypot(x - p.x, z - p.z) > 16) return;
+    if (!isFinite(x) || !isFinite(z)) {
+      _addStackToInv(p.inv, { type: d.type, qty: 1 });
+      reply({ ok: false, err: 'invalid_pos' });
+      return;
+    }
+    if (Math.hypot(x - p.x, z - p.z) > 16) {
+      _addStackToInv(p.inv, { type: d.type, qty: 1 });
+      reply({ ok: false, err: 'too_far' });
+      return;
+    }
     const colliders = Array.isArray(d.colliders)
       ? d.colliders.filter(c => c && c.type === 'box' &&
           isFinite(c.cx) && isFinite(c.cz) && isFinite(c.hw) && isFinite(c.hd)).slice(0, 4)
@@ -2284,15 +2424,12 @@ io.on('connection', async (socket) => {
     st.colliders = colliders;
     structures.set(id, st);
     worldPersist.scheduleUpsertStructure(st);
-    // Les zombies (au sol) ne se cognent que dans les murs du rez-de-chaussée (sans minY)
     for (const c of colliders) if (c.minY === undefined) structureColliders.push(c);
     io.emit('structure-spawn', st);
-    log.info('build', 'structure placed', {
-      player: p.username,
-      type: d.type,
-      pos: { x: +x.toFixed(1), z: +z.toFixed(1) },
-      colliders: colliders.length,
-    });
+    p.dirty = true;
+    _emitInvAuth(socket, p);
+    log.info('build', 'structure placed', { player: p.username, type: d.type });
+    reply({ ok: true, id });
   });
 
   socket.on('place-decor-prefab', (d, cb) => {
@@ -2318,6 +2455,10 @@ io.on('connection', async (socket) => {
       reject('Trop loin');
       return;
     }
+    if (!_removeStackFromInv(p.inv, itemType, 1)) {
+      reject('Objet manquant');
+      return;
+    }
     const item = _makeDecorItem({
       kind: 'prefab',
       prefabId,
@@ -2337,6 +2478,8 @@ io.on('connection', async (socket) => {
       ...(Number.isFinite(supportGroundY) ? { supportGroundY: Math.max(-1, Math.min(30, supportGroundY)) } : {}),
     });
     io.emit('decor-item-spawn', item);
+    p.dirty = true;
+    _emitInvAuth(socket, p);
     log.info('build', 'decor prefab placed', {
       player: p.username,
       prefabId: item.prefabId,
@@ -2351,6 +2494,7 @@ io.on('connection', async (socket) => {
     const pid = item?.prefabId || '';
     const isBuildWood = pid.startsWith('build_') && pid.endsWith('_wood');
     if (!item || (!isBuildWood && pid !== 'storage_chest')) return;
+    if (Math.hypot((item.x || 0) - p.x, (item.z || 0) - p.z) > 8) return;
     const y = Number(d.y);
     if (!Number.isFinite(y)) return;
     item.y = Math.max(-1, Math.min(30, y));
@@ -2358,54 +2502,141 @@ io.on('connection', async (socket) => {
     _touchDecorItem(item);
   });
 
-  socket.on('inventory-sync', (slots) => {
-    if (slots && typeof slots === 'object') {
-      p.inv = _normalizeInv(slots);
-      p.dirty = true;
+  socket.on('inventory-move', (d, cb) => {
+    const reply = (payload) => { if (typeof cb === 'function') cb(payload); };
+    const fromZone = d?.from?.zone;
+    const toZone = d?.to?.zone;
+    if (!['hotbar', 'bag', 'equip'].includes(fromZone) || !['hotbar', 'bag', 'equip'].includes(toZone)) {
+      reply({ ok: false, err: 'invalid' });
+      return;
     }
+    const ok = _moveInvSlot(p.inv, fromZone, d.from.index, toZone, d.to.index);
+    if (!ok) {
+      reply({ ok: false, err: 'move_failed' });
+      return;
+    }
+    p.dirty = true;
+    _emitInvAuth(socket, p);
+    reply({ ok: true });
   });
 
-  socket.on('survival-sync', (sv) => {
-    if (sv && typeof sv === 'object') {
-      p.survival = {
-        faim:       Math.max(0, Math.min(100, Number(sv.faim) || 0)),
-        soif:       Math.max(0, Math.min(100, Number(sv.soif) || 0)),
-        infection:  Math.max(0, Math.min(100, Number(sv.infection) || 0)),
-        saignement: !!sv.saignement,
-      };
-      // Vie autoritaire côté client (armure → peut dépasser 100) ; on persiste.
-      if (typeof sv.health === 'number') p.health = Math.max(0, Math.min(999, sv.health));
-      p.dirty = true;
+  socket.on('weapon-reload', async (d, cb) => {
+    const reply = (payload) => { if (typeof cb === 'function') cb(payload); };
+    const wmod = _weaponStatsMod || await weaponStatsModPromise;
+    const weaponType = String(d?.weaponType || p.equipped || '').slice(0, 60);
+    const stats = wmod.getWeaponStats(weaponType);
+    if (!stats.ammoType) {
+      reply({ ok: false, err: 'not_firearm' });
+      return;
     }
+    if (!wmod.playerHasWeapon(p.inv, weaponType, _iterInvStacks)) {
+      reply({ ok: false, err: 'no_weapon' });
+      return;
+    }
+    const n = _normalizeInv(p.inv);
+    let slot = null;
+    for (const s of n.hotbar) {
+      if (s && s.type === weaponType) { slot = s; break; }
+    }
+    if (!slot) {
+      reply({ ok: false, err: 'no_weapon' });
+      return;
+    }
+    const cap = stats.magazineCap || 12;
+    const need = cap - (slot.ammo || 0);
+    if (need <= 0) {
+      reply({ ok: true, loaded: 0 });
+      return;
+    }
+    const have = _countInvType(p.inv, stats.ammoType);
+    const load = Math.min(have, need);
+    if (load <= 0) {
+      reply({ ok: false, err: 'no_ammo' });
+      return;
+    }
+    if (!_removeStackFromInv(p.inv, stats.ammoType, load)) {
+      reply({ ok: false, err: 'consume_failed' });
+      return;
+    }
+    slot.ammo = (slot.ammo || 0) + load;
+    Object.assign(p.inv, n);
+    p.dirty = true;
+    _emitInvAuth(socket, p);
+    reply({ ok: true, loaded: load });
   });
 
-  // Mort : le butin du joueur tombe au sol dans une caisse récupérable 30 min.
+  socket.on('use-item', async (d, cb) => {
+    const reply = (payload) => { if (typeof cb === 'function') cb(payload); };
+    const zone = d?.zone === 'bag' || d?.zone === 'hotbar' ? d.zone : null;
+    const idx = Number(d?.index);
+    if (zone == null || !Number.isFinite(idx)) {
+      reply({ ok: false, err: 'invalid' });
+      return;
+    }
+    const stack = _normalizeInv(p.inv)[zone === 'bag' ? 'bag' : 'hotbar'][idx];
+    if (!stack?.type) {
+      reply({ ok: false, err: 'empty' });
+      return;
+    }
+    const itemFx = await itemEffectsModPromise;
+    const eff = itemFx.getItemEffect(stack.type);
+    if (!eff) {
+      reply({ ok: false, err: 'not_consumable' });
+      return;
+    }
+    itemFx.applyItemUse(stack.type, p, _normalizeInv);
+    _removeFromSlot(p.inv, zone, idx, 1);
+    p.dirty = true;
+    _emitInvAuth(socket, p);
+    _emitSurvivalUpdate(socket, p);
+    reply({ ok: true });
+  });
+
+  socket.on('craft-queue', async (d, cb) => {
+    const reply = (payload) => { if (typeof cb === 'function') cb(payload); };
+    const recipeMod = await craftRecipesModPromise;
+    const result = craftQueueMod.enqueueCraft(p, d?.recipeId || d?.result, _craftOps, recipeMod);
+    if (!result.ok) {
+      reply(result);
+      return;
+    }
+    p.dirty = true;
+    _emitInvAuth(socket, p);
+    socket.emit('craft-queue-state', craftQueueMod.getCraftQueueState(p));
+    reply(result);
+  });
+
+  socket.on('craft-cancel', async (d, cb) => {
+    const reply = (payload) => { if (typeof cb === 'function') cb(payload); };
+    const recipeMod = await craftRecipesModPromise;
+    const result = craftQueueMod.cancelCraftJob(p, Number(d?.jobId), _craftOps, recipeMod);
+    if (result.ok) {
+      p.dirty = true;
+      _emitInvAuth(socket, p);
+      socket.emit('craft-queue-state', craftQueueMod.getCraftQueueState(p));
+    }
+    reply(result);
+  });
+
+  socket.on('inventory-sync', () => {
+    log.throttled(`inv-sync-reject:${p.username}`, 5000, () => {
+      log.debug('inventory', 'ignored client inventory-sync', { player: p.username });
+    });
+  });
+
+  socket.on('survival-sync', () => {
+    log.throttled(`sv-sync-reject:${p.username}`, 5000, () => {
+      log.debug('survival', 'ignored client survival-sync', { player: p.username });
+    });
+  });
+
   socket.on('player-died', () => {
-    p.health = 0;
-    const loot = flattenInv(p.inv);
-    if (loot.length) {
-      const id  = ++itemIdCounter;
-      _addGroundItem({
-        id,
-        type: 'death_bag',
-        bag: true,
-        x: p.x,
-        z: p.z,
-        items: loot,
-        expiresAt: Date.now() + GROUND_ITEM_TTL_MS,
-        owner: p.username,
-      });
-      log.info('death', 'death bag spawned', {
-        player: p.username,
-        items: loot.length,
-        pos: { x: +p.x.toFixed(1), z: +p.z.toFixed(1) },
-      });
-    } else {
-      log.info('death', 'player died (empty inv)', { player: p.username });
-    }
+    log.debug('death', 'ignored client player-died', { player: p.username });
   });
 
   socket.on('respawn', () => {
+    if (p.health > 0 && !p._deathHandled) return;
+    p._deathHandled = false;
     p.health = 100;
     p.invincible = true;
     const kit = JSON.parse(JSON.stringify(STARTING_ITEMS));
@@ -2415,7 +2646,7 @@ io.on('connection', async (socket) => {
     p.posSynced = false;
     p.dirty = true;
     setTimeout(() => { if (players.has(socket.id)) p.invincible = false; }, 3000);
-    socket.emit('take-damage', { health: 100 });
+    _emitSurvivalUpdate(socket, p);
     socket.emit('respawn-at', { spawn: BEACH_SPAWN, inventory: kit, survival: { ...DEFAULT_SURVIVAL } });
     log.info('death', 'respawn', { player: p.username, spawn: BEACH_SPAWN, kit: 'tool_caillou' });
   });
@@ -2462,7 +2693,7 @@ io.on('connection', async (socket) => {
     }
     p.dirty = true;
     _saveSleepingToDb(sleep);
-    socket.emit('item-add', { slot: item });
+    _emitInvAuth(socket, p);
     io.emit('sleep-loot-update', { playerId: targetId, inventory: _cloneInv(sleep.inv) });
     log.info('sleep', 'loot take', {
       looter: p.username,
@@ -2547,6 +2778,7 @@ io.on('connection', async (socket) => {
 
   socket.on('disconnect', () => {
     adminSockets.delete(socket.id);
+    _pendingInvAuth.delete(socket.id);
     const leaving = players.get(socket.id);
     if (!leaving) return;
     players.delete(socket.id);

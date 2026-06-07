@@ -36,8 +36,7 @@
   ];
 
   /** @type {Array<{ id:number, result:string, qty:number, duration:number, remaining:number, state:'waiting'|'active'|'blocked' }>} */
-  const _queue = [];
-  let _jobSeq = 0;
+  let _queue = [];
   /** @type {typeof _queue[0] | null} */
   let _active = null;
 
@@ -124,88 +123,48 @@
     return { ok: true };
   }
 
-  function _consumeIngredients(rec) {
-    for (const [id, qty] of Object.entries(rec.ingredients)) {
-      ZS.Inventory.removeItem(id, qty);
-    }
-    ZS.Inventory.syncToServer?.();
-  }
-
-  function _canDeliver(job) {
-    return ZS.Inventory.canAddStack(job.result, job.qty || 1);
-  }
-
-  function _deliver(job) {
-    if (!_canDeliver(job)) return false;
-    const added = ZS.Inventory.addItem(job.result, job.qty || 1);
-    if (!added) return false;
-    ZS.Inventory.syncToServer?.();
-    const def = ZS.ITEMS[job.result];
-    ZS.UI?.showNotif?.('+ ' + (def?.label || job.result));
-    const idx = _queue.indexOf(job);
-    if (idx >= 0) _queue.splice(idx, 1);
-    if (_active === job) _active = null;
-    _startNext();
-    if (_visible) _render();
-    _renderQueueUi();
-    return true;
-  }
-
-  function _startNext() {
-    if (_active) return;
-    const job = _queue[0];
-    if (!job) return;
-    if (job.state === 'blocked') {
-      if (_canDeliver(job)) _deliver(job);
-      return;
-    }
-    if (job.state === 'waiting') {
-      job.state = 'active';
-      job.remaining = job.duration;
-      _active = job;
-    }
-  }
-
   function _enqueue(rec) {
     const check = _canEnqueue(rec);
     if (!check.ok) {
       ZS.UI?.showNotif?.(check.reason);
       return false;
     }
-    _consumeIngredients(rec);
-    _queue.push({
-      id: ++_jobSeq,
-      result: rec.result,
-      qty: rec.qty || 1,
-      duration: _craftDuration(rec),
-      remaining: 0,
-      state: 'waiting',
+    ZS.Network?.requestCraftQueue?.(rec.result)?.then?.((res) => {
+      if (!res?.ok) {
+        const errMap = {
+          insufficient_resources: 'Ressources insuffisantes',
+          queue_full: 'File pleine',
+          unknown_recipe: 'Recette inconnue',
+        };
+        ZS.UI?.showNotif?.(errMap[res.err] || 'Craft impossible');
+      } else {
+        const def = ZS.ITEMS[rec.result];
+        ZS.UI?.showNotif?.('En file : ' + (def?.label || rec.result));
+      }
+      _renderQueueUi();
+      if (_visible) _render();
     });
-    const def = ZS.ITEMS[rec.result];
-    ZS.UI?.showNotif?.('En file : ' + (def?.label || rec.result));
-    _startNext();
-    _renderQueueUi();
-    if (_visible) _render();
     return true;
   }
 
+  function applyServerQueue(state) {
+    if (!state) return;
+    _active = state.active || null;
+    _queue = Array.isArray(state.queue) ? state.queue.slice() : [];
+    _renderQueueUi();
+    if (_visible) _render();
+  }
+
+  function onServerComplete(job) {
+    if (!job) return;
+    const def = ZS.ITEMS[job.result];
+    ZS.UI?.showNotif?.('+ ' + (def?.label || job.result));
+    _renderQueueUi();
+  }
+
   function tick(dt) {
-    if (_active?.state === 'active') {
-      _active.remaining -= dt;
-      if (_active.remaining <= 0) {
-        _active.state = 'blocked';
-        _active = null;
-        if (_queue[0]?.state === 'blocked' && _canDeliver(_queue[0])) {
-          _deliver(_queue[0]);
-        } else if (_queue[0]?.state === 'blocked') {
-          ZS.UI?.showNotif?.('Fabriqué — en attente de place inventaire');
-        }
-      }
-    } else if (_queue[0]?.state === 'blocked') {
-      if (_canDeliver(_queue[0])) _deliver(_queue[0]);
-      else _startNext();
-    } else {
-      _startNext();
+    if (_active?.state === 'active' && typeof _active.remaining === 'number') {
+      _active.remaining = Math.max(0, _active.remaining - dt);
     }
     _renderQueueUi();
   }
@@ -475,7 +434,7 @@
     }
   }
 
-  function _makeActionBtn(rec, def) {
+  function _makeActionBtn(rec) {
     const check = _canEnqueue(rec);
     const hasRes = _hasResources(rec);
     const btn = document.createElement('button');
@@ -521,7 +480,7 @@
     info.appendChild(ings);
     info.appendChild(time);
     row.appendChild(info);
-    row.appendChild(_makeActionBtn(rec, def));
+    row.appendChild(_makeActionBtn(rec));
     return row;
   }
 
@@ -613,7 +572,7 @@
 
     const btnWrap = document.createElement('div');
     btnWrap.className = 'craft-card-actions';
-    btnWrap.appendChild(_makeActionBtn(rec, def));
+    btnWrap.appendChild(_makeActionBtn(rec));
     card.appendChild(btnWrap);
     return card;
   }
@@ -628,5 +587,5 @@
   }
 
   window.ZS = window.ZS || {};
-  ZS.Craft = { init, toggle, tick, getQueueLength: () => _queue.length };
+  ZS.Craft = { init, toggle, tick, getQueueLength: () => _queue.length, applyServerQueue, onServerComplete };
 }());

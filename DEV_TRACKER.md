@@ -50,6 +50,42 @@ Copier dans la description de PR :
 
 ## 2026-06-07
 
+### Completed — Audit pass 4 : désynchro mort + perf réseau (2026-06-07)
+
+- **Mort** : écran de mort uniquement via `player-death` (plus de double déclenchement client sur `take-damage`).
+- **Respawn** : retrait du `take-damage` redondant → `survival-update` + `respawn-at`.
+- **Survie** : broadcast `survival-update` seulement si valeurs affichées changent (faim/soif/infection/HP arrondis).
+- **Zombies** : une seule raycast LOS par tick (réutilisation `hasLOS` pour morsure) ; skip LOS si joueur > 15 m ; snapshot compact sur `request-zombie-sync`.
+- **Cache bust** : `20260607-server-authority-132`
+
+### Completed — Perf & fluidité multijoueur (2026-06-07)
+
+- **Inventaire** : coalescence `inventory-authoritative` ; tir/chop/mine regroupés ; hotbar patch partiel (slots modifiés seulement).
+- **Zombies** : payload compact ; throttle terrain/HP client ; **fix `DETECT_RANGE`** (régression IA) ; LOS attaque optimisé ; morsure/infection **serveur**.
+- **Survie** : plus de double `take-damage` faim/soif ; HP authoritatif sur coup zombie + `survival-update` immédiat.
+- **Cache bust** : `20260607-server-authority-131`
+
+### Completed — Audit post-migration authorité (2026-06-07)
+
+- **Corrections** : typo RCON `kill` ; rollback `inventory-move` ; `weapon-reload` serveur ; durabilité outils serveur (`wearInvTool`, `durabilityMax` dans `weapon-stats.mjs`) ; équipement hotbar via `inventory-move` ; RCON `heal` → `survival-update` ; handler `item-add` retiré.
+- **Nettoyage** : code craft client mort retiré.
+- **Tests** : `craft-queue.test.mjs`, `wearInvTool` dans `inventory-ops.test.mjs`.
+- **Vérif** : `npm test` 112 tests, `npm run lint` 0 erreurs, smoke OK.
+- **Cache bust** : `20260607-server-authority-129`
+
+### Completed — Migration serveur authoritatif (anti-cheat) (2026-06-07)
+
+- **Inventaire** : `inventory-ops.js` ; plus de `inventory-sync` ; pickup/drop/deposit authoritatifs ; `inventory-move`, `inventory-authoritative`.
+- **Survie** : tick serveur 1 s ; `use-item` ; `survival-update` ; mort via `player-death` serveur.
+- **Craft** : `craft-recipes.mjs` + `craft-queue.js` ; events `craft-queue` / `craft-cancel`.
+- **Combat** : `weapon-stats.mjs` ; `shoot` avec `weaponType` ; ammo débitée serveur.
+- **Récolte** : chop/mine grantent items serveur (`toolType`).
+- **Build** : placement consomme inv serveur ; fallback timeout client retiré.
+- **Monde** : colliders décor client rejetés.
+- **Docs** : `docs/ARCHITECTURE.md` section Server authority.
+- **Tests** : `inventory-ops.test.mjs`, `item-effects.test.mjs`.
+- **Cache bust** : `20260607-server-authority-127`
+
 ### Tuning — cycle jour/nuit 15 min / 15 min (2026-06-07)
 
 - **Durée** : cycle complet 30 min (`_DAY_DURATION` / `_DAY_LENGTH_SEC` = 1800 s) — soleil au-dessus de l'horizon ≈ 15 min, en dessous ≈ 15 min.

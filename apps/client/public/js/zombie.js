@@ -148,6 +148,7 @@
       prevZ:        z.z,
     };
     _updateHealthBar(entry, z.health != null ? z.health : maxHealth, maxHealth);
+    entry.lastHealth = z.health != null ? z.health : maxHealth;
     zombieMeshes.set(z.id, entry);
     _scene.add(group);
   }
@@ -156,16 +157,30 @@
     const entry = zombieMeshes.get(z.id);
     if (!entry || entry.dying) return;
 
-    entry.group.position.set(z.x, ZS.getTerrainHeight(z.x, z.z), z.z);
+    const moved = Math.hypot(z.x - entry.prevX, z.z - entry.prevZ);
+    const angleSame = z.angle == null || Math.abs(z.angle - entry.targetAngle) < 0.001;
+    const healthSame = z.health == null || z.health === entry.lastHealth;
+    const reachSame = z.meleeReach == null || !!z.meleeReach === !!entry.meleeReach;
+    if (moved < 0.0001 && angleSame && healthSame && reachSame) return;
+    entry.group.position.x = z.x;
+    entry.group.position.z = z.z;
+    if (moved > 0.08 || entry.lastTerrainX == null
+      || Math.hypot(z.x - entry.lastTerrainX, z.z - entry.lastTerrainZ) > 0.35) {
+      entry.group.position.y = ZS.getTerrainHeight(z.x, z.z);
+      entry.lastTerrainX = z.x;
+      entry.lastTerrainZ = z.z;
+    }
 
     if (z.angle != null) entry.targetAngle = z.angle;
     if (z.speed  != null) entry.speed = z.speed;
     if (z.meleeReach != null) entry.meleeReach = !!z.meleeReach;
     if (z.maxHealth != null) entry.maxHealth = z.maxHealth;
     if (z.collideRadius != null) entry.collideRadius = z.collideRadius;
-    if (z.health != null) _updateHealthBar(entry, z.health, entry.maxHealth);
+    if (z.health != null && z.health !== entry.lastHealth) {
+      _updateHealthBar(entry, z.health, entry.maxHealth);
+      entry.lastHealth = z.health;
+    }
 
-    const moved = Math.hypot(z.x - entry.prevX, z.z - entry.prevZ);
     entry.isMoving = moved > 0.005;
     entry.prevX = z.x;
     entry.prevZ = z.z;

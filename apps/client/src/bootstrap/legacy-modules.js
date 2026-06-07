@@ -32,6 +32,7 @@ export const LEGACY_MODULES = [
   '/js/zombie.js',
   '/js/rcon.js',
   '/js/chat.js',
+  '/js/qa-panel.js',
   '/js/network.js',
   '/js/ui.js',
   '/js/inventory.js',

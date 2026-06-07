@@ -8,9 +8,14 @@
 </head>
 <body>
 <div class="login-bg">
-  <div class="login-card">
+  <div class="login-card login-card-wide">
     <h1 class="login-title">ZOMBIE</h1>
     <p class="login-subtitle">Survive. Kill. Repeat.</p>
+
+    <div class="server-picker" id="server-picker">
+      <p class="server-picker-label">Choisir un serveur</p>
+      <div class="server-picker-grid" id="server-grid"></div>
+    </div>
 
     <div class="tabs">
       <button class="tab-btn active" id="tab-login" onclick="switchTab('login')">Connexion</button>
@@ -34,6 +39,22 @@
 
 <script>
   let currentTab = 'login';
+  let serversConfig = { servers: [], defaultId: 'prod' };
+  let selectedServer = null;
+
+  function apiBase() {
+    const url = localStorage.getItem('zombie_server_url');
+    return url || '';
+  }
+
+  function normalizeUrl(url) {
+    if (!url) return '';
+    return url.replace(/\/+$/, '');
+  }
+
+  function currentOrigin() {
+    return window.location.origin.replace(/\/+$/, '');
+  }
 
   function switchTab(tab) {
     currentTab = tab;
@@ -41,6 +62,97 @@
     document.getElementById('tab-register').classList.toggle('active', tab === 'register');
     document.getElementById('submit-btn').textContent = tab === 'login' ? 'Jouer' : 'Créer le compte';
     document.getElementById('error-msg').textContent = '';
+    updateRegisterVisibility();
+  }
+
+  function updateRegisterVisibility() {
+    const isDev = selectedServer?.role === 'dev';
+    const tabReg = document.getElementById('tab-register');
+    if (tabReg) tabReg.style.display = isDev ? 'none' : '';
+    if (isDev && currentTab === 'register') switchTab('login');
+  }
+
+  function selectServer(server) {
+    if (server.prodUrlMissing) {
+      const errEl = document.getElementById('error-msg');
+      if (errEl) {
+        errEl.textContent = 'Prod preview : définir ZS_PROD_URL sur le serveur équipe (URL Infomaniak du pote)';
+      }
+      return;
+    }
+    selectedServer = server;
+    localStorage.setItem('zombie_server_id', server.id);
+    localStorage.setItem('zombie_server_role', server.role || '');
+    localStorage.setItem('zombie_server_url', normalizeUrl(server.url || ''));
+
+    const target = normalizeUrl(server.url || '');
+    if (target && target !== currentOrigin()) {
+      localStorage.removeItem('zombie_token');
+      window.location.href = target + '/index.html';
+      return;
+    }
+
+    document.getElementById('error-msg').textContent = '';
+    renderServerGrid();
+    updateRegisterVisibility();
+  }
+
+  function renderServerGrid() {
+    const grid = document.getElementById('server-grid');
+    if (!grid) return;
+    grid.innerHTML = '';
+    const activeId = selectedServer?.id || localStorage.getItem('zombie_server_id') || serversConfig.defaultId;
+    for (const s of serversConfig.servers) {
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      const missing = !!s.prodUrlMissing;
+      btn.className = 'server-card' + (s.id === activeId ? ' active' : '') + (missing ? ' server-card-disabled' : '');
+      btn.disabled = missing;
+      btn.innerHTML =
+        `<span class="server-badge server-badge-${s.role || 'prod'}">${s.badge || s.role || ''}</span>` +
+        `<span class="server-name">${s.name}${missing ? ' (URL à configurer)' : ''}</span>` +
+        `<span class="server-desc">${s.description || ''}</span>`;
+      if (!missing) btn.addEventListener('click', () => selectServer(s));
+      grid.appendChild(btn);
+    }
+    if (!selectedServer) {
+      selectedServer = serversConfig.servers.find((s) => s.id === activeId) || serversConfig.servers[0];
+    }
+  }
+
+  async function loadServers() {
+    try {
+      const res = await fetch('/api/servers', { cache: 'no-store' });
+      if (res.ok) {
+        serversConfig = await res.json();
+      } else {
+        const fallback = await fetch('/servers.json', { cache: 'no-store' });
+        if (fallback.ok) serversConfig = await fallback.json();
+      }
+    } catch {
+      try {
+        const fallback = await fetch('/servers.json', { cache: 'no-store' });
+        if (fallback.ok) serversConfig = await fallback.json();
+      } catch { /* defaults */ }
+    }
+    if (!Array.isArray(serversConfig.servers) || !serversConfig.servers.length) {
+      serversConfig = {
+        defaultId: 'auto',
+        servers: [{ id: 'prod', name: 'Production', role: 'prod', url: '', description: 'Serveur actuel', badge: 'LIVE' }],
+      };
+    }
+    const savedId = localStorage.getItem('zombie_server_id');
+    selectedServer = serversConfig.servers.find((s) => s.id === savedId && !s.prodUrlMissing)
+      || serversConfig.servers.find((s) => s.id === serversConfig.defaultId && !s.prodUrlMissing)
+      || serversConfig.servers.find((s) => !s.prodUrlMissing)
+      || serversConfig.servers[0];
+    if (selectedServer) {
+      localStorage.setItem('zombie_server_id', selectedServer.id);
+      localStorage.setItem('zombie_server_role', selectedServer.role || '');
+      localStorage.setItem('zombie_server_url', normalizeUrl(selectedServer.url || ''));
+    }
+    renderServerGrid();
+    updateRegisterVisibility();
   }
 
   async function handleSubmit(e) {
@@ -54,16 +166,23 @@
     btn.textContent = '...';
     errEl.textContent = '';
 
+    const base = apiBase();
+    const path = currentTab === 'login' ? '/api/auth/login' : '/api/auth/register';
+
     try {
-      const res = await fetch(`/api/auth/${currentTab === 'login' ? 'login' : 'register'}`, {
+      const res = await fetch(base + path, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ username, password })
+        body: JSON.stringify({ username, password }),
       });
       const data = await res.json();
 
       if (!res.ok) {
-        errEl.textContent = data.error || 'Erreur inconnue';
+        if (data.code === 'dev_admin_only') {
+          errEl.textContent = 'Serveur dev réservé aux administrateurs';
+        } else {
+          errEl.textContent = data.error || 'Erreur inconnue';
+        }
         btn.disabled = false;
         btn.textContent = currentTab === 'login' ? 'Jouer' : 'Créer le compte';
         return;
@@ -72,6 +191,7 @@
       localStorage.setItem('zombie_token', data.token);
       localStorage.setItem('zombie_username', data.username);
       localStorage.setItem('zombie_is_admin', data.isAdmin ? '1' : '0');
+      if (data.serverRole) localStorage.setItem('zombie_server_role', data.serverRole);
       if (data.spawn) localStorage.setItem('zombie_spawn', JSON.stringify(data.spawn));
       if (data.health) localStorage.setItem('zombie_health', data.health);
       if (data.kills) localStorage.setItem('zombie_kills', data.kills);
@@ -84,16 +204,19 @@
     }
   }
 
-  // Redirect only if the stored token is still valid on THIS server.
   (async () => {
+    await loadServers();
+
     const token = localStorage.getItem('zombie_token');
     if (!token) return;
     try {
-      const res = await fetch('/api/auth/me', {
+      const res = await fetch(apiBase() + '/api/auth/me', {
         headers: { Authorization: 'Bearer ' + token },
         cache: 'no-store',
       });
       if (res.ok) {
+        const me = await res.json();
+        if (me.serverRole) localStorage.setItem('zombie_server_role', me.serverRole);
         window.location.href = '/game.html';
         return;
       }

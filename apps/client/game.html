@@ -149,6 +149,10 @@
 <button id="menu-btn" title="Menu">☰</button>
 <div id="menu-panel" style="display:none">
   <button id="menu-audio" class="menu-item">🔊 Son : activé</button>
+  <button id="menu-qa" class="menu-item menu-qa-item menu-qa-hidden" type="button">
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
+    Checklist QA
+  </button>
   <button id="menu-console" class="menu-item menu-console-item menu-console-hidden" type="button">
     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
       <polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/>
@@ -164,6 +168,28 @@
     Se déconnecter
   </button>
 </div>
+
+<!-- QA checklist overlay (serveur QA) -->
+<div id="qa-backdrop" style="display:none">
+  <div id="qa-panel">
+    <div class="qa-header">
+      <h2>Tests QA</h2>
+      <button id="qa-close-btn" type="button" aria-label="Fermer">✕</button>
+    </div>
+    <p id="qa-campaign-title" class="qa-campaign-title"></p>
+    <div id="qa-testers" class="qa-testers"></div>
+    <div id="qa-item-list" class="qa-item-list"></div>
+    <div id="qa-fail-box" class="qa-fail-box" style="display:none">
+      <p class="qa-fail-label">Problème sur : <strong id="qa-fail-item-label"></strong></p>
+      <textarea id="qa-fail-input" rows="4" placeholder="Décrivez ce qui ne va pas…"></textarea>
+      <div class="qa-fail-actions">
+        <button id="qa-fail-cancel" type="button" class="qa-btn-secondary">Annuler</button>
+        <button id="qa-fail-send" type="button" class="qa-btn-fail-send">Envoyer</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <button id="chat-btn" title="Chat — écrire" type="button">💬</button>
 <button id="jump-btn">⬆</button>
 <button id="shoot-btn">🔫</button>

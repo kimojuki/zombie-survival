@@ -1,0 +1,29 @@
+{
+  "defaultId": "auto",
+  "servers": [
+    {
+      "id": "dev",
+      "name": "Développement",
+      "role": "dev",
+      "url": "__TEAM__",
+      "description": "Équipe Badom — admins, builds en cours",
+      "badge": "DEV"
+    },
+    {
+      "id": "qa",
+      "name": "QA / Tests",
+      "role": "qa",
+      "url": "__TEAM__",
+      "description": "Équipe Badom — validation avant prod",
+      "badge": "QA"
+    },
+    {
+      "id": "prod",
+      "name": "Prod (preview)",
+      "role": "prod",
+      "url": "__PROD__",
+      "description": "Preview Infomaniak (3k51myccypp) — branche main",
+      "badge": "LIVE"
+    }
+  ]
+}

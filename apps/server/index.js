@@ -11,11 +11,16 @@ const jwt = require('jsonwebtoken');
 require('dotenv').config();
 
 const db = require('./src/db');
-const { getPlayer, createPlayer, savePlayerState, pool, ensureWorldSchema } = db;
+const { getPlayer, createPlayer, savePlayerState, pool, ensureWorldSchema, DB_CLIENT } = db;
 const log = require('./src/logger');
 const { createRcon } = require('./src/rcon');
 const { createWorldPersist } = require('./src/world-persist');
+const { getServerRole, isDevServer, isQaServer } = require('./src/server-role');
+const { createQaChecklist } = require('./src/qa-checklist');
+const { loadServersConfig, resolveServersForClient } = require('./src/servers-config');
 const worldPersist = createWorldPersist(db, log);
+const qaChecklist = createQaChecklist(pool, DB_CLIENT);
+const SERVER_ROLE = getServerRole();
 const invOps = require('./src/inventory-ops');
 const {
   normalizeInv: _normalizeInv,
@@ -88,6 +93,7 @@ const server = http.createServer(app);
 if (process.env.TRUST_PROXY === 'true' || process.env.NODE_ENV === 'production') {
   app.set('trust proxy', 1);
 }
+// Derrière Cloudflare / Infomaniak : TRUST_PROXY=true pour req.protocol / host corrects
 const io = new Server(server, {
   cors: { origin: true },
   pingTimeout: 60000,
@@ -230,8 +236,26 @@ app.get('/api/health', (req, res) => {
     chat: true,
     commit: GIT_COMMIT,
     clientVersion: getClientVersion(),
+    serverRole: SERVER_ROLE,
     decor: _decorStats(),
   });
+});
+
+app.get('/api/server-info', (req, res) => {
+  res.json({
+    role: SERVER_ROLE,
+    qaEnabled: isQaServer(),
+    devOnly: isDevServer(),
+  });
+});
+
+app.get('/api/servers', (req, res) => {
+  res.set('Cache-Control', 'no-store, no-cache, must-revalidate');
+  const proto = req.get('x-forwarded-proto') || req.protocol || 'https';
+  const host = req.get('x-forwarded-host') || req.get('host') || '';
+  const origin = host ? `${proto}://${host}`.replace(/\/+$/, '') : '';
+  const config = loadServersConfig(CLIENT_PUBLIC, SERVER_ROLE);
+  res.json(resolveServersForClient(config, origin));
 });
 
 /** Rochers monde synchronisables (debug + resync client). */
@@ -289,13 +313,14 @@ app.post('/api/auth/register', async (req, res) => {
   if (!/^[a-zA-Z0-9_-]+$/.test(username)) return res.status(400).json({ error: 'Nom invalide (a-z, 0-9, _, -)' });
 
   try {
+    if (isDevServer()) return res.status(403).json(_devAccessPayload());
     if (await getPlayer(username)) return res.status(409).json({ error: 'Nom déjà utilisé' });
     const hash = await bcrypt.hash(password, 12);
     const id = await createPlayer(username, hash, STARTING_SAVE, BEACH_SPAWN);
     const token = jwt.sign({ id, username }, JWT_SECRET, { expiresIn: '7d' });
     const isAdmin = isAdminUser(username) || RCON_AUTO_ADMIN;
     log.info('auth', 'register ok', { username });
-    res.json({ token, username, isAdmin, rconEnabled: isAdmin });
+    res.json({ token, username, isAdmin, rconEnabled: isAdmin, serverRole: SERVER_ROLE });
   } catch (err) {
     log.error('auth', 'register failed', { username, err: err.message });
     res.status(500).json({ error: 'Erreur serveur: ' + err.message });
@@ -310,7 +335,40 @@ app.get('/api/auth/me', (req, res) => {
     username: user.username,
     isAdmin,
     rconEnabled: isAdmin,
+    serverRole: SERVER_ROLE,
+    qaEnabled: isQaServer(),
   });
+});
+
+app.get('/api/qa/checklist', async (req, res) => {
+  if (!isQaServer()) return res.status(404).json({ ok: false, error: 'QA indisponible sur ce serveur' });
+  const user = authFromHeader(req);
+  if (!user) return res.status(401).json({ ok: false, error: 'Non authentifié' });
+  try {
+    const data = await qaChecklist.listItemsForTester(user.username);
+    res.json({ ok: true, ...data });
+  } catch (err) {
+    log.error('qa', 'checklist failed', { err: err.message });
+    res.status(500).json({ ok: false, error: 'Erreur serveur' });
+  }
+});
+
+app.post('/api/qa/verdict', async (req, res) => {
+  if (!isQaServer()) return res.status(404).json({ ok: false, error: 'QA indisponible sur ce serveur' });
+  const user = authFromHeader(req);
+  if (!user) return res.status(401).json({ ok: false, error: 'Non authentifié' });
+  const { itemId, verdict, feedback } = req.body || {};
+  try {
+    const result = await qaChecklist.submitVerdict(itemId, user.username, verdict, feedback);
+    if (!result.ok) {
+      const status = result.err === 'feedback_required' ? 400 : 409;
+      return res.status(status).json(result);
+    }
+    res.json(result);
+  } catch (err) {
+    log.error('qa', 'verdict failed', { err: err.message });
+    res.status(500).json({ ok: false, error: 'Erreur serveur' });
+  }
 });
 
 app.post('/api/auth/login', async (req, res) => {
@@ -321,6 +379,9 @@ app.post('/api/auth/login', async (req, res) => {
     const player = await getPlayer(username);
     if (!player || !(await bcrypt.compare(password, player.password_hash)))
       return res.status(401).json({ error: 'Identifiants invalides' });
+    if (isDevServer() && !_canAccessDevServer(player.username)) {
+      return res.status(403).json(_devAccessPayload());
+    }
 
     const token = jwt.sign({ id: player.id, username: player.username }, JWT_SECRET, { expiresIn: '7d' });
     log.info('auth', 'login ok', {
@@ -334,6 +395,8 @@ app.post('/api/auth/login', async (req, res) => {
       token, username: player.username,
       isAdmin,
       rconEnabled: isAdmin,
+      serverRole: SERVER_ROLE,
+      qaEnabled: isQaServer(),
       spawn: { x: player.pos_x ?? 0, y: player.pos_y ?? 0, z: player.pos_z ?? 0, rotY: player.rot_y ?? 0 },
       health: player.health ?? 100,
       kills: player.kills ?? 0
@@ -1089,6 +1152,14 @@ function isAdminUser(username) {
   return ADMIN_USERS.has((username || '').toLowerCase());
 }
 
+function _canAccessDevServer(username) {
+  return isAdminUser(username) || RCON_AUTO_ADMIN;
+}
+
+function _devAccessPayload() {
+  return { error: 'Serveur dev réservé aux administrateurs', code: 'dev_admin_only' };
+}
+
 function setWorldTime(t) {
   _worldTime = ((t % 1) + 1) % 1;
   worldPersist?.scheduleWorldState?.({ worldTime: _worldTime });
@@ -1430,6 +1501,7 @@ rcon = createRcon({
     const sock = io.sockets.sockets.get(target.socketId);
     if (sock) _emitSurvivalUpdate(sock, target);
   },
+  qaChecklist,
   log,
 });
 
@@ -1647,6 +1719,9 @@ setInterval(() => {
 io.use((socket, next) => {
   try {
     socket.user = jwt.verify(socket.handshake.auth.token, JWT_SECRET);
+    if (isDevServer() && !_canAccessDevServer(socket.user.username)) {
+      return next(new Error('Serveur dev réservé aux administrateurs'));
+    }
     next();
   } catch (err) {
     log.warn('socket', 'auth rejected', { err: err.message, ip: socket.handshake.address });
@@ -1729,7 +1804,9 @@ io.on('connection', async (socket) => {
     rconEnabled: isAdminUser(p.username) || RCON_AUTO_ADMIN,
     isAdmin: isAdminUser(p.username) || RCON_AUTO_ADMIN,
     rconPreAuth: isAdminUser(p.username) || RCON_AUTO_ADMIN,
-    features: { chat: true },
+    features: { chat: true, qa: isQaServer() },
+    serverRole: SERVER_ROLE,
+    qaEnabled: isQaServer(),
     onlineCount: players.size,
     inventory: p.inv,
     survival:  p.survival,
@@ -2932,6 +3009,7 @@ async function resetAllPlayersOnce() {
 
 async function loadPersistedWorld() {
   await ensureWorldSchema();
+  await qaChecklist.ensureSchema();
   const loaded = await worldPersist.loadInto(decorItems, structures, items, zombies, sleepingPlayers);
   decorSeq = Math.max(decorSeq, loaded.decorSeq || 1);
   structureIdCounter = Math.max(structureIdCounter, loaded.structureIdCounter || 0);
@@ -2994,6 +3072,7 @@ loadPersistedWorld()
       log.info('boot', 'server started', {
         url: `http://localhost:${PORT}`,
         listen: `${HOST}:${PORT}`,
+        serverRole: SERVER_ROLE,
         clientMode: USE_CLIENT_BUILD ? 'build/client' : 'apps/client',
         db: require('./src/db').DB_CLIENT,
         sqlite: require('./src/db').pool.path || undefined,

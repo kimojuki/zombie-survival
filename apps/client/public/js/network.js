@@ -212,6 +212,10 @@
     if (ZS.Chat?.setSelfId) ZS.Chat.setSelfId(data.selfId);
     if (ZS.Chat?.setServerReady) ZS.Chat.setServerReady(data.features?.chat !== false);
     if (ZS.Rcon?.refreshMenu) ZS.Rcon.refreshMenu();
+    if (data.qaEnabled && ZS.QaPanel?.init) {
+      ZS.QaPanel.init({ qaEnabled: true });
+    }
+    if (data.serverRole) localStorage.setItem('zombie_server_role', data.serverRole);
     _state.selfId = data.selfId;
     const spawn = data.spawn || ZS.SpawnZone?.spawn || null;
     if (spawn) {

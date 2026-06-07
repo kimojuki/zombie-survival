@@ -50,6 +50,21 @@ Copier dans la description de PR :
 
 ## 2026-06-07
 
+### Completed — Serveurs multi-domaines (Badom + preview prod) (2026-06-07)
+
+- **`GET /api/servers`** : liste dynamique, même origine = pas de redirect, auto-sélection par `SERVER_ROLE`.
+- **`.env`** : `ZS_TEAM_URL` (défaut survival.badom.ch), `ZS_PROD_URL` optionnel (défaut = preview [3k51myccypp](https://3k51myccypp.preview.infomaniak.website))
+- **Dev/QA** sur [survival.badom.ch](https://survival.badom.ch/) ; prod = [preview Infomaniak](https://3k51myccypp.preview.infomaniak.website/game.html) (branche `main`)
+- **Version** : `20260607-multi-domain-servers-139`
+
+### Completed — Workflow Dev / QA / Prod + checklist QA (2026-06-07)
+
+- **Connexion** : choix du serveur (dev / QA / prod) via `servers.json` sur l'écran login.
+- **SERVER_ROLE** : `dev` (admins only), `qa` (checklist menu ☰), `prod` (défaut).
+- **QA** : campagnes, items à tester, verdicts ✓/✗ + feedback, stats testeurs, commandes RCON `qa …`.
+- **Docs** : `docs/QA_WORKFLOW.md`, `.env.example` mis à jour.
+- **Version** : `20260607-dev-qa-prod-138`
+
 ### Completed — Audit pass 8 : HP armure authoritatif (2026-06-07)
 
 - **Fix anti-cheat / désync** : bonus de vie à l'équipement d'armure géré côté serveur (`syncArmorHealth` dans `item-effects.mjs`), plus de gain HP optimiste côté client.

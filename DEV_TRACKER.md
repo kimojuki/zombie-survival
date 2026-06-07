@@ -50,6 +50,13 @@ Copier dans la description de PR :
 
 ## 2026-06-07
 
+### Completed — Audit pass 5 : nettoyage client + test survie (2026-06-07)
+
+- **Verrou porte** : retrait du fallback client `removeItem('tool_verrou')` — inventaire serveur uniquement.
+- **Carte** : `receivePickup('map')` ignoré (pas d'item inventaire).
+- **Tests** : `survival-tick.test.mjs` (faim/soif, saignement, infection mortelle).
+- **Cache bust** : `20260607-server-authority-133`
+
 ### Completed — Audit pass 4 : désynchro mort + perf réseau (2026-06-07)
 
 - **Mort** : écran de mort uniquement via `player-death` (plus de double déclenchement client sur `take-damage`).

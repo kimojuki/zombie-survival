@@ -47,8 +47,6 @@
     if (d?.ok) {
       if (d.inventory && ZS.Inventory?.applyAuthoritativeInv) {
         ZS.Inventory.applyAuthoritativeInv(d.inventory);
-      } else {
-        removeItem('tool_verrou', 1);
       }
       if (d.keyDropped) {
         ZS.UI?.showNotif?.('Porte verrouillée — clé au sol (inventaire plein)');
@@ -883,6 +881,7 @@
   // ── Server pickup callback ─────────────────────────────────────────────────
 
   function receivePickup(type, qty) {
+    if (type === 'map') return;
     if (_placePending && type === _placePendingType) {
       const placed = _fallbackBuildPlacement(_placePendingType, _placePendingTransform, _placePendingSpec);
       if (!placed) {

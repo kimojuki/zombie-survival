@@ -39,6 +39,18 @@ export function getMaxHealthFromInv(inv, normalizeInv) {
   return 100 + getArmorFromInv(inv, normalizeInv);
 }
 
+/** Grant bonus HP when armor increases; clamp when armor decreases. */
+export function syncArmorHealth(player, prevArmor, newArmor) {
+  if (prevArmor === newArmor) return;
+  const maxHp = 100 + newArmor;
+  const hp = player.health ?? 100;
+  if (newArmor > prevArmor) {
+    player.health = Math.min(maxHp, hp + (newArmor - prevArmor));
+  } else {
+    player.health = Math.min(hp, maxHp);
+  }
+}
+
 export function applyItemUse(type, player, normalizeInv) {
   const eff = ITEM_EFFECTS[type];
   if (!eff) return { ok: false, err: 'unknown_item' };

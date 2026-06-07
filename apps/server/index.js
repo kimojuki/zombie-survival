@@ -700,7 +700,19 @@ const itemEffectsModPromise = import(ITEM_EFFECTS_URL);
 const craftRecipesModPromise = import(CRAFT_RECIPES_URL);
 const weaponStatsModPromise = import(WEAPON_STATS_URL);
 let _weaponStatsMod = null;
+let _itemFxMod = null;
 weaponStatsModPromise.then((m) => { _weaponStatsMod = m; }).catch(() => {});
+itemEffectsModPromise.then((m) => { _itemFxMod = m; }).catch(() => {});
+
+async function _getItemFx() {
+  return _itemFxMod || itemEffectsModPromise;
+}
+
+function _maybeSyncEquipArmor(p, prevArmor, itemFx) {
+  const newArmor = itemFx.getArmorFromInv(p.inv, _normalizeInv);
+  itemFx.syncArmorHealth(p, prevArmor, newArmor);
+  return prevArmor !== newArmor;
+}
 const _craftOps = {
   countInvType: _countInvType,
   removeStackFromInv: _removeStackFromInv,
@@ -1969,17 +1981,19 @@ io.on('connection', async (socket) => {
     reply({ ok: true });
   });
 
-  socket.on('item-drop', (d, cb) => {
+  socket.on('item-drop', async (d, cb) => {
     const reply = (payload) => { if (typeof cb === 'function') cb(payload); };
     if (!d || typeof d.type !== 'string' || d.type.length > 60) {
       reply({ ok: false, err: 'invalid' });
       return;
     }
     const qty = Math.max(1, Math.min(999, Number(d.qty) || 1));
-    const zone = d.zone === 'bag' || d.zone === 'hotbar' ? d.zone : null;
-    const idx = Number(d.index);
+    const zone = ['hotbar', 'bag', 'equip'].includes(d.zone) ? d.zone : null;
+    const idx = zone === 'equip' ? d.index : Number(d.index);
+    const itemFx = await _getItemFx();
+    const prevArmor = zone === 'equip' ? itemFx.getArmorFromInv(p.inv, _normalizeInv) : 0;
     let removed = false;
-    if (zone != null && Number.isFinite(idx)) {
+    if (zone != null && (zone === 'equip' ? idx != null : Number.isFinite(idx))) {
       const slot = _removeFromSlot(p.inv, zone, idx, qty);
       removed = !!slot && slot.type === d.type;
     } else {
@@ -2004,6 +2018,9 @@ io.on('connection', async (socket) => {
     _dropWorldItem(d.type, qty, p.x + Math.cos(ang) * 1.0, p.z + Math.sin(ang) * 1.0, extra);
     p.dirty = true;
     _emitInvAuth(socket, p);
+    if (zone === 'equip' && _maybeSyncEquipArmor(p, prevArmor, itemFx)) {
+      _emitSurvivalUpdate(socket, p);
+    }
     reply({ ok: true });
   });
 
@@ -2555,7 +2572,7 @@ io.on('connection', async (socket) => {
     _touchDecorItem(item);
   });
 
-  socket.on('inventory-move', (d, cb) => {
+  socket.on('inventory-move', async (d, cb) => {
     const reply = (payload) => { if (typeof cb === 'function') cb(payload); };
     const fromZone = d?.from?.zone;
     const toZone = d?.to?.zone;
@@ -2563,6 +2580,9 @@ io.on('connection', async (socket) => {
       reply({ ok: false, err: 'invalid' });
       return;
     }
+    const itemFx = await _getItemFx();
+    const equipTouched = fromZone === 'equip' || toZone === 'equip';
+    const prevArmor = equipTouched ? itemFx.getArmorFromInv(p.inv, _normalizeInv) : 0;
     const ok = _moveInvSlot(p.inv, fromZone, d.from.index, toZone, d.to.index);
     if (!ok) {
       reply({ ok: false, err: 'move_failed' });
@@ -2570,6 +2590,9 @@ io.on('connection', async (socket) => {
     }
     p.dirty = true;
     _emitInvAuth(socket, p);
+    if (equipTouched && _maybeSyncEquipArmor(p, prevArmor, itemFx)) {
+      _emitSurvivalUpdate(socket, p);
+    }
     reply({ ok: true });
   });
 

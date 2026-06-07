@@ -4,6 +4,7 @@ import {
   getItemEffect,
   getMaxHealthFromInv,
   applyItemUse,
+  syncArmorHealth,
 } from '../packages/shared/src/item-effects.mjs';
 
 function normalizeInv(inv) {
@@ -33,4 +34,22 @@ test('armor increases max health', () => {
 
 test('unknown item returns null effect', () => {
   assert.equal(getItemEffect('nonexistent'), null);
+});
+
+test('syncArmorHealth grants bonus when equipping armor', () => {
+  const player = { health: 100 };
+  syncArmorHealth(player, 0, 40);
+  assert.equal(player.health, 140);
+});
+
+test('syncArmorHealth clamps when unequipping armor', () => {
+  const player = { health: 130 };
+  syncArmorHealth(player, 40, 0);
+  assert.equal(player.health, 100);
+});
+
+test('syncArmorHealth keeps low HP when unequipping', () => {
+  const player = { health: 60 };
+  syncArmorHealth(player, 40, 0);
+  assert.equal(player.health, 60);
 });

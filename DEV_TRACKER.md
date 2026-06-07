@@ -50,6 +50,13 @@ Copier dans la description de PR :
 
 ## 2026-06-07
 
+### Completed — Audit pass 8 : HP armure authoritatif (2026-06-07)
+
+- **Fix anti-cheat / désync** : bonus de vie à l'équipement d'armure géré côté serveur (`syncArmorHealth` dans `item-effects.mjs`), plus de gain HP optimiste côté client.
+- **Serveur** : `inventory-move` et `item-drop` (zone `equip`) émettent `survival-update` après changement d'armure ; drop équipement accepte la zone `equip`.
+- **Tests** : +3 tests `syncArmorHealth` (125 tests total).
+- **Version** : `20260607-armor-hp-authority-137`
+
 ### Completed — Auto purge cache client (version gate) (2026-06-07)
 
 - **Source unique** : `apps/client/public/client-version.json` — remplace les `CACHE_BUST` manuels dans `game.html`.

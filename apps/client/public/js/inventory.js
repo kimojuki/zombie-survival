@@ -1135,19 +1135,15 @@
   // Vie max = 100 + valeur d'armure équipée (le joueur peut dépasser 100).
   function getMaxHealth() { return 100 + getArmorValue(); }
 
-  // Met à jour la vie max selon l'armure. gain=true (équipement en cours de jeu) →
-  // ajoute la vie bonus ; gain=false (chargement/restauration) → règle juste le plafond.
-  let _lastArmor = 0;
-  function _syncArmor(gain) {
+  // Met à jour le plafond de vie selon l'armure (bonus HP accordé par le serveur via survival-update).
+  function _syncArmor() {
     const armor = getArmorValue();
-    const max   = 100 + armor;
+    const max = 100 + armor;
     const p = _state && _state.player;
     if (p) {
-      if (gain) { const delta = armor - _lastArmor; if (delta > 0) p.health += delta; }
-      p.health = Math.max(0, Math.min(max, p.health));   // clamp au max courant
+      p.health = Math.max(0, Math.min(max, p.health));
       ZS.UI?.setHealth?.(Math.floor(p.health), max);
     }
-    _lastArmor = armor;
   }
 
   // ── Sauvegarde ─────────────────────────────────────────────────────────────
@@ -1194,7 +1190,7 @@
       ZS.setHandItem?.(_hotbar[_active]?.type || null);
       ZS.UI?.setWeaponUI?.(_hotbar[_active]?.type || null);
     }
-    _syncArmor(false);
+    _syncArmor();
   }
 
   function _sameStack(a, b) {
@@ -1261,7 +1257,7 @@
     }
     if (slotDirty) _updateUseBtn();
     if (_panelOpen) _renderInvPanel();
-    _syncArmor(false);
+    _syncArmor();
   }
 
   const STARTER_CAILLOU = { type: 'tool_caillou', qty: 1, durability: 80 };
@@ -1502,7 +1498,7 @@
     const touchedDos = (from.zone === 'equip' && from.idx === 'Dos')
                     || (to.zone === 'equip' && to.idx === 'Dos');
     if (touchedDos) _resizeBag();
-    if (from.zone === 'equip' || to.zone === 'equip') _syncArmor(true);
+    if (from.zone === 'equip' || to.zone === 'equip') _syncArmor();
     if (_socket?.connected) {
       _socket.emit('inventory-move', { from: { zone: from.zone, index: from.idx }, to: { zone: to.zone, index: to.idx } }, (res) => {
         if (res?.ok) return;

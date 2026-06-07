@@ -385,6 +385,10 @@
       item: { x: 0, y: 0.03, z: -0.05, rx: 0.04, ry: 0.06, rz: 0.04 },
       anim: { use: { style: 'bite', dur: 0.45 } },
     }),
+    food_sandwich: _grip({
+      item: { x: 0, y: 0.03, z: -0.05, rx: 0.04, ry: 0.06, rz: 0.04 },
+      anim: { use: { style: 'bite', dur: 0.55 } },
+    }),
     food_fruits: _grip({
       item: { x: 0, y: 0.04, z: -0.04, rx: 0.04, ry: 0.05, rz: 0 },
       anim: { use: { style: 'bite', dur: 0.4 } },
@@ -399,6 +403,10 @@
     med_kit_soin: _grip({
       item: { x: 0, y: 0.02, z: -0.06, rx: 0.04, ry: 0.08, rz: 0 },
       anim: { use: { style: 'apply', dur: 3.0 } },
+    }),
+    med_pilules_anti_infection: _grip({
+      item: { x: 0, y: 0.02, z: -0.05, rx: 0.18, ry: 0.12, rz: 0.06 },
+      anim: { use: { style: 'bite', dur: 0.85 } },
     }),
     med_seringue_anti_infection: _grip({
       item: { x: 0, y: 0.04, z: -0.05, rx: 0.12, ry: 0.06, rz: 0.02 },
@@ -1227,7 +1235,7 @@
     const procGrip  = _getGripPoint(type, procModel);
     const proc = _normalizeHeld(procModel, _fit(type) * viewScale, null, procGrip);
     pivot.add(proc);
-    if (type === 'tool_torche') _addTorchFx(pivot, proc);
+    if (type === 'tool_torche') _addTorchFx(pivot, proc, { local: true });
 
     // 2) Si un .glb existe, on le charge et on remplace une fois prêt
     const spec = GLB[type];
@@ -1237,7 +1245,7 @@
         while (pivot.children.length) pivot.remove(pivot.children[0]);
         const m = _normalizeHeld(t.clone(true), _fit(type) * viewScale, spec.rot, _getGripPoint(type, t));
         pivot.add(m);
-        if (type === 'tool_torche') _addTorchFx(pivot, m);
+        if (type === 'tool_torche') _addTorchFx(pivot, m, { local: true });
       }).catch(() => { /* on garde le fallback procédural */ });
     }
   }
@@ -1292,31 +1300,217 @@
     }
   }
 
-  // ── Torche enflammée : flamme + faisceau directionnel + halo ───────────────
-  function _addTorchFx(holder, model) {
+  // ── Torche enflammée : billboards + lumières (style feu de camp, échelle main) ─
+  const _torchFxList = [];
+  let _torchFireTex = null;
+  let _torchEmberTex = null;
+
+  function _torchCanvasTex(w, h, drawFn) {
+    const c = document.createElement('canvas');
+    c.width = w;
+    c.height = h;
+    drawFn(c.getContext('2d'), w, h);
+    const t = new THREE.CanvasTexture(c);
+    t.colorSpace = THREE.SRGBColorSpace;
+    t.magFilter = THREE.LinearFilter;
+    t.minFilter = THREE.LinearMipmapLinearFilter;
+    return t;
+  }
+
+  function _getTorchFireTex() {
+    if (_torchFireTex) return _torchFireTex;
+    _torchFireTex = _torchCanvasTex(64, 80, (ctx, w, h) => {
+      const g = ctx.createRadialGradient(w * 0.5, h * 0.74, 1, w * 0.5, h * 0.52, w * 0.5);
+      g.addColorStop(0, 'rgba(255,255,230,1)');
+      g.addColorStop(0.18, 'rgba(255,215,70,1)');
+      g.addColorStop(0.42, 'rgba(255,95,15,0.95)');
+      g.addColorStop(0.68, 'rgba(210,40,0,0.5)');
+      g.addColorStop(1, 'rgba(40,5,0,0)');
+      ctx.fillStyle = g;
+      ctx.fillRect(0, 0, w, h);
+      for (let i = 0; i < 18; i++) {
+        const x = w * 0.5 + (Math.random() - 0.5) * w * 0.35;
+        const y = h * (0.22 + Math.random() * 0.55);
+        const r = 2 + Math.random() * 5;
+        const g2 = ctx.createRadialGradient(x, y, 0, x, y, r);
+        g2.addColorStop(0, 'rgba(255,248,160,0.7)');
+        g2.addColorStop(1, 'rgba(255,50,0,0)');
+        ctx.fillStyle = g2;
+        ctx.beginPath();
+        ctx.arc(x, y, r, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    });
+    return _torchFireTex;
+  }
+
+  function _getTorchEmberTex() {
+    if (_torchEmberTex) return _torchEmberTex;
+    _torchEmberTex = _torchCanvasTex(32, 32, (ctx, w, h) => {
+      const g = ctx.createRadialGradient(w / 2, h / 2, 0, w / 2, h / 2, w * 0.48);
+      g.addColorStop(0, 'rgba(255,180,60,1)');
+      g.addColorStop(0.55, 'rgba(220,60,8,0.85)');
+      g.addColorStop(1, 'rgba(30,5,0,0)');
+      ctx.fillStyle = g;
+      ctx.fillRect(0, 0, w, h);
+    });
+    return _torchEmberTex;
+  }
+
+  function _unregisterTorchFx(fx) {
+    const i = _torchFxList.indexOf(fx);
+    if (i >= 0) _torchFxList.splice(i, 1);
+  }
+
+  function _animateTorchFx(fx, dt, opts) {
+    const ud = fx.userData.torchAnim;
+    if (!ud) return;
+    const out = !!opts?.extinguished && fx.userData.torchLocal;
+    fx.visible = !out;
+    if (out) return;
+
+    ud.t += dt;
+    const t = ud.t;
+    const move = !!opts?.moving && (opts.speed || 0) > 0.4;
+    const wind = move ? 0.016 + Math.min(0.028, (opts.speed || 0) * 0.0035) : 0.006;
+
+    const flicker = 0.86 + Math.sin(t * 9.1) * 0.08 + Math.sin(t * 14.7) * 0.05 + Math.sin(t * 23.3) * 0.03;
+    const flicker2 = 0.9 + Math.sin(t * 6.4 + 1.2) * 0.07 + Math.sin(t * 11.8) * 0.04;
+    const swayX = Math.sin(t * 6.2) * wind + Math.sin(t * 12.1) * wind * 0.45;
+    const swayZ = Math.sin(t * 4.8 + 0.5) * wind * 0.55;
+
+    ud.lights.spot.intensity = ud.base.spot * flicker;
+    ud.lights.core.intensity = ud.base.core * flicker2;
+    ud.lights.pool.intensity = ud.base.pool * (0.88 + Math.sin(t * 5.1) * 0.1);
+    ud.lights.spot.angle = Math.PI / 5.2 + Math.sin(t * 5.5) * 0.028 + wind * Math.sin(t * 8);
+    ud.lights.spotTgt.position.x = swayX * 12;
+    ud.lights.spotTgt.position.z = -10 + swayZ * 8;
+
+    for (let i = 0; i < ud.layers.length; i++) {
+      const L = ud.layers[i];
+      const wob = Math.sin(t * 8.5 + L.phase) * 0.1 + Math.sin(t * 15.2 + L.phase * 1.7) * 0.07;
+      const rise = Math.sin(t * 10 + L.phase) * 0.01;
+      L.mesh.position.x = L.baseX + swayX * (1.2 + L.phase * 0.12);
+      L.mesh.position.z = L.baseZ + swayZ * (0.8 + L.phase * 0.08);
+      L.mesh.position.y = L.baseY + rise + Math.abs(swayX) * 0.5;
+      const sy = 0.78 + wob + flicker * 0.14;
+      const sx = 1 + Math.sin(t * 11 + L.phase) * 0.1;
+      L.mesh.scale.set(sx, sy, 1);
+      L.mesh.material.opacity = 0.7 + wob * 0.38 + flicker * 0.18;
+    }
+
+    for (let i = 0; i < ud.embers.length; i++) {
+      const e = ud.embers[i];
+      const p = e.phase + t * e.speed;
+      e.mesh.material.opacity = 0.35 + Math.sin(p * 6) * 0.4;
+      e.mesh.scale.setScalar(0.42 + Math.sin(p * 4.2) * 0.18);
+      e.mesh.position.y = e.baseY + Math.sin(p * 3) * 0.014;
+      e.mesh.position.x = e.baseX + swayX * 2.2;
+    }
+
+    if (ud.coreOuter) {
+      const sy = 0.72 + flicker * 0.22;
+      ud.coreOuter.scale.set(1 + swayX * 3, sy, 1 + swayZ * 2.5);
+      ud.coreInner.scale.set(1 + swayX, 1.05 + (1 - sy) * 0.35, 1 + swayZ);
+      ud.coreOuter.material.opacity = 0.5 + flicker * 0.22;
+      ud.coreInner.material.opacity = 0.82 + flicker2 * 0.14;
+    }
+  }
+
+  function tickTorchFx(dt, opts) {
+    const step = dt || 0.016;
+    for (let i = _torchFxList.length - 1; i >= 0; i--) {
+      const fx = _torchFxList[i];
+      if (!fx.parent) {
+        _torchFxList.splice(i, 1);
+        continue;
+      }
+      _animateTorchFx(fx, step, opts || {});
+    }
+  }
+
+  function _addTorchFx(holder, model, opts) {
     const old = holder.getObjectByName('torchFx');
-    if (old) holder.remove(old);
+    if (old) {
+      _unregisterTorchFx(old);
+      holder.remove(old);
+    }
 
     holder.updateWorldMatrix(true, true);
     const box = new THREE.Box3().setFromObject(model);
     box.applyMatrix4(new THREE.Matrix4().copy(holder.matrixWorld).invert());
-    const cx   = isFinite(box.min.x) ? (box.min.x + box.max.x) / 2 : 0;
-    const cz   = isFinite(box.min.z) ? (box.min.z + box.max.z) / 2 : 0;
+    const cx = isFinite(box.min.x) ? (box.min.x + box.max.x) / 2 : 0;
+    const cz = isFinite(box.min.z) ? (box.min.z + box.max.z) / 2 : 0;
     const topY = isFinite(box.max.y) ? box.max.y : 0.3;
 
     const fx = new THREE.Group();
     fx.name = 'torchFx';
     fx.position.set(cx, topY + 0.02, cz);
+    fx.userData.torchLocal = !!opts?.local;
 
     const flameMat = (color, op) => new THREE.MeshBasicMaterial({
       color, transparent: true, opacity: op,
-      blending: THREE.AdditiveBlending, depthWrite: false,
+      blending: THREE.AdditiveBlending, depthWrite: false, depthTest: false,
     });
-    const outer = new THREE.Mesh(new THREE.ConeGeometry(0.07, 0.24, 8), flameMat(0xff5512, 0.82));
-    outer.position.y = 0.11;
-    const inner = new THREE.Mesh(new THREE.ConeGeometry(0.04, 0.15, 8), flameMat(0xffdd55, 0.98));
-    inner.position.y = 0.08;
-    fx.add(outer, inner);
+    const coreOuter = new THREE.Mesh(new THREE.ConeGeometry(0.055, 0.18, 7), flameMat(0xff5512, 0.65));
+    coreOuter.position.y = 0.09;
+    const coreInner = new THREE.Mesh(new THREE.ConeGeometry(0.032, 0.11, 7), flameMat(0xffdd55, 0.92));
+    coreInner.position.y = 0.07;
+    fx.add(coreOuter, coreInner);
+
+    const fireMat = new THREE.MeshBasicMaterial({
+      map: _getTorchFireTex(),
+      transparent: true,
+      opacity: 1,
+      depthWrite: false,
+      depthTest: false,
+      blending: THREE.AdditiveBlending,
+      side: THREE.DoubleSide,
+    });
+    const emberMat = new THREE.MeshBasicMaterial({
+      map: _getTorchEmberTex(),
+      transparent: true,
+      opacity: 0.85,
+      depthWrite: false,
+      depthTest: false,
+      blending: THREE.AdditiveBlending,
+    });
+
+    const layers = [];
+    const layerDefs = [
+      { w: 0.16, h: 0.26, y: 0.1, x: 0, z: 0, phase: 0 },
+      { w: 0.11, h: 0.18, y: 0.12, x: 0.014, z: 0.006, phase: 1.15 },
+      { w: 0.075, h: 0.12, y: 0.14, x: -0.01, z: -0.004, phase: 2.35 },
+    ];
+    const billboards = [];
+    for (let i = 0; i < layerDefs.length; i++) {
+      const d = layerDefs[i];
+      const mesh = new THREE.Mesh(new THREE.PlaneGeometry(d.w, d.h), fireMat.clone());
+      mesh.position.set(d.x, d.y, d.z);
+      mesh.renderOrder = 14;
+      mesh.userData.billboard = true;
+      fx.add(mesh);
+      billboards.push(mesh);
+      layers.push({
+        mesh, phase: d.phase, baseX: d.x, baseY: d.y, baseZ: d.z,
+      });
+    }
+
+    const embers = [];
+    for (let i = 0; i < 4; i++) {
+      const a = (i / 4) * Math.PI * 2;
+      const ex = Math.cos(a) * 0.028;
+      const ez = Math.sin(a) * 0.022;
+      const e = new THREE.Mesh(new THREE.PlaneGeometry(0.05, 0.05), emberMat.clone());
+      e.position.set(ex, 0.05 + (i % 2) * 0.02, ez);
+      e.renderOrder = 13;
+      e.userData.billboard = true;
+      fx.add(e);
+      billboards.push(e);
+      embers.push({ mesh: e, phase: i * 1.7, speed: 5.5 + i * 0.9, baseX: ex, baseY: e.position.y });
+    }
+
+    if (ZS.registerBillboards) ZS.registerBillboards(billboards);
 
     const spot = new THREE.SpotLight(0xff9520, 68, 32, Math.PI / 5.2, 0.44, 1.1);
     spot.position.set(0, 0.05, 0);
@@ -1337,22 +1531,18 @@
     pool.userData.playerTorch = true;
     fx.add(pool);
 
-    const base = { spot: 68, core: 18, pool: 3.2 };
-    let t = Math.random() * 10;
-    outer.onBeforeRender = () => {
-      t += 0.08;
-      const f = 0.9 + Math.sin(t * 7.3) * 0.07 + Math.sin(t * 13.1) * 0.04;
-      const sway = Math.sin(t * 5.5) * 0.025;
-      spot.intensity = base.spot * f;
-      spot.angle = Math.PI / 5.2 + sway;
-      core.intensity = base.core * f;
-      pool.intensity = base.pool * (0.94 + Math.sin(t * 4.2) * 0.06);
-      const sy = 0.88 + Math.sin(t * 9.0) * 0.12;
-      outer.scale.set(1, sy, 1);
-      inner.scale.set(1, 1.82 - sy, 1);
+    fx.userData.torchAnim = {
+      t: Math.random() * 10,
+      layers,
+      embers,
+      coreOuter,
+      coreInner,
+      lights: { spot, core, pool, spotTgt },
+      base: { spot: 68, core: 18, pool: 3.2 },
     };
 
     holder.add(fx);
+    _torchFxList.push(fx);
   }
 
   // ── Muzzle flash : éclair + lumière au bout du canon lors d'un tir ──────────
@@ -1448,6 +1638,7 @@
       case 'food_haricots_boite':           return _can(0xcc7733);
       case 'food_soupe_conserve':           return _can(0xdd9933);
       case 'food_pain':                     return _bread();
+      case 'food_sandwich':                 return _sandwich();
       case 'food_fruits':                   return _apple();
       case 'food_viande_crue':              return _meat(0xcc4444);
       case 'food_viande_cuite':             return _meat(0x884422);
@@ -1455,6 +1646,7 @@
       // ── Médical ──────────────────────────────────────────────────────────
       case 'med_bandage':                   return _bandage();
       case 'med_kit_soin':                  return _medkit();
+      case 'med_pilules_anti_infection':    return _pillBlister();
       case 'med_seringue_anti_infection':   return _syringe();
       // ── Munitions ────────────────────────────────────────────────────────
       case 'ammo': case 'ammo_pistolet':    return _ammoBox(0xddcc44);
@@ -1670,6 +1862,15 @@
     return _setGripPoint(g, 0, 0, 0);
   }
 
+  function _sandwich() {
+    const g = new THREE.Group();
+    addBox(g, m(0xddbb66), 0.20, 0.034, 0.14,  0,  0.048, 0);
+    addBox(g, m(0x88aa55), 0.17, 0.028, 0.12,  0,  0.014, 0);
+    addBox(g, m(0xcc8844), 0.15, 0.022, 0.11,  0, -0.010, 0);
+    addBox(g, m(0xddbb66), 0.20, 0.034, 0.14,  0, -0.048, 0);
+    return _setGripPoint(g, 0, 0, 0);
+  }
+
   function _apple() {
     const g = new THREE.Group();
     const sphere = new THREE.Mesh(new THREE.SphereGeometry(0.068, 10, 8), m(0xdd2222));
@@ -1703,6 +1904,30 @@
     addBox(g, m(0xffffff), 0.018, 0.085, 0.01, 0,  0,    -0.046);       // croix
     addBox(g, m(0xffffff), 0.085, 0.018, 0.01, 0,  0,    -0.046);
     addBox(g, m(0x881111), 0.19,  0.012, 0.082, 0,  0.068, 0);          // couvercle
+    return _setGripPoint(g, 0, 0, 0);
+  }
+
+  function _pillBlister() {
+    const g = new THREE.Group();
+    const foil = new THREE.Mesh(
+      new THREE.BoxGeometry(0.14, 0.018, 0.10),
+      new THREE.MeshLambertMaterial({ color: 0xd8e8f0 }),
+    );
+    g.add(foil);
+    const card = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.008, 0.088), m(0xf4f8ff));
+    card.position.y = 0.012; g.add(card);
+    const pillMat = m(0x88ddaa);
+    const pillA = new THREE.Mesh(new THREE.CapsuleGeometry(0.014, 0.028, 4, 8), pillMat);
+    pillA.rotation.z = Math.PI / 2;
+    pillA.position.set(-0.028, 0.022, 0);
+    g.add(pillA);
+    const pillB = new THREE.Mesh(new THREE.CapsuleGeometry(0.014, 0.028, 4, 8), pillMat);
+    pillB.rotation.z = Math.PI / 2;
+    pillB.position.set(0.028, 0.022, 0);
+    g.add(pillB);
+    const label = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.004, 0.03), m(0x44aa66));
+    label.position.set(0, 0.018, -0.048);
+    g.add(label);
     return _setGripPoint(g, 0, 0, 0);
   }
 
@@ -1823,14 +2048,34 @@
 
   // ── Helpers ────────────────────────────────────────────────────────────────
 
+  const _boxGeoCache = new Map();
+  const _matCache = new Map();
+
+  function _boxGeo(w, h, d) {
+    const key = `${w}|${h}|${d}`;
+    let geo = _boxGeoCache.get(key);
+    if (!geo) {
+      geo = new THREE.BoxGeometry(w, h, d);
+      _boxGeoCache.set(key, geo);
+    }
+    return geo;
+  }
+
   function addBox(parent, material, w, h, d, x, y, z) {
-    const mesh = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), material);
+    const mesh = new THREE.Mesh(_boxGeo(w, h, d), material);
     mesh.position.set(x, y, z);
     parent.add(mesh);
     return mesh;
   }
 
-  function m(color) { return new THREE.MeshLambertMaterial({ color }); }
+  function m(color) {
+    let mat = _matCache.get(color);
+    if (!mat) {
+      mat = new THREE.MeshLambertMaterial({ color });
+      _matCache.set(color, mat);
+    }
+    return mat;
+  }
 
   function applyHumanoidPalette(root, palette) {
     const slots = root?.userData?.skinSlots;
@@ -1902,6 +2147,7 @@
   ZS.triggerArmAnim    = triggerArmAnim;
   ZS.tickArmAnim       = tickArmAnim;
   ZS.tickFPSArms       = tickFPSArms;
+  ZS.tickTorchFx       = tickTorchFx;
   ZS.tickHumanoidRig   = tickHumanoidRig;
   ZS.isArmAnimActive   = isArmAnimActive;
   ZS.applyHumanoidPalette = applyHumanoidPalette;

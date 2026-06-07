@@ -55,6 +55,15 @@ Source unique : `apps/client/public/client-version.json` (`version`).
 
 **Après un changement JS/CSS client** : incrémenter uniquement `client-version.json` (plus besoin de Ctrl+F5 manuel).
 
+### UI panneaux (`panel_ui.js`)
+
+Tous les menus modaux jeu (inventaire, craft, coffre, fouille, groupe, QA) partagent :
+
+- **JS** : `ZS.PanelUI` (`create`, `makeHeader`, `makeSlot`, `makeSplitBody`, grilles hotbar/sac/coffre).
+- **CSS** : classes `.zs-panel`, `.zs-backdrop`, `.zs-panel-hdr`, `.zs-panel-hint` — section *Panneaux ZS unifiés* dans `style.css`.
+
+Pour changer le look global (couleurs, taille desktop, header) : modifier `style.css` (bloc unifié) et/ou `panel_ui.js`, pas chaque fichier séparément.
+
 Ordre des scripts legacy (important) dans `apps/client/src/bootstrap/legacy-modules.js` :
 
 1. `noise.js`, `camp_textures.js`, `buildings.js`
@@ -113,6 +122,19 @@ Pose in-game / admin :
 |------------|-------------|--------|-----|
 | **PC** | WASD / flèches | Pointer lock (clic zone jeu) | Clic gauche |
 | **Mobile** | Joystick gauche | Glisser zone droite | Bouton 🔫 |
+
+### Audio multijoueur
+
+| Event | Direction | Rôle |
+|-------|-----------|------|
+| `attack` | client → serveur | `{ kind, weapon? }` — relai `player-attack` avec position serveur |
+| `player-attack` | serveur → autres | `{ id, kind, weapon, x, z, t }` — tir / mêlée spatialisés |
+| `footstep` | client → serveur | `{ surface, sprint }` — rate limit 200 ms |
+| `player-footstep` | serveur → autres | `{ id, surface, sprint, x, z, t }` — pas spatialisés |
+
+**Local uniquement** (normal) : ambiance biome (position propre), bruissements forêt, oiseaux optionnels, filtre sous l’eau.
+
+**Monde synchronisé** (tous les clients) : `decor-door-state` (porte spatialisée), `decor-tree-chop` / `decor-tree-fell` (coupe + impact chute), `decor-rock-mine` (broadcast).
 
 ### Chat joueurs
 
@@ -218,7 +240,8 @@ Client emit(intent) → Serveur valide → mute p.inv / p.survival
 | Inventaire | `item-pickup`, `item-drop`, `inventory-move`, `use-item`, `weapon-reload` | `inventory-authoritative` |
 | Survie | *(aucun push)* | `survival-update` (tick 1 s) |
 | Craft | `craft-queue`, `craft-cancel` | `craft-queue-state`, `craft-complete` |
-| Combat | `shoot` + `weaponType`, `weapon-reload` | stats `weapon-stats.mjs` ; usure via `wearInvTool` |
+| Combat | `shoot` + `weaponType`, `weapon-reload` | stats `weapon-stats.mjs` (plombs + dispersion serveur) ; 1 event/pompe ; usure via `wearInvTool` |
+| Mouvement | `move` | cap vitesse + clamp `WORLD_RADIUS` / Y + **secteur 01** (`sector-bounds.mjs`) ; `move-correction` si triche |
 | Récolte | `decor-chop`, `decor-mine` + `toolType` | grant items serveur |
 | Construction | `place-structure`, `place-decor-prefab` | consume inv avant spawn |
 | Mort | *(serveur only)* | `player-death` |
@@ -254,7 +277,7 @@ Client emit(intent) → Serveur valide → mute p.inv / p.survival
 | Client inv | `applyAuthoritativeInv` préserve le slot hotbar actif (pas de reset UI) |
 | Zombies | `zombie-tick` payload compact ; client throttle hauteur terrain |
 | Survie | dégâts faim/soif via `survival-update` (pas de double `take-damage`) |
-| Morsure zombie | infection/saignement roll serveur + `survival-update` immédiat |
+| Morsure zombie | infection **uniquement** sur morsure (~32 % des coups) ; griffes = saignement possible ; PvP n'infecte pas |
 
 ### Monde
 

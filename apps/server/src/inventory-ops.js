@@ -8,6 +8,39 @@ const DEFAULT_EQUIP = Object.freeze({
 });
 
 const MAX_STACK = 99;
+const HOTBAR_SIZE = 6;
+
+/** Aligné client + packages/shared/src/item-effects.mjs */
+const BAG_SLOTS_BY_TYPE = {
+  eq_petit_sac: 8,
+  eq_sac_moyen: 16,
+  eq_grand_sac: 24,
+};
+
+function bagCapacity(inv) {
+  const n = normalizeInv(inv);
+  const equipped = n.equip?.Dos;
+  if (!equipped?.type) return 0;
+  return BAG_SLOTS_BY_TYPE[equipped.type] || 0;
+}
+
+/** Grille fixe hotbar/sac comme le client (slots vides = null). */
+function ensureSlotGrid(inv) {
+  const n = normalizeInv(inv);
+  if (n.hotbar.length < HOTBAR_SIZE) {
+    while (n.hotbar.length < HOTBAR_SIZE) n.hotbar.push(null);
+  } else if (n.hotbar.length > HOTBAR_SIZE) {
+    n.hotbar.length = HOTBAR_SIZE;
+  }
+  const cap = bagCapacity(n);
+  if (n.bag.length < cap) {
+    while (n.bag.length < cap) n.bag.push(null);
+  } else if (n.bag.length > cap) {
+    n.bag.length = cap;
+  }
+  Object.assign(inv, n);
+  return n;
+}
 
 function normalizeInv(inv) {
   if (!inv || typeof inv !== 'object') {
@@ -218,7 +251,7 @@ function playerOwnsItemType(inv, type) {
 
 /** Déplace ou fusionne deux slots inventaire (hotbar/bag/equip). */
 function moveInvSlot(inv, fromZone, fromIdx, toZone, toIdx) {
-  const n = normalizeInv(inv);
+  const n = ensureSlotGrid(inv);
   const getArr = (zone) => (zone === 'bag' ? n.bag : zone === 'hotbar' ? n.hotbar : null);
   let src;
   if (fromZone === 'equip') {
@@ -304,6 +337,9 @@ function wearInvTool(inv, toolType, maxDurability) {
 module.exports = {
   DEFAULT_EQUIP,
   MAX_STACK,
+  HOTBAR_SIZE,
+  bagCapacity,
+  ensureSlotGrid,
   normalizeInv,
   cloneInv,
   flattenInv,

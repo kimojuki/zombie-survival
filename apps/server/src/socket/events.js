@@ -3,6 +3,7 @@
 const SOCKET_EVENTS = Object.freeze({
   chatMessage: 'chat-message',
   playerAttack: 'player-attack',
+  playerFootstep: 'player-footstep',
   playerJoin: 'player-join',
   playerLeave: 'player-leave',
   playerUpdate: 'player-update',

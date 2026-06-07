@@ -6,14 +6,19 @@
   let _touchControlsReady = false;
   let _joyBase = null;
   let _joyThumb = null;
+  let _sprintBtn = null;
+  let _sprintPtr = null;
   let _movePtr = null;
   let _lookPtr = null;
   let _moveOriginX = 0;
   let _moveOriginY = 0;
   let _lookLastX = 0;
   let _lookLastY = 0;
+  let _sprintLookLastX = 0;
+  let _sprintLookLastY = 0;
   const _MOVE_MAX = 60;
-  const _LOOK_SENS = 0.004;
+  let _lookSensTouch = 0.004;
+  let _invertY = false;
   const _MOVE_FRAC = 0.44;
 
   function _wantsTouchControls() {
@@ -26,11 +31,12 @@
   const _UI_ROOT_SEL = [
     'button', 'input', 'textarea', 'select', 'a', 'label',
     '#menu-btn', '#menu-panel', '#craft-btn', '#inv-btn', '#map-btn', '#chat-btn',
-    '#shoot-btn', '#jump-btn', '#reload-btn', '#use-btn', '#grab-btn',
+    '#shoot-btn', '#jump-btn', '#reload-btn', '#use-btn', '#grab-btn', '#sprint-btn',
     '#door-interact-btn', '#hotbar', '.hb-slot',
     '#inv-panel', '#inv-backdrop', '#craft-panel', '#craft-backdrop',
     '#qa-backdrop', '#group-backdrop', '#spawn-intro-overlay', '#map-overlay', '#death-screen',
     '#rcon-panel', '#storage-panel', '#storage-backdrop', '#sleep-loot-panel', '#sleep-loot-backdrop',
+    '#sign-backdrop', '#sign-panel', '#options-backdrop', '#options-panel',
     '.inv-slot', '#chat-input-row',
     '#chat-wrap', '#craft-queue-hud',
   ].join(',');
@@ -84,15 +90,105 @@
     document.body.appendChild(_joyBase);
   }
 
+  function applyOptions() {
+    const sens = ZS.Options?.getLookSensitivity?.();
+    if (sens) _lookSensTouch = sens.touch;
+    _invertY = !!ZS.Options?.get?.('invertY');
+  }
+
+  function _applyLookDelta(dx, dy) {
+    if (!_state?.camera) return;
+    const inv = _invertY ? -1 : 1;
+    _state.camera.yaw -= dx * _lookSensTouch;
+    _state.camera.pitch -= dy * _lookSensTouch * inv;
+    _state.camera.pitch = Math.max(
+      -Math.PI / 2 + 0.05,
+      Math.min(Math.PI / 2 - 0.05, _state.camera.pitch),
+    );
+  }
+
+  function _releaseSprintPointer(e) {
+    if (e && _sprintPtr !== null && e.pointerId !== _sprintPtr) return;
+    _sprintPtr = null;
+    if (_state?.input) _state.input.sprintHeld = false;
+    if (_sprintBtn) _sprintBtn.classList.remove('active');
+  }
+
+  function _ensureSprintButton() {
+    if (_sprintBtn) return;
+    _sprintBtn = document.createElement('button');
+    _sprintBtn.id = 'sprint-btn';
+    _sprintBtn.type = 'button';
+    _sprintBtn.title = 'Sprint';
+    _sprintBtn.setAttribute('aria-label', 'Sprint');
+    _sprintBtn.textContent = '⚡';
+    const sprintDown = (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      if (_sprintPtr !== null) return;
+      _sprintPtr = e.pointerId;
+      _sprintLookLastX = e.clientX;
+      _sprintLookLastY = e.clientY;
+      try { _sprintBtn.setPointerCapture(e.pointerId); } catch (_) { /* ignore */ }
+      if (_state?.input) _state.input.sprintHeld = true;
+      _sprintBtn.classList.add('active');
+    };
+    const sprintMove = (e) => {
+      if (e.pointerId !== _sprintPtr || !_state) return;
+      const dx = e.clientX - _sprintLookLastX;
+      const dy = e.clientY - _sprintLookLastY;
+      if (Math.abs(dx) > 0.4 || Math.abs(dy) > 0.4) {
+        _applyLookDelta(dx, dy);
+        _sprintLookLastX = e.clientX;
+        _sprintLookLastY = e.clientY;
+      }
+      if (e.cancelable) e.preventDefault();
+    };
+    const sprintUp = (e) => {
+      if (e) {
+        e.stopPropagation();
+        _releaseSprintPointer(e);
+        try { _sprintBtn.releasePointerCapture(e.pointerId); } catch (_) { /* ignore */ }
+      }
+    };
+    _sprintBtn.addEventListener('pointerdown', sprintDown, { passive: false });
+    _sprintBtn.addEventListener('pointermove', sprintMove, { passive: false });
+    _sprintBtn.addEventListener('pointerup', sprintUp);
+    _sprintBtn.addEventListener('pointercancel', sprintUp);
+    document.body.appendChild(_sprintBtn);
+  }
+
+  function _updateSprintButton() {
+    if (!_wantsTouchControls()) return;
+    _ensureSprintButton();
+    const mx = _state?.input?.moveX ?? 0;
+    const mz = _state?.input?.moveZ ?? 0;
+    const moving = Math.hypot(mx, mz) > 0.12;
+    const joyVisible = _joyBase && _joyBase.style.display !== 'none';
+    if (!moving || !joyVisible || _movePtr === null) {
+      if (_sprintPtr === null) {
+        _sprintBtn.classList.remove('visible', 'active', 'exhausted');
+        if (_state?.input) _state.input.sprintHeld = false;
+      }
+      return;
+    }
+    _sprintBtn.classList.add('visible');
+    _sprintBtn.classList.toggle('exhausted', !ZS.Survival?.canSprint?.());
+  }
+
   function _resetMove() {
     _movePtr = null;
     if (_state?.input) {
       _state.input.moveX = 0;
       _state.input.moveZ = 0;
+      if (_sprintPtr === null) _state.input.sprintHeld = false;
     }
     if (_joyBase) {
       _joyBase.style.display = 'none';
       _joyThumb.style.transform = 'translate(-50%, -50%)';
+    }
+    if (_sprintBtn && _sprintPtr === null) {
+      _sprintBtn.classList.remove('visible', 'active', 'exhausted');
     }
   }
 
@@ -117,6 +213,7 @@
         _joyBase.style.top = `${e.clientY}px`;
         _joyBase.style.display = 'block';
         _joyThumb.style.transform = 'translate(-50%, -50%)';
+        _updateSprintButton();
         if (e.cancelable) e.preventDefault();
       } else if (ratio < 0.9) {
         if (_lookPtr !== null) return;
@@ -140,18 +237,23 @@
         _state.input.moveZ = ny * (clamped / _MOVE_MAX);
         _joyThumb.style.transform =
           `translate(calc(-50% + ${nx * clamped}px), calc(-50% + ${ny * clamped}px))`;
+        _updateSprintButton();
         if (e.cancelable) e.preventDefault();
       } else if (e.pointerId === _lookPtr) {
         const dx = e.clientX - _lookLastX;
         const dy = e.clientY - _lookLastY;
-        _state.camera.yaw -= dx * _LOOK_SENS;
-        _state.camera.pitch -= dy * _LOOK_SENS;
-        _state.camera.pitch = Math.max(
-          -Math.PI / 2 + 0.05,
-          Math.min(Math.PI / 2 - 0.05, _state.camera.pitch),
-        );
+        _applyLookDelta(dx, dy);
         _lookLastX = e.clientX;
         _lookLastY = e.clientY;
+        if (e.cancelable) e.preventDefault();
+      } else if (e.pointerId === _sprintPtr) {
+        const dx = e.clientX - _sprintLookLastX;
+        const dy = e.clientY - _sprintLookLastY;
+        if (Math.abs(dx) > 0.4 || Math.abs(dy) > 0.4) {
+          _applyLookDelta(dx, dy);
+          _sprintLookLastX = e.clientX;
+          _sprintLookLastY = e.clientY;
+        }
         if (e.cancelable) e.preventDefault();
       }
     };
@@ -159,6 +261,7 @@
     const onUp = (e) => {
       if (e.pointerId === _movePtr) _resetMove();
       if (e.pointerId === _lookPtr) _lookPtr = null;
+      if (e.pointerId === _sprintPtr) _releaseSprintPointer(e);
     };
 
     document.addEventListener('pointerdown', onDown, { capture: true, passive: false });
@@ -181,8 +284,9 @@
     _setupJumpButton();
     _setupRespawn();
     setHealth(100);
-    setKills(0);
+    setPlayerKills(0);
     setAmmo(30);
+    setEndurance(100);
   }
 
   function _initTouchControls() {
@@ -228,8 +332,8 @@
     else if (type === 'wpn_hache_combat' || type === 'tool_hachette') icon = '🪓';
     else if (cat === 'melee') icon = '🗡️';
     else if (cat === 'tool') icon = '🛠️';
-    if (shoot)  shoot.textContent = icon;
-    if (reload) reload.style.display = cat === 'firearm' ? 'flex' : 'none';
+    if (shoot) shoot.textContent = icon;
+    if (reload) reload.classList.toggle('show-reload', cat === 'firearm');
   }
 
   // ── Jump button ──────────────────────────────────────────────────────────
@@ -272,8 +376,9 @@
       Math.round(h) + (_maxHp > 100 ? '/' + _maxHp : '');
   }
 
-  function setKills(k) {
-    document.getElementById('kills-count').textContent = k;
+  function setPlayerKills(k) {
+    const el = document.getElementById('player-kills-count');
+    if (el) el.textContent = Math.max(0, k | 0);
   }
 
   function setOnlineCount(n) {
@@ -301,6 +406,19 @@
     if (txt) txt.textContent = Math.max(0, v);
   }
 
+  function setEndurance(v) {
+    const bar = document.getElementById('endurance-bar');
+    const txt = document.getElementById('endurance-text');
+    const wrap = document.getElementById('endurance-bar-wrap');
+    const pct = Math.max(0, Math.min(100, v));
+    if (bar) {
+      bar.style.width = pct + '%';
+      bar.style.background = pct > 45 ? '#e8c040' : pct > 18 ? '#cc8820' : '#aa5518';
+    }
+    if (txt) txt.textContent = Math.round(pct);
+    if (wrap) wrap.style.opacity = pct >= 99.5 ? '0.72' : '1';
+  }
+
   function setInfection(v) {
     const bar  = document.getElementById('infection-bar');
     const wrap = document.getElementById('infection-bar-wrap');
@@ -311,22 +429,60 @@
     wrap.style.display = pct > 0 ? 'flex' : 'none';
   }
 
-  function setStatus(bleeding, infected) {
+  const _statusFx = {
+    bleeding: false,
+    infected: false,
+    antiviral: false,
+    zoneSafe: null,
+  };
+
+  function _renderStatusEffects() {
     const el = document.getElementById('status-effects');
     if (!el) return;
     el.replaceChildren();
-    if (bleeding) {
+    if (_statusFx.zoneSafe === true) {
+      const z = document.createElement('span');
+      z.className = 'status-badge status-zone-safe';
+      z.textContent = '🛡️ Plage sûre';
+      el.appendChild(z);
+    } else if (_statusFx.zoneSafe === false) {
+      const z = document.createElement('span');
+      z.className = 'status-badge status-zone-wild';
+      z.textContent = '⚠️ Zone ouverte';
+      el.appendChild(z);
+    }
+    if (_statusFx.bleeding) {
       const b = document.createElement('span');
       b.className = 'status-badge status-bleed';
       b.textContent = '🩸 Saignement';
       el.appendChild(b);
     }
-    if (infected) {
+    if (_statusFx.antiviral) {
+      const a = document.createElement('span');
+      a.className = 'status-badge status-antiviral';
+      a.textContent = '💊 Antiviral actif';
+      el.appendChild(a);
+    }
+    if (_statusFx.infected) {
       const i = document.createElement('span');
       i.className = 'status-badge status-infect';
       i.textContent = '🦠 Infecté';
       el.appendChild(i);
     }
+  }
+
+  function setStatus(bleeding, infected, antiviral) {
+    _statusFx.bleeding = !!bleeding;
+    _statusFx.infected = !!infected;
+    _statusFx.antiviral = !!antiviral;
+    _renderStatusEffects();
+  }
+
+  /** true = sable protégé, false = hors plage, null = masqué (mort / chargement). */
+  function setZoneSafe(safe) {
+    if (_statusFx.zoneSafe === safe) return;
+    _statusFx.zoneSafe = safe;
+    _renderStatusEffects();
   }
 
   function showNotif(text) {
@@ -344,6 +500,41 @@
     setTimeout(() => { el.style.opacity = 0; }, 200);
   }
 
+  let _survVignette = null;
+  function _ensureSurvVignette() {
+    if (_survVignette) return _survVignette;
+    _survVignette = document.getElementById('survival-vignette');
+    return _survVignette;
+  }
+
+  /** Légère vignette immersive selon faim / soif / saignement. */
+  function setSurvivalVignette({ faim, soif, saignement }) {
+    if (ZS.Options?.isFeature?.('survivalVignette') === false) {
+      const el0 = _ensureSurvVignette();
+      if (el0) { el0.className = ''; el0.style.opacity = '0'; }
+      return;
+    }
+    const el = _ensureSurvVignette();
+    if (!el) return;
+    if (saignement) {
+      el.className = 'surv-bleed';
+      el.style.opacity = '';
+      return;
+    }
+    if (soif < 24) {
+      el.className = 'surv-thirst';
+      el.style.opacity = String(0.12 + ((24 - soif) / 24) * 0.34);
+      return;
+    }
+    if (faim < 24) {
+      el.className = 'surv-hunger';
+      el.style.opacity = String(0.1 + ((24 - faim) / 24) * 0.3);
+      return;
+    }
+    el.className = '';
+    el.style.opacity = '0';
+  }
+
   function showWave(msg) {
     const el = document.getElementById('wave-banner');
     el.textContent = msg;
@@ -351,8 +542,25 @@
     setTimeout(() => { el.style.opacity = 0; }, 2500);
   }
 
-  function showDeath(kills) {
-    document.getElementById('death-kills').textContent = `Zombies tués : ${kills}`;
+  function _formatSurvived(ms) {
+    const total = Math.max(0, Math.floor((ms || 0) / 1000));
+    const h = Math.floor(total / 3600);
+    const m = Math.floor((total % 3600) / 60);
+    const s = total % 60;
+    if (h > 0) return `${h} h ${m} min`;
+    if (m > 0) return `${m} min ${s} s`;
+    return `${s} s`;
+  }
+
+  function showDeath(recap) {
+    setZoneSafe(null);
+    const r = (recap && typeof recap === 'object') ? recap : { zombieKills: recap ?? 0 };
+    const zk = document.getElementById('death-zombie-kills');
+    const pk = document.getElementById('death-player-kills');
+    const sv = document.getElementById('death-survived');
+    if (zk) zk.textContent = String(r.zombieKills ?? 0);
+    if (pk) pk.textContent = String(r.playerKills ?? 0);
+    if (sv) sv.textContent = _formatSurvived(r.survivedMs);
     document.getElementById('death-screen').classList.add('show');
   }
 
@@ -368,8 +576,9 @@
 
   window.ZS = window.ZS || {};
   ZS.UI = {
-    init, ensureTouchControls, setHealth, setKills, setOnlineCount, setAmmo,
-    setHunger, setThirst, setInfection, setStatus, showNotif, flashDamage,
+    init, ensureTouchControls, setHealth, setPlayerKills, setOnlineCount, setAmmo, setEndurance,
+    setHunger, setThirst, setInfection, setStatus, setZoneSafe, setSurvivalVignette,
+    applyOptions, showNotif, flashDamage,
     showWave, showDeath, hideDeath, setWeaponUI,
   };
   ZS.logout = logout;

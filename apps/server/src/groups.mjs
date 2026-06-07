@@ -292,10 +292,17 @@ export function createGroupsManager(ctx) {
     for (const uid of pendingInvites.keys()) _emitStateToUserId(uid);
   }
 
+  function areSameGroup(userIdA, userIdB) {
+    const a = memberOf.get(_normId(userIdA));
+    const b = memberOf.get(_normId(userIdB));
+    return !!(a && b && a === b);
+  }
+
   return {
     onConnect,
     onDisconnect,
     onRosterChange,
+    areSameGroup,
     handleCreate,
     handleInvite,
     handleInviteRespond,

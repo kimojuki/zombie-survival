@@ -666,6 +666,12 @@ function createRcon(ctx) {
       if (!n && !reset) return ok('Palmiers déjà présents — rien à ajouter.');
       return ok(`${n} palmier(s) plage ${reset ? 'repositionnée(s)' : 'ajouté(s)'} et synchronisé(s).`);
     }
+    if (kind === 'signs') {
+      if (!ctx.ensureBeachSigns) return fail('ensureBeachSigns indisponible');
+      const n = await ctx.ensureBeachSigns({ broadcast: true, reset });
+      if (!n && !reset) return ok('Panneaux plage déjà présents — rien à ajouter.');
+      return ok(`${n} panneau(x) plage ${reset ? 'repositionné(s)' : 'ajouté(s)'} et synchronisé(s).`);
+    }
     if (kind === 'barriers') {
       if (!ctx.ensureRoadBarriers) return fail('ensureRoadBarriers indisponible');
       const n = await ctx.ensureRoadBarriers({ broadcast: true, reset });
@@ -681,7 +687,7 @@ function createRcon(ctx) {
       if (!n && !reset) return ok('Rochers déjà présents — rien à ajouter.');
       return ok(`${n} rocher(s) minable(s) ${reset ? 'repositionné(s)' : 'ajouté(s)'} (camp: ${camp}, monde: ${world}).`);
     }
-    return fail('Usage: decorseed wrecks|trees|palms|barriers|rocks [reset]');
+    return fail('Usage: decorseed wrecks|trees|palms|signs|barriers|rocks [reset]');
   });
 
   register('decoritems', 'Liste les items posables comme décor [filtre]', (args) => {

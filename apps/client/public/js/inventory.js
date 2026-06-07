@@ -12,7 +12,16 @@
   let _active = 0;
   let _panelOpen  = false;
   let _invBackdrop = null;
-  let _sel = null;      // sélection pour déplacement : { zone:'hotbar'|'bag'|'equip', idx }
+  let _sel = null;      // objet sélectionné (détail / jeter) : { zone, idx }
+  let _dragPending = null;
+  let _drag = null;
+  let _dragGhost = null;
+  let _dragOverEl = null;
+  const _DRAG_THRESH = 7;
+  let _detailIcon = null;
+  let _detailName = null;
+  let _detailCat = null;
+  let _detailDesc = null;
 
   let _state, _scene, _socket;
   let _lockPending = null;
@@ -131,6 +140,8 @@
 
   // ── Tick ───────────────────────────────────────────────────────────────────
 
+  let _ghostTick = 0;
+
   function tick(dt) {
     const now = Date.now() * 0.001;
     const px = _state.player.x, pz = _state.player.z;
@@ -155,7 +166,13 @@
     _grabTargetId = nearId;
     _updateGrabUI(nearItem);
 
-    _updateBuildGhost();   // aperçu de construction si une structure est en main
+    const activeType = _hotbar[_active]?.type;
+    if (activeType && _isStructure(activeType)) {
+      if (++_ghostTick % 3 === 0) _updateBuildGhost();
+    } else if (_ghost) {
+      _ghostTick = 0;
+      _updateBuildGhost();
+    }
   }
 
   // Y a-t-il au moins une place pour cet objet (pile non pleine ou slot libre) ?
@@ -747,7 +764,10 @@
       if (res?.ok) {
         if (!_hotbar[_active] || !_isStructure(_hotbar[_active].type)) _removeGhost();
       } else {
-        ZS.UI?.showNotif?.(res?.err || 'Placement refusé');
+        const err = res?.err || res?.error;
+        ZS.UI?.showNotif?.(err === 'beach_protected'
+          ? 'Construction interdite sur la plage (zone protégée)'
+          : (err || 'Placement refusé'));
       }
     });
   }
@@ -763,6 +783,10 @@
     const type = item.type;
     const t = _placementTransform();
     const s = STRUCT[type];
+    if (ZS.isBuildBlockedOnBeach?.(t.x, t.z)) {
+      ZS.UI?.showNotif?.('Construction interdite sur la plage (zone protégée)');
+      return false;
+    }
     if (s.prefabId) {
       _placePending = true;
       _placePendingType = type;
@@ -789,7 +813,10 @@
       _socket.emit('place-decor-prefab', payload, (res) => {
         _clearPlacePending();
         if (!res?.ok) {
-          ZS.UI?.showNotif?.(res?.error || 'Placement refusé');
+          const err = res?.error || res?.err;
+        ZS.UI?.showNotif?.(err === 'beach_protected'
+          ? 'Construction interdite sur la plage (zone protégée)'
+          : (err || 'Placement refusé'));
           return;
         }
         if (!_hotbar[_active] || !_isStructure(_hotbar[_active].type)) _removeGhost();
@@ -1262,6 +1289,10 @@
 
   const STARTER_CAILLOU = { type: 'tool_caillou', qty: 1, durability: 80 };
   const STARTER_TORCHE  = { type: 'tool_torche', qty: 1 };
+  const STARTER_RATIONS = [
+    { type: 'food_eau_bouteille', qty: 1 },
+    { type: 'food_sandwich', qty: 1 },
+  ];
 
   function _initToolDurability(slot) {
     if (!slot?.type || slot.durability != null) return;
@@ -1286,6 +1317,21 @@
     return _hotbar.some((s) => s && s.type === type)
       || _bag.some((s) => s && s.type === type)
       || Object.values(_equip).some((s) => s && s.type === type);
+  }
+
+  /** Eau + sandwich si aucun aliment (secours client). */
+  function ensureStarterRations() {
+    const hasFood = _hotbar.some((s) => s?.type?.startsWith('food_'))
+      || _bag.some((s) => s?.type?.startsWith('food_'))
+      || Object.values(_equip).some((s) => s?.type?.startsWith('food_'));
+    if (hasFood) return false;
+    let changed = false;
+    for (const s of STARTER_RATIONS) {
+      if (_hasItemType(s.type)) continue;
+      if (addItem(s.type, s.qty)) changed = true;
+    }
+    if (changed) _syncToServer();
+    return changed;
   }
 
   /** Torche si absente (rejoin de nuit — secours client si sync serveur en retard). */
@@ -1452,7 +1498,214 @@
     ZS.UI.showNotif(def.label + ' équipé');
   }
 
-  // ── Déplacement d'items (tap pour sélectionner → tap pour déposer) ──────────
+  // ── Déplacement d'items (glisser-déposer) ─────────────────────────────────
+
+  function _parseSlotIdx(zone, raw) {
+    if (zone === 'equip') return raw;
+    const n = parseInt(raw, 10);
+    return Number.isFinite(n) ? n : raw;
+  }
+
+  function _slotFromEl(el) {
+    if (!el?.dataset?.invZone) return null;
+    return {
+      zone: el.dataset.invZone,
+      idx: _parseSlotIdx(el.dataset.invZone, el.dataset.invIdx),
+    };
+  }
+
+  function _ensureDragGhost() {
+    if (_dragGhost) return;
+    _dragGhost = document.createElement('div');
+    _dragGhost.id = 'inv-drag-ghost';
+    _dragGhost.hidden = true;
+    document.body.appendChild(_dragGhost);
+  }
+
+  function _positionDragGhost(x, y) {
+    if (!_dragGhost) return;
+    _dragGhost.style.left = `${x}px`;
+    _dragGhost.style.top = `${y}px`;
+  }
+
+  function _setDragOver(el) {
+    if (_dragOverEl === el) return;
+    if (_dragOverEl) _dragOverEl.classList.remove('inv-slot-drag-over');
+    _dragOverEl = el || null;
+    if (_dragOverEl) _dragOverEl.classList.add('inv-slot-drag-over');
+  }
+
+  function _clearDragVisuals() {
+    document.querySelectorAll('#inv-panel .inv-slot-dragging').forEach((n) => {
+      n.classList.remove('inv-slot-dragging');
+    });
+    _setDragOver(null);
+    if (_dragGhost) _dragGhost.hidden = true;
+  }
+
+  function _endDrag() {
+    _drag = null;
+    _dragPending = null;
+    _clearDragVisuals();
+  }
+
+  function _findInvSlotEl(x, y) {
+    if (_dragGhost) _dragGhost.hidden = true;
+    const hit = document.elementFromPoint(x, y);
+    if (_dragGhost) _dragGhost.hidden = false;
+    return hit?.closest?.('#inv-panel .inv-slot') || null;
+  }
+
+  function _startDrag(from, item, x, y) {
+    _ensureDragGhost();
+    const def = _def(item.type);
+    _dragGhost.replaceChildren();
+    const ic = document.createElement('span');
+    ic.className = 'inv-drag-ghost-icon';
+    ic.textContent = def?.icon || '?';
+    _dragGhost.appendChild(ic);
+    ZS.Icons?.apply(ic, item.type);
+    if (item.qty > 1) {
+      const q = document.createElement('span');
+      q.className = 'inv-drag-ghost-qty';
+      q.textContent = item.qty;
+      _dragGhost.appendChild(q);
+    }
+    _dragGhost.hidden = false;
+    _positionDragGhost(x, y);
+    _drag = { from, ptr: _dragPending?.ptr ?? null };
+    _dragPending = null;
+    const srcEl = document.querySelector(
+      `#inv-panel .inv-slot[data-inv-zone="${from.zone}"][data-inv-idx="${from.idx}"]`,
+    );
+    srcEl?.classList.add('inv-slot-dragging');
+  }
+
+  function _onInvPointerMove(e) {
+    if (!_panelOpen) return;
+    if (_dragPending && e.pointerId === _dragPending.ptr) {
+      const dx = e.clientX - _dragPending.x;
+      const dy = e.clientY - _dragPending.y;
+      if (Math.hypot(dx, dy) >= _DRAG_THRESH) {
+        const item = _getSlot(_dragPending.zone, _dragPending.idx);
+        if (item) _startDrag({ zone: _dragPending.zone, idx: _dragPending.idx }, item, e.clientX, e.clientY);
+      }
+      if (e.cancelable) e.preventDefault();
+      return;
+    }
+    if (!_drag || e.pointerId !== _drag.ptr) return;
+    _positionDragGhost(e.clientX, e.clientY);
+    _setDragOver(_findInvSlotEl(e.clientX, e.clientY));
+    if (e.cancelable) e.preventDefault();
+  }
+
+  function _releaseDragCapture(ptr) {
+    if (_dragPending?.ptr === ptr) {
+      try { _dragPending.el?.releasePointerCapture?.(ptr); } catch (_) { /* ignore */ }
+    }
+    if (_drag?.ptr === ptr) {
+      const from = _drag.from;
+      const srcEl = document.querySelector(
+        `#inv-panel .inv-slot[data-inv-zone="${from.zone}"][data-inv-idx="${from.idx}"]`,
+      );
+      try { srcEl?.releasePointerCapture?.(ptr); } catch (_) { /* ignore */ }
+    }
+  }
+
+  function _finishDragDrop(e) {
+    if (_dragPending && e.pointerId === _dragPending.ptr) {
+      _releaseDragCapture(e.pointerId);
+      _dragPending = null;
+      _updateInvSelection();
+      return;
+    }
+    if (!_drag || e.pointerId !== _drag.ptr) return;
+    _releaseDragCapture(e.pointerId);
+    const from = _drag.from;
+    const targetEl = _findInvSlotEl(e.clientX, e.clientY);
+    const to = targetEl ? _slotFromEl(targetEl) : null;
+    _endDrag();
+    if (to && !(to.zone === from.zone && to.idx === from.idx)) {
+      _moveOrSwap(from, to);
+      const landed = _getSlot(to.zone, to.idx);
+      _sel = landed ? { zone: to.zone, idx: to.idx } : null;
+      if (!landed && _getSlot(from.zone, from.idx)) _sel = { zone: from.zone, idx: from.idx };
+      _renderInvPanel();
+      _renderHotbar();
+      return;
+    }
+    _sel = _getSlot(from.zone, from.idx) ? { zone: from.zone, idx: from.idx } : null;
+    _updateInvSelection();
+  }
+
+  function _onSlotPointerDown(e, zone, idx) {
+    if (!_panelOpen) return;
+    if (e.pointerType === 'mouse' && e.button !== 0) return;
+    e.preventDefault();
+    e.stopPropagation();
+    _endDrag();
+    const item = _getSlot(zone, idx);
+    if (!item) {
+      _sel = null;
+      _updateInvSelection();
+      return;
+    }
+    _sel = { zone, idx };
+    _dragPending = {
+      zone, idx, ptr: e.pointerId, x: e.clientX, y: e.clientY, el: e.currentTarget,
+    };
+    try { e.currentTarget.setPointerCapture(e.pointerId); } catch (_) { /* ignore */ }
+    _updateInvSelection();
+  }
+
+  function _onSlotPointerUp(e) {
+    if (_dragPending && e.pointerId === _dragPending.ptr) {
+      try { _dragPending.el?.releasePointerCapture?.(e.pointerId); } catch (_) { /* ignore */ }
+    }
+    _finishDragDrop(e);
+  }
+
+  function _bindInvDrag() {
+    if (document.body.dataset.invDrag === '1') return;
+    document.body.dataset.invDrag = '1';
+    document.addEventListener('pointermove', _onInvPointerMove, { passive: false });
+    document.addEventListener('pointerup', _onSlotPointerUp);
+    document.addEventListener('pointercancel', _onSlotPointerUp);
+  }
+
+  function _updateInvSelection() {
+    const selItem = _sel ? _getSlot(_sel.zone, _sel.idx) : null;
+    const selDef = selItem ? _def(selItem.type) : null;
+    if (!_sel || !selItem) _sel = null;
+
+    const hint = document.getElementById('inv-hint');
+    if (hint) {
+      hint.classList.toggle('inv-hint-selected', !!selDef);
+      const desktop = document.body.classList.contains('mode-desktop');
+      hint.textContent = desktop
+        ? 'Glissez un objet vers un emplacement pour le déplacer.'
+        : 'Maintenez et glissez un objet vers un autre emplacement.';
+    }
+
+    if (document.body.classList.contains('mode-desktop')) {
+      _renderItemDetail(selItem);
+    }
+
+    const dropBtn = document.getElementById('inv-drop-btn');
+    if (dropBtn) {
+      dropBtn.classList.toggle('inv-drop-btn-active', !!selItem);
+      dropBtn.disabled = !selItem;
+    }
+
+    document.querySelectorAll('#inv-panel .inv-slot').forEach((el) => {
+      const slot = _slotFromEl(el);
+      if (!slot) return;
+      el.classList.toggle(
+        'inv-slot-selected',
+        !!(_sel && _sel.zone === slot.zone && _sel.idx === slot.idx),
+      );
+    });
+  }
 
   function _getSlot(zone, idx) {
     if (zone === 'equip')  return _equip[idx];
@@ -1463,17 +1716,6 @@
     if (zone === 'equip')  { _equip[idx] = val; return; }
     if (zone === 'hotbar') { _hotbar[idx] = val; return; }
     _bag[idx] = val;
-  }
-
-  function _clickSlot(zone, idx) {
-    if (!_sel) {
-      if (_getSlot(zone, idx)) _sel = { zone, idx };   // ramasse
-    } else {
-      _moveOrSwap(_sel, { zone, idx });                 // dépose
-      _sel = null;
-    }
-    _renderInvPanel();
-    _renderHotbar();
   }
 
   function _moveOrSwap(from, to) {
@@ -1563,29 +1805,58 @@
 
   const EQUIP_SLOTS = ['Tête', 'Torso', 'Mains', 'Dos'];
 
+  const _CAT_LABELS = {
+    food: 'Nourriture',
+    medical: 'Soins',
+    melee: 'Mêlée',
+    firearm: 'Arme à feu',
+    ammo: 'Munitions',
+    equipment: 'Équipement',
+    resource: 'Ressource',
+    tool: 'Outil',
+    structure: 'Construction',
+    key: 'Clé',
+    map: 'Carte',
+  };
+
+  function _itemDesc(type) {
+    const def = _def(type);
+    return def?.desc || 'Aucune description disponible.';
+  }
+
+  function _renderItemDetail(selItem) {
+    if (!_detailName || !_detailDesc) return;
+    if (!selItem) {
+      if (_detailIcon) _detailIcon.textContent = '▫';
+      _detailName.textContent = 'Aucune sélection';
+      if (_detailCat) _detailCat.textContent = '';
+      _detailDesc.textContent = 'Sélectionnez un objet pour afficher sa description.';
+      return;
+    }
+    const def = _def(selItem.type);
+    if (_detailIcon) {
+      _detailIcon.textContent = def?.icon || '?';
+      ZS.Icons?.apply(_detailIcon, selItem.type);
+    }
+    _detailName.textContent = def?.label || selItem.type;
+    if (_detailCat) {
+      _detailCat.textContent = def?.category
+        ? (_CAT_LABELS[def.category] || def.category)
+        : '';
+    }
+    _detailDesc.textContent = _itemDesc(selItem.type);
+  }
+
   function _buildInvPanel() {
     _invBackdrop = document.createElement('div');
     _invBackdrop.id = 'inv-backdrop';
+    _invBackdrop.className = 'zs-backdrop';
     _invBackdrop.addEventListener('click', togglePanel);
     document.body.appendChild(_invBackdrop);
 
     const p = document.createElement('div');
     p.id = 'inv-panel';
-
-    const hdr = document.createElement('div');
-    hdr.className = 'inv-hdr';
-    const titleWrap = document.createElement('div');
-    titleWrap.className = 'inv-hdr-title';
-    const title = document.createElement('span');
-    title.className = 'inv-hdr-name';
-    title.textContent = '🎒 Inventaire';
-    const sub = document.createElement('span');
-    sub.className = 'inv-hdr-sub inv-desktop-only';
-    sub.textContent = 'I · Tab · Échap pour fermer';
-    titleWrap.appendChild(title);
-    titleWrap.appendChild(sub);
-    const hdrBtns = document.createElement('div');
-    hdrBtns.className = 'inv-hdr-btns';
+    p.className = 'zs-panel zs-panel-wide';
 
     const dropBtn = document.createElement('button');
     dropBtn.type = 'button';
@@ -1595,25 +1866,20 @@
     dropBtn.addEventListener('click', _dropSelected);
     dropBtn.addEventListener('touchstart', (e) => { e.preventDefault(); _dropSelected(); }, { passive: false });
 
-    const closeBtn = document.createElement('button');
-    closeBtn.type = 'button';
-    closeBtn.className = 'inv-close-btn';
-    closeBtn.textContent = '✕';
-    closeBtn.addEventListener('click', togglePanel);
-    hdrBtns.appendChild(dropBtn);
-    hdrBtns.appendChild(closeBtn);
-    hdr.appendChild(titleWrap);
-    hdr.appendChild(hdrBtns);
-    p.appendChild(hdr);
+    const hdr = ZS.PanelUI.makeHeader({
+      title: '🎒 Inventaire',
+      subtitle: 'I · Tab · Échap pour fermer',
+      extraButtons: [dropBtn],
+      onClose: togglePanel,
+    });
+    p.appendChild(hdr.el);
 
-    const hint = document.createElement('div');
+    const hint = ZS.PanelUI.makeHint('Maintenez et glissez un objet vers un autre emplacement.');
     hint.id = 'inv-hint';
-    hint.className = 'inv-hint';
-    hint.textContent = 'Touchez un objet puis un emplacement pour le déplacer.';
     p.appendChild(hint);
 
     const body = document.createElement('div');
-    body.className = 'inv-body';
+    body.className = 'zs-panel-body inv-body';
 
     const equipCol = document.createElement('aside');
     equipCol.className = 'inv-equip-col';
@@ -1656,34 +1922,42 @@
     mainCol.appendChild(bagSec);
 
     body.appendChild(mainCol);
+
+    const detailCol = document.createElement('aside');
+    detailCol.className = 'inv-detail-col inv-desktop-only';
+    const detailTitle = document.createElement('h3');
+    detailTitle.className = 'inv-section-title';
+    detailTitle.textContent = 'Détail';
+    detailCol.appendChild(detailTitle);
+    const detailCard = document.createElement('div');
+    detailCard.className = 'inv-detail-card';
+    _detailIcon = document.createElement('div');
+    _detailIcon.className = 'inv-detail-icon';
+    _detailIcon.textContent = '▫';
+    detailCard.appendChild(_detailIcon);
+    _detailName = document.createElement('div');
+    _detailName.className = 'inv-detail-name';
+    _detailName.textContent = 'Aucune sélection';
+    detailCard.appendChild(_detailName);
+    _detailCat = document.createElement('div');
+    _detailCat.className = 'inv-detail-cat';
+    detailCard.appendChild(_detailCat);
+    _detailDesc = document.createElement('p');
+    _detailDesc.className = 'inv-detail-desc';
+    _detailDesc.textContent = 'Sélectionnez un objet pour afficher sa description.';
+    detailCard.appendChild(_detailDesc);
+    detailCol.appendChild(detailCard);
+    body.appendChild(detailCol);
+
     p.appendChild(body);
 
     document.body.appendChild(p);
+    _bindInvDrag();
   }
 
   function _renderInvPanel() {
     const equip = document.getElementById('inv-equip');
     if (!equip) return;
-
-    const hint = document.getElementById('inv-hint');
-    const selItem = _sel ? _getSlot(_sel.zone, _sel.idx) : null;
-    const selDef = selItem ? _def(selItem.type) : null;
-    if (hint) {
-      hint.classList.toggle('inv-hint-selected', !!selDef);
-      if (selDef) {
-        hint.textContent = '▸ ' + (selDef.label || selItem.type)
-          + ' — cliquez un emplacement ou 🗑 Jeter.';
-      } else {
-        hint.textContent = document.body.classList.contains('mode-desktop')
-          ? 'Cliquez un objet, puis un emplacement pour le déplacer.'
-          : 'Touchez un objet puis un emplacement pour le déplacer.';
-      }
-    }
-    const dropBtn = document.getElementById('inv-drop-btn');
-    if (dropBtn) {
-      dropBtn.classList.toggle('inv-drop-btn-active', !!selItem);
-      dropBtn.disabled = !selItem;
-    }
 
     equip.replaceChildren();
     for (const slotName of EQUIP_SLOTS) {
@@ -1733,13 +2007,15 @@
         grid.appendChild(el);
       }
     }
+    _updateInvSelection();
   }
 
   function _wireSlot(el, zone, idx) {
     const item = _getSlot(zone, idx);
+    el.dataset.invZone = zone;
+    el.dataset.invIdx = String(idx);
     if (item) el.title = _def(item.type)?.label || '';
-    el.classList.toggle('inv-slot-selected', !!(_sel && _sel.zone === zone && _sel.idx === idx));
-    el.addEventListener('click', (e) => { e.stopPropagation(); _clickSlot(zone, idx); });
+    el.addEventListener('pointerdown', (e) => _onSlotPointerDown(e, zone, idx), { passive: false });
   }
 
   function _makeSlotEl(item) {
@@ -1767,6 +2043,7 @@
     const p = document.getElementById('inv-panel');
     if (!p) return;
     _sel = null;
+    _endDrag();
     p.style.display = _panelOpen ? 'flex' : 'none';
     if (_invBackdrop) _invBackdrop.style.display = _panelOpen ? 'block' : 'none';
     if (_panelOpen) {
@@ -1922,6 +2199,7 @@
     countItem, findItemSlot, addItem, addItemSlot, removeItem, removeStack, getStorageStacks, getStorageSlots, canAddItem, canAddStack, consumeOne,
     getInvSnapshot, syncToServer, applyAuthoritativeInv,
     placeActiveStructure, getActiveItem, hasDoorKey, removeDoorKey, installDoorLockOnNearestDoor, getWeaponAmmo, decrementAmmo, reloadWeapon, wearActiveWeapon,
-    getArmorValue, getMaxHealth, togglePanel, loadFromSave, loadRespawnKit, ensureStarterCaillou, ensureStarterTorche, clear,
+    getArmorValue, getMaxHealth, togglePanel, loadFromSave, loadRespawnKit,
+    ensureStarterCaillou, ensureStarterTorche, ensureStarterRations, clear,
   };
 }());

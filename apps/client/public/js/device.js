@@ -35,7 +35,8 @@
   }
 
   function detectTouchInput() {
-    if (window.__ZS_FORCE_TOUCH) return true;
+    if (window.__ZS_FORCE_TOUCH === false) return false;
+    if (window.__ZS_FORCE_TOUCH === true) return true;
     if (_hasTouchApi()) return true;
     if (window.__ZS_TOUCH_MODE === true) return true;
 

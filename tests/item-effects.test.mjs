@@ -11,6 +11,31 @@ function normalizeInv(inv) {
   return inv;
 }
 
+test('med_pilules reduce infection and pause progression', () => {
+  const player = {
+    health: 100,
+    survival: { faim: 80, soif: 80, infection: 45, saignement: false },
+    inv: { hotbar: [], bag: [], equip: {} },
+  };
+  const res = applyItemUse('med_pilules_anti_infection', player, normalizeInv);
+  assert.equal(res.ok, true);
+  assert.equal(player.survival.infection, 25);
+  assert.ok(player.survival.infectionPausedUntil > Date.now());
+});
+
+test('med_seringue cures infection completely', () => {
+  const player = {
+    health: 80,
+    survival: { faim: 80, soif: 80, infection: 60, saignement: false, infectionPausedUntil: Date.now() + 5000 },
+    inv: { hotbar: [], bag: [], equip: {} },
+  };
+  const res = applyItemUse('med_seringue_anti_infection', player, normalizeInv);
+  assert.equal(res.ok, true);
+  assert.equal(player.survival.infection, 0);
+  assert.equal(player.survival.infectionPausedUntil, undefined);
+  assert.equal(player.health, 95);
+});
+
 test('med_bandage heals and stops bleeding', () => {
   const player = {
     health: 50,

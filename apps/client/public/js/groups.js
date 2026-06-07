@@ -23,7 +23,7 @@
   function _setOpen(open) {
     _open = open;
     const { backdrop, panel } = _els();
-    if (backdrop) backdrop.style.display = open ? 'flex' : 'none';
+    if (backdrop) backdrop.style.display = open ? 'block' : 'none';
     if (panel) panel.style.display = open ? 'flex' : 'none';
     if (open) _render();
   }

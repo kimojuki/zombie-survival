@@ -115,23 +115,26 @@
   }
 
   function _seaSurface(scene) {
-    const geo = new THREE.PlaneGeometry(SEA.hw * 2, SEA.hd * 2, 16, 20);
+    const geo = new THREE.PlaneGeometry(SEA.hw * 2, SEA.hd * 2, 24, 28);
     geo.rotateX(-Math.PI / 2);
-    const mat = new THREE.MeshLambertMaterial({
-      color: 0x1a5270,
-      transparent: true,
-      opacity: 0.96,
-      emissive: 0x082838,
-      emissiveIntensity: 0.35,
-      depthWrite: true,
-      polygonOffset: true,
-      polygonOffsetFactor: -1,
-      polygonOffsetUnits: -2,
-    });
+    const mat = ZS.BeachTextures?.getOceanMaterial
+      ? ZS.BeachTextures.getOceanMaterial()
+      : new THREE.MeshLambertMaterial({
+        color: 0x1a5270,
+        transparent: true,
+        opacity: 0.96,
+        emissive: 0x082838,
+        emissiveIntensity: 0.35,
+        depthWrite: true,
+        polygonOffset: true,
+        polygonOffsetFactor: -1,
+        polygonOffsetUnits: -2,
+      });
     const mesh = new THREE.Mesh(geo, mat);
     mesh.position.set(SEA.cx, SEA.y, SEA.cz);
     mesh.renderOrder = 5;
     scene.add(mesh);
+    ZS.registerWaterMaterial?.(mat);
     ZS.registerWaterSurface?.(mesh, 0.05, 0.85);
 
     const step = 14;

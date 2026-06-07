@@ -36,3 +36,10 @@ test('findPlayerShootTarget hits player even when zombie is closer on ray', () =
 test('player collide radius is stable', () => {
   assert.equal(PLAYER_COLLIDE_RADIUS, 0.45);
 });
+
+test('findPlayerShootTarget tolerates slight lateral offset', () => {
+  const ray = { ox: 0, oz: 0, nx: 1, nz: 0, range: 90, radius: 0.8 };
+  const players = [{ socketId: 'v', x: 8, z: 0.65, health: 100, invincible: false, skip: false }];
+  const hit = findPlayerShootTarget(ray, players);
+  assert.equal(hit?.kind, 'player');
+});

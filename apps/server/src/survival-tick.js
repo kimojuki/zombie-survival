@@ -1,7 +1,8 @@
 'use strict';
 
-const HUNGER_DECAY = 0.11;
-const THIRST_DECAY = 0.16;
+// Sync packages/shared/src/survival.mjs (HUNGER_DECAY_PER_SEC / THIRST_DECAY_PER_SEC)
+const HUNGER_DECAY = 0.04;
+const THIRST_DECAY = 0.06;
 const BLEED_DMG = 2.0;
 const STARVE_DMG = 0.8;
 const DEHYDRATE_DMG = 1.2;
@@ -22,7 +23,12 @@ function tickPlayerSurvival(p, dt, getMaxHealth) {
   sv.faim = clampStat((sv.faim ?? 80) - HUNGER_DECAY * dt);
   sv.soif = clampStat((sv.soif ?? 80) - THIRST_DECAY * dt);
 
-  if (sv.infection > 0) {
+  const now = Date.now();
+  if (sv.infectionPausedUntil && now >= sv.infectionPausedUntil) {
+    delete sv.infectionPausedUntil;
+  }
+  const infectionPaused = sv.infectionPausedUntil && now < sv.infectionPausedUntil;
+  if (sv.infection > 0 && !infectionPaused) {
     sv.infection = clampStat(sv.infection + INFECT_PROGRESS * dt);
   }
 

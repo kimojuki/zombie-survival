@@ -294,6 +294,7 @@ export function createScenarioBeach(ctx) {
     onRespawnDuringIntro,
     resetScenario,
     isAct1Done,
+    isInvincibleDuringIntro,
     shouldDelayZombieSync,
     BEACH_SCENARIO_VERSION,
   };

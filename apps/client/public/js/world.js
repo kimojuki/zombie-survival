@@ -8,6 +8,7 @@
   const _billboardVec = new THREE.Vector3();
   const _waterSurfaces = [];
   let _waterAnimTick = 0;
+  let _waterAnimEnabled = true;
   let _lastFoliageDay = -1;
   let _colliderCache = null;
   let _colliderCacheFrame = -1;
@@ -202,9 +203,10 @@
     scene.add(_hemiLight);
 
     const _mobileBuild = _isMobileBuild();
+    const _buildProf = _optsProfile();
     _sunLight = new THREE.DirectionalLight(0xfff5dd, 1.4);
-    _sunLight.castShadow = !_mobileBuild;
-    const _shadowMap = _mobileBuild ? 512 : 1024;
+    _sunLight.castShadow = _buildProf ? !!_buildProf.shadows : !_mobileBuild;
+    const _shadowMap = _buildProf?.shadowMapSize ?? (_mobileBuild ? 512 : 1024);
     _sunLight.shadow.mapSize.width  = _shadowMap;
     _sunLight.shadow.mapSize.height = _shadowMap;
     _sunLight.shadow.camera.near    = 1;
@@ -238,7 +240,7 @@
     _moonSprite.frustumCulled = false;
     _moonSprite.renderOrder = 0;
     scene.add(_moonSprite);
-    if (!_mobileBuild) spawnStars();
+    if (_buildProf ? _buildProf.stars : !_mobileBuild) spawnStars();
     spawnClouds();
 
     onProgress?.(0.08, 'Ciel et éclairage');
@@ -276,9 +278,11 @@
     }
     if (_perf) console.log('[world] total', Math.round(performance.now() - _t0), 'ms');
     for (const c of buildingColliders) _colliders.push(c);
+    ZS.buildSectorWalls?.(scene);
     tickDayNight(0);
     ZS.SpawnZone?.finishBeachDecorAsync?.();
     ZS.finishForestDecorAsync?.(scene);
+    applyGraphicsOptions(_optsProfile());
     return buildingColliders;
   }
 
@@ -297,6 +301,12 @@
 
   function setWorldTime(t) { _timeOfDay = t; }
 
+  function getFoliageDayBlend() {
+    const angle = _timeOfDay * Math.PI * 2;
+    const sunY = Math.sin(angle - Math.PI * 0.5);
+    return Math.max(0, Math.min(1, (sunY + 0.06) / 0.48));
+  }
+
   // Centre du frustum d'ombre (suit le joueur) — mis à jour depuis la boucle de jeu.
   let _shadowCX = 0, _shadowCZ = 0;
   function setShadowCenter(x, z) { _shadowCX = x; _shadowCZ = z; }
@@ -306,8 +316,16 @@
   const _skyLocalDir = new THREE.Vector3();
   const _skyCamQuat = new THREE.Quaternion();
   const _skyRootQuat = new THREE.Quaternion();
+  const _fogWork = new THREE.Color();
+  const _fogBeach = new THREE.Color(0x6aacc8);
+  const _fogForest = new THREE.Color(0x5a7a58);
+  let _dnFrame = 0;
 
   function tickDayNight(dt) {
+    _dnFrame++;
+    const gpEarly = _optsProfile();
+    const dnStride = gpEarly?.dayNightStride ?? 1;
+    const dnLite = dnStride > 1 && (_dnFrame % dnStride) !== 0;
     if (dt > 0) {
       _timeOfDay += dt / _DAY_LENGTH_SEC;
       if (_timeOfDay >= 1) {
@@ -378,23 +396,38 @@
     _ambientLight.intensity = k.ambI;
     _ambientLight.color.setHex(k.amb);
     _scene.background.setHex(k.sky);
-    _scene.fog.color.setHex(k.sky);
+    _fogWork.setHex(k.sky);
+    const bwFog = ZS.beachCoastWeight?.(_shadowCX, _shadowCZ) ?? 0;
+    if (bwFog > 0.04) _fogWork.lerp(_fogBeach, Math.min(0.5, bwFog * 0.5));
+    const fwFog = ZS.forestFloorWeight?.(_shadowCX, _shadowCZ) ?? 0;
+    if (fwFog > 0.04) _fogWork.lerp(_fogForest, Math.min(0.42, fwFog * 0.42));
+    _scene.fog.color.copy(_fogWork);
 
     // Hémisphère : ciel = couleur actuelle du fond, sol = vert sombre constant
     _hemiLight.color.setHex(k.sky);
     _hemiLight.intensity = 0.06 + k.ambI * 0.22 + moonIntensity * 0.08;
 
-    // Brouillard de nuit moins agressif
+    // Brouillard de nuit moins agressif (profil options)
     const night = Math.max(0, Math.min(1, -sunY * 1.8));
-    _scene.fog.near = 140 - night * 75;
-    _scene.fog.far  = 420 - night * 200;
+    const gp = _optsProfile();
+    const fogNearBase = gp?.fogNear ?? 140;
+    const fogFarDay = gp?.fogFar ?? 420;
+    const fogFarNight = gp?.fogFarNight ?? 220;
+    _scene.fog.near = fogNearBase - night * Math.min(75, fogNearBase * 0.45);
+    _scene.fog.far = fogFarDay - night * (fogFarDay - fogFarNight);
+    if (dnLite) return;
 
-    // Eau : scintillement animé (intensité emissive ondulante)
-    if (_waterMats.length > 0) {
+    // Eau : scintillement animé (désactivé sur profils sans animation océan)
+    if (_waterMats.length > 0 && (_waterAnimEnabled || _oceanScrollEnabled)) {
       const wt  = Date.now() * 0.001;
       const rip = 0.14 + Math.sin(wt * 0.65) * 0.07 + Math.sin(wt * 1.38) * 0.04;
       const dBr = 0.35 + k.ambI * 0.65; // plus brillant de jour
-      for (const m of _waterMats) m.emissiveIntensity = rip * dBr;
+      for (const m of _waterMats) {
+        m.emissiveIntensity = rip * dBr;
+        if (_oceanScrollEnabled && m.map && m.userData._oceanScroll) {
+          m.map.offset.y = (wt * 0.018) % 1;
+        }
+      }
     }
 
     const foliageDay = Math.max(0, Math.min(1, (sunY + 0.06) / 0.48));
@@ -404,24 +437,27 @@
       ZS.tickBeachLighting?.(foliageDay);
       ZS.tickForestLighting?.(foliageDay);
     }
-    if (_waterSurfaces.length > 0) {
+    const waterStride = gp?.waterStride ?? 1;
+    if (_waterSurfaces.length > 0 && _waterAnimEnabled) {
       _waterAnimTick++;
-      const wt = Date.now() * 0.001;
-      const doNormals = _waterAnimTick % 5 === 0;
-      for (const ws of _waterSurfaces) {
-        const pos = ws.mesh.geometry.attributes.position;
-        const base = ws.base;
-        for (let i = 0; i < pos.count; i++) {
-          const bx = base[i * 3];
-          const by = base[i * 3 + 1];
-          const bz = base[i * 3 + 2];
-          const wave =
-            Math.sin(wt * ws.speed + bx * 0.09 + bz * 0.05) * ws.amp +
-            Math.sin(wt * (ws.speed * 1.7) + bx * 0.16 - bz * 0.12) * (ws.amp * 0.45);
-          pos.setY(i, by + wave);
+      if (_waterAnimTick % waterStride === 0) {
+        const wt = Date.now() * 0.001;
+        const doNormals = _waterAnimTick % (5 * waterStride) === 0;
+        for (const ws of _waterSurfaces) {
+          const pos = ws.mesh.geometry.attributes.position;
+          const base = ws.base;
+          for (let i = 0; i < pos.count; i++) {
+            const bx = base[i * 3];
+            const by = base[i * 3 + 1];
+            const bz = base[i * 3 + 2];
+            const wave =
+              Math.sin(wt * ws.speed + bx * 0.09 + bz * 0.05) * ws.amp +
+              Math.sin(wt * (ws.speed * 1.7) + bx * 0.16 - bz * 0.12) * (ws.amp * 0.45);
+            pos.setY(i, by + wave);
+          }
+          pos.needsUpdate = true;
+          if (doNormals) ws.mesh.geometry.computeVertexNormals();
         }
-        pos.needsUpdate = true;
-        if (doNormals) ws.mesh.geometry.computeVertexNormals();
       }
     }
 
@@ -497,7 +533,8 @@
 
   function spawnStars() {
     if (!_skyRoot) return;
-    const count = _isMobileBuild() ? 64 : 240;
+    const prof = _optsProfile();
+    const count = prof?.starCount ?? (_isMobileBuild() ? 64 : 240);
     const radius = 168;
     const pos = new Float32Array(count * 3);
     const sizes = new Float32Array(count);
@@ -604,12 +641,59 @@
     return _cT.getHex();
   }
 
+  function _optsProfile() {
+    return ZS.Options?.getProfile?.() || null;
+  }
+
   function _isMobileBuild() {
+    const p = _optsProfile();
+    if (p) return p.tier !== 'high';
     return !!(ZS.detectTouchInput?.() || window.__ZS_TOUCH_MODE || window.ZS?._touchInput || window.ZS?._isMobile);
   }
 
   function _terrainSeg() {
+    const p = _optsProfile();
+    if (p) return p.terrainSeg;
     return _isMobileBuild() ? 28 : 44;
+  }
+
+  let _oceanScrollEnabled = true;
+
+  function _applyShadowFrustum(fr) {
+    if (!_sunLight?.shadow) return;
+    const h = fr ?? 58;
+    _sunLight.shadow.camera.left = -h;
+    _sunLight.shadow.camera.right = h;
+    _sunLight.shadow.camera.top = h;
+    _sunLight.shadow.camera.bottom = -h;
+    _sunLight.shadow.camera.updateProjectionMatrix?.();
+  }
+
+  function _setCloudBudget(n) {
+    const max = Math.max(0, n ?? 0);
+    for (let i = 0; i < _clouds.length; i++) {
+      _clouds[i].sprite.visible = i < max;
+    }
+  }
+
+  function applyGraphicsOptions(profile) {
+    const p = profile || _optsProfile();
+    if (!p) return;
+    _waterAnimEnabled = p.waterAnim !== false;
+    _oceanScrollEnabled = p.oceanScroll !== false;
+    if (_scene?.fog) {
+      _scene.fog.near = p.fogNear;
+      _scene.fog.far = p.fogFar;
+    }
+    if (_sunLight) {
+      _sunLight.castShadow = !!p.shadows;
+      if (_sunLight.shadow) {
+        _sunLight.shadow.mapSize.set(p.shadowMapSize, p.shadowMapSize);
+        _applyShadowFrustum(p.shadowFrustum);
+      }
+    }
+    _setCloudBudget(p.clouds);
+    if (_starField) _starField.visible = !!p.stars && (p.starCount ?? 0) > 0;
   }
 
   function _triSlope(pa, i0, i1, i2) {
@@ -925,7 +1009,8 @@
       depthTest: true,
     });
 
-    const cloudCount = _isMobileBuild() ? 4 : 10;
+    const prof = _optsProfile();
+    const cloudCount = prof?.clouds ?? (_isMobileBuild() ? 4 : 10);
     for (let i = 0; i < cloudCount; i++) {
       const sprite = new THREE.Sprite(_cloudMat);
       const az0 = _rng() * Math.PI * 2;
@@ -1076,6 +1161,13 @@
     _startTreeFall(tree, dirX, dirZ);
   }
 
+  function hasActiveTreeAnims() {
+    for (const tree of _trees) {
+      if (tree.shakeT > 0 || tree.state === 'falling') return true;
+    }
+    return false;
+  }
+
   function tickTreeFalls(dt) {
     for (const tree of _trees) {
       if (tree.shakeT > 0) {
@@ -1091,7 +1183,8 @@
       tree.group.rotation.x = ease * (Math.PI * 0.46);
       if (p >= 1 && !tree.fallAnim.impactPlayed) {
         tree.fallAnim.impactPlayed = true;
-        ZS.Audio?.treeFall?.(0.9);
+        const sp = ZS.Audio?.spatialAt?.(tree.x, tree.z);
+        ZS.Audio?.treeFall?.(0.9 * (sp?.vol ?? 1), sp?.pan);
       }
     }
   }
@@ -1247,6 +1340,13 @@
     const rock = _findRockByDecorId(decorId);
     if (!rock || rock.state !== 'active') return;
     _depleteRock(rock);
+  }
+
+  function hasActiveRockMines() {
+    for (const rock of _rocks) {
+      if (rock.shakeT > 0) return true;
+    }
+    return false;
   }
 
   function tickRockMines(dt) {
@@ -1563,14 +1663,17 @@
   function getWaterZones() { return _waterZones.slice(); }
 
   window.ZS = window.ZS || {};
-  ZS.buildWorld        = buildWorld;
-  ZS.buildWorldAsync   = buildWorldAsync;
+  ZS.buildWorld             = buildWorld;
+  ZS.buildWorldAsync        = buildWorldAsync;
+  ZS.applyGraphicsOptions   = applyGraphicsOptions;
+  ZS.World                  = { applyGraphicsOptions };
   ZS.registerGroundMesh      = registerGroundMesh;
   ZS.getVisibleTerrainHeight = getVisibleTerrainHeight;
   ZS.raycastTerrainHeight    = raycastTerrainHeight;
   ZS.raycastGroundHeight     = raycastGroundHeight;
-  ZS.tickDayNight      = tickDayNight;
-  ZS.setWorldTime      = setWorldTime;
+  ZS.tickDayNight         = tickDayNight;
+  ZS.setWorldTime         = setWorldTime;
+  ZS.getFoliageDayBlend   = getFoliageDayBlend;
   ZS.setShadowCenter   = setShadowCenter;
   function registerDecorColliders(id, colliders) {
     if (!id) return;
@@ -1593,9 +1696,35 @@
     invalidateColliderCache();
   }
 
-  function getColliders() {
-    const frame = ZS._frameId ?? -1;
-    if (_colliderCache && _colliderCacheFrame === frame) return _colliderCache;
+  const _COLLIDER_CELL = 16;
+  let _colliderGrid = null;
+  let _standCacheX = NaN;
+  let _standCacheZ = NaN;
+  let _standCacheEye = NaN;
+  let _standCacheVal = 0;
+
+  function _colliderRefXZ(col) {
+    const x = col.cx ?? col.x ?? ((col.x0 ?? 0) + (col.x1 ?? 0)) * 0.5;
+    const z = col.cz ?? col.z ?? ((col.z0 ?? 0) + (col.z1 ?? 0)) * 0.5;
+    return { x, z };
+  }
+
+  function _rebuildColliderGrid(list) {
+    const grid = new Map();
+    for (let i = 0; i < list.length; i++) {
+      const col = list[i];
+      const { x, z } = _colliderRefXZ(col);
+      const cx = Math.floor(x / _COLLIDER_CELL);
+      const cz = Math.floor(z / _COLLIDER_CELL);
+      const key = cx + ',' + cz;
+      let bucket = grid.get(key);
+      if (!bucket) { bucket = []; grid.set(key, bucket); }
+      bucket.push(col);
+    }
+    _colliderGrid = grid;
+  }
+
+  function _buildColliderList() {
     const out = _colliders.slice();
     const barriers = ZS.getBarrierColliders?.();
     if (barriers?.length) out.push(...barriers);
@@ -1604,14 +1733,72 @@
         for (const c of cols) out.push(c);
       }
     }
+    return out;
+  }
+
+  function getColliders() {
+    const frame = ZS._frameId ?? -1;
+    if (_colliderCache && _colliderCacheFrame === frame) return _colliderCache;
+    const out = _buildColliderList();
     _colliderCache = out;
     _colliderCacheFrame = frame;
+    _rebuildColliderGrid(out);
+    return out;
+  }
+
+  /** Colliders terrain statiques pour le serveur (sans décor dynamique). */
+  function getCollidersForServer() {
+    const out = _colliders.slice();
+    const barriers = ZS.getBarrierColliders?.();
+    if (barriers?.length) {
+      for (let i = 0; i < barriers.length; i++) {
+        const c = barriers[i];
+        if (c && c.minY === undefined && !c.decorId) out.push(c);
+      }
+    }
+    return out;
+  }
+
+  /** Colliders proches (mouvement) — évite de scanner toute la carte chaque frame. */
+  function getCollidersNear(px, pz, radius) {
+    const r = radius ?? 32;
+    getColliders();
+    if (!_colliderGrid) return _colliderCache || [];
+    const r2 = r * r;
+    const minCx = Math.floor((px - r) / _COLLIDER_CELL);
+    const maxCx = Math.floor((px + r) / _COLLIDER_CELL);
+    const minCz = Math.floor((pz - r) / _COLLIDER_CELL);
+    const maxCz = Math.floor((pz + r) / _COLLIDER_CELL);
+    const out = [];
+    for (let cx = minCx; cx <= maxCx; cx++) {
+      for (let cz = minCz; cz <= maxCz; cz++) {
+        const bucket = _colliderGrid.get(cx + ',' + cz);
+        if (!bucket) continue;
+        for (let i = 0; i < bucket.length; i++) {
+          const col = bucket[i];
+          const ref = _colliderRefXZ(col);
+          const dx = ref.x - px;
+          const dz = ref.z - pz;
+          if (dx * dx + dz * dz <= r2 + 64) out.push(col);
+        }
+      }
+    }
     return out;
   }
 
   function invalidateColliderCache() {
     _colliderCache = null;
     _colliderCacheFrame = -1;
+    _colliderGrid = null;
+    _standCacheX = NaN;
+    _standCacheZ = NaN;
+  }
+
+  /** Murs secteur — enregistrés après Buildings.buildAll (voir sector_walls.js). */
+  function registerSectorCollider(c) {
+    if (!c) return;
+    _colliders.push(c);
+    invalidateColliderCache();
   }
 
   // Hauteur max montable d'un bond (JUMP_V=8, GRAVITY=22 → ~1.45 m)
@@ -1756,16 +1943,26 @@
 
   /** Sol sous les pieds : terrain + étages + dessus des décors (caisses, souches…). */
   function getStandHeight(x, z, playerEyeY) {
+    if (Math.hypot(x - _standCacheX, z - _standCacheZ) < 0.2
+      && Math.abs(playerEyeY - _standCacheEye) < 0.4) {
+      return _standCacheVal;
+    }
     let best = ZS.getEffectiveFloorHeight(x, z, playerEyeY);
     const baseFloor = best;
+    const nearby = getCollidersNear(x, z, 24);
 
-    for (const col of getColliders()) {
+    for (let i = 0; i < nearby.length; i++) {
+      const col = nearby[i];
       const top = decorStandTop(col);
       if (top == null) continue;
       if (!overColliderFootprint(x, z, 0.02, col)) continue;
       if (top - baseFloor > MAX_STAND_STEP) continue;
       if (top <= playerEyeY - 0.45 && top > best) best = top;
     }
+    _standCacheX = x;
+    _standCacheZ = z;
+    _standCacheEye = playerEyeY;
+    _standCacheVal = best;
     return best;
   }
 
@@ -1779,7 +1976,10 @@
   }
 
   ZS.getColliders           = getColliders;
+  ZS.getCollidersForServer  = getCollidersForServer;
+  ZS.getCollidersNear       = getCollidersNear;
   ZS.invalidateColliderCache = invalidateColliderCache;
+  ZS.registerSectorCollider = registerSectorCollider;
   ZS.getBarrierColliders     = () => (ZS.BarrierPrefabs?.getBarrierColliders?.() || []);
   ZS.registerDecorColliders = registerDecorColliders;
   ZS.removeDecorColliders   = removeDecorColliders;
@@ -1793,15 +1993,21 @@
   ZS.chopTree              = chopTree;
   ZS.registerChoppableTree = registerChoppableTree;
   ZS.removeChoppableTree   = removeChoppableTree;
+  ZS.isTreeVisPinned       = (decorId) => {
+    const t = _findTreeByDecorId(decorId);
+    return !!(t && (t.state === 'falling' || t.fallAnim));
+  };
   ZS.applyRemoteTreeChop   = applyRemoteTreeChop;
   ZS.applyRemoteTreeGrow   = applyRemoteTreeGrow;
   ZS.applyRemoteTreeFell   = applyRemoteTreeFell;
+  ZS.hasActiveTreeAnims    = hasActiveTreeAnims;
   ZS.tickTreeFalls         = tickTreeFalls;
   ZS.mineRock              = mineRock;
   ZS.registerMinableRock   = registerMinableRock;
   ZS.removeMinableRock     = removeMinableRock;
   ZS.applyRemoteRockMine   = applyRemoteRockMine;
   ZS.applyRemoteRockDepleted = applyRemoteRockDepleted;
+  ZS.hasActiveRockMines    = hasActiveRockMines;
   ZS.tickRockMines         = tickRockMines;
   ZS.registerFireLight     = registerFireLight;
   ZS.registerBillboards    = registerBillboards;

@@ -441,6 +441,23 @@
     return hit.dist < halfW + (margin || 0);
   }
 
+  function _nearestTrailSample(x, z) {
+    let best = null;
+    for (const rc of _trailCorridors) {
+      if (x < rc.minX || x > rc.maxX || z < rc.minZ || z > rc.maxZ) continue;
+      const hit = _sampleRoadCorridor(rc, x, z);
+      if (hit && (!best || hit.dist < best.dist)) best = hit;
+    }
+    return best;
+  }
+
+  function isInTrailCorridor(x, z, margin) {
+    const hit = _nearestTrailSample(x, z);
+    if (!hit) return false;
+    const halfW = hit.halfW || hit.rc.halfW;
+    return hit.dist < halfW + (margin || 0);
+  }
+
   function _riverBedHeight(x, z, baseH) {
     const hit = _nearestRiverPoint(x, z);
     if (!hit) return baseH;
@@ -572,6 +589,7 @@
   ZS.registerTrailCorridor     = registerTrailCorridor;
   ZS.finalizeRoadNetwork       = finalizeRoadNetwork;
   ZS.isInRoadCorridor          = isInRoadCorridor;
+  ZS.isInTrailCorridor         = isInTrailCorridor;
   ZS.registerRiverChannel      = registerRiverChannel;
   ZS.isInRiverChannel        = isInRiverChannel;
   ZS.registerUpperFloor      = registerUpperFloor;

@@ -50,6 +50,423 @@ Copier dans la description de PR :
 
 ## 2026-06-07
 
+### Completed — Fix carte (M) PC (2026-06-08)
+
+- **map.js** ajouté à `legacy-modules.js` (le chargement via `ZS.loadScript` était un no-op).
+- **loading.js** : alias `ZS.loadScript`.
+- **game.html** : bouton carte en optional chaining.
+- **Version** : `20260608-map-fix-248`
+
+### Completed — Collision murs secteur 01 (2026-06-08)
+
+- **sector_walls.js** : segments `type:'seg'` dans `world._colliders` (plus `ZS.B` après buildAll) ; coords X/Z corrigées ; chunks 22 m ; trous aux portes.
+- **world.js** : `registerSectorCollider`.
+- **Version** : `20260608-sector-collision-247`
+
+### Completed — Fix audio `setVolumes` manquant (2026-06-08)
+
+- **audio.js** : implémente `setVolumes({ master, ambient, sfx })` (cassait tout `ZS.Audio` au chargement).
+- **game.js** : init Craft/Audio en optional chaining.
+- **Version** : `20260608-audio-setvol-245`
+
+### Completed — Animation flamme torche en main (2026-06-08)
+
+- **player.js** : billboards feu (3 couches + braises), textures procédurales, sway au mouvement, lumières synchronisées ; `tickTorchFx` ; extinction visuelle en eau (locale).
+- **game.js** : tick chaque frame.
+- **Version** : `20260608-torch-flame-244`
+
+### Completed — Secteurs : murs denses + carte RP 10 secteurs (2026-06-08)
+
+- **sectors.mjs** : registre unique `SECTORS_ALL` (S01–S10), `MAP_WORLD`, `MAP_ROADS`, `getSectorAt`.
+- **sector-bounds.mjs** / **sector_bounds.js** : réexport + miroir client.
+- **sector_walls.js** : espacement barrières `1.95 m` (chevauchement), ouvertures aux portes RP.
+- **map.js** : refactor data-driven — tous les secteurs, routes, portes, position joueur (X/Z + secteur), refresh 4×/s.
+- **Tests** : `tests/sectors.test.mjs`
+- **Version** : `20260608-sectors-map-243`
+
+### Completed — Ambiance torche (feu en main) (2026-06-08)
+
+- **audio.js** : `tickHeldTorch` — boucle crépitement synthétique + pops ; coupe en eau / mort / mute.
+- **game.js** : appel chaque frame si `tool_torche` en main.
+- **Version** : `20260608-torch-fire-242`
+
+### Completed — Ambiance forêt : faune optionnelle (2026-06-08)
+
+- **audio.js** : `rustle_2` (serpent) retiré des rafales vent → option « Faune en forêt » (55–130 s, court/extrait).
+- Rafales vent seules toutes les ~14–34 s, plus douces.
+- Lit `forest_ambient.ogg` sous `forest_wind.mp3` ; volume forêt légèrement relevé.
+- **Options** : toggle `forestCreatures` (défaut off, comme oiseaux).
+- **Version** : `20260608-forest-audio-241`
+
+### Completed — Périmètre secteur 01 forêt (2026-06-08)
+
+- **sector-bounds.mjs** + **sector_bounds.js** : limites S01 (forêt + plage), clamp client/serveur.
+- **sector_walls.js** : murs jersey + grillage + colliders ; portes « BIENTÔT » (E = easter egg).
+- **map.js** : carte M alignée sur zone ouverte + secteurs grisés.
+- **sign_ui** : texte `sector_coming_soon`.
+- **Version** : `20260608-sector01-walls-240`
+
+### Completed — Perf round 4 : LOD arbres + lumières + réseau (2026-06-07)
+
+- **tree_prefabs** : `buildSimple` (2 meshes) pour arbres lointains ; upgrade auto < 42 m.
+- **spawn_clearing** : LOD simple si distance > 42 m ou `simpleLod` ; `upgradeTreeLod`.
+- **network** : arbres différés en LOD simple ; upgrade à l'approche.
+- **game.js** : cull lumières O(n×k) ; skip tick chute arbres/rochers si inactif.
+- **inventory** : ghost construction à ~20 Hz.
+- **server** : `player-move` broadcast par proximité (150 m) ; `rotY` validé.
+- **Version** : `20260607-perf-lod-239`
+
+### Completed — Perf round 3 : culling décor + arbres stream (2026-06-07)
+
+- **network.js** : visibilité décor par distance (`decorVisRadius`) ; arbres lointains paginés + spawn progressif.
+- **server** : `GET /api/world/decor-trees` paginé (`limit`/`offset`, tri distance).
+- **zombie.js** : anim/visibilité par distance ; fix dispose caches partagés.
+- **network tick** : joueurs distants animés < 72 m ; `getLocalXZ` exporté.
+- **world.js** : `waterStride` ; `isTreeVisPinned` pour arbres en chute.
+- **spawn_clearing** : `castShadow` off sur arbres si profil sans ombres.
+- **Version** : `20260607-perf-cull-238`
+
+### Completed — Perf round 2 + autorité serveur (2026-06-07)
+
+- **world.js** : `dayNightStride` (eau/nuages/feu sur frames allégées) ; eau emissive off si profil statique.
+- **game.js** : overlay eau sans `blur` CSS ; fusil à pompe = 1 événement `shoot` (serveur résout 8 plombs).
+- **forest/beach_decor** : ancres décor réduites selon tier (potato ~20 %).
+- **tree_prefabs** : `_detailMul` par tier (potato 0.32).
+- **weapon-stats.mjs** + **server** : dispersion serveur par plomb ; clamp `move` dans `WORLD_RADIUS` + Y borné.
+- **server** : `zombie-tick` time-only throttlé à ~1 Hz si aucun changement.
+- **Version** : `20260607-perf-auth-237`
+
+### Completed — Perf mobile/tablette + options branchées (2026-06-07)
+
+- **options.js** : auto tactile → `low` (téléphone/tablette) ; profils allégés (DPR, décor, terrain, brouillard, lumières).
+- **world.js** : `applyGraphicsOptions` — nuages, étoiles, eau, frustum ombres ; océan scroll off en faible.
+- **game.js** : culling lumières / billboards / ambiance selon profil (`lightCullEvery`, `biomeStride`).
+- **options** : toggles immersion/audio appliqués via `_applyImmediate`.
+- **Version** : `20260607-perf-mobile-236`
+
+### Completed — Réglage pas sable / forêt (2026-06-07)
+
+- **audio.js** : sable gain 0.46, clip court ; forêt = herbe + feuilles (plus de tissu), gain 0.7, pitch plus sourd.
+- **Version** : `20260607-footsteps-tune-235`
+
+### Completed — Sync audio multijoueur (2026-06-07)
+
+- **Serveur** : `player-footstep` (surface, position serveur) ; `player-attack` enrichi (arme, x/z, horodatage).
+- **Client** : pas des autres joueurs spatialisés ; tirs/mêlée à la position serveur ; coupe arbre/rocher + chute arbre + portes spatialisés.
+- **audio.js** : `spatialAt`, `footstep` avec panoramique.
+- **Version** : `20260607-audio-sync-234`
+
+### Completed — Pas sentier & asphalte (2026-06-07)
+
+- **noise.js** : `isInTrailCorridor` ; **road_network.js** : `getSurfaceAt` (asphalt/trail).
+- **audio.js** : surfaces `trail` (gravier CC0) et `asphalt` (pas durs) ; gain/clip/rate dédiés.
+- **Version** : `20260607-footsteps-trail-233`
+
+### Completed — Pas sur bois (fondations) (2026-06-07)
+
+- **build_anchors.js** : `isStandingOnFoundation(px, pz, feetY)` — détection dalle tous niveaux.
+- **audio.js** : surface `wood` + échantillons CC0 ; gain/clip/rate adaptés au bois.
+- **game.js** : passe la hauteur des pieds à `footstepSurface`.
+- **Version** : `20260607-footsteps-wood-232`
+
+### Completed — Volume pas sable réduit (2026-06-07)
+
+- **audio.js** : `FOOTSTEP_GAIN.sand` 1.05 → 0.68.
+- **Version** : `20260607-footsteps-sand-231`
+
+### Completed — Ambiance biomes v2 (vent, oiseaux option, vagues distance) (2026-06-07)
+
+- **Forêt** : boucle vent sans oiseaux (`forest_wind.mp3`, OGA CC0) ; cris d’oiseaux optionnels (Options → « Oiseaux en forêt », désactivé par défaut) ; bruissements de branches au vent toutes les ~7–23 s.
+- **Plage** : volume des vagues selon `beachOceanProximity` — plus fort au bord de l’océan (est), atténué en s’éloignant vers l’intérieur du sable.
+- **options.js / options_ui.js** : toggle `forestBirds`.
+- **Version** : `20260607-biome-audio-230`
+
+### Completed — Bruits de pas réalistes (footstep-samples) (2026-06-07)
+
+- **audio.js** : remplacement de la synthèse procédurale par des échantillons par surface (sable, herbe, forêt, terre, eau peu profonde) ; alternance L/R, variation de pitch ; synthèse conservée en secours.
+- **Assets** (`public/audio/sfx/footsteps/`) : Yo Frankie sand/grass (CC-BY Blender Foundation) ; C-Dogs OGA cloth/leather (CC0) ; 100 CC0 SFX v2 dirt/wet (CC0).
+- **Version** : `20260607-footsteps-229`
+
+### Completed — Options layout large PC/tablette (2026-06-07)
+
+- **options_ui.js** : mobile inchangé (bottom sheet) ; PC/tablette = nav latérale + grille 2 col. + cartes.
+- **Version** : `20260607-options-wide-228`
+
+### Completed — Panneau Options (graphismes, audio, contrôles) (2026-06-07)
+
+- **options.js** : presets Auto / Très faible / Faible / Moyen / Élevé, persistance `zs_options_v1`.
+- **options_ui.js** + menu ☰ : panneau responsive mobile/tablette/PC.
+- **Branché** : renderer, ombres, brouillard, décor, eau, lumières, audio, pas, head-bob, FOV, vignette survie, sensibilité, tactile.
+- **Profil « Très faible »** : téléphones limités (décor minimal, pas d’ombres, distance courte).
+- **Version** : `20260607-options-226`
+
+### Completed — Pack immersion joueur (2026-06-07)
+
+- **Audio** : pas (sable/forêt/herbe/eau), splash + filtre sous l'eau, ambiance atténuée en profondeur.
+- **Visuel** : overlay eau selon profondeur, FOV sprint, head-bob caméra, brouillard teinté biome.
+- **Survie** : vignette faim (ambre) / soif (bleu) / saignement (rouge pulsé).
+- **Version** : `20260607-immersion-225`
+
+### Completed — Ambiance audio biomes plage/forêt (2026-06-07)
+
+- **audio.js** : boucles CC0 plage (vagues jasinski) + forêt (BigSoundBank #100), crossfade selon `beachCoastWeight`, secours synth.
+- **Son ON par défaut** ; grognements zombies coupés (`ZOMBIE_SFX_ENABLED = false`).
+- **game.js** : `updateBiomeAmbient` chaque frame.
+- **Fichiers** : `public/audio/biomes/beach_waves.flac`, `forest_ambient.ogg`.
+- **Version** : `20260607-biome-audio-224`
+
+### Completed — Texture océan horizon plage (2026-06-07)
+
+- **beach_textures.js** : `getOceanMaterial()` — dégradé côte→horizon, écume, vaguelettes, brume lointaine.
+- **proc_spawn.js** : surface mer texturée + `registerWaterMaterial` ; maillage 24×28 pour vagues plus douces.
+- **world.js** : défilement UV léger le long de la côte.
+- **Version** : `20260607-ocean-tex-223`
+
+### Completed — Badge HUD zone sûre plage (2026-06-07)
+
+- **HUD** : `🛡️ Plage sûre` / `⚠️ Zone ouverte` à côté saignement/infection (`setZoneSafe`).
+- **Version** : `20260607-zone-flag-222`
+
+### Completed — Panneau plage ton RP survivants (2026-06-07)
+
+- **sign_ui.js** : messages de Léo, Mina, Viktor… (plus de ton tutoriel / serveur).
+- **Version** : `20260607-sign-rp-221`
+
+### Completed — Construction interdite sur la plage (2026-06-07)
+
+- **Build** : fondations, murs, portes, coffres, etc. refusés sur le sable protégé (client + serveur).
+- **Shared** : `isBuildBlockedOnBeach` (emprise 3×3 m).
+- **Version** : `20260607-beach-no-build-220`
+
+### Completed — Panneau sortie plage (prefab + UI RP) (2026-06-07)
+
+- **Prefab** `sign_beach_exit` — panneau 3D à la bouche du sentier ; `E` pour lire.
+- **UI** `sign_ui.js` — popup planche (zone sûre, palmiers/caillou, craft, raccourcis).
+- **Serveur** : seed `beach-sign-placements.mjs`, RCON `decorseed signs`, `decoradd prefab sign_beach_exit`.
+- **Version** : `20260607-beach-sign-219`
+
+### Completed — Zone sûre plage (anti spawn-kill) (2026-06-07)
+
+- **PvP** : joueurs / endormis sur le sable de plage ignorés par le raycast et les dégâts (tirs extérieurs inclus).
+- **Loot** : vol d’endormi (💤) interdit sur la plage ; cadavres (☠) autorisés.
+- **Shared** : `isOnBeachSafeSand` (`beach-spawn.mjs`).
+
+### Completed — Spawn plage aléatoire (respawn) (2026-06-07)
+
+- **`pickBeachSpawn`** : point aléatoire sur le sable (poids côte + footprint), pas toujours le même pixel.
+- **Serveur** : respawn mort, tué offline, nouveau compte, 1re connexion sans position sauvée.
+- **Version** : `20260607-beach-spawn-rand-218`
+
+### Completed — Tuer un joueur endormi (déco) (2026-06-07)
+
+- **Combat** : coups/tirs infligent des dégâts aux corps endormis (`sleeper-hit` / `sleeper-death`) ; corps passe en état mort (☠) fouillable.
+- **Reconnexion** : si tué pendant l’absence → respawn plage + kit départ ; sac mort au sol avec le loot restant.
+- **Version** : `20260607-sleeper-kill-217`
+
+### Completed — Fouille / coffre drag & drop bidirectionnel (2026-06-07)
+
+- **Fouille** : déposer des objets sur le corps / dormeur (joueur → cible) + réorg. cible ; `lootMoveTransfer` serveur.
+- **Coffre** : déjà supporté via `storage-move` ; hints UI mis à jour.
+- **Version** : `20260607-loot-bidir-216`
+
+### Completed — Login sans sélecteur serveur (2026-06-07)
+
+- **`index.html`** : retrait prod/QA/dev picker — session toujours `dev` + origine courante ; cache bust jeu inchangé.
+- **Version** : `20260607-login-dev-only-215`
+
+### Completed — Drag & drop coffre + fouille (2026-06-07)
+
+- **Client** : `PanelUI.bindTransferDrag` — glisser-déposer entre conteneurs (coffre ↔ inventaire, cible ↔ joueur).
+- **Serveur** : `storage-move`, `sleep-loot-move` + `storage-ops.js` (grille coffre fixe, échanges).
+- **Tests** : `tests/storage-ops.test.mjs`
+- **Version** : `20260607-transfer-drag-214`
+
+### Completed — Système UI panneaux unifié `PanelUI` (2026-06-07)
+
+- **`panel_ui.js`** : factory partagée (`create`, `makeHeader`, `makeSlot`, `makeSplitBody`, grilles) — une modif = tous les menus.
+- **CSS `.zs-panel`** : backdrops, headers, hints, hauteurs `--zs-panel-h` centralisés ; inventaire, craft, coffre, fouille, groupe, QA.
+- **Refactor** : `storage_ui.js`, `sleep_loot.js`, headers `inventory.js` / `craft.js`, HTML groupe + QA.
+- **Version** : `20260607-panel-ui-213`
+
+### Completed — UI fouille corps / dormeur alignée inventaire (2026-06-07)
+
+- **`sleep_loot.js`** : panneau sombre deux colonnes (cible : équipement + hotbar + sac | votre inventaire en lecture seule).
+- **CSS** : `#sleep-loot-panel` partage les styles `#storage-panel` / `.stor-*`.
+- **Version** : `20260607-loot-ui-212`
+
+### Completed — UI coffre alignée inventaire (2026-06-07)
+
+- **`storage_ui.js`** : panneau sombre (header, hint, slots `.inv-slot`), deux colonnes PC/tablette (coffre | inventaire joueur).
+- **Retrait** : style Minecraft inline dans `game.js` + `chest_ui.js`.
+- **CSS** : `#storage-panel` / `#storage-backdrop` dans `style.css` (même famille que `#inv-panel`).
+- **Version** : `20260607-storage-ui-211`
+
+### Fixed — PvP dégâts entre joueurs (2026-06-07)
+
+- Rayon hit joueur 0.72 m, visée mêlée conserve origine caméra (désync client/serveur).
+- Invincibilité intro scénario seulement pendant les étapes protégées (pas permanent hors acte 1).
+- Poing envoie toujours `shoot` au serveur ; membres du même groupe exclus du PvP.
+- **Version** : `20260607-pvp-fix-193`
+
+### Fixed — Monde vide après chargement (arbres/zombies) (2026-06-07)
+
+- **Cause** : handler `connect` vidait tout le décor pendant la 1re sync (`Network.preconnect` + socket parallèle au `buildWorld`) ; `disconnect` effaçait le buffer `game-init` ; reconnexion sans nouveau `game-init` (recovery Socket.io).
+- **Fix client** : ne plus vider le monde sur `connect` tant que `_hadSpawnReady` est faux ; reset centralisé dans `_finalizeGameInit` ; garde anti double-sync ; buffer `game-init` conservé au disconnect.
+- **Fix serveur** : `request-game-init` + helper `_gameInitPayload` pour resync après recovery.
+- **Version** : `20260607-sync-fix-195`
+
+### Fixed — Infection uniquement sur morsure zombie (2026-06-07)
+
+- **Symptôme** : barre infection montait sans morsure, mort à 100 % sans coup de zombie clair.
+- **Cause** : 25 % d'infection sur **chaque** coup zombie + 15 % sur dégâts PvP ; localStorage client pouvait afficher une infection fantôme.
+- **Fix** : `packages/shared/src/survival.mjs` — morsure distincte des griffes (~32 % des attaques, ~68 % transmettent) ; PvP sans infection ; notif client sur `take-damage.infected`.
+- **Tests** : `tests/survival-bite.test.mjs`
+- **Version** : `20260607-infection-bite-196`
+
+### Completed — Pilules anti-infection + seringue rare (2026-06-07)
+
+- **Pilules** (`med_pilules_anti_infection`) : −20 infection, pause progression 150 s, loot zombie fréquent (~52 %, pool pondéré pilules).
+- **Seringue** : guérison totale + 15 PV ; plus de drop zombie ; hôpital en loot rare seulement.
+- **Visuel** : blister procédural au sol / en main, anim. prise, badge HUD « Antiviral actif ».
+- **Serveur** : `infectionPausedUntil` dans survival-tick + `survival-update`.
+- **Version** : `20260607-pills-197`
+
+### Tuning — Faim / soif plus lentes (2026-06-07)
+
+- **Avant** : ~12 min faim, ~8 min soif (depuis 80).
+- **Après** : ~33 min faim (`0.04`/s), ~22 min soif (`0.06`/s) — constantes dans `packages/shared/src/survival.mjs`.
+- **Version** : `20260607-survival-198`
+
+### Completed — Endurance + sprint (Shift / mobile) (2026-06-07)
+
+- **Barre ⚡** HUD ; sprint ×1,62 (pas en eau) ; drain 22/s, regen 14/s après 0,4 s.
+- **PC** : `Shift` maintenu en marchant.
+- **Mobile** : bouton ⚡ au-dessus du joystick (visible seulement en déplacement, non superposé aux boutons droite).
+- **Boisson énergisante** : +35 endurance (serveur `bonus_endurance`).
+- **Version** : `20260607-sprint-199`
+
+### Completed — Rations survie (kit départ + loot zombie) (2026-06-07)
+
+- **Item** `food_sandwich` (+32 faim, +8 soif) ; modèle 3D procédural.
+- **Kit départ** : 1 eau + 1 sandwich en sac (`ensureStarterRations` si aucun aliment).
+- **Loot zombie** : eau/sandwich/conserves pondérés (~50 % drop) + pilules/bandage/munitions.
+- **Respawn** : rations incluses dans `STARTING_ITEMS`.
+- **Version** : `20260607-rations-200`
+
+### Fixed — Sprint mobile + badges HUD (2026-06-07)
+
+- **Sprint** : `setPointerCapture`, plus de `pointerleave` / `disabled` ; bouton figé pendant l'appui (évite le jitter).
+- **HUD** : badges saignement/infection descendus sous la barre d'endurance (`top: 132px`).
+- **Version** : `20260607-sprint-ui-201`
+
+### Fixed — Inventaire sac : déplacement refusé (2026-06-07)
+
+- **Symptôme** : échange bouteille/sandwich (sac) → « Déplacement refusé » ; caillou (hotbar) OK.
+- **Cause** : sac serveur compact (longueur 2) vs grille client (8 slots) → index hors limites.
+- **Fix** : `ensureSlotGrid` dans `moveInvSlot` (hotbar 6 + sac selon équipement Dos).
+- **Tests** : `inventory-ops.test.mjs`.
+
+### Completed — Inventaire drag & drop (2026-06-07)
+
+- **Déplacement** : glisser-déposer (souris + tactile) remplace le double-clic ; fantôme, surbrillance cible, fusion/échange inchangés.
+- **Version** : `20260607-inv-drag-210`
+
+### Completed — Inventaire PC / tablette + descriptions objets (2026-06-07)
+
+- **Inventaire** : fenêtre taille fixe (comme artisanat) ; colonne **Détail** avec description de l'objet sélectionné.
+- **Items** : champ `desc` pour chaque entrée du registre (`items.js`).
+- **Mobile** : panneau inchangé (pas de colonne détail).
+- **Version** : `20260607-inv-detail-209`
+
+### Fixed — Panneau artisanat taille fixe PC / tablette (2026-06-07)
+
+- **Craft** : hauteur uniforme quel que soit l'onglet (Matériaux, Outils, Armes…) — zone recettes scrollable ; mobile inchangé.
+- **Version** : `20260607-craft-panel-208`
+
+### Changed — HUD kills → joueurs tués (2026-06-07)
+
+- **HUD** : retrait du compteur zombies (☠️) ; affichage **⚔️ joueurs tués** (`lifePlayerKills`, reset au respawn).
+- **Serveur** : `playerKills` dans `game-init` et `score-update`.
+- **Version** : `20260607-hud-pvp-207`
+
+### Fixed — Sprint + regard caméra (mobile / tablette) (2026-06-07)
+
+- **Sprint maintenu** : glisser le doigt sur ⚡ (même hors du bouton) tourne la caméra — plus bloqué en ligne droite.
+- **Position ⚡** : décalé vers la gauche (`right: 82px`) pour marge au bord écran ; rechargement `right: 152px`.
+- **Version** : `20260607-sprint-pos-206`
+
+### Fixed — Bouton chat tablette (2026-06-07)
+
+- **Symptôme** : 💬 absent sur tablette (iPad / Android tablet).
+- **Cause** : tablette = `mode-desktop` sans `mode-mobile` → CSS masquait `#chat-btn` et le bouton Envoyer.
+- **Fix** : afficher chat sur `mode-tablet` ; clavier virtuel + envoi tactile comme mobile.
+- **Version** : `20260607-tablet-chat-204`
+
+### Fixed — Sprint mobile (position) + bouton rechargement fantôme (2026-06-07)
+
+- **Sprint** : fixé à droite au-dessus du bouton d'attaque (`bottom: 188px`), plus au-dessus du joystick.
+- **Bouton ⟳** : c'était **Recharger** — affiché par erreur sur toutes les armes (CSS `display:flex !important`) ; visible uniquement avec une arme à feu, libellé **R**.
+- **Version** : `20260607-sprint-pos-203`
+
+### Fixed — Textures arbres (fluo jour/nuit) (2026-06-07)
+
+- **Symptôme** : feuillage vert fluo sans atlas, jour et nuit.
+- **Cause** : `emissive` = teinte verte forte (0.32) masquait la texture ; arbres chargés après le 1er `tickTreeLighting` gardaient l'émissif max.
+- **Fix** : émissif subtil (`0x142010`, ~0.08), teinte via `color` + `map` ; sync jour/nuit à la création du matériau (`getFoliageDayBlend`).
+- **Version** : `20260607-tree-tex-202`
+
+### Fixed — Sync game-init : retry + pas de monde vide silencieux (2026-06-07)
+
+- **Symptôme** : plage vide, pas d’arbres/zombies/inventaire ; le joueur peut bouger (sync échouée mais `_spawnReady` forcé).
+- **Cause** : échec `game-init` (restarts nodemon, reconnexion) + catch qui libérait le joueur sans retry.
+- **Fix** : retry auto `request-game-init` (8 essais), flush pending dès `init()`, resync après reconnexion, pas de reset loading pendant sync.
+- **Données** : SQLite locale intacte (1755 décor, 768 arbres, 70 zombies) — pas de perte de travail.
+- **Version** : `20260607-sync-fix-195`
+
+### Fixed — Crash boot serveur spatial grid (2026-06-07)
+
+- `import(SPATIAL_GRID_URL)` placé après la déclaration de la constante (TDZ).
+- Serveur redémarré, health + smoke OK.
+
+### Completed — Audit perf phase 5 chargement + arbres (2026-06-07)
+
+- **Chargement** : socket parallèle au `buildWorld`, buffer `game-init` (`Network.preconnect`).
+- **Client** : cache géométries/matériaux arbres (`tree_prefabs.js`).
+- **Version** : `20260607-perf-phase5-192`
+
+### Completed — Audit perf phase 4 (2026-06-07)
+
+- **Serveur** : grille spatiale zombies pour sync rayon 110 m (broadcast multi-joueurs).
+- **Client** : cache BoxGeometry + MeshLambertMaterial partagés (zombies, joueurs distants).
+- **Version** : `20260607-perf-phase4-191`
+
+### Completed — Audit perf phase 3 serveur autoritaire (2026-06-07)
+
+- **Serveur** : delta sync zombies (updates + removed, snapshot 2 s), grille joueurs AI, DT wall-clock plafonné.
+- **Client** : `Zombies.applyDelta`, `getCollidersForServer`, skip colliders si `worldCollidersReady`.
+- **Shared** : `packages/shared/src/spatial-grid.mjs` + tests.
+- **Version** : `20260607-perf-phase3-190`
+
+### Completed — Audit perf phase 2 + chargement client (2026-06-07)
+
+- **Doc** : `docs/PERFORMANCE.md` — pipeline boot, runtime, serveur, roadmap chargement.
+- **Runtime** : grille colliders `getCollidersNear`, cache `getStandHeight`, mouvement 30 m.
+- **Chargement** : yield chaque script legacy, `qa-panel`/`groups`/`map` différés, `ZS.loadScript`, sync zombie unique, log timing game-init.
+- **Version** : `20260607-perf-phase2-189`
+
+### Completed — Écran récap mort + notif RIP (2026-06-07)
+
+- **Mort** : récap (zombies tués, joueurs tués, temps survécu) + bouton respawn ; stats par vie (`lifeZombieKills`, `lifePlayerKills`, `lifeStartedAt`).
+- **Autres joueurs** : notif `RIP <pseudo>` à la mort d’un joueur.
+- **Version** : `20260607-death-recap-188`
+
+### Completed — Optimisations perf phase 1 (2026-06-07)
+
+- **Audit** : `docs/PERFORMANCE.md` — roadmap mobile + sync mobs.
+- **Client** : interpolation zombie (lerp), dispose GPU, `_cullLights` sans traverse, UI porte throttlée, vectors réutilisés.
+- **Serveur** : `zombie-tick` par joueur (rayon 110 m), `zombie-hit` avec x/z/angle, fin persist zombie toutes les 5 s.
+- **Version** : `20260607-perf-phase1-187`
+
 ### Completed — Fix fouille sleeper : caillou/torche recréés au réveil (2026-06-07)
 
 - **Bug** : après fouille totale du corps endormi, caillou + torche réapparaissaient à la reconnexion (autres items correctement retirés).

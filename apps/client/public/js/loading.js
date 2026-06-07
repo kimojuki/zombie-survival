@@ -121,7 +121,32 @@
     return _active;
   }
 
-  const api = { setProgress, forceProgress, setPhase, show, hide, reset, isActive, onReady, PHASES };
+  const _scriptLoads = new Map();
+
+  /** Charge un script legacy hors chemin critique (cache + dédup in-flight). */
+  function loadScript(src) {
+    if (document.querySelector(`script[data-zs-src="${src}"]`)) return Promise.resolve();
+    if (_scriptLoads.has(src)) return _scriptLoads.get(src);
+    const ver = window.__ZS_CLIENT_VERSION || '';
+    const url = src + (src.includes('?') ? '&' : '?') + 'v=' + encodeURIComponent(ver);
+    const p = fetch(url, { cache: 'no-store', credentials: 'same-origin' })
+      .then((r) => {
+        if (!r.ok) throw new Error('load ' + src);
+        return r.text();
+      })
+      .then((code) => {
+        const s = document.createElement('script');
+        s.dataset.zsSrc = src;
+        s.textContent = code + '\n//# sourceURL=' + src;
+        document.body.appendChild(s);
+      });
+    _scriptLoads.set(src, p);
+    p.catch(() => { _scriptLoads.delete(src); });
+    return p;
+  }
+
+  const api = { setProgress, forceProgress, setPhase, show, hide, reset, isActive, onReady, loadScript, PHASES };
   window.__zsLoading = api;
   ZS.Loading = api;
+  ZS.loadScript = loadScript;
 }());

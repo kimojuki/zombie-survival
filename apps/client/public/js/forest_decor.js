@@ -382,15 +382,23 @@
     });
   }
 
+  function _anchorSlice(list) {
+    const tier = ZS.Options?.getResolvedTier?.() ?? 'high';
+    const frac = tier === 'potato' ? 0.2 : tier === 'low' ? 0.45 : tier === 'medium' ? 0.72 : 1;
+    const minN = tier === 'potato' ? 4 : tier === 'low' ? 8 : list.length;
+    return list.slice(0, Math.max(minN, Math.ceil(list.length * frac)));
+  }
+
   async function buildForestDecorAsync(scene) {
     if (!scene) return;
-    const mobile = !!(window.__ZS_TOUCH_MODE || window.ZS?._touchInput || window.ZS?._isMobile);
-    const target = mobile ? 105 : 205;
+    const scale = ZS.Options?.getDecorScale?.() ?? 1;
+    const mobile = scale < 0.85 || !!(window.__ZS_TOUCH_MODE || window.ZS?._touchInput || window.ZS?._isMobile);
+    const target = Math.max(14, Math.round((mobile ? 105 : 205) * scale));
     const rng = _rng(55291);
     const placed = [];
     let attempts = 0;
     const maxAttempts = target * 55;
-    const batch = mobile ? 8 : 14;
+    const batch = Math.max(4, Math.round((mobile ? 8 : 14) * Math.min(1, scale + 0.35)));
     let sinceYield = 0;
 
     const root = new THREE.Group();
@@ -419,7 +427,7 @@
       _scatterInstanced(root, {
         geo: new THREE.BoxGeometry(0.035, 0.006, 0.025),
         mat: leafMat,
-        count: mobile ? 130 : 270,
+        count: Math.max(10, Math.round((mobile ? 130 : 270) * scale)),
         rng: _rng(88102),
         placed,
         scaleFn: (r) => 0.55 + r() * 0.85,
@@ -430,7 +438,7 @@
       _scatterInstanced(root, {
         geo: _GEO.pebble,
         mat: rockMat,
-        count: mobile ? 70 : 145,
+        count: Math.max(8, Math.round((mobile ? 70 : 145) * scale)),
         rng: _rng(77103),
         placed,
         scaleFn: (r) => 0.5 + r() * 0.8,
@@ -440,7 +448,7 @@
     _scatterInstanced(root, {
       geo: _GEO.acorn,
       mat: FT().getBarkMaterial?.(42) || rockMat,
-      count: mobile ? 55 : 115,
+      count: Math.max(6, Math.round((mobile ? 55 : 115) * scale)),
       rng: _rng(66104),
       placed,
       scaleFn: (r) => 0.65 + r() * 0.55,
@@ -459,7 +467,7 @@
       [28, -42, _fernPatch], [-20, 33, _mossRock], [-60, -70, _stumpSmall],
       [120, -88, _pineNeedleMat], [55, 55, _mushroomCluster],
     ];
-    for (const [ax, az, fn] of anchors) {
+    for (const [ax, az, fn] of _anchorSlice(anchors)) {
       if (!_canPlace(ax, az, placed, 1.4, false)) continue;
       fn(root, ax, _groundY(ax, az), az, _rng(Math.floor(ax * 13 + az * 7)));
       placed.push({ x: ax, z: az, tiny: false });

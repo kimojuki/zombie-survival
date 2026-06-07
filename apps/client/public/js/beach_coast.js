@@ -14,6 +14,17 @@
     return t * t * (3 - 2 * t);
   }
 
+  const OCEAN_SHORE_X = MAP_EAST_X + 1;
+
+  /** 0–1 : proximité de la ligne de rivage (vagues plus fortes près de l’océan à l’est). */
+  function beachOceanProximity(x, z) {
+    const bw = beachCoastWeight(x, z);
+    if (bw < 0.03) return 0;
+    const inland = Math.max(0, OCEAN_SHORE_X - x);
+    const t = 1 - Math.min(1, inland / 50);
+    return bw * t * t;
+  }
+
   function beachCoastWeight(x, z) {
     const cz = -8;
     const halfLen = 86;
@@ -45,9 +56,28 @@
     return Math.max(0, Math.min(1, w));
   }
 
+  const BEACH_SAFE_SAND_MIN_WEIGHT = 0.32;
+
   function isInBeachFootprint(x, z, margin) {
     const cut = Math.max(0.03, 0.11 - (margin || 0) * 0.045);
     return beachCoastWeight(x, z) >= cut;
+  }
+
+  function isOnBeachSafeSand(x, z) {
+    return beachCoastWeight(x, z) >= BEACH_SAFE_SAND_MIN_WEIGHT && isInBeachFootprint(x, z, 0);
+  }
+
+  function isBuildBlockedOnBeach(x, z, halfW, halfD) {
+    const hw = halfW == null ? 1.5 : halfW;
+    const hd = halfD == null ? 1.5 : halfD;
+    const pts = [
+      [x, z],
+      [x - hw, z - hd],
+      [x + hw, z - hd],
+      [x - hw, z + hd],
+      [x + hw, z + hd],
+    ];
+    return pts.some(([px, pz]) => isOnBeachSafeSand(px, pz));
   }
 
   function beachTerrainSink(bw) {
@@ -74,7 +104,10 @@
   ZS.BEACH_SAND_THICKNESS = BEACH_SAND_THICKNESS;
   ZS.BEACH_CAP_LIFT = BEACH_CAP_LIFT;
   ZS.beachCoastWeight = beachCoastWeight;
+  ZS.beachOceanProximity = beachOceanProximity;
   ZS.beachTerrainSink = beachTerrainSink;
   ZS.isInBeachFootprint = isInBeachFootprint;
+  ZS.isOnBeachSafeSand = isOnBeachSafeSand;
+  ZS.isBuildBlockedOnBeach = isBuildBlockedOnBeach;
   ZS.getBeachSurfaceHeight = getBeachSurfaceHeight;
 }());

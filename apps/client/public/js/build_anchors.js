@@ -5,6 +5,8 @@
   const CELL = 3.0;
   const SNAP_R = 1.75;
   const LEVEL_H = 2.6;
+  /** Épaisseur dalle fondation (spawn_clearing build_floor_wood). */
+  const FLOOR_DECK_H = 0.18;
   /** Extensions fondation voisine à ±CELL — rayon plus large que les murs. */
   const SNAP_R_FLOOR = CELL + 1.5;
   /** Murs/portes : même portée que les ancrages fondation. */
@@ -769,9 +771,23 @@
     return out;
   }
 
+  /** Joueur debout sur une dalle de fondation (tous niveaux). */
+  function isStandingOnFoundation(px, pz, feetY) {
+    if (!Number.isFinite(feetY)) return false;
+    for (const f of _floors.values()) {
+      if (!_isCoherentDeck(f)) continue;
+      const margin = 0.12;
+      if (Math.abs(px - f.cx) > f.hw - margin || Math.abs(pz - f.cz) > f.hd - margin) continue;
+      const deckTop = f.baseY + FLOOR_DECK_H;
+      if (feetY >= deckTop - 0.42 && feetY <= deckTop + 0.55) return true;
+    }
+    return false;
+  }
+
   window.ZS = window.ZS || {};
   ZS.BuildAnchors = {
     registerFoundation, unregisterFoundation, snapPlacement,
+    isStandingOnFoundation,
     getNearestFloorAnchor, getNearestFloorBaseY, findAdjacentFloorHeight,
     findFoundationDeckNear, findFoundationUnderCell,
     listAdjacentFoundations, computeUnifiedFloorHeight,

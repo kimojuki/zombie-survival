@@ -297,32 +297,20 @@
   function _buildPanel() {
     _backdrop = document.createElement('div');
     _backdrop.id = 'craft-backdrop';
+    _backdrop.className = 'zs-backdrop';
     _backdrop.addEventListener('click', toggle);
     document.body.appendChild(_backdrop);
 
     _panel = document.createElement('div');
     _panel.id = 'craft-panel';
+    _panel.className = 'zs-panel zs-panel-wide';
 
-    const hdr = document.createElement('div');
-    hdr.className = 'craft-hdr';
-    const titleWrap = document.createElement('div');
-    titleWrap.className = 'craft-hdr-title';
-    const title = document.createElement('span');
-    title.className = 'craft-hdr-name';
-    title.textContent = '⚒ Artisanat';
-    const sub = document.createElement('span');
-    sub.className = 'craft-hdr-sub craft-desktop-only';
-    sub.textContent = 'Q · Échap pour fermer';
-    titleWrap.appendChild(title);
-    titleWrap.appendChild(sub);
-    const closeBtn = document.createElement('button');
-    closeBtn.type = 'button';
-    closeBtn.className = 'craft-close-btn';
-    closeBtn.textContent = '✕';
-    closeBtn.addEventListener('click', toggle);
-    hdr.appendChild(titleWrap);
-    hdr.appendChild(closeBtn);
-    _panel.appendChild(hdr);
+    const hdr = ZS.PanelUI.makeHeader({
+      title: '⚒ Artisanat',
+      subtitle: 'Q · Échap pour fermer',
+      onClose: toggle,
+    });
+    _panel.appendChild(hdr.el);
 
     _queuePanel = document.createElement('div');
     _queuePanel.id = 'craft-queue-panel';

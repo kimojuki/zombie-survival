@@ -452,6 +452,22 @@
     return false;
   }
 
+  /** Surface chaussée sous (x,z) : `asphalt` | `trail` | null (hors RN goudron/sentier). */
+  function getSurfaceAt(x, z, margin) {
+    if (!_ready) resolve();
+    const m = margin ?? 0.12;
+    let best = null;
+    for (const e of _resolved) {
+      if (e.type !== 'asphalt' && e.type !== 'trail') continue;
+      const hw = e.width * 0.5 + m;
+      for (let i = 0; i < e.pts.length - 1; i++) {
+        const d = _distSeg(x, z, e.pts[i][0], e.pts[i][1], e.pts[i + 1][0], e.pts[i + 1][1]);
+        if (d <= hw && (!best || d < best.dist)) best = { dist: d, type: e.type };
+      }
+    }
+    return best ? best.type : null;
+  }
+
   function sampleAlong(edgeId, t) {
     if (!_ready) resolve();
     const e = _resolved.find(ed => ed.id === edgeId);
@@ -934,6 +950,7 @@
     applyFlattening,
     buildMeshes,
     isNearRoad,
+    getSurfaceAt,
     sampleAlong,
     getResolvedEdges,
     computeTrailRoadJoin,

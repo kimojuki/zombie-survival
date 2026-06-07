@@ -1,7 +1,8 @@
 /** Combat partagé — raycasts XZ, constantes joueur. */
 
 export const PLAYER_COLLIDE_RADIUS = 0.45;
-export const PLAYER_HIT_RADIUS = 0.45;
+/** Rayon hit PvP (un peu plus large que le collide — compensation latence / visée). */
+export const PLAYER_HIT_RADIUS = 0.72;
 
 /**
  * Intersection segment (ox,oz)+t*(nx,nz) avec disque (tx,tz).

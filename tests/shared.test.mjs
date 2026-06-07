@@ -9,6 +9,7 @@ test('shared constants expose stable app contracts', () => {
   assert.equal(APP_NAME, 'Zombie Survival');
   assert.equal(ROUTES.HEALTH, '/api/health');
   assert.equal(SOCKET_EVENTS.PLAYER_ATTACK, 'player-attack');
+  assert.equal(SOCKET_EVENTS.PLAYER_FOOTSTEP, 'player-footstep');
   assert.equal(SOCKET_EVENTS.ZOMBIE_HIT, 'zombie-hit');
 });
 

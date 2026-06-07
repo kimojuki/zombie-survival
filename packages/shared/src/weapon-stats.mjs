@@ -14,10 +14,10 @@ export const WEAPON_STATS = Object.freeze({
   tool_hache_pierre: { dmg: 24, range: 2.9, radius: 0.95, kb: 0.8, fireRate: 0.65, ammoType: null, durabilityMax: 100 },
   tool_pioche_pierre: { dmg: 18, range: 2.5, radius: 0.85, kb: 0.5, fireRate: 0.6, ammoType: null, durabilityMax: 120 },
   tool_marteau: { dmg: 18, range: 2.4, radius: 0.85, kb: 0.7, fireRate: 0.7, ammoType: null, durabilityMax: 200 },
-  wpn_pistolet: { dmg: 25, range: 90, radius: 0.8, kb: 0.2, fireRate: 0.28, ammoType: 'ammo_pistolet', magazineCap: 12, pellets: 1 },
-  pistol: { dmg: 25, range: 90, radius: 0.8, kb: 0.2, fireRate: 0.28, ammoType: 'ammo_pistolet', magazineCap: 12, pellets: 1 },
-  wpn_fusil_pompe: { dmg: 12, range: 40, radius: 0.9, kb: 0.5, fireRate: 0.85, ammoType: 'ammo_fusil_pompe', magazineCap: 6, pellets: 8 },
-  wpn_fusil_chasse: { dmg: 75, range: 80, radius: 0.8, kb: 0.6, fireRate: 1.1, ammoType: 'ammo_fusil_chasse', magazineCap: 5, pellets: 1 },
+  wpn_pistolet: { dmg: 25, range: 90, radius: 0.8, kb: 0.2, fireRate: 0.28, ammoType: 'ammo_pistolet', magazineCap: 12, pellets: 1, dispersion: 0.15 },
+  pistol: { dmg: 25, range: 90, radius: 0.8, kb: 0.2, fireRate: 0.28, ammoType: 'ammo_pistolet', magazineCap: 12, pellets: 1, dispersion: 0.15 },
+  wpn_fusil_pompe: { dmg: 12, range: 40, radius: 0.9, kb: 0.5, fireRate: 0.85, ammoType: 'ammo_fusil_pompe', magazineCap: 6, pellets: 8, dispersion: 0.85 },
+  wpn_fusil_chasse: { dmg: 75, range: 80, radius: 0.8, kb: 0.6, fireRate: 1.1, ammoType: 'ammo_fusil_chasse', magazineCap: 5, pellets: 1, dispersion: 0.01 },
 });
 
 export const MAX_PLAYER_SPEED = 11;

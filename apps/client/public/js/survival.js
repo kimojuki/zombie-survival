@@ -2,13 +2,16 @@
 (function () {
   'use strict';
 
-  const HUNGER_DECAY    = 0.11;  // /s → vide en ~15 min
-  const THIRST_DECAY    = 0.16;  // /s → vide en ~10 min
-  const BLEED_DMG       = 2.0;   // hp/s
-  const STARVE_DMG      = 0.8;   // hp/s quand faim = 0
-  const DEHYDRATE_DMG   = 1.2;   // hp/s quand soif = 0
-  const INFECT_PROGRESS = 0.7;   // pts/s → 0→100 en ~2min20
-  const INFECT_BITE_CHANCE = 0.25; // proba d'infection par coup
+  // Faim/soif/infection : serveur authoritatif (survival-tick, 1 s)
+  // Endurance : client (sprint local)
+
+  const ENDURANCE_MAX = 100;
+  const ENDURANCE_SPRINT_DRAIN = 22;
+  const ENDURANCE_REGEN = 14;
+  const ENDURANCE_REGEN_DELAY = 0.4;
+  const ENDURANCE_MIN_SPRINT = 5;
+
+  let _sprintRegenDelay = 0;
 
   const _sv = {
     faim: 80,
@@ -16,6 +19,7 @@
     endurance: 100,
     saignement: false,
     infection: 0,   // 0–100 ; à 100 = mort
+    infectionPausedUntil: 0,
     _timer: 0,
     _pendingType: null,
   };
@@ -32,7 +36,7 @@
         _sv.faim       = Math.max(0, Math.min(100, s.faim       ?? 80));
         _sv.soif       = Math.max(0, Math.min(100, s.soif       ?? 80));
         _sv.saignement = !!s.saignement;
-        _sv.infection  = Math.max(0, Math.min(100, Number(s.infection) || 0));
+        // infection : serveur authoritatif (game-init / survival-update)
       }
     } catch {}
     _flush();
@@ -45,6 +49,10 @@
     _sv.soif       = Math.max(0, Math.min(100, Number(sv.soif) || 0));
     _sv.infection  = Math.max(0, Math.min(100, Number(sv.infection) || 0));
     _sv.saignement = !!sv.saignement;
+    _sv.infectionPausedUntil = Number(sv.infectionPausedUntil) || 0;
+    if (sv.endurance != null) {
+      _sv.endurance = Math.max(0, Math.min(ENDURANCE_MAX, Number(sv.endurance) || 0));
+    }
     _flush();
     _save();
   }
@@ -56,23 +64,53 @@
       soif: Math.max(0, Math.min(100, d.soif != null ? Number(d.soif) : _sv.soif)),
       infection: Math.max(0, Math.min(100, d.infection != null ? Number(d.infection) : _sv.infection)),
       saignement: !!d.saignement,
+      infectionPausedUntil: d.infectionPausedUntil != null
+        ? Number(d.infectionPausedUntil) : _sv.infectionPausedUntil,
+      endurance: d.endurance != null
+        ? Math.max(0, Math.min(ENDURANCE_MAX, Number(d.endurance))) : _sv.endurance,
     };
     if (next.faim === _sv.faim && next.soif === _sv.soif
-      && next.infection === _sv.infection && next.saignement === _sv.saignement) {
+      && next.infection === _sv.infection && next.saignement === _sv.saignement
+      && next.infectionPausedUntil === _sv.infectionPausedUntil
+      && next.endurance === _sv.endurance) {
       return;
     }
     _sv.faim = next.faim;
     _sv.soif = next.soif;
     _sv.infection = next.infection;
     _sv.saignement = next.saignement;
+    _sv.infectionPausedUntil = next.infectionPausedUntil;
+    _sv.endurance = next.endurance;
     _flush();
   }
 
   function _syncServer() {}
 
+  function tickEndurance(dt, { sprinting = false, moving = false } = {}) {
+    if (!_state || _state.player.dead) return;
+    if (sprinting && moving) {
+      _sv.endurance = Math.max(0, _sv.endurance - ENDURANCE_SPRINT_DRAIN * dt);
+      _sprintRegenDelay = ENDURANCE_REGEN_DELAY;
+    } else if (_sprintRegenDelay > 0) {
+      _sprintRegenDelay = Math.max(0, _sprintRegenDelay - dt);
+    } else {
+      _sv.endurance = Math.min(ENDURANCE_MAX, _sv.endurance + ENDURANCE_REGEN * dt);
+    }
+    ZS.UI.setEndurance?.(Math.floor(_sv.endurance));
+  }
+
+  function canSprint() {
+    return _sv.endurance > ENDURANCE_MIN_SPRINT;
+  }
+
+  function addEndurance(amount) {
+    if (!Number.isFinite(amount) || amount <= 0) return;
+    _sv.endurance = Math.min(ENDURANCE_MAX, _sv.endurance + amount);
+    ZS.UI.setEndurance?.(Math.floor(_sv.endurance));
+  }
+
   function tick(dt) {
     if (!_state || _state.player.dead) return;
-    _sv.endurance = Math.min(100, _sv.endurance + 8 * dt);
     if (_sv._timer > 0) {
       _sv._timer -= dt;
       if (_sv._timer <= 0) {
@@ -82,6 +120,16 @@
     }
     ZS.UI.setHunger(Math.floor(_sv.faim));
     ZS.UI.setThirst(Math.floor(_sv.soif));
+    ZS.UI.setSurvivalVignette?.({
+      faim: _sv.faim,
+      soif: _sv.soif,
+      saignement: _sv.saignement,
+    });
+    const antiviral = _sv.infectionPausedUntil > Date.now();
+    if (_sv._lastAntiviralUi !== antiviral) {
+      _sv._lastAntiviralUi = antiviral;
+      ZS.UI.setStatus(_sv.saignement, _sv.infection > 0, antiviral);
+    }
   }
 
   function useItem(type) {
@@ -112,7 +160,7 @@
 
   function reset() {
     _sv.faim = 80; _sv.soif = 80; _sv.endurance = 100;
-    _sv.saignement = false; _sv.infection = 0;
+    _sv.saignement = false; _sv.infection = 0; _sv.infectionPausedUntil = 0;
     _sv._timer = 0; _sv._pendingType = null;
     _flush();
     _save();
@@ -125,18 +173,23 @@
     ZS.UI.setHunger(Math.floor(_sv.faim));
     ZS.UI.setThirst(Math.floor(_sv.soif));
     ZS.UI.setInfection(_sv.infection);
-    ZS.UI.setStatus(_sv.saignement, _sv.infection > 0);
+    ZS.UI.setEndurance?.(Math.floor(_sv.endurance));
+    const antiviral = _sv.infectionPausedUntil > Date.now();
+    ZS.UI.setStatus(_sv.saignement, _sv.infection > 0, antiviral);
   }
 
   function _save() {
     try {
       localStorage.setItem('zombie_survival', JSON.stringify({
         faim: _sv.faim, soif: _sv.soif,
-        saignement: _sv.saignement, infection: _sv.infection,
+        saignement: _sv.saignement,
       }));
     } catch {}
   }
 
   window.ZS = window.ZS || {};
-  ZS.Survival = { init, tick, useItem, applyDamage, reset, get, loadFromSave, setWaterContact, applyServerState };
+  ZS.Survival = {
+    init, tick, tickEndurance, canSprint, addEndurance,
+    useItem, applyDamage, reset, get, loadFromSave, setWaterContact, applyServerState,
+  };
 }());

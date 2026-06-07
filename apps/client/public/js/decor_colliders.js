@@ -98,6 +98,7 @@
     food_soupe_conserve: { type: 'cyl', lx: 0, lz: 0, r: 0.08, topY: 0.14 },
     tool_caillou: { type: 'cyl', lx: 0, lz: 0, r: 0.09, topY: 0.14 },
     food_pain: { type: 'box', lx: 0, lz: 0, hw: 0.14, hd: 0.10, maxY: 0.10 },
+    food_sandwich: { type: 'box', lx: 0, lz: 0, hw: 0.15, hd: 0.11, maxY: 0.11 },
     tool_hachette: { type: 'box', lx: 0, lz: 0, hw: 0.16, hd: 0.07, maxY: 0.08, layFlat: true },
     tool_pioche: { type: 'box', lx: 0, lz: 0, hw: 0.18, hd: 0.07, maxY: 0.08, layFlat: true },
     tool_marteau: { type: 'box', lx: 0, lz: 0, hw: 0.15, hd: 0.07, maxY: 0.08, layFlat: true },

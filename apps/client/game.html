@@ -128,7 +128,7 @@
 
 <div id="pc-play-hint" aria-hidden="true">
   <span>Cliquez pour jouer</span>
-  <small>WASD · souris · Échap pour libérer le curseur</small>
+  <small>WASD · Shift sprint · souris · Échap curseur</small>
 </div>
 
 <div id="chat-wrap" aria-live="polite">
@@ -158,6 +158,11 @@
     <div id="thirst-bar-bg"><div id="thirst-bar"></div></div>
     <span id="thirst-text" class="stat-text">80</span>
   </div>
+  <div id="endurance-bar-wrap">
+    <span style="font-size:1rem">⚡</span>
+    <div id="endurance-bar-bg"><div id="endurance-bar"></div></div>
+    <span id="endurance-text" class="stat-text">100</span>
+  </div>
   <div id="infection-bar-wrap" style="display:none">
     <span style="font-size:1rem">🦠</span>
     <div id="infection-bar-bg"><div id="infection-bar"></div></div>
@@ -166,11 +171,12 @@
   <div id="status-effects"></div>
   <div id="hud-stats-tr">
     <div id="online-display" title="Joueurs en ligne">👥 <span id="online-count">1</span></div>
-    <div id="kills-display">☠️ <span id="kills-count">0</span></div>
+    <div id="player-kills-display" title="Joueurs tués">⚔️ <span id="player-kills-count">0</span></div>
   </div>
   <div id="ammo-display">🔫 <span id="ammo-count">30</span></div>
   <div id="crosshair"></div>
   <div id="damage-flash"></div>
+  <div id="survival-vignette"></div>
   <div id="wave-banner"></div>
 </div>
 
@@ -181,7 +187,13 @@
 <!-- Boutons flottants (après les zones pour être au-dessus) -->
 <button id="menu-btn" title="Menu">☰</button>
 <div id="menu-panel" style="display:none">
-  <button id="menu-audio" class="menu-item">🔇 Son : coupé</button>
+  <button id="menu-options" class="menu-item" type="button">
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <circle cx="12" cy="12" r="3"/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/>
+    </svg>
+    Options
+  </button>
+  <button id="menu-audio" class="menu-item">🔊 Son : activé</button>
   <button id="menu-qa" class="menu-item menu-qa-item menu-qa-hidden" type="button">
     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
     Checklist QA
@@ -209,12 +221,37 @@
   </button>
 </div>
 
+<!-- Options -->
+<div id="options-backdrop" class="zs-backdrop" style="display:none">
+  <div id="options-panel" class="zs-panel options-panel">
+    <div class="zs-panel-hdr inv-hdr">
+      <div class="zs-panel-hdr-title inv-hdr-title">
+        <span class="zs-panel-hdr-name inv-hdr-name">⚙️ Options</span>
+        <span class="zs-panel-hdr-sub inv-hdr-sub zs-desktop-only">Échap pour fermer</span>
+      </div>
+      <div class="zs-panel-hdr-btns inv-hdr-btns">
+        <button id="options-close-btn" type="button" class="zs-close-btn inv-close-btn" aria-label="Fermer">✕</button>
+      </div>
+    </div>
+    <div id="opt-reload-banner" class="opt-reload-banner" style="display:none">
+      <span>Certains réglages graphiques demandent un rechargement complet.</span>
+      <button id="opt-reload-btn" type="button" class="opt-btn opt-btn-primary">Recharger</button>
+    </div>
+    <div id="options-panel-body" class="zs-panel-body options-panel-body"></div>
+  </div>
+</div>
+
 <!-- Gestion des groupes -->
-<div id="group-backdrop" style="display:none">
-  <div id="group-panel">
-    <div class="group-header">
-      <h2>Mon groupe</h2>
-      <button id="group-close-btn" type="button" aria-label="Fermer">✕</button>
+<div id="group-backdrop" class="zs-backdrop" style="display:none">
+  <div id="group-panel" class="zs-panel">
+    <div class="zs-panel-hdr inv-hdr group-header">
+      <div class="zs-panel-hdr-title inv-hdr-title">
+        <span class="zs-panel-hdr-name inv-hdr-name">👥 Mon groupe</span>
+        <span class="zs-panel-hdr-sub inv-hdr-sub zs-desktop-only">Échap pour fermer</span>
+      </div>
+      <div class="zs-panel-hdr-btns inv-hdr-btns">
+        <button id="group-close-btn" type="button" class="zs-close-btn inv-close-btn" aria-label="Fermer">✕</button>
+      </div>
     </div>
     <div id="group-invite-banner" class="group-invite-banner" style="display:none">
       <p id="group-invite-text" class="group-invite-text"></p>
@@ -223,16 +260,20 @@
         <button id="group-invite-decline" type="button" class="group-btn group-btn-secondary group-btn-sm">Refuser</button>
       </div>
     </div>
-    <div id="group-panel-body" class="group-panel-body"></div>
+    <div id="group-panel-body" class="zs-panel-body group-panel-body"></div>
   </div>
 </div>
 
 <!-- QA checklist overlay (serveur QA) -->
-<div id="qa-backdrop" style="display:none">
-  <div id="qa-panel">
-    <div class="qa-header">
-      <h2>Tests QA</h2>
-      <button id="qa-close-btn" type="button" aria-label="Fermer">✕</button>
+<div id="qa-backdrop" class="zs-backdrop" style="display:none">
+  <div id="qa-panel" class="zs-panel">
+    <div class="zs-panel-hdr inv-hdr qa-header">
+      <div class="zs-panel-hdr-title inv-hdr-title">
+        <span class="zs-panel-hdr-name inv-hdr-name">🧪 Tests QA</span>
+      </div>
+      <div class="zs-panel-hdr-btns inv-hdr-btns">
+        <button id="qa-close-btn" type="button" class="zs-close-btn inv-close-btn" aria-label="Fermer">✕</button>
+      </div>
     </div>
     <p id="qa-campaign-title" class="qa-campaign-title"></p>
     <div id="qa-testers" class="qa-testers"></div>
@@ -251,10 +292,10 @@
 <button id="chat-btn" title="Chat — écrire" type="button">💬</button>
 <button id="jump-btn">⬆</button>
 <button id="shoot-btn">🔫</button>
-<button id="reload-btn" title="Recharger [R]" style="display:none">⟳</button>
+<button id="reload-btn" title="Recharger" aria-label="Recharger">R</button>
 <button id="craft-btn" title="Artisanat [Q]">⚒</button>
 <button id="inv-btn"   title="Inventaire [I]" onclick="ZS.Inventory.togglePanel()">🎒</button>
-<button id="map-btn"   title="Carte [M]"      onclick="ZS.Map.toggleMap()">🗺️</button>
+<button id="map-btn"   title="Carte [M]"      onclick="ZS.Map?.toggleMap?.()">🗺️</button>
 
 <!-- Hotbar -->
 <div id="hotbar"></div>
@@ -280,9 +321,14 @@
 
 <!-- Death screen -->
 <div id="death-screen">
-  <h2>MORT</h2>
-  <p id="death-kills"></p>
-  <button id="respawn-btn">Réapparaître</button>
+  <h2>Vous êtes mort</h2>
+  <p class="death-subtitle">Récapitulatif de votre partie</p>
+  <div class="death-recap">
+    <div class="death-stat"><span class="death-stat-label">Zombies tués</span><span class="death-stat-value" id="death-zombie-kills">0</span></div>
+    <div class="death-stat"><span class="death-stat-label">Joueurs tués</span><span class="death-stat-value" id="death-player-kills">0</span></div>
+    <div class="death-stat"><span class="death-stat-label">Temps survécu</span><span class="death-stat-value" id="death-survived">0 s</span></div>
+  </div>
+  <button id="respawn-btn">Réapparaître et retenter sa chance</button>
 </div>
 
 <!-- Libraries -->
@@ -417,7 +463,7 @@
       const done = i + 1;
       const pct = scriptMin + (scriptMax - scriptMin) * (done / modules.length);
       setConnectingMsg('Initialisation…', `${done} / ${modules.length}`, pct);
-      if (done % 2 === 0 || done === modules.length) await yieldToMain();
+      await yieldToMain();
     }
     window.ZS?.Loading?.setPhase?.('scripts', 1, 'Modules chargés', '');
   })().catch(err => {

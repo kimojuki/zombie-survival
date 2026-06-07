@@ -92,6 +92,24 @@ test('moveInvSlot swaps stacks', () => {
   assert.equal(inv.hotbar[1].type, 'a');
 });
 
+test('moveInvSlot allows bag indices on compact server arrays', () => {
+  const inv = {
+    hotbar: Array(6).fill(null),
+    bag: [
+      { type: 'food_eau_bouteille', qty: 1 },
+      { type: 'food_sandwich', qty: 1 },
+    ],
+    equip: { Tête: null, Torso: null, Mains: null, Dos: { type: 'eq_petit_sac', qty: 1 } },
+  };
+  assert.ok(moveInvSlot(inv, 'bag', 0, 'bag', 3));
+  assert.equal(inv.bag[0], null);
+  assert.equal(inv.bag[1].type, 'food_sandwich');
+  assert.equal(inv.bag[3].type, 'food_eau_bouteille');
+  assert.ok(moveInvSlot(inv, 'bag', 1, 'bag', 0));
+  assert.equal(inv.bag[0].type, 'food_sandwich');
+  assert.equal(inv.bag[1], null);
+});
+
 test('flattenInv includes equip', () => {
   const inv = emptyInv();
   inv.equip.Torso = { type: 'armor_vest', qty: 1 };

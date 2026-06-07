@@ -73,7 +73,8 @@
   }
 
   function _isMobile() {
-    return document.body.classList.contains('mode-mobile');
+    return document.body.classList.contains('mode-mobile')
+      || document.body.classList.contains('mode-tablet');
   }
 
   function _resetChatViewport() {
@@ -101,7 +102,7 @@
   }
 
   function _resumeGameInput() {
-    if (document.body.classList.contains('mode-mobile')) return;
+    if (_isMobile()) return;
     if (ZS.Rcon?.isOpen?.()) return;
     const resume = () => {
       if (typeof ZS.requestPointerLock === 'function') ZS.requestPointerLock();

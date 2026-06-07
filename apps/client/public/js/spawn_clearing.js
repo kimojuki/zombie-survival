@@ -808,6 +808,7 @@
 
   const DECOR_DOORS = new Map();
   const DECOR_STORAGES = new Map();
+  const DECOR_SIGNS = new Map();
   const DECOR_BUILDS = new Map();
   const _buildRayHits = [];
   const DOOR_OPEN_ANGLE = -Math.PI * 0.52;
@@ -886,7 +887,12 @@
       entry.openAngle = wantOpen ? DOOR_OPEN_ANGLE : 0;
       entry.pivot.rotation.y = entry.openAngle;
     } else if (prevOpen !== wantOpen) {
-      ZS.Audio?.door?.(wantOpen ? 1 : 0);
+      const px = entry.root?.position?.x;
+      const pz = entry.root?.position?.z;
+      const sp = (Number.isFinite(px) && Number.isFinite(pz))
+        ? ZS.Audio?.spatialAt?.(px, pz)
+        : null;
+      ZS.Audio?.door?.(wantOpen ? 1 : 0, sp?.vol ?? 1, sp?.pan);
     }
     _refreshDecorCollision(entry.root);
     return true;
@@ -983,6 +989,15 @@
     DECOR_STORAGES.delete(decorId);
   }
 
+  function unregisterDecorSign(decorId) {
+    DECOR_SIGNS.delete(decorId);
+  }
+
+  function registerDecorSign(decorId, entry) {
+    if (!decorId || !entry?.root) return;
+    DECOR_SIGNS.set(decorId, entry);
+  }
+
   function unregisterDecorBuild(decorId) {
     DECOR_BUILDS.delete(decorId);
   }
@@ -1032,6 +1047,24 @@
       const dist = Math.hypot(entry.root.position.x - x, entry.root.position.z - z);
       if (dist > maxDist) continue;
       if (!best || dist < best.dist) best = { decorId, dist, prefabId: entry.root.userData.prefabId };
+    }
+    return best;
+  }
+
+  function findNearestDecorSign(x, z, maxDist = 3.2) {
+    let best = null;
+    for (const [decorId, entry] of DECOR_SIGNS) {
+      if (!entry.root.parent) continue;
+      const dist = Math.hypot(entry.root.position.x - x, entry.root.position.z - z);
+      if (dist > maxDist) continue;
+      if (!best || dist < best.dist) {
+        best = {
+          decorId,
+          dist,
+          prefabId: entry.root.userData.prefabId,
+          signKind: entry.signKind,
+        };
+      }
     }
     return best;
   }
@@ -1388,7 +1421,18 @@
     root.userData.decorId = decorId;
 
     scene.add(root);
-    prefab.build(root, isBuildFloor ? { supportDrop } : opts);
+    const isTree = prefabId.startsWith('tree_');
+    const lp = ZS.Network?.getLocalXZ?.();
+    const treeDist2 = lp
+      ? ((x || 0) - lp.x) ** 2 + ((z || 0) - lp.z) ** 2
+      : 0;
+    const useSimpleLod = isTree && (opts.simpleLod || treeDist2 > 42 * 42);
+    if (useSimpleLod && ZS.TreePrefabs?.buildSimple) {
+      ZS.TreePrefabs.buildSimple(root, prefabId);
+      root.userData.simpleLod = true;
+    } else {
+      prefab.build(root, isBuildFloor ? { supportDrop } : opts);
+    }
 
     const decorSpec = {
         decorId,
@@ -1438,6 +1482,12 @@
       };
       DECOR_STORAGES.set(decorId, entry);
       setDecorStorageState(decorId, !!opts.storageOpen, { instant: true });
+    }
+    if (root.userData.isReadableSign) {
+      DECOR_SIGNS.set(decorId, {
+        root,
+        signKind: root.userData.signKind || opts.signKind || 'beach_safe_zone',
+      });
     }
 
     if (prefab.buildKind) {
@@ -1515,6 +1565,9 @@
     }
 
     if (prefabId.startsWith('tree_') && ZS.registerChoppableTree) {
+      if (!ZS.Options?.getProfile?.()?.shadows) {
+        root.traverse((o) => { if (o.isMesh) o.castShadow = false; });
+      }
       ZS.registerChoppableTree(scene, root, root.position.x, root.position.z, decorId, {
         prefabId,
         woodMax: opts.woodMax,
@@ -1842,13 +1895,28 @@
   ZS.buildCampProps     = buildCampProps;
   ZS.buildSpawnCamp     = buildSpawnCamp;
   ZS.spawnDecorPrefab   = spawnDecorPrefab;
+  function upgradeTreeLod(root, prefabId, buildOpts = {}) {
+    if (!root?.userData?.simpleLod) return false;
+    const prefab = DECOR_PREFABS[prefabId];
+    if (!prefab) return false;
+    while (root.children.length) root.remove(root.children[0]);
+    prefab.build(root, buildOpts);
+    root.userData.simpleLod = false;
+    if (!ZS.Options?.getProfile?.()?.shadows) {
+      root.traverse((o) => { if (o.isMesh) o.castShadow = false; });
+    }
+    return true;
+  }
+
   ZS.registerDecorPrefab = registerDecorPrefab;
+  ZS.upgradeTreeLod = upgradeTreeLod;
   ZS.listDecorPrefabs   = listDecorPrefabs;
   ZS.findNearestDecorDoor = findNearestDecorDoor;
   ZS.setDecorDoorLockState = setDecorDoorLockState;
   ZS.setDecorDoorState    = setDecorDoorState;
   ZS.unregisterDecorDoor  = unregisterDecorDoor;
   ZS.findNearestDecorStorage = findNearestDecorStorage;
+  ZS.findNearestDecorSign = findNearestDecorSign;
   ZS.hitDecorStorage        = hitDecorStorage;
   ZS.hitDecorBuild          = hitDecorBuild;
   ZS.hitDecorBuildRay       = hitDecorBuildRay;
@@ -1856,6 +1924,8 @@
   ZS.getDecorDoorMeta       = getDecorDoorMeta;
   ZS.setDecorStorageState    = setDecorStorageState;
   ZS.unregisterDecorStorage  = unregisterDecorStorage;
+  ZS.unregisterDecorSign     = unregisterDecorSign;
+  ZS.registerDecorSign       = registerDecorSign;
   ZS.unregisterDecorBuild    = unregisterDecorBuild;
   ZS.tickDecorDoors       = tickDecorDoors;
   ZS.getDecorGroundHeight = getDecorGroundHeight;

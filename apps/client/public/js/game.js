@@ -39,9 +39,10 @@
       onGround: true,
       health: parseInt(localStorage.getItem('zombie_health') || '100'),
       kills:  parseInt(localStorage.getItem('zombie_kills')  || '0'),
+      playerKills: 0,
       dead: false
     },
-    input:  { moveX: 0, moveZ: 0 },
+    input:  { moveX: 0, moveZ: 0, sprintHeld: false },
     camera: { yaw: 0, pitch: 0 },
     keys:   {},
     jumpPressed: false,
@@ -71,11 +72,19 @@
     ?? !!window.__ZS_TOUCH_MODE;
   const _isPhone = ZS._isPhone ?? false;
   const _isMobile = _touchInput;
+  ZS.Options?.init?.();
+  ZS.Options?.applyTouchMode?.();
+  const _gfxProf = ZS.Options?.getProfile?.() || {
+    pixelRatioMax: _isMobile ? 1.15 : 1.5,
+    shadows: !_isMobile,
+    cameraFar: 175,
+    maxLights: _isMobile ? 5 : 8,
+    shadowInterval: _isMobile ? 24 : 18,
+  };
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: false, powerPreference: 'high-performance' });
-  // Pixel ratio plafonné : énorme gain mobile (moins de fragments → moins de chauffe).
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio, _isMobile ? 1.15 : 1.5));
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, _gfxProf.pixelRatioMax));
   renderer.setSize(window.innerWidth, window.innerHeight);
-  renderer.shadowMap.enabled = !_isMobile;
+  renderer.shadowMap.enabled = !!_gfxProf.shadows;
   renderer.shadowMap.type = THREE.PCFShadowMap;     // moins cher que PCFSoft
   renderer.shadowMap.autoUpdate = false;            // ombres mises à jour par intermittence
   renderer.shadowMap.needsUpdate = true;
@@ -83,7 +92,7 @@
 
   const scene  = new THREE.Scene();
   // Distance de rendu réduite (le brouillard masque la coupe) → moins de draw calls.
-  const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 175);
+  const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, _gfxProf.cameraFar || 175);
   camera.rotation.order = 'YXZ';
   scene.add(camera);
   ZS._camera = camera;   // référence pour l'audio spatial (panoramique/distance)
@@ -94,24 +103,76 @@
   const _waterOverlay = document.createElement('div');
   Object.assign(_waterOverlay.style, {
     position: 'fixed', inset: '0', pointerEvents: 'none', zIndex: '40',
-    background: 'linear-gradient(to top, rgba(10,60,140,0.55) 0%, rgba(10,60,140,0.18) 40%, transparent 70%)',
-    opacity: '0', transition: 'opacity 0.35s ease',
+    background: 'linear-gradient(to top, rgba(10,60,140,0.62) 0%, rgba(10,60,140,0.22) 42%, transparent 72%)',
+    opacity: '0',
   });
   document.body.appendChild(_waterOverlay);
   let _inWater = false;
   let _waterDepth = 0;
+  let _footstepAcc = 0;
+  let _walkBobPhase = 0;
+  let _camFov = 75;
 
   function _updateWaterEffect(px, pz, py) {
     const waterY = ZS.getWaterSurface(px, pz);
     const feetY = (py || 0) - 1.7;
     const nowIn  = waterY !== null && waterY > feetY - 0.05;
-    _waterDepth = nowIn ? Math.max(0, waterY - feetY) : 0;
-    if (nowIn === _inWater) return;
-    _inWater = nowIn;
-    _waterOverlay.style.opacity = nowIn ? '1' : '0';
-    state.player.inWater = nowIn;
-    ZS.Survival?.setWaterContact?.(nowIn);
+    const depth = nowIn ? Math.max(0, waterY - feetY) : 0;
+    _waterDepth = depth;
+
+    const opacity = nowIn ? Math.min(0.68, 0.1 + depth * 0.52) : 0;
+    _waterOverlay.style.opacity = String(opacity);
+    // Pas de filter:blur — coûteux sur GPU mobile/tablette.
+    _waterOverlay.style.filter = '';
+
+    ZS.Audio?.setWaterDepth?.(depth, nowIn);
+
+    if (nowIn !== _inWater) {
+      if (nowIn) ZS.Audio?.splash?.(Math.min(1, depth * 1.4 + 0.32));
+      _inWater = nowIn;
+      state.player.inWater = nowIn;
+      ZS.Survival?.setWaterContact?.(nowIn);
+    }
   }
+
+  function _tickFootsteps(dt) {
+    if (ZS.Options?.isFeature?.('footsteps') === false) return;
+    const p = state.player;
+    if (!p.onGround || p.dead) return;
+    const speed = p.moveSpeed || 0;
+    if (speed < 0.4) { _footstepAcc = 0; return; }
+    if (_inWater && _waterDepth > 0.38) return;
+
+    _footstepAcc += dt;
+    const interval = p.sprinting ? 0.28 : 0.41;
+    if (_footstepAcc < interval) return;
+    _footstepAcc = 0;
+
+    const feetY = p.y - 1.7;
+    let surface = ZS.Audio?.footstepSurface?.(p.x, p.z, feetY) || 'dirt';
+    if (_inWater && _waterDepth > 0.02) surface = 'water';
+    const stepVol = p.sprinting ? 0.72 : 0.56;
+    ZS.Audio?.footstep?.(surface, stepVol);
+    ZS.Network?.sendFootstep?.(surface, p.sprinting);
+  }
+
+  let _onSafeSand = null;
+  function _updateBeachZoneUi(px, pz) {
+    const safe = !!(ZS.isOnBeachSafeSand?.(px, pz));
+    if (safe === _onSafeSand) return;
+    _onSafeSand = safe;
+    ZS.UI?.setZoneSafe?.(safe);
+  }
+
+  // ── Socket (parallèle au build — game-init bufferisé dans network.js) ───────
+  window.ZS?.Loading?.setPhase?.('socket', 0, 'Connexion multijoueur…', 'En parallèle du monde');
+  const _tSocket = performance.now();
+  const socket = io({
+    auth: { token, client: _isMobile ? 'mobile' : 'desktop' },
+    transports: ['polling', 'websocket'],
+    reconnectionAttempts: 8,
+  });
+  ZS.Network.preconnect(socket);
 
   // ── Build world ───────────────────────────────────────────────────────────
   window.ZS?.Loading?.setPhase?.('world', 0, 'Construction du monde…', 'Terrain et routes');
@@ -119,16 +180,25 @@
   if (ZS.buildWorldAsync) {
     await ZS.buildWorldAsync(scene, (p, detail) => {
       window.ZS?.Loading?.setPhase?.('world', p, 'Construction du monde…', detail || '');
+      if (socket.connected) {
+        window.ZS?.Loading?.setPhase?.('socket', 1, 'Serveur joint', detail || 'Monde en cours…');
+      } else {
+        window.ZS?.Loading?.setPhase?.('socket', Math.min(0.65, 0.15 + p * 0.35), 'Connexion multijoueur…', detail || '');
+      }
     });
   } else {
     ZS.buildWorld(scene);
     window.ZS?.Loading?.setPhase?.('world', 0.72, 'Construction du monde…', 'Végétation et camp');
   }
   console.log('[world] build', Math.round(performance.now() - _tWorld), 'ms');
+  if (socket.connected) console.log('[socket] connect', Math.round(performance.now() - _tSocket), 'ms (parallel)');
 
   const _worldLights = [];
+  const _playerTorchLights = [];
   scene.traverse((o) => {
-    if ((o.isPointLight || o.isSpotLight) && !o.userData.playerTorch) _worldLights.push(o);
+    if (!o.isPointLight && !o.isSpotLight) return;
+    if (o.userData.playerTorch) _playerTorchLights.push(o);
+    else _worldLights.push(o);
   });
   ZS.Zombies.init(scene);
 
@@ -166,17 +236,9 @@
   camera.rotation.y = state.camera.yaw;
   camera.rotation.x = state.camera.pitch;
 
-  // ── Socket.io ─────────────────────────────────────────────────────────────
-  window.ZS?.Loading?.setPhase?.('world', 1, 'Monde prêt', 'Connexion multijoueur…');
-  const socket = io({
-    auth: { token, client: _isMobile ? 'mobile' : 'desktop' },
-    transports: ['polling', 'websocket'],
-    reconnectionAttempts: 8,
-  });
+  window.ZS?.Loading?.setPhase?.('world', 1, 'Monde prêt', socket.connected ? 'Synchronisation…' : 'Connexion multijoueur…');
   ZS.Network.init(socket, scene, state);
 
-  // Transmet la géométrie de collision au serveur (physique des zombies côté serveur)
-  socket.emit('world-colliders', ZS.getColliders());
   socket.emit('world-water-zones', ZS.getWaterZones());
 
   // Transmet l'empreinte des bâtiments lootables → le serveur génère le loot (items.md)
@@ -185,7 +247,7 @@
   // ── UI ────────────────────────────────────────────────────────────────────
   try { ZS.UI.init(state); } catch (e) { console.error('UI init:', e); }
   ZS.UI.setHealth(state.player.health);
-  ZS.UI.setKills(state.player.kills);
+  ZS.UI.setPlayerKills(state.player.playerKills);
 
   // ── Survival ──────────────────────────────────────────────────────────────
   ZS.Survival.init(state);
@@ -193,10 +255,13 @@
   // ── Inventory ─────────────────────────────────────────────────────────────
   ZS.Inventory.init(state, scene, socket);
   ZS.SleepLoot?.init?.(state);
-  ZS.Map.init(state, scene);
-  ZS.Craft.init();
-  ZS.Audio.init();
+  ZS.Map?.init?.(state, scene);
+  ZS.Craft?.init?.();
+  ZS.Audio?.init?.();
+  ZS.Options?.applyAudio?.();
   if (ZS.Chat) ZS.Chat.init(socket);
+  ZS.OptionsUI?.init?.();
+  ZS.UI?.applyOptions?.();
   _initMenu();
   _addTestItems();
 
@@ -220,6 +285,7 @@
     const btn     = document.getElementById('menu-btn');
     const panel   = document.getElementById('menu-panel');
     const audio   = document.getElementById('menu-audio');
+    const options = document.getElementById('menu-options');
     const out     = document.getElementById('menu-logout');
     const consoleBtn = document.getElementById('menu-console');
     if (!btn || !panel) return;
@@ -246,9 +312,14 @@
       if (panel.style.display !== 'none' &&
           !panel.contains(e.target) && e.target !== btn) setOpen(false);
     });
+    if (options) options.addEventListener('click', (e) => {
+      e.stopPropagation();
+      setOpen(false);
+      ZS.OptionsUI?.open?.();
+    });
     if (audio) audio.addEventListener('click', () => {
-      // Pas de stopPropagation : laisse audio.js démarrer le contexte sur ce geste.
-      ZS.Audio.toggleMute();   // met aussi à jour le libellé du bouton
+      const next = !ZS.Audio.isMuted();
+      ZS.Options?.set?.('muted', next);
     });
     if (out) out.addEventListener('click', (e) => {
       e.stopPropagation();
@@ -265,6 +336,8 @@
     const vp = window.visualViewport;
     const w  = vp ? vp.width  : window.innerWidth;
     const h  = vp ? vp.height : window.innerHeight;
+    const pr = ZS.Options?.getProfile?.()?.pixelRatioMax;
+    if (pr) renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, pr));
     renderer.setSize(w, h);
     camera.aspect = w / h;
     camera.updateProjectionMatrix();
@@ -407,6 +480,11 @@
       ZS.StorageUI.close();
       return;
     }
+    if (e.code === 'Escape' && ZS.SignUI?.isOpen?.()) {
+      e.preventDefault();
+      ZS.SignUI.close();
+      return;
+    }
     if (e.code === 'Escape' && ZS.SleepLoot?.isOpen?.()) {
       e.preventDefault();
       ZS.SleepLoot.closePanel();
@@ -436,6 +514,7 @@
     for (const k of Object.keys(state.keys)) delete state.keys[k];
     state.input.moveX = 0;
     state.input.moveZ = 0;
+    state.input.sprintHeld = false;
   }
   ZS.clearMovementKeys = _clearMovementKeys;
 
@@ -445,7 +524,7 @@
   function _blocksPointerLock(el) {
     if (!el || el === canvas) return false;
     return !!el.closest?.(
-      '#menu-panel, #menu-btn, #inv-panel, #craft-panel, #storage-panel, #storage-backdrop, #sleep-loot-panel, #sleep-loot-backdrop, #map-overlay, #group-backdrop, #death-screen, '
+      '#menu-panel, #menu-btn, #inv-panel, #craft-panel, #storage-panel, #storage-backdrop, #sleep-loot-panel, #sleep-loot-backdrop, #sign-backdrop, #sign-panel, #options-backdrop, #options-panel, #map-overlay, #group-backdrop, #death-screen, '
       + '#connecting-screen, #rcon-panel, #chat-wrap, #hotbar, #craft-btn, #inv-btn, #map-btn, #chat-btn, '
       + '#build-ctl, button, a, input, textarea, select, [contenteditable]'
     );
@@ -468,6 +547,10 @@
     if (groupBd && groupBd.style.display === 'flex') return true;
     if (ZS.StorageUI?.isOpen?.()) return true;
     if (ZS.SleepLoot?.isOpen?.()) return true;
+    if (ZS.SignUI?.isOpen?.()) return true;
+    if (ZS.OptionsUI?.isOpen?.()) return true;
+    const optBd = document.getElementById('options-backdrop');
+    if (optBd && optBd.style.display === 'flex') return true;
     return false;
   }
 
@@ -524,8 +607,10 @@
   document.addEventListener('mousemove', (e) => {
     if (ZS.SpawnIntro?.isActive?.()) return;
     if (!pointerLocked) return;
-    state.camera.yaw   -= e.movementX * 0.002;
-    state.camera.pitch -= e.movementY * 0.002;
+    const sens = ZS.Options?.getLookSensitivity?.().mouse ?? 0.002;
+    const inv = ZS.Options?.get?.('invertY') ? -1 : 1;
+    state.camera.yaw   -= e.movementX * sens;
+    state.camera.pitch -= e.movementY * sens * inv;
     state.camera.pitch = Math.max(-Math.PI / 2 + 0.05, Math.min(Math.PI / 2 - 0.05, state.camera.pitch));
   });
 
@@ -578,11 +663,8 @@
     raycaster.setFromCamera(screenCenter, camera);
     const dir = raycaster.ray.direction.clone();
     const disp = def.dispersion_balle || 0.05;
-    if (item.type === 'wpn_fusil_pompe') {
-      for (let i = 0; i < 8; i++) _sendShot(dir, Math.max(disp, 0.25), item.type);
-    } else {
-      _sendShot(dir, disp, item.type);
-    }
+    // Un seul événement — le serveur résout les 8 plombs (autoritaire).
+    _sendShot(dir, item.type === 'wpn_fusil_pompe' ? Math.max(disp, 0.25) : disp, item.type);
     if ((item.ammo || 0) <= 0 && ZS.Inventory.countItem(def.type_munition_accepte) > 0) _startReload(def);
   }
 
@@ -596,12 +678,10 @@
     raycaster.setFromCamera(screenCenter, camera);
     const dir = raycaster.ray.direction;
     const cam = _cameraWorldPos();
-    if (_tryDamageDecorRay('__fist__', FIST.portee_metre + 1.2)) {
-      ZS.Audio.chopWood(0.85);
-      return;
-    }
+    const decorHit = _tryDamageDecorRay('__fist__', FIST.portee_metre + 1.2);
     const hitDist = ZS.Zombies.nearestDist(cam.x, cam.z);
-    ZS.Audio.melee(hitDist < FIST.portee_metre + 0.8 ? 0.9 : 0.4);
+    ZS.Audio.melee(decorHit ? 0.85 : (hitDist < FIST.portee_metre + 0.8 ? 0.9 : 0.4));
+    // Toujours envoyer au serveur (PvP prioritaire côté serveur même si décor touché localement).
     ZS.Network.sendShoot(cam.x, cam.z, dir.x, dir.z, '__fist__');
   }
 
@@ -801,7 +881,7 @@
 
   function _playSwing(kind, type) {
     ZS.triggerArmAnim(fpsArms, kind, type);
-    ZS.Network.sendAttack(kind === 'punch' ? 'melee' : kind);
+    ZS.Network.sendAttack(kind === 'punch' ? 'melee' : kind, type);
   }
 
   let _doorBtn = null;
@@ -838,199 +918,6 @@
     document.body.appendChild(_doorBtn);
     return _doorBtn;
   }
-
-  const StorageUI = (() => {
-    let panel = null;
-    let backdrop = null;
-    let state = { id: null, items: [], capacity: 0 };
-
-    function _ensurePanel() {
-      if (panel) return;
-      backdrop = document.createElement('div');
-      backdrop.id = 'storage-backdrop';
-      backdrop.style.cssText = 'display:none;position:fixed;inset:0;z-index:469;background:rgba(0,0,0,.28)';
-      backdrop.addEventListener('click', close);
-      document.body.appendChild(backdrop);
-
-      panel = document.createElement('div');
-      panel.id = 'storage-panel';
-      panel.style.cssText = [
-        'display:none',
-        'position:fixed',
-        'top:50%',
-        'left:50%',
-        'transform:translate(-50%,-50%)',
-        'z-index:470',
-        'width:min(438px,96vw)',
-        'max-height:82vh',
-        'overflow:auto',
-        'background:#c6c6c6',
-        'border:4px solid',
-        'border-color:#f6f6f6 #555 #555 #f6f6f6',
-        'border-radius:4px',
-        'padding:12px 14px 14px',
-        'color:#303030',
-        'font:13px monospace',
-        'box-shadow:0 6px 28px rgba(0,0,0,.55)',
-      ].join(';');
-      document.body.appendChild(panel);
-    }
-
-    function _itemLabel(stack) {
-      const def = ZS.ITEMS?.[stack.type];
-      return `${def?.icon || '□'} ${def?.label || stack.type} x${stack.qty || 1}`;
-    }
-
-    function _makeSlot(stack, onClick) {
-      const slot = document.createElement('button');
-      slot.type = 'button';
-      slot.title = stack?.type ? _itemLabel(stack) : '';
-      slot.style.cssText = [
-        'position:relative',
-        'width:40px',
-        'height:40px',
-        'padding:0',
-        'border:2px solid',
-        'border-color:#595959 #f5f5f5 #f5f5f5 #595959',
-        'background:#8b8b8b',
-        'box-shadow:inset 2px 2px 0 rgba(0,0,0,.35), inset -2px -2px 0 rgba(255,255,255,.35)',
-        'font:20px monospace',
-        'color:#fff',
-        'cursor:pointer',
-        'touch-action:manipulation',
-      ].join(';');
-      if (stack?.type) {
-        const icon = document.createElement('span');
-        icon.textContent = ZS.ITEMS?.[stack.type]?.icon || '?';
-        icon.style.cssText = 'position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:20px';
-        const count = document.createElement('span');
-        count.textContent = (stack.qty || 1) > 1 ? String(stack.qty || 1) : '';
-        count.style.cssText = 'position:absolute;right:3px;bottom:1px;font:bold 11px monospace;color:#fff;text-shadow:1px 1px 0 #000';
-        slot.appendChild(icon);
-        slot.appendChild(count);
-      } else {
-        slot.disabled = true;
-        slot.style.cursor = 'default';
-      }
-      if (stack?.type && onClick) slot.addEventListener('click', onClick);
-      return slot;
-    }
-
-    function _makeGrid() {
-      const grid = document.createElement('div');
-      grid.style.cssText = 'display:grid;grid-template-columns:repeat(9,40px);gap:4px;width:max-content;max-width:100%;';
-      return grid;
-    }
-
-    function _sectionTitle(text) {
-      const h = document.createElement('div');
-      h.textContent = text;
-      h.style.cssText = 'margin:10px 0 4px;color:#3b3b3b;font:16px monospace;text-shadow:1px 1px 0 #eee';
-      return h;
-    }
-
-    function render() {
-      _ensurePanel();
-      panel.replaceChildren();
-
-      const closeBtn = document.createElement('button');
-      closeBtn.type = 'button';
-      closeBtn.textContent = 'x';
-      closeBtn.style.cssText = 'position:absolute;right:8px;top:6px;width:24px;height:24px;border:2px solid #555;background:#d6d6d6;color:#222;cursor:pointer';
-      closeBtn.addEventListener('click', close);
-      panel.appendChild(closeBtn);
-
-      panel.appendChild(_sectionTitle(`Chest (${state.items.length}/${state.capacity})`));
-      const chestGrid = _makeGrid();
-      for (let i = 0; i < state.capacity; i++) {
-        const stack = state.items[i] || null;
-        chestGrid.appendChild(_makeSlot(stack, () => {
-          if (!ZS.Inventory?.canAddStack?.(stack.type, stack.qty || 1)) {
-            ZS.UI?.showNotif?.('Inventaire plein');
-            return;
-          }
-          ZS.Network.requestStorageWithdraw(state.id, i);
-        }));
-      }
-      panel.appendChild(chestGrid);
-
-      panel.appendChild(_sectionTitle('Inventory'));
-      const invSlots = ZS.Inventory?.getStorageSlots?.() || [];
-      const bagSlots = invSlots.filter((s) => s.zone === 'bag');
-      const hotbarSlots = invSlots.filter((s) => s.zone === 'hotbar');
-      const invGrid = _makeGrid();
-      const paddedBag = [...bagSlots, ...Array(Math.max(0, 27 - bagSlots.length)).fill(null)];
-      for (const slot of paddedBag) {
-        invGrid.appendChild(_makeSlot(slot, () => {
-          if (state.items.length >= state.capacity) {
-            ZS.UI?.showNotif?.('Coffre plein');
-            return;
-          }
-          if (!slot?.type) return;
-          ZS.Network.requestStorageDeposit(state.id, slot);
-        }));
-      }
-      panel.appendChild(invGrid);
-
-      const hotbarGrid = _makeGrid();
-      const paddedHotbar = [...hotbarSlots, ...Array(Math.max(0, 9 - hotbarSlots.length)).fill(null)];
-      for (const slot of paddedHotbar) {
-        hotbarGrid.appendChild(_makeSlot(slot, () => {
-          if (state.items.length >= state.capacity) {
-            ZS.UI?.showNotif?.('Coffre plein');
-            return;
-          }
-          if (!slot?.type) return;
-          ZS.Network.requestStorageDeposit(state.id, slot);
-        }));
-      }
-      panel.appendChild(hotbarGrid);
-    }
-
-    function open(data) {
-      state = {
-        id: data?.id || null,
-        items: Array.isArray(data?.items) ? data.items : [],
-        capacity: data?.capacity || 18,
-      };
-      if (state.id) ZS.setDecorStorageState?.(state.id, true);
-      _ensurePanel();
-      backdrop.style.display = 'block';
-      panel.style.display = 'block';
-      render();
-      if (_isDesktopMode()) ZS.onUiPanelOpen?.();
-    }
-
-    function update(data) {
-      if (!panel || panel.style.display === 'none') return;
-      if (!data || data.id !== state.id) return;
-      state.items = Array.isArray(data.items) ? data.items : [];
-      state.capacity = data.capacity || state.capacity;
-      render();
-    }
-
-    function close() {
-      const wasOpen = isOpen();
-      if (state.id) ZS.setDecorStorageState?.(state.id, false);
-      if (state.id) ZS.Network?.requestStorageClose?.(state.id);
-      if (panel) panel.style.display = 'none';
-      if (backdrop) backdrop.style.display = 'none';
-      state.id = null;
-      if (wasOpen && _isDesktopMode()) ZS.onUiPanelClose?.();
-    }
-
-    function closeIf(decorId) {
-      if (state.id && state.id === decorId) close();
-    }
-
-    function isOpen() {
-      return !!state.id && panel?.style.display !== 'none';
-    }
-
-    return { open, update, close, closeIf, isOpen };
-  })();
-  window.ZS = window.ZS || {};
-  ZS.StorageUI = StorageUI;
 
   const INTERACT_HOLD_S = 2.0;
   const INTERACT_TAP_MAX_S = 0.28;
@@ -1186,13 +1073,17 @@
 
   function _interactWorld() {
     if (_interactDoor()) return true;
+    if (ZS.SignUI?.tryInteract?.(ZS.SignUI.getNearestForUi?.(state.player.x, state.player.z))) return true;
     return ZS.SleepLoot?.tryInteract?.() || false;
   }
 
   function _interactWorldKeyDown() {
     if (ZS.StorageUI?.isOpen?.()) return true;
+    if (ZS.SignUI?.isOpen?.()) return true;
     if (ZS.SleepLoot?.isPending?.()) return true;
     if (!state.player.dead) {
+      const sign = ZS.SignUI?.getNearestForUi?.(state.player.x, state.player.z);
+      if (sign && ZS.SignUI?.tryInteract?.(sign)) return true;
       const sleeper = ZS.SleepLoot?.getNearestForUi?.(state.player.x, state.player.z);
       if (sleeper && ZS.SleepLoot?.tryInteract?.()) return true;
     }
@@ -1203,15 +1094,27 @@
   ZS.isInteractHoldActive = () => !!_interactHold;
   ZS.isDoorUnlockHoldActive = ZS.isInteractHoldActive;
 
+  let _doorUiTick = 0;
+  let _doorUiX = NaN;
+  let _doorUiZ = NaN;
   function _updateDoorInteractUi() {
-    const storage = ZS.findNearestDecorStorage?.(state.player.x, state.player.z, 2.8) || null;
-    const door = ZS.findNearestDecorDoor?.(state.player.x, state.player.z, 3.2) || null;
-    const sleeper = (!storage && !door && !state.player.dead)
-      ? ZS.SleepLoot?.getNearestForUi?.(state.player.x, state.player.z) : null;
+    const px = state.player.x;
+    const pz = state.player.z;
+    const moved = Math.hypot(px - _doorUiX, pz - _doorUiZ) > 0.45;
+    if (!moved && !_interactHold && ++_doorUiTick < 6) return;
+    _doorUiTick = 0;
+    _doorUiX = px;
+    _doorUiZ = pz;
+    const storage = ZS.findNearestDecorStorage?.(px, pz, 2.8) || null;
+    const door = ZS.findNearestDecorDoor?.(px, pz, 3.2) || null;
+    const sign = (!storage && !door)
+      ? ZS.SignUI?.getNearestForUi?.(px, pz) : null;
+    const sleeper = (!storage && !door && !sign && !state.player.dead)
+      ? ZS.SleepLoot?.getNearestForUi?.(px, pz) : null;
     _nearStorage = storage;
     _nearDoor = door;
     const btn = _ensureDoorButton();
-    if ((!storage && !door && !sleeper) || state.player.dead || ZS.Rcon?.isOpen?.() || ZS.Chat?.isOpen?.() || ZS.SleepLoot?.isOpen?.()) {
+    if ((!storage && !door && !sign && !sleeper) || state.player.dead || ZS.Rcon?.isOpen?.() || ZS.Chat?.isOpen?.() || ZS.SleepLoot?.isOpen?.() || ZS.SignUI?.isOpen?.()) {
       btn.style.display = 'none';
       return;
     }
@@ -1230,6 +1133,7 @@
       }
       else label = door.open ? 'Fermer' : 'Ouvrir';
     }
+    else if (sign) label = 'Lire le panneau';
     else label = 'Fouiller';
     btn.textContent = mobile ? label : `E — ${label}`;
     btn.style.display = 'block';
@@ -1277,15 +1181,32 @@
   // ── Culling des lumières : seules les N PointLights les plus proches restent
   // actives (en forward rendering chaque fragment éclairé calcule TOUTES les
   // lumières → coût majeur sur mobile). Le compte reste constant = pas de recompile.
-  const MAX_ACTIVE_LIGHTS = _isMobile ? 5 : 8;
+  let MAX_ACTIVE_LIGHTS = _gfxProf.maxLights || (_isMobile ? 3 : 8);
+  let _SHADOW_INTERVAL = _gfxProf.shadowInterval || (_isMobile ? 36 : 18);
+  let _LIGHT_CULL_EVERY = _gfxProf.lightCullEvery || (_isMobile ? 6 : 4);
+  let _BIOME_STRIDE = _gfxProf.biomeStride || (_isMobile ? 2 : 1);
+  let _BILLBOARD_STRIDE = _gfxProf.billboardStride || (_isMobile ? 2 : 1);
+  let _biomeStrideAcc = 0;
+  let _billboardStrideAcc = 0;
+  ZS._gfxRuntime = {
+    renderer,
+    camera,
+    scene,
+    onProfile(p) {
+      MAX_ACTIVE_LIGHTS = p.maxLights ?? MAX_ACTIVE_LIGHTS;
+      _SHADOW_INTERVAL = p.shadowInterval ?? _SHADOW_INTERVAL;
+      _LIGHT_CULL_EVERY = p.lightCullEvery ?? _LIGHT_CULL_EVERY;
+      _BIOME_STRIDE = p.biomeStride ?? 1;
+      _BILLBOARD_STRIDE = p.billboardStride ?? 1;
+    },
+  };
+  ZS.Options?.applyRuntime?.(ZS._gfxRuntime);
   let _bbCamX = NaN, _bbCamZ = NaN;
   let _lightCullCamX = NaN, _lightCullCamZ = NaN;
   let _lightCullTick = 0;
   const _lp = new THREE.Vector3();
   function _cullLights() {
-    scene.traverse((o) => {
-      if ((o.isPointLight || o.isSpotLight) && o.userData.playerTorch) o.visible = true;
-    });
+    for (let i = 0; i < _playerTorchLights.length; i++) _playerTorchLights[i].visible = true;
     const n = _worldLights.length;
     if (n <= MAX_ACTIVE_LIGHTS) {
       for (const l of _worldLights) l.visible = true;
@@ -1293,20 +1214,32 @@
     }
     const cx = _cameraWorldPos();
     const camMoved = Math.hypot(cx.x - _lightCullCamX, cx.z - _lightCullCamZ) > 4;
-    if (!camMoved && ++_lightCullTick < 4) return;
+    if (!camMoved && ++_lightCullTick < _LIGHT_CULL_EVERY) return;
     _lightCullTick = 0;
     _lightCullCamX = cx.x;
     _lightCullCamZ = cx.z;
+    const k = MAX_ACTIVE_LIGHTS;
+    const nearest = [];
     for (const l of _worldLights) {
       l.getWorldPosition(_lp);
-      l.userData._d = _lp.distanceToSquared(cx);
+      const d = _lp.distanceToSquared(cx);
+      l.userData._d = d;
+      let ins = nearest.length;
+      for (let i = 0; i < nearest.length; i++) {
+        if (d < nearest[i].userData._d) { ins = i; break; }
+      }
+      if (nearest.length < k) {
+        nearest.splice(ins, 0, l);
+      } else if (ins < k) {
+        nearest.splice(ins, 0, l);
+        nearest.length = k;
+      }
     }
-    _worldLights.sort((a, b) => a.userData._d - b.userData._d);
-    for (let i = 0; i < n; i++) _worldLights[i].visible = i < MAX_ACTIVE_LIGHTS;
+    const nearSet = new Set(nearest);
+    for (const l of _worldLights) l.visible = nearSet.has(l);
   }
 
   let _shadowTick = 0;
-  const _SHADOW_INTERVAL = _isMobile ? 24 : 18;
   function loop(timestamp) {
     requestAnimationFrame(loop);
     ZS._frameId = (ZS._frameId | 0) + 1;
@@ -1317,6 +1250,24 @@
         && !ZS.SpawnIntro?.isActive?.()) {
       updateMovement(dt);
       _updateWaterEffect(state.player.x, state.player.z, state.player.y);
+      _updateBeachZoneUi(state.player.x, state.player.z);
+      _biomeStrideAcc++;
+      if (_biomeStrideAcc >= _BIOME_STRIDE) {
+        _biomeStrideAcc = 0;
+        ZS.Audio?.updateBiomeAmbient?.(state.player.x, state.player.z, dt * _BIOME_STRIDE);
+      }
+      _tickFootsteps(dt);
+      const activeType = ZS.Inventory?.getActiveItem?.()?.type;
+      ZS.Audio?.tickHeldTorch?.(dt, activeType, {
+        dead: false,
+        inWater: _inWater && _waterDepth > 0.25,
+      });
+    } else {
+      ZS.Audio?.tickHeldTorch?.(dt, null, { dead: !!state.player.dead });
+      if (_onSafeSand !== null) {
+        _onSafeSand = null;
+        ZS.UI?.setZoneSafe?.(null);
+      }
     }
     ZS.SpawnIntro?.tick?.(dt);
     ZS.Scenario?.tick?.(dt);
@@ -1324,15 +1275,23 @@
       moving: !!state.player.isMoving,
       speed: state.player.moveSpeed || 0,
     });
+    ZS.tickTorchFx?.(dt, {
+      moving: !!state.player.isMoving,
+      speed: state.player.moveSpeed || 0,
+      extinguished: _inWater && _waterDepth > 0.25,
+    });
     ZS.tickArmAnim(fpsArms, dt);
     ZS.setShadowCenter(state.player.x, state.player.z);
     ZS.tickDayNight(dt);
-    ZS.tickTreeFalls?.(dt);
-    ZS.tickRockMines?.(dt);
+    if (ZS.hasActiveTreeAnims?.()) ZS.tickTreeFalls?.(dt);
+    if (ZS.hasActiveRockMines?.()) ZS.tickRockMines?.(dt);
     ZS.tickDecorDoors?.(dt);
     const camPos = _cameraWorldPos();
     const camX = camPos.x, camZ = camPos.z;
-    if (Math.hypot(camX - _bbCamX, camZ - _bbCamZ) > 0.2) {
+    _billboardStrideAcc++;
+    if (_billboardStrideAcc >= _BILLBOARD_STRIDE
+        && Math.hypot(camX - _bbCamX, camZ - _bbCamZ) > 0.2) {
+      _billboardStrideAcc = 0;
       _bbCamX = camX; _bbCamZ = camZ;
       if (ZS.updateBillboards) ZS.updateBillboards(camX, camZ);
     }
@@ -1341,7 +1300,7 @@
     ZS.Inventory.tick(dt);
     ZS.Craft.tick(dt);
     ZS.Survival.tick(dt);
-    ZS.Map.tick();
+    ZS.Map?.tick?.();
     _updateInteractHold(dt);
     _updateDoorInteractUi();
     _cullLights();
@@ -1368,10 +1327,11 @@
   const PLAYER_R  = 0.45;
   const GRAVITY   = 22;
   const JUMP_V    = 8;
+  const WALK_SPEED = 5;
+  const SPRINT_MULT = 1.62;
 
   function updateMovement(dt) {
     if (ZS.SpawnIntro?.isActive?.()) return;
-    const SPEED = _inWater ? 2.8 : 5;
     const keys  = state.keys;
 
     let mx = state.input.moveX;
@@ -1384,8 +1344,17 @@
 
     const len = Math.hypot(mx, mz);
     if (len > 1) { mx /= len; mz /= len; }
-    state.player.isMoving = len > 0.01;
+    const moving = len > 0.08;
+    const sprintKey = keys['ShiftLeft'] || keys['ShiftRight'];
+    const wantsSprint = (sprintKey || state.input.sprintHeld) && moving;
+    const canSprint = !_inWater && ZS.Survival?.canSprint?.();
+    const sprinting = wantsSprint && canSprint;
+    state.player.sprinting = sprinting;
+    const baseSpeed = _inWater ? 2.8 : WALK_SPEED;
+    const SPEED = sprinting ? baseSpeed * SPRINT_MULT : baseSpeed;
+    state.player.isMoving = moving;
     state.player.moveSpeed = len * SPEED;
+    ZS.Survival?.tickEndurance?.(dt, { sprinting, moving });
 
     camera.getWorldDirection(_fwd);
     _fwd.y = 0;
@@ -1398,21 +1367,23 @@
     let newX = p.x + (_fwd.x * (-mz) + _right.x * mx) * SPEED * dt;
     let newZ = p.z + (_fwd.z * (-mz) + _right.z * mx) * SPEED * dt;
 
-    // World bounds (map 600×600 → range -300…+300)
-    newX = Math.max(-295, Math.min(295, newX));
-    newZ = Math.max(-295, Math.min(295, newZ));
+    if (ZS.SectorBounds?.clamp) {
+      const bc = ZS.SectorBounds.clamp(newX, newZ);
+      if (Math.abs(bc.x - newX) > 0.04 || Math.abs(bc.z - newZ) > 0.04) {
+        ZS.SectorBounds.onBlocked?.();
+      }
+      newX = bc.x;
+      newZ = bc.z;
+    } else {
+      newX = Math.max(-295, Math.min(295, newX));
+      newZ = Math.max(-295, Math.min(295, newZ));
+    }
 
     // Collision avec arbres, rochers, murs — respecte la hauteur pour sauter par-dessus
-    const colliders = ZS.getColliders();
+    const colliders = ZS.getCollidersNear?.(newX, newZ, 30) || ZS.getColliders();
     const feetY = p.y - 1.7; // Y des pieds du joueur
 
     for (const col of colliders) {
-      const refX = col.cx ?? col.x ?? ((col.x0 ?? 0) + (col.x1 ?? 0)) * 0.5;
-      const refZ = col.cz ?? col.z ?? ((col.z0 ?? 0) + (col.z1 ?? 0)) * 0.5;
-      const _cdx = refX - newX;
-      const _cdz = refZ - newZ;
-      if (_cdx * _cdx + _cdz * _cdz > 900) continue;
-
       if (col.type === 'seg') {
         if (ZS.shouldSkipDecorSideCollision?.(col, feetY, p.y, p.velocityY, newX, newZ, PLAYER_R)) continue;
         const resolved = ZS.resolveDecorSegmentCollision?.(col, newX, newZ, feetY, PLAYER_R);
@@ -1525,9 +1496,22 @@
       p.onGround = false;
     }
 
+    const bobAmp = (ZS.Options?.isFeature?.('headBob') !== false && moving && p.onGround && !_inWater)
+      ? 0.016 * Math.min(1, (p.moveSpeed || 0) / 5) * (sprinting ? 1.15 : 1)
+      : 0;
+    if (bobAmp > 0) _walkBobPhase += dt * (sprinting ? 11 : 9);
+    const headBob = bobAmp > 0 ? Math.sin(_walkBobPhase) * bobAmp : 0;
+
+    const targetFov = (sprinting && ZS.Options?.isFeature?.('sprintFov') !== false) ? 81 : 75;
+    _camFov += (targetFov - _camFov) * Math.min(1, dt * 9);
+    if (Math.abs(camera.fov - _camFov) > 0.05) {
+      camera.fov = _camFov;
+      camera.updateProjectionMatrix();
+    }
+
     localAvatar.position.set(p.x, p.y - 1.7, p.z);
     localAvatar.rotation.y = state.camera.yaw;
-    camera.position.set(p.x, p.y, p.z);
+    camera.position.set(p.x, p.y + headBob, p.z);
     camera.rotation.y = state.camera.yaw;
     camera.rotation.x = state.camera.pitch;
 

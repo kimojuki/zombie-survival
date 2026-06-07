@@ -10,6 +10,8 @@ import {
   MAP_EAST_X,
   beachCoastWeight,
   isInBeachFootprint,
+  isOnBeachSafeSand,
+  isBuildBlockedOnBeach,
   pickBeachSpawn,
 } from '../packages/shared/src/beach-spawn.mjs';
 
@@ -42,6 +44,27 @@ test('pickBeachSpawn stays on coast strip', () => {
   for (let i = 0; i < 20; i++) {
     const p = pickBeachSpawn(() => i / 20);
     assert.ok(isInBeachFootprint(p.x, p.z, 2));
+    assert.ok(beachCoastWeight(p.x, p.z) >= 0.32);
     assert.equal(p.rotY, BEACH_SPAWN.rotY);
   }
+});
+
+test('build blocked when footprint touches beach safe sand', () => {
+  assert.ok(isBuildBlockedOnBeach(BEACH_SPAWN.x, BEACH_SPAWN.z));
+  assert.ok(!isBuildBlockedOnBeach(180, -8));
+});
+
+test('beach safe sand covers spawn strip but not deep forest', () => {
+  assert.ok(isOnBeachSafeSand(BEACH_SPAWN.x, BEACH_SPAWN.z));
+  assert.ok(isOnBeachSafeSand(260, 0));
+  assert.ok(!isOnBeachSafeSand(180, -8));
+  assert.ok(!isOnBeachSafeSand(320, 0));
+});
+
+test('pickBeachSpawn spreads along the beach', () => {
+  const pts = Array.from({ length: 30 }, (_, i) => pickBeachSpawn(() => (i * 0.17) % 1));
+  const xs = new Set(pts.map((p) => Math.round(p.x)));
+  const zs = new Set(pts.map((p) => Math.round(p.z)));
+  assert.ok(xs.size >= 4, 'x spread on sand');
+  assert.ok(zs.size >= 6, 'z spread on sand');
 });

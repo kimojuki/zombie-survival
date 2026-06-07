@@ -112,8 +112,52 @@ export function isInBeachFootprint(x, z, margin = 0) {
 export const CAMP_FOOTPRINT = BEACH_FOOTPRINT;
 export const isInCampFootprint = isInBeachFootprint;
 
-/** Jitter léger le long de la côte (respawn / nouveaux comptes). */
+/** Poids côte minimal pour considérer un point comme « sable de plage » (spawn + zone sûre). */
+export const BEACH_SAFE_SAND_MIN_WEIGHT = 0.32;
+
+/** Zone sûre PvP / vol endormi — même critère que le spawn aléatoire sur le sable. */
+export function isOnBeachSafeSand(x, z) {
+  return beachCoastWeight(x, z) >= BEACH_SAFE_SAND_MIN_WEIGHT && isInBeachFootprint(x, z, 0);
+}
+
+/** Construction joueur interdite si le centre ou l'emprise touche le sable protégé. */
+export function isBuildBlockedOnBeach(x, z, halfW = 1.5, halfD = 1.5) {
+  const pts = [
+    [x, z],
+    [x - halfW, z - halfD],
+    [x + halfW, z - halfD],
+    [x - halfW, z + halfD],
+    [x + halfW, z + halfD],
+  ];
+  return pts.some(([px, pz]) => isOnBeachSafeSand(px, pz));
+}
+
+/** Zone de tirage sur le sable (marge eau à l'est, bords N/S adoucis). */
+export const BEACH_SPAWN_SAND_RECT = Object.freeze({
+  xMin: BEACH_COAST_RECT.xWest + 3,
+  xMax: MAP_EAST_X - 10,
+  zMin: BEACH_COAST_RECT.zSouth + 12,
+  zMax: BEACH_COAST_RECT.zNorth - 12,
+});
+
+/**
+ * Point de spawn aléatoire sur le sable de la plage (respawn / nouveaux comptes).
+ * Rejette l'eau et l'herbe via beachCoastWeight + isInBeachFootprint.
+ */
 export function pickBeachSpawn(rng = Math.random) {
+  const { xMin, xMax, zMin, zMax } = BEACH_SPAWN_SAND_RECT;
+  for (let t = 0; t < 64; t++) {
+    const x = xMin + rng() * (xMax - xMin);
+    const z = zMin + rng() * (zMax - zMin);
+    if (isOnBeachSafeSand(x, z)) {
+      return {
+        x: Math.round(x * 10) / 10,
+        y: BEACH_SPAWN.y,
+        z: Math.round(z * 10) / 10,
+        rotY: BEACH_SPAWN.rotY,
+      };
+    }
+  }
   const zSpread = 22;
   const xSpread = 5;
   return {

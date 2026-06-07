@@ -7,8 +7,65 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="mobile-web-app-capable" content="yes">
   <title>Zombie Survival</title>
-  <link rel="stylesheet" href="/css/style.css?v=20260607-craft-mobile-fix-125">
-  <script src="/js/loading.js?v=20260606-anchor-guides-only-81"></script>
+  <script>
+  (function () {
+    'use strict';
+    var GUARD = 'zs_version_reloading';
+    var KEY = 'zs_client_version';
+
+    function clearCaches() {
+      if (navigator.serviceWorker && navigator.serviceWorker.getRegistrations) {
+        navigator.serviceWorker.getRegistrations().then(function (regs) {
+          regs.forEach(function (r) { r.unregister(); });
+        });
+      }
+      if (!window.caches || !caches.keys) return Promise.resolve();
+      return caches.keys().then(function (names) {
+        return Promise.all(names.map(function (n) { return caches.delete(n); }));
+      });
+    }
+
+    function applyVersion(v) {
+      window.__ZS_CLIENT_VERSION = v;
+      var css = document.getElementById('zs-css');
+      if (css) css.href = '/css/style.css?v=' + encodeURIComponent(v);
+      if (!document.getElementById('zs-loading-js')) {
+        var s = document.createElement('script');
+        s.id = 'zs-loading-js';
+        s.src = '/js/loading.js?v=' + encodeURIComponent(v);
+        document.head.appendChild(s);
+      }
+      window.dispatchEvent(new Event('zs-client-version'));
+    }
+
+    function finish(stored, serverVer) {
+      if (sessionStorage.getItem(GUARD)) {
+        sessionStorage.removeItem(GUARD);
+        localStorage.setItem(KEY, serverVer);
+        applyVersion(serverVer);
+        return;
+      }
+      if (stored && stored !== serverVer) {
+        sessionStorage.setItem(GUARD, '1');
+        localStorage.setItem(KEY, serverVer);
+        clearCaches().then(function () {
+          location.replace(
+            location.pathname + '?v=' + encodeURIComponent(serverVer) + '&_=' + Date.now() + (location.hash || ''),
+          );
+        });
+        return;
+      }
+      localStorage.setItem(KEY, serverVer);
+      applyVersion(serverVer);
+    }
+
+    fetch('/api/client-version?_=' + Date.now(), { cache: 'no-store', credentials: 'same-origin' })
+      .then(function (r) { return r.json(); })
+      .then(function (d) { finish(localStorage.getItem(KEY), d.version || '__CLIENT_VERSION__'); })
+      .catch(function () { finish(localStorage.getItem(KEY), '__CLIENT_VERSION__'); });
+  })();
+  </script>
+  <link id="zs-css" rel="stylesheet" href="/css/style.css">
 </head>
 <body>
 
@@ -232,10 +289,19 @@
     setConnectingMsg('Chargement du jeu…', 'Délai dépassé — tentative de connexion quand même', 12);
   }
 
-  const CACHE_BUST = '20260607-server-authority-135';
-  // Attendre le serveur, puis charger les scripts legacy via le manifeste Vite.
+  const CACHE_BUST = window.__ZS_CLIENT_VERSION || '__CLIENT_VERSION__';
+
+  async function waitForClientVersion() {
+    if (window.__ZS_CLIENT_VERSION) return window.__ZS_CLIENT_VERSION;
+    return new Promise((resolve) => {
+      window.addEventListener('zs-client-version', () => resolve(window.__ZS_CLIENT_VERSION), { once: true });
+    });
+  }
+
+  // Attendre la version client (purge cache auto si update), puis le serveur, puis les scripts legacy.
   (async () => {
-    setConnectingMsg('Connexion au serveur…', 'Vérification de l\'état du serveur', 0);
+    setConnectingMsg('Connexion au serveur…', 'Vérification de la version', 0);
+    await waitForClientVersion();
     await waitForServer();
     const { LEGACY_MODULES } = await import('/src/bootstrap/legacy-modules.js');
     const modules = LEGACY_MODULES.filter((src) => !src.includes('loading.js'));

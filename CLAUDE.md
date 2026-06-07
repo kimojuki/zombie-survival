@@ -46,7 +46,8 @@ Copy `.env.example` → `.env` for local development.
 | `apps/server/index.js` | Auth, zombie AI, loot, multiplayer sync, RCON hooks |
 | `apps/server/src/rcon.js` | Admin command registry |
 | `apps/server/src/db.js` | Dual SQLite/MySQL data layer |
-| `apps/client/game.html` | Legacy game HTML shell (`CACHE_BUST` here) |
+| `apps/client/public/client-version.json` | Version client (cache bust auto) |
+| `apps/client/game.html` | Legacy game HTML shell |
 | `apps/client/public/js/game.js` | Main loop, movement, shooting |
 | `apps/client/public/js/world.js` | Terrain, day/night, vegetation, water |
 | `apps/client/public/js/road_network.js` | **Road graph** — single source of truth |
@@ -59,7 +60,7 @@ Copy `.env.example` → `.env` for local development.
 - Build order: `resolve → flatten → terrain → buildAll → buildMeshes` (see `world.js`)
 - Loot buildings: `registerLoot(category, cx, cz, w, d)`
 - First connected client sends colliders, water zones, loot buildings to server
-- Increment `CACHE_BUST` in `apps/client/game.html` after legacy client JS changes
+- Increment `version` in `apps/client/public/client-version.json` after legacy client JS/CSS changes
 - Do not commit `.env`, `database/*.sqlite`, or `notes-local/`
 - Branch flow: `feature/* -> dev -> master`; never merge `dev` to `master` without green checks and validation.
 - Keep `server.js` as a compatibility wrapper only; new server work belongs under `apps/server`.

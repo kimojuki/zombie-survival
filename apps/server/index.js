@@ -38,6 +38,7 @@ const {
 } = invOps;
 const { tickPlayerSurvival } = require('./src/survival-tick');
 const craftQueueMod = require('./src/craft-queue');
+const { createClientVersionLoader } = require('./src/client-version');
 const { pickZombiesToTrim } = require('./src/zombie-population');
 
 // Dev SQLite : mot de passe par défaut "dev" si RCON_PASSWORD absent (prod MySQL = désactivé)
@@ -103,13 +104,19 @@ const CLIENT_ROOT = path.join(ROOT_DIR, 'apps/client');
 const CLIENT_SRC = path.join(CLIENT_ROOT, 'src');
 const CLIENT_DIST = path.join(ROOT_DIR, 'build/client');
 const CLIENT_PUBLIC = path.join(CLIENT_ROOT, 'public');
+function getClientVersion() {
+  const dir = USE_CLIENT_BUILD ? CLIENT_DIST : CLIENT_PUBLIC;
+  return createClientVersionLoader(dir).load();
+}
 const USE_CLIENT_BUILD =
   process.env.USE_CLIENT_BUILD === 'true'
   || (process.env.NODE_ENV === 'production'
     && fs.existsSync(path.join(CLIENT_DIST, 'index.html')));
 
-function _noCacheJs(res, filePath) {
-  if (filePath.endsWith('.js')) res.set('Cache-Control', 'no-cache');
+function _clientAssetHeaders(res, filePath) {
+  if (/\.(js|mjs|css|html)$/i.test(filePath)) {
+    res.set('Cache-Control', 'no-cache, must-revalidate');
+  }
 }
 
 function _sendClientHtml(res, fileName) {
@@ -117,6 +124,18 @@ function _sendClientHtml(res, fileName) {
   const filePath = USE_CLIENT_BUILD
     ? path.join(CLIENT_DIST, fileName)
     : path.join(CLIENT_ROOT, fileName);
+  if (fileName === 'game.html') {
+    fs.readFile(filePath, 'utf8', (err, html) => {
+      if (err) {
+        log.error('client', 'html read failed', { fileName, err: err.message });
+        if (!res.headersSent) res.status(500).json({ error: 'Client entrypoint unavailable' });
+        return;
+      }
+      const ver = getClientVersion();
+      res.type('html').send(html.replace(/__CLIENT_VERSION__/g, ver));
+    });
+    return;
+  }
   res.sendFile(filePath, (err) => {
     if (err) {
       log.error('client', 'html send failed', { fileName, err: err.message });
@@ -135,12 +154,12 @@ function _registerClientStatic() {
   app.get('/models-preview.html', (req, res) => _sendClientHtml(res, 'models-preview.html'));
 
   if (USE_CLIENT_BUILD) {
-    app.use(express.static(CLIENT_DIST, { setHeaders: _noCacheJs }));
+    app.use(express.static(CLIENT_DIST, { setHeaders: _clientAssetHeaders }));
     return;
   }
 
-  app.use('/src', express.static(CLIENT_SRC, { setHeaders: _noCacheJs }));
-  app.use(express.static(CLIENT_PUBLIC, { setHeaders: _noCacheJs }));
+  app.use('/src', express.static(CLIENT_SRC, { setHeaders: _clientAssetHeaders }));
+  app.use(express.static(CLIENT_PUBLIC, { setHeaders: _clientAssetHeaders }));
 }
 
 // Répartition des zombies par secteur (poids = densité relative).
@@ -188,6 +207,11 @@ function _emitPlayersOnline() {
 
 // ── Health (client attend que le serveur soit prêt) ───────────────────────────
 
+app.get('/api/client-version', (req, res) => {
+  res.set('Cache-Control', 'no-store, no-cache, must-revalidate');
+  res.json({ version: getClientVersion() });
+});
+
 app.get('/api/health', (req, res) => {
   if (!serverReady) {
     return res.status(503).json({
@@ -205,6 +229,7 @@ app.get('/api/health', (req, res) => {
     rcon: !!(RCON_PASSWORD || ADMIN_USERS.size),
     chat: true,
     commit: GIT_COMMIT,
+    clientVersion: getClientVersion(),
     decor: _decorStats(),
   });
 });

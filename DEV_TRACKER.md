@@ -22,7 +22,7 @@ Chaque feature ou refonte doit laisser une trace pour l'équipe :
 | Routes / terrain / spawn | **docs/ROAD_NETWORK.md** |
 | Archi client/serveur | **docs/ARCHITECTURE.md** |
 | Onboarding / setup | **README.md** |
-| Changement JS client | **apps/client/game.html** → incrémenter `CACHE_BUST` |
+| Changement JS client | **apps/client/public/client-version.json** → incrémenter `version` |
 
 Index complet : [README.md](README.md#documentation-à-lire-avant-un-push--review)
 
@@ -33,7 +33,7 @@ Copier dans la description de PR :
 - [ ] **DEV_TRACKER.md** mis à jour (date + résumé)
 - [ ] **Docs techniques** mises à jour si le comportement/config change
 - [ ] **`.env.example`** à jour si nouvelles variables
-- [ ] **`CACHE_BUST`** incrémenté si JS client modifié
+- [ ] **`client-version.json`** à jour si JS/CSS client modifié
 - [ ] Tests manuels listés (spawn, multijoueur, admin, etc.)
 - [ ] Pas de `.env`, SQLite, `notes-local/` dans le commit
 - [ ] Message de commit / PR explique le **pourquoi**, pas seulement le quoi
@@ -49,6 +49,14 @@ Copier dans la description de PR :
 ## 2026-06-06
 
 ## 2026-06-07
+
+### Completed — Auto purge cache client (version gate) (2026-06-07)
+
+- **Source unique** : `apps/client/public/client-version.json` — remplace les `CACHE_BUST` manuels dans `game.html`.
+- **API** : `GET /api/client-version` + champ `clientVersion` sur `/api/health`.
+- **Client** : au boot, compare avec `localStorage` → purge caches + reload si update ; CSS/JS chargés avec `?v=version`.
+- **Serveur** : `game.html` injecte `__CLIENT_VERSION__` ; assets JS/CSS en `no-cache`.
+- **Version** : `20260607-client-version-gate-136`
 
 ### Completed — Audit pass 7 : cap zombie 70 + perf réseau (2026-06-07)
 

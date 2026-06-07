@@ -60,6 +60,10 @@ try {
   const body = await res.json();
   assert.equal(typeof body.ok, 'boolean');
   assert.equal(typeof body.ready, 'boolean');
+  if (body.ready) {
+    assert.equal(typeof body.clientVersion, 'string');
+    assert.ok(body.clientVersion.length >= 4);
+  }
 } finally {
   if (child) child.kill();
 }

@@ -44,6 +44,17 @@ Vue d'ensemble pour onboarding et reviews PR.
 
 ## Chargement client (`apps/client/game.html`)
 
+### Version client et cache
+
+Source unique : `apps/client/public/client-version.json` (`version`).
+
+1. Au chargement, le client appelle `GET /api/client-version` (no-store).
+2. Si la version diffère de `localStorage.zs_client_version` → purge `caches` + rechargement forcé (`?v=…&_=…`).
+3. CSS, `loading.js` et tous les scripts legacy reçoivent `?v=<version>`.
+4. `game.html` est servi avec `Cache-Control: no-store` ; les assets JS/CSS en `no-cache`.
+
+**Après un changement JS/CSS client** : incrémenter uniquement `client-version.json` (plus besoin de Ctrl+F5 manuel).
+
 Ordre des scripts legacy (important) dans `apps/client/src/bootstrap/legacy-modules.js` :
 
 1. `noise.js`, `camp_textures.js`, `buildings.js`
@@ -67,7 +78,7 @@ Le premier client connecté envoie au serveur :
 | Zombies | Serveur + BDD | IA tick 100 ms ; positions ~5 s (`world_zombies`) |
 | Tir / hit | Serveur | Raycast vs zombies |
 | Jour/nuit | Serveur + BDD | `_worldTime` dans `world_meta` |
-| Inventaire / survie | Client + persist | `inventory-sync`, `survival-sync` |
+| Inventaire / survie / craft | Serveur | `inventory-authoritative`, `survival-update`, `craft-queue` |
 | Routes / terrain | Client | Généré localement, identique pour tous |
 | Admin RCON | Serveur | Commandes via socket ou API |
 | Décor monde | Serveur + BDD | Arbres, rochers, épaves, barrières, builds — IDs `seed_*` ; chop/mine/portes persistés |

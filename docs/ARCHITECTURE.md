@@ -237,7 +237,7 @@ Client emit(intent) → Serveur valide → mute p.inv / p.survival
 
 | Domaine | Events client | Réponse serveur |
 |---------|---------------|-----------------|
-| Inventaire | `item-pickup`, `item-drop`, `inventory-move`, `use-item`, `weapon-reload` | `inventory-authoritative` |
+| Inventaire | `item-pickup`, `item-drop`, `inventory-move`, `use-item`, `weapon-reload` | `inventory-authoritative` ; `use-item` résout par **type** puis slot — voir [INVENTORY_CONSUMPTION.md](./INVENTORY_CONSUMPTION.md) |
 | Survie | *(aucun push)* | `survival-update` (tick 1 s) |
 | Craft | `craft-queue`, `craft-cancel` | `craft-queue-state`, `craft-complete` |
 | Combat | `shoot` + `weaponType`, `weapon-reload` | stats `weapon-stats.mjs` (plombs + dispersion serveur) ; 1 event/pompe ; usure via `wearInvTool` |
@@ -257,7 +257,9 @@ Client emit(intent) → Serveur valide → mute p.inv / p.survival
 
 | Fichier | Rôle |
 |---------|------|
-| `apps/server/src/inventory-ops.js` | `_addStackToInv`, `_removeFromSlot`, etc. |
+| `apps/server/src/inventory-ops.js` | `ensureSlotGrid`, `findStackByType`, `cloneInv`, `_addStackToInv`, `_removeFromSlot` |
+| `apps/server/src/inv-debug.js` | Snapshots inventaire + logs `[inv-debug]` serveur |
+| `apps/client/public/js/consume_debug.js` | Logs `[inv-debug]` client, compare, `dumpWithServer()` |
 | `apps/server/src/survival-tick.js` | Faim/soif/infection/dégâts |
 | `apps/server/src/craft-queue.js` | File craft par joueur |
 | `packages/shared/src/item-effects.mjs` | Effets consommables |

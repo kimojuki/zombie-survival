@@ -29,6 +29,8 @@ npm run dev:server
 npm run dev:client
 ```
 
+After **server** changes (`apps/server/`), restart Node — a running process does not pick up edits until restart. Verify `GET /api/health` returns `invDebugBuild` matching `apps/client/public/client-version.json`, then hard-refresh the browser (Ctrl+F5). See [docs/INVENTORY_CONSUMPTION.md](docs/INVENTORY_CONSUMPTION.md) for inventory / consumption debugging.
+
 Use `npm run test:smoke` for server boot checks and `npm run test:visual` for the FPS arm preview captures.
 
 ## Review Rules

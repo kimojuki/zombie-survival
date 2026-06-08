@@ -237,23 +237,22 @@
   camera.rotation.x = state.camera.pitch;
 
   window.ZS?.Loading?.setPhase?.('world', 1, 'Monde prêt', socket.connected ? 'Synchronisation…' : 'Connexion multijoueur…');
-  ZS.Network.init(socket, scene, state);
-
-  socket.emit('world-water-zones', ZS.getWaterZones());
-
-  // Transmet l'empreinte des bâtiments lootables → le serveur génère le loot (items.md)
-  socket.emit('loot-buildings', ZS.Buildings.getLootBuildings());
 
   // ── UI ────────────────────────────────────────────────────────────────────
   try { ZS.UI.init(state); } catch (e) { console.error('UI init:', e); }
   ZS.UI.setHealth(state.player.health);
   ZS.UI.setPlayerKills(state.player.playerKills);
 
-  // ── Survival ──────────────────────────────────────────────────────────────
+  // ── Survival + inventaire avant Network (game-init appelle spawnWorldItem / loadFromSave)
   ZS.Survival.init(state);
-
-  // ── Inventory ─────────────────────────────────────────────────────────────
   ZS.Inventory.init(state, scene, socket);
+
+  ZS.Network.init(socket, scene, state);
+
+  socket.emit('world-water-zones', ZS.getWaterZones());
+
+  // Transmet l'empreinte des bâtiments lootables → le serveur génère le loot (items.md)
+  socket.emit('loot-buildings', ZS.Buildings.getLootBuildings());
   ZS.SleepLoot?.init?.(state);
   ZS.Map?.init?.(state, scene);
   ZS.Craft?.init?.();
@@ -836,7 +835,7 @@
     const def = ZS.ITEMS[item.type];
     if (!def) return false;
     if (def.category === 'food' || def.category === 'medical') {
-      if (ZS.Survival.useItem(item.type)) {
+      if (ZS.Survival.useItem(item.type, ZS.Inventory?.findItemSlot?.(item.type))) {
         const dur = (ZS.getGrip(item.type)?.anim?.use?.dur)
           ?? (def.category === 'medical' ? (def.temps_utilisation || 1.5) : 0.5);
         ZS.triggerArmAnim(fpsArms, 'use', item.type, { dur });
@@ -1071,8 +1070,28 @@
     return _interactDoorTap();
   }
 
+  function _interactCampProp(px, pz) {
+    const wb = ZS.findNearestDecorInteract?.(px, pz, 3.0, 'workbench');
+    if (wb) {
+      ZS.Craft?.toggle?.();
+      return true;
+    }
+    const fire = ZS.findNearestDecorInteract?.(px, pz, 3.2, 'campfire');
+    if (fire) {
+      ZS.Network?.requestCampfireCook?.(fire.decorId);
+      return true;
+    }
+    const bed = ZS.findNearestDecorInteract?.(px, pz, 3.2, 'bedroll');
+    if (bed) {
+      ZS.Network?.requestCampRest?.(bed.decorId);
+      return true;
+    }
+    return false;
+  }
+
   function _interactWorld() {
     if (_interactDoor()) return true;
+    if (_interactCampProp(state.player.x, state.player.z)) return true;
     if (ZS.SignUI?.tryInteract?.(ZS.SignUI.getNearestForUi?.(state.player.x, state.player.z))) return true;
     return ZS.SleepLoot?.tryInteract?.() || false;
   }
@@ -1084,6 +1103,7 @@
     if (!state.player.dead) {
       const sign = ZS.SignUI?.getNearestForUi?.(state.player.x, state.player.z);
       if (sign && ZS.SignUI?.tryInteract?.(sign)) return true;
+      if (_interactCampProp(state.player.x, state.player.z)) return true;
       const sleeper = ZS.SleepLoot?.getNearestForUi?.(state.player.x, state.player.z);
       if (sleeper && ZS.SleepLoot?.tryInteract?.()) return true;
     }
@@ -1107,14 +1127,16 @@
     _doorUiZ = pz;
     const storage = ZS.findNearestDecorStorage?.(px, pz, 2.8) || null;
     const door = ZS.findNearestDecorDoor?.(px, pz, 3.2) || null;
-    const sign = (!storage && !door)
+    const campProp = (!storage && !door)
+      ? ZS.findNearestDecorInteract?.(px, pz, 3.2) : null;
+    const sign = (!storage && !door && !campProp)
       ? ZS.SignUI?.getNearestForUi?.(px, pz) : null;
-    const sleeper = (!storage && !door && !sign && !state.player.dead)
+    const sleeper = (!storage && !door && !campProp && !sign && !state.player.dead)
       ? ZS.SleepLoot?.getNearestForUi?.(px, pz) : null;
     _nearStorage = storage;
     _nearDoor = door;
     const btn = _ensureDoorButton();
-    if ((!storage && !door && !sign && !sleeper) || state.player.dead || ZS.Rcon?.isOpen?.() || ZS.Chat?.isOpen?.() || ZS.SleepLoot?.isOpen?.() || ZS.SignUI?.isOpen?.()) {
+    if ((!storage && !door && !campProp && !sign && !sleeper) || state.player.dead || ZS.Rcon?.isOpen?.() || ZS.Chat?.isOpen?.() || ZS.SleepLoot?.isOpen?.() || ZS.SignUI?.isOpen?.()) {
       btn.style.display = 'none';
       return;
     }
@@ -1133,6 +1155,9 @@
       }
       else label = door.open ? 'Fermer' : 'Ouvrir';
     }
+    else if (campProp?.role === 'workbench') label = 'Établi';
+    else if (campProp?.role === 'campfire') label = 'Cuire au feu';
+    else if (campProp?.role === 'bedroll') label = 'Repos';
     else if (sign) label = 'Lire le panneau';
     else label = 'Fouiller';
     btn.textContent = mobile ? label : `E — ${label}`;

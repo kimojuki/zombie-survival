@@ -14,6 +14,9 @@ const {
   playerHasDoorKey,
   cloneInv,
   wearInvTool,
+  ensureSlotGrid,
+  findStackByType,
+  resolveUseItemStack,
 } = require('../apps/server/src/inventory-ops.js');
 
 function emptyInv() {
@@ -134,6 +137,77 @@ test('wearInvTool decrements durability', () => {
   assert.equal(r.worn, true);
   assert.equal(r.broken, false);
   assert.equal(inv.hotbar[0].durability, 79);
+});
+
+test('ensureSlotGrid overflows bag food to hotbar without equipped bag', () => {
+  const inv = {
+    hotbar: [
+      { type: 'tool_caillou', qty: 1 },
+      { type: 'tool_torche', qty: 1 },
+      null, null, null, null,
+    ],
+    bag: [
+      { type: 'food_eau_bouteille', qty: 1 },
+      { type: 'food_sandwich', qty: 1 },
+    ],
+    equip: { Tête: null, Torso: null, Mains: null, Dos: null },
+  };
+  ensureSlotGrid(inv);
+  assert.equal(inv.bag.length, 0);
+  assert.equal(inv.hotbar[2].type, 'food_eau_bouteille');
+  assert.equal(inv.hotbar[3].type, 'food_sandwich');
+});
+
+test('ensureSlotGrid keeps bag food when hotbar is full', () => {
+  const inv = {
+    hotbar: [
+      { type: 'tool_caillou', qty: 1 },
+      { type: 'tool_torche', qty: 1 },
+      { type: 'food_eau_bouteille', qty: 1 },
+      { type: 'food_sandwich', qty: 1 },
+      { type: 'res_bois_brut', qty: 5 },
+      { type: 'res_pierre', qty: 3 },
+    ],
+    bag: [{ type: 'med_bandage', qty: 1 }],
+    equip: { Tête: null, Torso: null, Mains: null, Dos: null },
+  };
+  ensureSlotGrid(inv);
+  assert.equal(inv.bag.length, 1);
+  assert.equal(inv.bag[0].type, 'med_bandage');
+  assert.ok(findStackByType(inv, 'food_eau_bouteille'));
+});
+
+test('resolveUseItemStack finds food after bag overflow when hotbar slot empty', () => {
+  const inv = {
+    hotbar: [
+      { type: 'tool_caillou', qty: 1 },
+      { type: 'tool_torche', qty: 1 },
+      { type: 'food_eau_bouteille', qty: 1 },
+      null, null, null,
+    ],
+    bag: [],
+    equip: { Tête: null, Torso: null, Mains: null, Dos: null },
+  };
+  const resolved = resolveUseItemStack(inv, 'hotbar', 2, 'food_eau_bouteille');
+  assert.equal(resolved?.zone, 'hotbar');
+  assert.equal(resolved?.idx, 2);
+  assert.equal(resolved?.stack?.type, 'food_eau_bouteille');
+});
+
+test('resolveUseItemStack falls back by type when hotbar slot mismatches', () => {
+  const inv = {
+    hotbar: [
+      { type: 'tool_caillou', qty: 1 },
+      { type: 'tool_torche', qty: 1 },
+      null, null, null, null,
+    ],
+    bag: [{ type: 'food_eau_bouteille', qty: 1 }],
+    equip: { Tête: null, Torso: null, Mains: null, Dos: { type: 'eq_petit_sac', qty: 1 } },
+  };
+  ensureSlotGrid(inv);
+  const resolved = resolveUseItemStack(inv, 'hotbar', 0, 'food_eau_bouteille');
+  assert.equal(resolved?.stack?.type, 'food_eau_bouteille');
+  assert.notEqual(resolved?.stack?.type, 'tool_caillou');
 });
 
 test('cloneInv deep copy', () => {

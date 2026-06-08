@@ -98,6 +98,7 @@
     ZS.unregisterDecorDoor?.(id);
     ZS.unregisterDecorStorage?.(id);
     ZS.unregisterDecorSign?.(id);
+    ZS.unregisterDecorInteract?.(id);
     ZS.unregisterDecorBuild?.(id);
     ZS.BuildAnchors?.unregisterFoundation?.(id);
     ZS.removeChoppableTree?.(id);
@@ -134,6 +135,8 @@
     if (!d?.id || !_scene) return Promise.resolve(null);
     // Glissières posées localement au build RN (road_network + barrier_prefabs).
     if (d.prefabId?.startsWith('road_barrier_')) return Promise.resolve(null);
+    const pk = String(d.placementKey || '');
+    if (pk.startsWith('s01:hub:') || pk.startsWith('s01:camp:')) return Promise.resolve(null);
     _removeDecorItem(d.id);
     const isPrefab = d.kind === 'prefab' || (d.prefabId && !d.type);
     const isBuildWood = d.prefabId?.startsWith('build_') && d.prefabId.endsWith('_wood');
@@ -175,6 +178,7 @@
       buildDamage: Number.isFinite(d.buildDamage) ? d.buildDamage : undefined,
       buildMaxHp: Number.isFinite(d.buildMaxHp) ? d.buildMaxHp : undefined,
       signKind: d.signKind || undefined,
+      interactRole: d.interactRole || undefined,
       simpleLod: !!spawnOpts.simpleLod,
     };
     if (d.prefabId?.startsWith('build_') && d.prefabId.endsWith('_wood')) {
@@ -182,6 +186,12 @@
       if (!Number.isFinite(commonOpts.buildMaxHp)) commonOpts.buildMaxHp = 100;
       d.buildDamage = commonOpts.buildDamage;
       d.buildMaxHp = commonOpts.buildMaxHp;
+    }
+    const placementKey = d.placementKey ? String(d.placementKey) : '';
+    if (placementKey.startsWith('s01:') && Number.isFinite(d.x) && Number.isFinite(d.z)) {
+      const ty = ZS.getTerrainHeight ? ZS.getTerrainHeight(d.x, d.z) : 0;
+      commonOpts.baseY = ty;
+      commonOpts.grounded = false;
     }
     const onRoot = (root) => {
       if (!root) return;
@@ -192,6 +202,9 @@
     if (isPrefab) {
       if (!d.prefabId || !ZS.spawnDecorPrefab) return Promise.resolve(null);
       const root = ZS.spawnDecorPrefab(_scene, d.prefabId, d.x, d.y, d.z, commonOpts);
+      if (!root && placementKey.startsWith('s01:')) {
+        console.warn('[decor] prefab S01 non spawné', d.prefabId, placementKey);
+      }
       onRoot(root);
       return Promise.resolve(root);
     }
@@ -227,6 +240,7 @@
   function _isPinnedDecor(data, decorId) {
     if (!data) return true;
     const pid = data.prefabId || data.type || '';
+    if (data.immutable || (data.placementKey && String(data.placementKey).startsWith('s01:'))) return true;
     if (pid.startsWith('build_') || pid.startsWith('wreck_')) return true;
     if (pid.includes('door') || pid === 'storage_chest') return true;
     if (data.locked != null || data.doorOpen != null || data.storageOpen != null) return true;
@@ -489,7 +503,9 @@
     }
 
     const decorList = (data.decorItems || []).filter(
-      (d) => !d.prefabId?.startsWith('road_barrier_'),
+      (d) => !d.prefabId?.startsWith('road_barrier_')
+        && !String(d.placementKey || '').startsWith('s01:hub:')
+        && !String(d.placementKey || '').startsWith('s01:camp:'),
     );
     const itemList = data.items || [];
     const structList = data.structures || [];
@@ -534,13 +550,32 @@
 
     for (const st of structList) ZS.Inventory.spawnStructure(st);
 
+    const clientV = window.__ZS_CLIENT_VERSION || '';
+    const serverBuild = data.serverBuild || data.invDebugBuild || null;
+    ZS.ConsumeDebug?.log('game-init-server-build', {
+      clientVersion: clientV,
+      serverBuild,
+      wokeFromSleep: !!data.wokeFromSleep,
+    });
+    if (clientV && serverBuild && clientV !== serverBuild) {
+      console.warn('[inv-debug] VERSION MISMATCH game-init', { client: clientV, server: serverBuild });
+      ZS.UI?.showNotif?.('Serveur pas à jour — redémarrer Node (npm run dev:server)');
+    } else if (clientV && !serverBuild) {
+      console.warn('[inv-debug] Serveur ancien (pas de serverBuild) — redémarrer Node');
+      ZS.UI?.showNotif?.('Serveur ancien — arrêter Node puis npm run dev:server');
+    }
+
     if (data.inventory) {
+      ZS.ConsumeDebug?.log('game-init-inv-raw', {
+        trace: ZS.ConsumeDebug?.traceId?.('init'),
+        serverFood: ZS.ConsumeDebug?.foodFromInv?.(data.inventory),
+        wokeFromSleep: !!data.wokeFromSleep,
+        serverBuild,
+      });
       ZS.Inventory.loadFromSave(data.inventory);
-      if (!data.wokeFromSleep) {
-        ZS.Inventory.ensureStarterCaillou?.();
-        ZS.Inventory.ensureStarterTorche?.();
-        ZS.Inventory.ensureStarterRations?.();
-      }
+      const cmp = ZS.ConsumeDebug?.compare?.(data.inventory, 'game-init');
+      ZS.ConsumeDebug?.log('game-init-inv-loaded', { compare: cmp });
+      requestInvDebugSnapshot(cmp?.trace, 'post-game-init');
     }
     if (data.survival) ZS.Survival.loadFromSave(data.survival);
     const scenario = data.scenario || data.inventory?.scenario;
@@ -919,9 +954,15 @@
     socket.on('item-spawn',  (d)  => ZS.Inventory.spawnWorldItem(d));
     socket.on('item-remove', (id) => ZS.Inventory.removeWorldItem(id));
     socket.on('inventory-authoritative', (inv) => {
+      ZS.ConsumeDebug?.log('inventory-authoritative', {
+        trace: ZS.ConsumeDebug?.traceId?.('auth'),
+        serverFood: ZS.ConsumeDebug?.foodFromInv?.(inv),
+        clientBefore: ZS.ConsumeDebug?.clientSnapshot?.(),
+      });
       if (inv && ZS.Inventory?.applyAuthoritativeInv) {
         const prevActive = ZS.Inventory.getActiveItem?.()?.type;
         ZS.Inventory.applyAuthoritativeInv(inv);
+        ZS.ConsumeDebug?.compare?.(inv, 'inventory-authoritative');
         ZS.SleepLoot?.refreshIfOpen?.();
         ZS.StorageUI?.refreshIfOpen?.();
         const next = ZS.Inventory.getActiveItem?.();
@@ -1550,9 +1591,50 @@
     });
   }
 
-  function requestUseItem(zone, index) {
-    if (!_socket) return;
-    _socket.emit('use-item', { zone, index });
+  function requestUseItem(zone, index, type, cb, trace) {
+    if (!_socket?.connected) {
+      ZS.ConsumeDebug?.log('use-item-offline', { trace, zone, index, type });
+      if (typeof cb === 'function') cb({ ok: false, err: 'offline', trace });
+      return;
+    }
+    ZS.ConsumeDebug?.log('use-item-emit', { trace, zone, index, type, socketId: _socket.id });
+    _socket.emit('use-item', { zone, index, type, trace }, (res) => {
+      ZS.ConsumeDebug?.log('use-item-ack', {
+        trace,
+        res: res ? {
+          ok: res.ok,
+          err: res.err,
+          trace: res.trace,
+          debug: res.debug,
+          serverBuild: res.serverBuild || res.debug?.build,
+        } : null,
+      });
+      if (typeof cb === 'function') cb(res);
+    });
+  }
+
+  function requestInvDebugSnapshot(trace, reason) {
+    if (!_socket?.connected) {
+      ZS.ConsumeDebug?.log('debug-snapshot-offline', { trace, reason });
+      return;
+    }
+    const t = trace || ZS.ConsumeDebug?.traceId?.('snap');
+    ZS.ConsumeDebug?.log('debug-snapshot-req', { trace: t, reason });
+    _socket.emit('debug-inv-snapshot', { trace: t, reason }, (res) => {
+      ZS.ConsumeDebug?.log('debug-snapshot-res', {
+        trace: t,
+        reason,
+        serverBuild: res?.serverBuild,
+        serverFood: res?.snap?.food,
+        serverHotbar: res?.snap?.hotbar,
+        client: ZS.ConsumeDebug?.clientSnapshot?.(),
+        match: JSON.stringify(res?.snap?.food) === JSON.stringify(ZS.ConsumeDebug?.clientSnapshot?.()?.food),
+      });
+      if (res?.inventory) {
+        ZS.Inventory?.loadFromSave?.(res.inventory);
+        ZS.ConsumeDebug?.compare?.(res.inventory, `server-snapshot-${reason || 'manual'}`);
+      }
+    });
   }
 
   function requestCraftQueue(recipeId) {
@@ -1639,6 +1721,24 @@
     _socket.emit('build-hit', { id: decorId, toolType });
   }
 
+  function requestCampfireCook(decorId, cb) {
+    if (!_socket || !decorId) return;
+    _socket.emit('campfire-cook', { decorId }, (res) => {
+      if (res?.ok) ZS.UI?.showNotif?.('Viande cuite au feu');
+      else ZS.UI?.showNotif?.(res?.error || 'Cuisson impossible');
+      if (typeof cb === 'function') cb(res);
+    });
+  }
+
+  function requestCampRest(decorId, cb) {
+    if (!_socket || !decorId) return;
+    _socket.emit('camp-rest', { decorId }, (res) => {
+      if (res?.ok) ZS.UI?.showNotif?.('Repos — endurance récupérée');
+      else ZS.UI?.showNotif?.(res?.error || 'Repos impossible');
+      if (typeof cb === 'function') cb(res);
+    });
+  }
+
   function _patchDecorFloorHeight(id, y) {
     const entry = decorItems.get(id);
     if (!entry?.data) return;
@@ -1670,8 +1770,10 @@
     isSpawnReady: () => _spawnReady,
     requestStorageOpen, requestStorageClose, requestStorageDeposit, requestStorageWithdraw, requestStorageMove,
     requestStorageHit, requestStoragePickup,
-    requestUseItem, requestCraftQueue, requestCraftCancel,
+    requestUseItem, requestInvDebugSnapshot, requestCraftQueue, requestCraftCancel,
     requestBuildHit,
+    requestCampfireCook,
+    requestCampRest,
     getDecorRoot: _getDecorRoot,
     patchDecorFloorHeight: _patchDecorFloorHeight,
     syncDecorFloorHeight,

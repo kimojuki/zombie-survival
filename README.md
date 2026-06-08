@@ -49,6 +49,7 @@ ADMIN_USERS=votre_username
 | [docs/DEPLOY.md](docs/DEPLOY.md) | Prod Infomaniak, auto-deploy (cron / webhook) |
 | [docs/ROAD_NETWORK.md](docs/ROAD_NETWORK.md) | Architecture routes/sentiers (2026-06) |
 | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | Vue d'ensemble client/serveur |
+| [docs/INVENTORY_CONSUMPTION.md](docs/INVENTORY_CONSUMPTION.md) | Inventaire authoritatif, `use-item`, debug `[inv-debug]` |
 | [.env.example](.env.example) | Variables d'environnement commentées |
 | [design/](design/) | Design monde cible ; migration depuis `worlDesign/` |
 

@@ -123,6 +123,22 @@
     return bag ? (_def(bag.type)?.slots_inventaire_bonus || 0) : 0;
   }
 
+  /** Sans sac équipé : tout le sac → hotbar (aligné serveur ensureSlotGrid). */
+  function _migrateBagToHotbarIfNoSac() {
+    if (_bagCapacity() > 0) return;
+    const stacks = _bag.filter((s) => s?.type);
+    if (!stacks.length) return;
+    _bag = [];
+    _resizeBag();
+    for (const it of stacks) {
+      const hasType = (t) => _hotbar.some((s) => s?.type === t);
+      if (hasType(it.type)) continue;
+      const i = _hotbar.findIndex((s) => !s || !s.type);
+      if (i < 0) break;
+      _hotbar[i] = it;
+    }
+  }
+
   // Redimensionne _bag selon le sac équipé ; le surplus part en hotbar sinon perdu.
   function _resizeBag() {
     const cap   = _bagCapacity();
@@ -783,8 +799,11 @@
     const type = item.type;
     const t = _placementTransform();
     const s = STRUCT[type];
-    if (ZS.isBuildBlockedOnBeach?.(t.x, t.z)) {
-      ZS.UI?.showNotif?.('Construction interdite sur la plage (zone protégée)');
+    const halfW = (s.w || 3) / 2;
+    const halfD = (s.t || s.w || 3) / 2;
+    if (ZS.S01Bounds?.isS01BuildBlocked?.(t.x, t.z, halfW, halfD)
+        || ZS.isBuildBlockedOnBeach?.(t.x, t.z, halfW, halfD)) {
+      ZS.UI?.showNotif?.('Construction interdite dans cette zone protégée');
       return false;
     }
     if (s.prefabId) {
@@ -871,6 +890,10 @@
   // ── World items ────────────────────────────────────────────────────────────
 
   function spawnWorldItem(d) {
+    if (!_scene) {
+      console.warn('[inventory] spawnWorldItem ignoré — scène non initialisée', d?.id);
+      return;
+    }
     if (_worldItems.has(d.id)) return;
     if (d.bag) {                                  // butin de mort (caisse)
       const mesh  = _makeBagMesh();
@@ -1179,6 +1202,11 @@
   // { hotbar, bag, equip }. Restaure intégralement les 3 zones.
   function loadFromSave(data, opts = {}) {
     if (!data) return;
+    ZS.ConsumeDebug?.log('loadFromSave', {
+      trace: ZS.ConsumeDebug?.traceId?.('load'),
+      serverFood: ZS.ConsumeDebug?.foodFromInv?.(data),
+      opts,
+    });
     const isArr = Array.isArray(data);
     const hotbar = isArr ? data : data.hotbar;
     const bag    = isArr ? null : data.bag;
@@ -1202,6 +1230,7 @@
       let placed = false;
       for (let i = 0; i < HOTBAR_SIZE && !placed; i++) if (!_hotbar[i]) { _hotbar[i] = it; placed = true; }
     }
+    _migrateBagToHotbarIfNoSac();
 
     if (_hotbar[0] && _hotbar[0].type === 'pistol' && _hotbar[0].ammo == null) _hotbar[0].ammo = 30;
 
@@ -1273,6 +1302,10 @@
 
   function applyAuthoritativeInv(data) {
     if (!data) return;
+    ZS.ConsumeDebug?.log('applyAuthoritativeInv', {
+      serverFood: ZS.ConsumeDebug?.foodFromInv?.(data),
+      clientBefore: ZS.ConsumeDebug?.clientSnapshot?.(),
+    });
     const before = _hotbar.map((s) => (s ? { ...s } : null));
     loadFromSave(data, { fullReset: false, skipRender: true });
     let slotDirty = false;
@@ -1458,7 +1491,8 @@
     if (!def) return;
 
     if (def.category === 'food' || def.category === 'medical') {
-      if (ZS.Survival.useItem(item.type)) {
+      const loc = findItemSlot(item.type) || { zone: 'hotbar', idx: _active };
+      if (ZS.Survival.useItem(item.type, loc)) {
         const dur = (ZS.getGrip?.(item.type)?.anim?.use?.dur)
           ?? (def.category === 'medical' ? (def.temps_utilisation || 1.5) : 0.5);
         if (ZS._fpsArms) ZS.triggerArmAnim(ZS._fpsArms, 'use', item.type, { dur });

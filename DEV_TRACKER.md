@@ -50,6 +50,134 @@ Copier dans la description de PR :
 
 ## 2026-06-07
 
+### Completed — Doc inventaire / consommation (2026-06-08)
+
+- **Doc** : `docs/INVENTORY_CONSUMPTION.md` — flux `use-item`, bugs corrigés, debug `[inv-debug]`, checklist redémarrage serveur
+- **Màj** : `ARCHITECTURE.md`, `CONTRIBUTING.md`, `README.md` (index docs)
+
+### Completed — Diagnostic serveur non redémarré (2026-06-08)
+
+- **Cause (logs)** : `invDebugBuild: undefined` sur `/api/health` alors que client `269` — process Node sur `:3000` tournait depuis ~55 min sans recharger `index.js` (uptime 3322 s)
+- **Fix** : `serverBuild` / `invDebugBuild` dans `game-init` ; alerte UI si absent ou mismatch ; version `269`
+- **Action dev** : tuer le node sur 3000 puis `npm run dev:server` (nodemon ne recharge pas toujours si lancé avant les edits)
+
+### Completed — Handlers inventaire tôt + check version serveur (2026-06-08)
+
+- **Cause (logs)** : `debug-snapshot-req` sans `debug-snapshot-res` — handlers `use-item` / `debug-inv-snapshot` enregistrés ~1200 lignes après `game-init` ; risque serveur Node non redémarré (build 267 absent)
+- **Fix** : `_registerInvConsumeHandlers` juste après `players.set` ; inventaire canonisé (`_cloneInv`) à la connexion ; `invDebugBuild` sur `/api/health` ; client log `server-health` + alerte mismatch ; `serverBuild` dans les acks
+- **Version** : `20260608-fix-inv-early-handlers-268`
+
+### Completed — Fix perte nourriture ensureSlotGrid + use-item par type (2026-06-08)
+
+- **Cause** : `ensureSlotGrid` vidait le sac sans sac équipé même si hotbar pleine → items perdus au `use-item` (`empty`)
+- **Fix** : sac conserve les stacks non placés ; `findStackByType` ; `use-item` par type ; `cloneInv` migre ; `_emitInvAuth` à la connexion ; build `267`
+- **Version** : `20260608-fix-inv-no-discard-267`
+
+### Completed — Fix désync slot bag/hotbar consommation (2026-06-08)
+
+- **Cause (logs)** : serveur envoyait nourriture en `bag`, client l’affichait en hotbar slot 2–3 ; `use-item` sur mauvais slot → `empty` + wipe sac
+- **Fix** : `resolveUseItemStack` cherche par **type d’abord** ; migration dans `_gameInitPayload` ; client `_migrateBagToHotbarIfNoSac` ; `findItemSlot` à l’usage
+- **Version** : `20260608-fix-inv-migrate-266`
+
+### Completed — Debug inventaire / consommation corrélé (2026-06-08)
+
+- **Client** : `consume_debug.js` — logs `[inv-debug]`, `ZS.ConsumeDebug.dump()`, compare client/serveur
+- **Serveur** : `inv-debug.js` — logs `[inv-debug]` connect, game-init, use-item, `debug-inv-snapshot`
+- **Corrélation** : `traceId` partagé client ↔ serveur sur `use-item` et snapshots
+- **Version** : `20260608-inv-debug-265`
+
+### Completed — Fix consommation v2 : sync authoritaire (2026-06-08)
+
+- **Cause** : client ajoutait eau/sandwich en local (`ensureStarterRations`) sans sync serveur ; appel `use-item` retardé de 0,5 s ; ack sans inventaire/survie
+- **Fix** : retrait starters client-side ; `use-item` immédiat + réponse `{ inventory, survival }` ; retry serveur si slot vide ; `ensureStarterRations` après `ensureSlotGrid`
+- **Version** : `20260608-fix-consume-v2-264`
+
+### Completed — Fix consommation : nourriture effacée du sac serveur (2026-06-08)
+
+- **Cause** : `ensureSlotGrid` tronquait `bag` à 0 sans sac équipé → eau/sandwich supprimés côté serveur à chaque `use-item` ; client les affichait encore (overflow hotbar)
+- **Fix** : overflow sac→hotbar (serveur + kit départ en hotbar) ; `resolveUseItemStack` vérifie le type ; migration à la connexion ; slot passé dans `_useHeldItem`
+- **Version** : `20260608-fix-consume-bag-263`
+
+### Completed — Sol forêt plus lumineux (2026-06-08)
+
+- **terrain_textures.js** : base olive claire, mousse verte, taches lumière filtrée, litière dorée
+- **world.js** : vertex colors forêt éclaircis, moins de lerps sombres, hemi rebond sol sous couvert
+- **Version** : `20260608-forest-floor-bright-262`
+
+### Completed — Fix game-init crash inventaire (2026-06-08)
+
+- **Cause** : `Network.init` déclenchait `game-init` avant `Inventory.init` → `_scene` undefined dans `spawnWorldItem` → inventaire jamais chargé → consommation « désynchronisé »
+- **Fix** : `Survival` + `Inventory.init` avant `Network.init` dans `game.js` ; garde `_scene` dans `spawnWorldItem`
+- **Version** : `20260608-fix-game-init-inv-261`
+
+### Completed — Texture sol forêt procédurale (2026-06-08)
+
+- **terrain_textures.js** : atlas canvas (mousse, litière, aiguilles, humus + terre sentier)
+- **world.js** : teintes forêt via `forestFloorWeight`, tiling plus fin en forêt
+- **Version** : `20260608-forest-floor-tex-260`
+
+### Completed — Fix consommation eau / sandwich (2026-06-08)
+
+- **Cause** : nourriture en sac côté serveur, affichée en hotbar côté client (sans sac équipé) → slot vide au `use-item`
+- **Fix** : slot actif hotbar + fallback recherche par `type` serveur ; kit départ en hotbar ; callback erreur client
+- **Version** : `20260608-fix-consume-food-259`
+
+### Completed — RCON worldwipe (2026-06-08)
+
+- **`worldwipe`** : retire constructions joueur (build bois, structures, coffres/camp posés) — seed immuable conservé
+- Options : `all` (décor manuel), `ground` (items au sol), `full`
+- **index.js** : `wipePlayerWorld()` partagé boot + RCON
+
+### Completed — Map propre : retrait POI S01 + builds joueurs (2026-06-08)
+
+- **Seed S01 vide** : `computeS01DecorPlacements()` → `[]` (station, cabanes, pont, hub retirés)
+- **Boot** : `_purgeAllS01Decor()` à chaque démarrage ; `_purgePlayerBuildsAndCampDecor()` une fois (`.world_clean_slate_20260608`)
+- **Conservé** : plage, sentier, panneau + torche plage, arbres/rochers/épaves seed globaux
+
+### Completed — Restauration plage + sentier d'origine (2026-06-08)
+
+- **Sentier** : tracé original `BEACH_TRAIL_PTS` → jonction `[14,-18]` (plus le coude `[14,-8]` / fin `[0,-6]`)
+- **Visuel** : `buildSpawnTrail` dans `proc_spawn.js` (mesh Trails) — plus de `spawn_trail` RoadNetwork
+- **Terrain** : retrait `S01Terrain.registerWorld` (rivière + aplats POI) et routes S01 RN (`s01_roads` vide)
+- **Conservé** : plage, panneau + torche bouche sentier (`beach-sign-placements.mjs`)
+- **Version** : `20260608-beach-trail-restore-258`
+
+### Completed — S01 : suppression campements + terrain naturel (2026-06-08)
+
+- **Campements retirés** : plus de hub `(0,-6)` ni campement abandonné `(-20,33)` — decor seed, aplats terrain, routes secondaires et zone safe
+- **Conservé** : sentier terre `spawn_trail`, carrefour `(28,-42)` (marqueurs pierres), cabanes N/S, station essence, pont
+- **Serveur** : `_purgeS01CampDecor()` au boot — retire decor persisté `s01:hub:*` / `s01:camp:*`
+- **Client** : `network.js` ignore ces clés ; `proc_spawn.js` sentier sync `BEACH_TRAIL_PTS` (plus de branche `[14,-18]`)
+- **Tests** : `s01-placements`, `s01-build-exclusions`, `beach-spawn`
+- **Version** : `20260608-s01-remove-camps-257`
+
+### Completed — Fix crash serveur makeZombie (2026-06-08)
+
+- **index.js** : `const z = buildZombieEntity({ x, z })` → TDZ ReferenceError au boot ; renommé `entity`
+
+### Completed — Sentier terre seul + camp hub client (2026-06-08)
+
+- **proc_spawn.js** : suppression ruban sable `buildSpawnTrail` (doublon RN) ; décor cailloux plage seulement
+- **s01_terrain.js** : `buildHubCamp` à la fin du sentier `(0,-6)` — feu, établi, coffre, layout
+- **network.js** : ignore seed serveur `s01:hub:*` (évite doublons) ; fallback campement abandonné seul
+- **Version** : `20260608-trail-dirt-hub-camp-256`
+
+### Completed — Torche guide panneau plage (2026-06-08)
+
+- **beach-sign-placements.mjs** : prefab `beach_exit_torch` à côté du panneau sortie sentier
+- **sign_prefabs.js** : poteau + flamme + `PointLight` (flicker via `registerFireLight`)
+- **Version** : `20260608-beach-exit-torch-252`
+
+### Completed — S01 forêt complète : POI seed + interactions (2026-06-08)
+
+- **Shared** : `s01-world-placements.mjs`, `s01-roads.mjs`, `s01-river.mjs`, `s01-safe-zones.mjs`, `s01-build-exclusions.mjs`, `s01-poi.mjs`
+- **Serveur** : `ensureS01World()` — decor immuables (hub, campement, cabanes, essence, pont), coffres loot, zones safe, zombies T1 forêt, cuisson/repos socket
+- **Client** : `s01_terrain.js`, `s01_roads.js`, `s01_bounds.js`, `s01_prefabs.js` — rivière, routes terre, clairière, interactions établi/feu/couchage
+- **Sentier** : termine sur clairière `(0, -6)` — `BEACH_TRAIL_PTS` sync
+- **Tests** : `s01-placements.test.mjs`, `s01-build-exclusions.test.mjs`
+- **Doc** : `design/secteur/START_FOREST.md`
+- **Version** : `20260608-s01-forest-full-251`
+
 ### Completed — Murs secteur : coins et trous (2026-06-08)
 
 - **sector_walls.js** : périmètre pleine longueur (sans PAD), portes filtrées par bord, coins renforcés, step 1,75 m.

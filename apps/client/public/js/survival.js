@@ -132,19 +132,63 @@
     }
   }
 
-  function useItem(type) {
+  function _finishUseItemResponse(res, ctx) {
+    ZS.ConsumeDebug?.log('use-item-res', {
+      trace: ctx?.trace,
+      res: res ? {
+        ok: res.ok,
+        err: res.err,
+        trace: res.trace,
+        debug: res.debug,
+        foodAfter: ZS.ConsumeDebug?.foodFromInv?.(res.inventory),
+        survival: res.survival,
+      } : null,
+      clientAfter: ZS.ConsumeDebug?.clientSnapshot?.(),
+    });
+    if (!res) {
+      ZS.UI.showNotif('Consommation impossible (pas de réponse serveur)');
+      ZS.Network?.requestInvDebugSnapshot?.(ctx?.trace, 'no-response');
+      return;
+    }
+    if (res.ok === false) {
+      if (res.inventory) ZS.Inventory?.applyAuthoritativeInv?.(res.inventory);
+      ZS.ConsumeDebug?.compare?.(res.inventory, 'use-item-fail');
+      ZS.Network?.requestInvDebugSnapshot?.(res.trace || ctx?.trace, `fail-${res.err || 'unknown'}`);
+      ZS.UI.showNotif(`Consommation refusée (${res.err || 'erreur'}) — voir console [inv-debug]`);
+      return;
+    }
+    if (res.survival) applyServerState(res.survival);
+    if (res.inventory) ZS.Inventory?.applyAuthoritativeInv?.(res.inventory);
+    ZS.ConsumeDebug?.compare?.(res.inventory, 'use-item-ok');
+  }
+
+  function useItem(type, slot) {
     const def = ZS.ITEMS[type];
     if (!def) return false;
     if (_sv._timer > 0) { ZS.UI.showNotif('Déjà en train d\'utiliser…'); return false; }
     if (def.category !== 'food' && def.category !== 'medical') return false;
-    const loc = ZS.Inventory?.findItemSlot?.(type);
-    if (!loc) return false;
+    const loc = slot || ZS.Inventory?.findItemSlot?.(type);
+    const trace = ZS.ConsumeDebug?.traceId?.('use');
+    ZS.ConsumeDebug?.log('use-item-req', {
+      trace,
+      type,
+      slot: loc,
+      client: ZS.ConsumeDebug?.clientSnapshot?.(),
+      survival: { faim: _sv.faim, soif: _sv.soif },
+    });
+    if (!loc) {
+      ZS.UI.showNotif('Objet introuvable dans l\'inventaire');
+      ZS.Network?.requestInvDebugSnapshot?.(trace, 'client-no-slot');
+      return false;
+    }
     const dur = def.category === 'medical' ? (def.temps_utilisation || 1.5) : 0.5;
     _sv._timer = dur;
     _sv._pendingType = type;
     ZS.UI.showNotif(def.category === 'medical' ? 'Soin en cours…' : 'Consommation…');
+    ZS.Network?.requestUseItem?.(loc.zone, loc.idx, type, (res) => {
+      _finishUseItemResponse(res, { trace, type, loc });
+    }, trace);
     setTimeout(() => {
-      ZS.Network?.requestUseItem?.(loc.zone, loc.idx);
       _sv._timer = 0;
       _sv._pendingType = null;
     }, dur * 1000);

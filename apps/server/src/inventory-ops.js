@@ -24,22 +24,80 @@ function bagCapacity(inv) {
   return BAG_SLOTS_BY_TYPE[equipped.type] || 0;
 }
 
-/** Grille fixe hotbar/sac comme le client (slots vides = null). */
+function _hotbarHasType(n, type) {
+  return n.hotbar.some((s) => s?.type === type);
+}
+
+/** Place les stacks en hotbar ; retourne ceux qui n'ont pas trouvé de place. */
+function _overflowStacksToHotbar(n, stacks) {
+  const remaining = [];
+  for (const stack of stacks) {
+    if (!stack?.type) continue;
+    if (_hotbarHasType(n, stack.type)) continue;
+    const freeHb = n.hotbar.findIndex((slot) => !slot || !slot.type);
+    if (freeHb < 0) {
+      remaining.push(stack);
+      continue;
+    }
+    n.hotbar[freeHb] = stack;
+  }
+  return remaining;
+}
+
+/** Grille fixe hotbar/sac — ne supprime jamais d'items (évite perte nourriture sans sac). */
 function ensureSlotGrid(inv) {
   const n = normalizeInv(inv);
   if (n.hotbar.length < HOTBAR_SIZE) {
     while (n.hotbar.length < HOTBAR_SIZE) n.hotbar.push(null);
   } else if (n.hotbar.length > HOTBAR_SIZE) {
+    const dropped = n.hotbar.splice(HOTBAR_SIZE);
     n.hotbar.length = HOTBAR_SIZE;
+    const left = _overflowStacksToHotbar(n, dropped);
+    if (left.length) n.bag = [...left, ...n.bag.filter((s) => s?.type)];
   }
   const cap = bagCapacity(n);
-  if (n.bag.length < cap) {
+  if (cap === 0 && n.bag.length > 0) {
+    const left = _overflowStacksToHotbar(n, n.bag.filter((s) => s?.type));
+    n.bag = left;
+  } else if (n.bag.length < cap) {
     while (n.bag.length < cap) n.bag.push(null);
   } else if (n.bag.length > cap) {
-    n.bag.length = cap;
+    const extras = n.bag.splice(cap).filter((s) => s?.type);
+    const left = _overflowStacksToHotbar(n, extras);
+    n.bag = [...n.bag.slice(0, cap), ...left];
   }
   Object.assign(inv, n);
   return n;
+}
+
+/** Trouve un stack par type (hotbar puis sac) après migration. */
+function findStackByType(inv, type) {
+  if (!type) return null;
+  const n = ensureSlotGrid(inv);
+  for (const z of ['hotbar', 'bag']) {
+    const arr = n[z];
+    for (let i = 0; i < arr.length; i++) {
+      if (arr[i]?.type === type) return { zone: z, idx: i, stack: arr[i] };
+    }
+  }
+  return null;
+}
+
+/** Résout un stack consommable — type prioritaire, sinon slot exact. */
+function resolveUseItemStack(inv, zone, idx, typeHint) {
+  if (typeof typeHint === 'string' && typeHint) {
+    const byType = findStackByType(inv, typeHint);
+    if (byType) return byType;
+  }
+  const n = ensureSlotGrid(inv);
+  if (zone === 'hotbar' || zone === 'bag') {
+    const arr = zone === 'bag' ? n.bag : n.hotbar;
+    const i = Number(idx);
+    if (Number.isFinite(i) && i >= 0 && i < arr.length && arr[i]?.type) {
+      return { zone, idx: i, stack: arr[i] };
+    }
+  }
+  return null;
 }
 
 function normalizeInv(inv) {
@@ -57,7 +115,9 @@ function normalizeInv(inv) {
 }
 
 function cloneInv(inv) {
-  return JSON.parse(JSON.stringify(normalizeInv(inv)));
+  const copy = JSON.parse(JSON.stringify(inv && typeof inv === 'object' ? inv : {}));
+  ensureSlotGrid(copy);
+  return JSON.parse(JSON.stringify(normalizeInv(copy)));
 }
 
 function flattenInv(inv) {
@@ -340,6 +400,8 @@ module.exports = {
   HOTBAR_SIZE,
   bagCapacity,
   ensureSlotGrid,
+  findStackByType,
+  resolveUseItemStack,
   normalizeInv,
   cloneInv,
   flattenInv,

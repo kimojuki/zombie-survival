@@ -12,6 +12,7 @@ import {
   isInBeachFootprint,
   isOnBeachSafeSand,
   isBuildBlockedOnBeach,
+  isForestTerrainAllowed,
   pickBeachSpawn,
 } from '../packages/shared/src/beach-spawn.mjs';
 
@@ -37,7 +38,7 @@ test('beach tapers naturally at north and south tips', () => {
 
 test('beach trail starts at sand edge and reaches forest clearing', () => {
   assert.deepEqual(BEACH_TRAIL_PTS[0], [242, -8]);
-  assert.deepEqual(BEACH_TRAIL_PTS[BEACH_TRAIL_PTS.length - 2], [0, -6]);
+  assert.deepEqual(BEACH_TRAIL_PTS[BEACH_TRAIL_PTS.length - 1], [14, -18]);
 });
 
 test('pickBeachSpawn stays on coast strip', () => {
@@ -59,6 +60,15 @@ test('beach safe sand covers spawn strip but not deep forest', () => {
   assert.ok(isOnBeachSafeSand(260, 0));
   assert.ok(!isOnBeachSafeSand(180, -8));
   assert.ok(!isOnBeachSafeSand(320, 0));
+});
+
+test('forest terrain rejects beach sand and allows inland forest', () => {
+  assert.ok(!isForestTerrainAllowed(BEACH_SPAWN.x, BEACH_SPAWN.z));
+  assert.ok(!isForestTerrainAllowed(265, -8));
+  assert.ok(!isForestTerrainAllowed(270, 20));
+  assert.ok(isForestTerrainAllowed(180, -8));
+  assert.ok(isForestTerrainAllowed(0, -6));
+  assert.ok(isForestTerrainAllowed(-50, 40));
 });
 
 test('pickBeachSpawn spreads along the beach', () => {

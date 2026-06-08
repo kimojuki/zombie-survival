@@ -2,7 +2,7 @@
 (function () {
   'use strict';
 
-  // Offsets locaux (lx, lz) relatifs au pivot du décor. maxY = hauteur solide (sautable au-dessus).
+  // Offsets locaux (lx, lz) relatifs au pivot du décor. minY/maxY = bande verticale active (monde = baseY + offset).
   const PREFAB_COLLIDERS = {
     spawn_campfire: [
       { type: 'box', lx: 0, lz: 0, hw: 0.52, hd: 0.52, maxY: 0.42 },
@@ -46,14 +46,7 @@
     storage_chest: [
       { type: 'box', lx: 0, lz: 0, hw: 0.58, hd: 0.36, maxY: 0.62 },
     ],
-    building_survivor_shack: [
-      { type: 'box', lx: 0, lz: 2.04, hw: 2.64, hd: 0.11 },
-      { type: 'box', lx: -2.54, lz: 0, hw: 0.11, hd: 2.08 },
-      { type: 'box', lx: 2.54, lz: 0, hw: 0.11, hd: 2.08 },
-      { type: 'box', lx: -1.61, lz: -2.04, hw: 0.99, hd: 0.11 },
-      { type: 'box', lx: 1.61, lz: -2.04, hw: 0.99, hd: 0.11 },
-      { type: 'box', lx: 0, lz: -2.12, hw: 0.62, hd: 0.10, door: true },
-    ],
+    building_survivor_shack: _survivorShackColliderDefs(),
     smallcity_house_a: [
       { type: 'box', lx: 0, lz: -4.75, hw: 5.5, hd: 0.13, maxY: 3.1 },
       { type: 'box', lx: -5.5, lz: 0, hw: 0.13, hd: 4.75, maxY: 3.1 },
@@ -93,6 +86,23 @@
     ],
     road_barrier_rail: [
       { type: 'box', lx: 0, lz: 0, hw: 0.5, hd: 0.04, maxY: 0.66 },
+    ],
+    s01_gas_station: [
+      { type: 'box', lx: 0, lz: 0, hw: 4.1, hd: 3.1, maxY: 3.4 },
+      { type: 'box', lx: -4.5, lz: 0, hw: 2.8, hd: 3.8, maxY: 3.9 },
+    ],
+    s01_military_tent: [
+      { type: 'box', lx: -5.5, lz: 0, hw: 0.14, hd: 3.75, maxY: 2.2 },
+      { type: 'box', lx: 5.5, lz: 0, hw: 0.14, hd: 3.75, maxY: 2.2 },
+      { type: 'box', lx: 0, lz: 3.75, hw: 5.5, hd: 0.14, maxY: 2.2 },
+      { type: 'cyl', lx: 0, lz: -1.8, r: 0.11, topY: 3.7 },
+      { type: 'cyl', lx: 0, lz: 1.8, r: 0.11, topY: 3.7 },
+    ],
+    sign_sector_gate: [
+      { type: 'cyl', lx: 0, lz: 0, r: 0.14, topY: 2.4 },
+    ],
+    beach_exit_torch: [
+      { type: 'cyl', lx: 0, lz: 0, r: 0.08, topY: 2.1 },
     ],
     spawn_flat_stone: [],
     spawn_drink_set: [],
@@ -138,6 +148,135 @@
     res_planche: { type: 'box', lx: 0, lz: 0, hw: 0.20, hd: 0.08, maxY: 0.06, layFlat: true },
   };
 
+  /** Pièces validées une par une — miroir packages/shared/src/survivor-shack-*.mjs */
+  function _survivorShackColliderDefs() {
+    return [
+      _survivorShackFloorColliderDef(),
+      _survivorShackWallNorthColliderDef(),
+      ..._survivorShackWallSouthColliderDefs(),
+      _survivorShackWallWestColliderDef(),
+      _survivorShackWallEastColliderDef(),
+      _survivorShackDoorLeafColliderDef(),
+      ..._survivorShackRoofColliderDefs(),
+    ];
+  }
+
+  function _survivorShackFloorColliderDef() {
+    const FLOOR_W = 5.25;
+    const FLOOR_D = 4.25;
+    return {
+      type: 'box',
+      lx: 0,
+      lz: 0,
+      hw: FLOOR_W / 2,
+      hd: FLOOR_D / 2,
+      minY: 0,
+      maxY: 0.12,
+    };
+  }
+
+  /** Pièce 2/7 — miroir packages/shared/src/survivor-shack-wall-north.mjs */
+  function _survivorShackWallNorthColliderDef() {
+    const W = 5.25;
+    const Z = 2.04;
+    return {
+      type: 'box',
+      lx: 0,
+      lz: Z,
+      hw: W / 2,
+      hd: 0.22,
+    };
+  }
+
+  /** Pièce 3/7 — miroir packages/shared/src/survivor-shack-wall-south.mjs */
+  function _survivorShackWallSouthColliderDefs() {
+    const Z = -2.04;
+    const HW = 1.98 / 2;
+    const HD = 0.22;
+    const X = 1.61;
+    return [
+      { type: 'box', lx: -X, lz: Z, hw: HW, hd: HD },
+      { type: 'box', lx: X, lz: Z, hw: HW, hd: HD },
+    ];
+  }
+
+  /** Pièce 4/7 — miroir packages/shared/src/survivor-shack-wall-west.mjs */
+  function _survivorShackWallWestColliderDef() {
+    const X = -2.54;
+    const D = 4.15;
+    return {
+      type: 'box',
+      lx: X,
+      lz: 0,
+      hw: 0.22,
+      hd: D / 2,
+    };
+  }
+
+  /** Pièce 5/7 — miroir packages/shared/src/survivor-shack-wall-east.mjs */
+  function _survivorShackWallEastColliderDef() {
+    const X = 2.54;
+    const D = 4.15;
+    return {
+      type: 'box',
+      lx: X,
+      lz: 0,
+      hw: 0.22,
+      hd: D / 2,
+    };
+  }
+
+  /** Miroir packages/shared/src/door-leaf-collider.mjs */
+  const DOOR_OPEN_ANGLE = -Math.PI * 0.52;
+
+  function _transformOpenDoorLeaf(def, angle) {
+    if (!def?.door || !angle) return def;
+    const px = def.doorPivotLx ?? def.lx ?? 0;
+    const pz = def.doorPivotLz ?? def.lz ?? 0;
+    const offX = (def.lx || 0) - px;
+    const offZ = (def.lz || 0) - pz;
+    const c = Math.cos(angle);
+    const s = Math.sin(angle);
+    return {
+      ...def,
+      lx: px + offX * c + offZ * s,
+      lz: pz - offX * s + offZ * c,
+      localRotY: angle,
+    };
+  }
+
+  /** Pièce 7/7 — miroir packages/shared/src/survivor-shack-roof.mjs */
+  function _survivorShackRoofColliderDefs() {
+    const halfRun = 2.45;
+    const rise = 0.93;
+    const pitch = Math.atan2(rise, halfRun);
+    const roofW = 5.88;
+    const panelLen = halfRun + 0.12;
+    const panelZ = halfRun * 0.5;
+    const band = { minY: 2.55, maxY: 3.65 };
+    return [
+      { type: 'box', lx: 0, lz: -panelZ, hw: roofW / 2, hd: panelLen / 2, rotX: -pitch, ...band },
+      { type: 'box', lx: 0, lz: panelZ, hw: roofW / 2, hd: panelLen / 2, rotX: pitch, ...band },
+    ];
+  }
+
+  /** Pièce 6/7 — miroir packages/shared/src/survivor-shack-door.mjs */
+  function _survivorShackDoorLeafColliderDef() {
+    const DOOR_W = 1.24;
+    const PIVOT_X = -0.60;
+    const PIVOT_Z = -2.10;
+    return {
+      type: 'box',
+      lx: 0,
+      lz: PIVOT_Z,
+      hw: DOOR_W / 2,
+      hd: 0.28,
+      doorPivotLx: PIVOT_X,
+      doorPivotLz: PIVOT_Z,
+      door: true,
+    };
+  }
+
   function _doorFrameColliderDefs(gap) {
     const w = 3.0;
     const t = 0.36;
@@ -151,17 +290,21 @@
     ];
   }
 
-  /** Battant — actif fermé uniquement (`door: true` + `doorOpen` sur le spec). */
+  /** Battant — pivot local ; ouvert = collider tourné (trou libre, panneau bloque). */
   function _doorLeafColliderDef(gap) {
     const doorW = Math.max(0.9, gap - 0.1);
+    const pivotX = -doorW / 2;
+    const pivotZ = -0.11;
     return {
       type: 'box',
       lx: 0,
-      lz: -0.11,
+      lz: pivotZ,
       hw: doorW / 2,
       hd: 0.06,
       minY: 0.08,
       maxY: 2.12,
+      doorPivotLx: pivotX,
+      doorPivotLz: pivotZ,
       door: true,
     };
   }
@@ -244,16 +387,19 @@
 
     for (const raw of _defsForSpec(spec)) {
       if (!raw) continue;
-      if (raw.door && spec.doorOpen) continue;
-      const def = _applyLayFlat(raw, spec);
+      let def = _applyLayFlat(raw, spec);
+      if (raw.door && spec.doorOpen) {
+        const angle = Number.isFinite(spec.doorAngle) ? spec.doorAngle : DOOR_OPEN_ANGLE;
+        def = _transformOpenDoorLeaf(def, angle);
+      }
       const lx0 = (def.lx || 0) * (railLenScale ?? scale);
       const lz0 = (def.lz || 0) * (railLenScale ?? scale);
       const hw = (def.hw || 0.1) * (railLenScale ?? scale);
       const hd = (def.hd || 0.1) * scale;
 
       if (def.type === 'cyl' || def.r != null) {
-        const ox = lx0 * cos - lz0 * sin;
-        const oz = lx0 * sin + lz0 * cos;
+        const ox = lx0 * cos + lz0 * sin;
+        const oz = -lx0 * sin + lz0 * cos;
         out.push({
           x: x + ox,
           z: z + oz,
@@ -284,20 +430,22 @@
         continue;
       }
 
-      const ox = lx0 * cos - lz0 * sin;
-      const oz = lx0 * sin + lz0 * cos;
       out.push({
         type: 'box',
-        cx: x + ox,
-        cz: z + oz,
+        cx: x,
+        cz: z,
+        lx: lx0,
+        lz: lz0,
         hw,
         hd,
         rotY,
-        rotX: rotX || 0,
+        rotX: def.rotX ?? rotX ?? 0,
+        localRotY: def.localRotY || 0,
         baseY,
-        maxY: def.maxY != null ? baseY + def.maxY : undefined,
-        minY: def.minY != null ? baseY + def.minY : undefined,
+        maxY: def.maxY != null ? baseY + def.maxY * scale : undefined,
+        minY: def.minY != null ? baseY + def.minY * scale : undefined,
         decorId: spec.decorId,
+        prefabId: spec.prefabId,
       });
     }
     return out;

@@ -1,11 +1,14 @@
 /** Repousse progressive arbres / rochers — emplacements valides sans chevauchement décor. */
 
 import { TREE_ZONES, TREE_EXCLUSIONS, SPAWN_TRAIL_PTS } from './tree-placements.mjs';
-import { ROCK_ZONES, ROCK_EXCLUSIONS, isInCampFootprint } from './rock-placements.mjs';
+import { computeS01TreeClearZones } from './s01-world-placements.mjs';
+import { ROCK_ZONES, ROCK_EXCLUSIONS, isInCampFootprint, getForestRockZones } from './rock-placements.mjs';
+import { isInsideSector01 } from './sector-bounds.mjs';
 import {
   BEACH_SPAWN,
   beachCoastWeight,
   isInBeachFootprint,
+  isForestTerrainAllowed,
 } from './beach-spawn.mjs';
 import { PALM_ZONES } from './palm-placements.mjs';
 import { getTreeScale } from './tree-growth.mjs';
@@ -18,15 +21,15 @@ export const REGEN_CONFIG = Object.freeze({
   /** Phase initiale des arbres regen (0–4) — évite les pousses quasi inutilisables. */
   regenTreeStartPhase: 2,
   /** Arbres forêt debout ciblés (seed + repousse, hors palmiers). */
-  treeTargetStanding: 220,
+  treeTargetStanding: 580,
   /** Palmiers plage — repousse 16–28 (cible médiane 22). */
   palmIntervalMs: 12_000,
   palmsPerTick: 3,
   palmTargetStanding: 22,
   palmRegenStartPhase: 2,
   palmMinCoastWeight: 0.35,
-  /** Rochers monde (hors ancres camp fixes). */
-  rockTargetWorld: 75,
+  /** Rochers monde forêt S01 (hors ancres camp fixes). */
+  rockTargetWorld: 140,
   spawnAttempts: 80,
   minClearance: 2.2,
   minTreeGap: 2.8,
@@ -68,6 +71,9 @@ function _nearTrail(x, z, margin = 1.35) {
 
 function _inExclusion(x, z) {
   for (const e of TREE_EXCLUSIONS) {
+    if (Math.hypot(x - e.cx, z - e.cz) < e.r) return true;
+  }
+  for (const e of computeS01TreeClearZones()) {
     if (Math.hypot(x - e.cx, z - e.cz) < e.r) return true;
   }
   return false;
@@ -159,19 +165,41 @@ function _pickRockPrefab(rng) {
   return rng() < 0.72 ? 'rock_boulder' : 'rock_outcrop';
 }
 
+function _sampleRegenPoint(rng, zone) {
+  if (zone.shape === 'rect') {
+    const rx = zone.rx ?? zone.radius ?? 40;
+    const rz = zone.rz ?? zone.radius ?? 40;
+    return {
+      x: zone.cx + (rng() * 2 - 1) * rx,
+      z: zone.cz + (rng() * 2 - 1) * rz,
+    };
+  }
+  const ang = rng() * Math.PI * 2;
+  const dist = Math.sqrt(rng()) * zone.radius;
+  return {
+    x: zone.cx + Math.cos(ang) * dist,
+    z: zone.cz + Math.sin(ang) * dist,
+  };
+}
+
+function _inForestSector(x, z) {
+  if (!isInsideSector01(x, z, 3)) return false;
+  if (!isForestTerrainAllowed(x, z)) return false;
+  return true;
+}
+
 /** @returns {object|null} placement arbre regen ou null */
 export function findRandomTreeSpawn(decors, seed = Date.now()) {
   const rng = _mulberry32(seed >>> 0);
-  const regenZones = TREE_ZONES.filter((z) => z.id.startsWith('forest_') || z.id.startsWith('coastal_'));
+  const regenZones = TREE_ZONES.filter((z) => (
+    z.id.startsWith('forest_') || z.id === 'coastal_littoral'
+  ));
   if (!regenZones.length) return null;
   for (let attempt = 0; attempt < REGEN_CONFIG.spawnAttempts; attempt++) {
     const zone = regenZones[Math.floor(rng() * regenZones.length)];
-    const ang = rng() * Math.PI * 2;
-    const dist = Math.sqrt(rng()) * zone.radius;
-    const x = zone.cx + Math.cos(ang) * dist;
-    const z = zone.cz + Math.sin(ang) * dist;
+    const { x, z } = _sampleRegenPoint(rng, zone);
+    if (!_inForestSector(x, z)) continue;
     if (_nearTrail(x, z)) continue;
-    if (isInBeachFootprint(x, z, 1.5)) continue;
     if (!isSpawnPointClear(x, z, decors, { minGap: REGEN_CONFIG.minTreeGap })) continue;
     return {
       kind: 'prefab',
@@ -191,14 +219,12 @@ export function findRandomTreeSpawn(decors, seed = Date.now()) {
 /** @returns {object|null} placement rocher regen (taille adulte) ou null */
 export function findRandomRockSpawn(decors, seed = Date.now()) {
   const rng = _mulberry32((seed + 7919) >>> 0);
-  const zones = ROCK_ZONES;
+  const zones = getForestRockZones();
   if (!zones.length) return null;
   for (let attempt = 0; attempt < REGEN_CONFIG.spawnAttempts; attempt++) {
     const zone = zones[Math.floor(rng() * zones.length)];
-    const ang = rng() * Math.PI * 2;
-    const dist = rng() * zone.radius;
-    const x = zone.cx + Math.cos(ang) * dist;
-    const z = zone.cz + Math.sin(ang) * dist;
+    const { x, z } = _sampleRegenPoint(rng, zone);
+    if (!_inForestSector(x, z)) continue;
     const scale = 1.4 + rng() * 0.85;
     if (!isRockSpawnClear(x, z, decors, { minGap: REGEN_CONFIG.minRockGap, rockScale: scale })) continue;
     return {
@@ -263,18 +289,27 @@ export function seedWorldRockPlacements(decors, {
   if (target <= 0) return [];
   const occupied = [...decors];
   const rng = _mulberry32(seed >>> 0);
-  const zones = ROCK_ZONES;
+  const zones = getForestRockZones();
   const out = [];
   let attempts = 0;
-  const maxAttempts = Math.max(target * 140, 800);
+  const maxAttempts = Math.max(target * 160, 1200);
   while (out.length < target && attempts < maxAttempts) {
     attempts++;
     const zone = zones[Math.floor(rng() * zones.length)];
     const slotRng = _mulberry32((zone.seed || 1) + attempts * 997 + out.length * 31);
-    const ang = slotRng() * Math.PI * 2;
-    const dist = slotRng() * zone.radius;
-    const x = zone.cx + Math.cos(ang) * dist;
-    const z = zone.cz + Math.sin(ang) * dist;
+    let x; let z;
+    if (zone.shape === 'rect') {
+      const rx = zone.rx ?? zone.radius ?? 40;
+      const rz = zone.rz ?? zone.radius ?? 40;
+      x = zone.cx + (slotRng() * 2 - 1) * rx;
+      z = zone.cz + (slotRng() * 2 - 1) * rz;
+    } else {
+      const ang = slotRng() * Math.PI * 2;
+      const dist = slotRng() * zone.radius;
+      x = zone.cx + Math.cos(ang) * dist;
+      z = zone.cz + Math.sin(ang) * dist;
+    }
+    if (!_inForestSector(x, z)) continue;
     const scale = 1.4 + slotRng() * 0.85;
     if (!isRockSpawnClear(x, z, occupied, { minGap, rockScale: scale })) continue;
     const placement = {

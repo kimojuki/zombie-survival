@@ -1,5 +1,18 @@
 'use strict';
 
+const { pathToFileURL } = require('url');
+const path = require('path');
+
+const S01_CHECKPOINTS_URL = pathToFileURL(
+  path.join(__dirname, '../../../packages/shared/src/s01-checkpoints.mjs'),
+).href;
+
+let _checkpointsMod = null;
+async function _getS01Checkpoints() {
+  if (!_checkpointsMod) _checkpointsMod = await import(S01_CHECKPOINTS_URL);
+  return _checkpointsMod;
+}
+
 /**
  * Console RCON — registre de commandes admin serveur.
  * Utilisée via Socket.io (in-game) et POST /api/rcon (scripts externes).
@@ -406,9 +419,78 @@ function createRcon(ctx) {
     return ok(`Annonce envoyée: ${msg}`);
   });
 
-  register('tp', 'Téléportation tp <x> <z> | tp <joueur> <x> <z>', (args, meta) => {
+  function _teleportPlayer(target, x, z, rotY) {
+    if (!target?.socketId) {
+      return fail('Joueur non connecté — lancez la commande en jeu (pas via API seule)');
+    }
+    if (!Number.isFinite(x) || !Number.isFinite(z)) {
+      return fail(`Coordonnées invalides (${x}, ${z})`);
+    }
+    const y = 2.5;
+    const py = y + 1.7;
+    target.x = x;
+    target.y = py;
+    target.z = z;
+    target.lastX = x;
+    target.lastZ = z;
+    target.lastMoveAt = Date.now();
+    target.posSynced = true;
+    target._tpGraceUntil = Date.now() + 2500;
+    if (Number.isFinite(rotY)) target.rotY = rotY;
+    target.dirty = true;
+    const sock = ctx.io.sockets.sockets.get(target.socketId);
+    if (sock) {
+      sock.emit('admin-tp', { x, y: py, z, rotY: target.rotY });
+      sock.broadcast.emit('player-move', {
+        id: target.socketId,
+        x: target.x,
+        y: target.y,
+        z: target.z,
+        rotY: target.rotY,
+      });
+    }
+    return ok(`${target.username} → (${x.toFixed(1)}, ${z.toFixed(1)})`);
+  }
+
+  async function _tpCheckpointList() {
+    const mod = await _getS01Checkpoints();
+    const rows = mod.listS01Checkpoints().map((cp) => {
+      const hint = cp.note ? ` — ${cp.note}` : '';
+      return `  ${cp.id} — ${cp.label} @ (${cp.x}, ${cp.z})${hint}`;
+    });
+    return ok('Points de vérification S01:', ...rows, 'Usage: tpcheck <id>  ou  tp check <id>');
+  }
+
+  async function _tpCheckpointGo(meta, rawId) {
+    const mod = await _getS01Checkpoints();
+    const cp = mod.resolveS01Checkpoint(rawId);
+    if (!cp) {
+      const ids = mod.listS01Checkpoints().map((c) => c.id).join(', ');
+      return fail(`Point inconnu: ${rawId} — ids: ${ids}`);
+    }
+    const note = cp.note ? ` — ${cp.note}` : '';
+    const res = _teleportPlayer(meta.player, cp.x, cp.z, cp.rotY);
+    if (!res.ok) return res;
+    res.lines.push(`${cp.label}${note}`);
+    return res;
+  }
+
+  register('tpcheck', 'TP point vérif S01 — tpcheck [id]', async (args, meta) => {
+    if (!args[1]) return _tpCheckpointList();
+    return _tpCheckpointGo(meta, args[1]);
+  });
+
+  register('tp', 'tp check [id] | tp <x> <z> | tp <joueur> <x> <z>', async (args, meta) => {
+    const sub = (args[1] || '').toLowerCase();
+    if (sub === 'check' || sub === 'verif') {
+      if (!args[2]) return _tpCheckpointList();
+      return _tpCheckpointGo(meta, args[2]);
+    }
+
     let target = meta.player;
-    let x, z, rotY = null;
+    let x;
+    let z;
+    let rotY = null;
     if (args.length >= 4 && findPlayer(args[1])) {
       target = findPlayer(args[1]);
       x = Number(args[2]);
@@ -419,21 +501,9 @@ function createRcon(ctx) {
       z = Number(args[2]);
       if (args.length >= 4) rotY = Number(args[3]);
     } else {
-      return fail('Usage: tp <x> <z>  ou  tp <joueur> <x> <z>');
+      return fail('Usage: tp check [id] | tp <x> <z> | tp <joueur> <x> <z>');
     }
-    if (!target || !Number.isFinite(x) || !Number.isFinite(z)) return fail('Arguments invalides');
-    const y = 2.5;
-    target.x = x;
-    target.y = y + 1.7;
-    target.z = z;
-    if (Number.isFinite(rotY)) target.rotY = rotY;
-    target.dirty = true;
-    const sock = ctx.io.sockets.sockets.get(target.socketId);
-    if (sock) {
-      sock.emit('admin-tp', { x, y: y + 1.7, z, rotY: target.rotY });
-      sock.broadcast.emit('player-move', { id: target.socketId, x: target.x, y: target.y, z: target.z, rotY: target.rotY });
-    }
-    return ok(`${target.username} → (${x.toFixed(1)}, ${z.toFixed(1)})`);
+    return _teleportPlayer(target, x, z, rotY);
   });
 
   register('bring', 'Téléporte un joueur vers vous <nom>', (args, meta) => {
@@ -699,6 +769,23 @@ function createRcon(ctx) {
     return ok('=== Items décor posables ===', ...list.map((id) => `  ${id}`));
   });
 
+  register('worldwipe', 'Wipe map — worldwipe [all] [ground]', async (args) => {
+    if (!ctx.wipePlayerWorld) return fail('worldwipe indisponible');
+    const flags = new Set(args.slice(1).map((a) => a.toLowerCase()));
+    const full = flags.has('full');
+    const r = await ctx.wipePlayerWorld({
+      broadcast: true,
+      allPlayerDecor: full || flags.has('all'),
+      groundItems: full || flags.has('ground'),
+    });
+    const parts = [];
+    if (r.structures) parts.push(`${r.structures} structure(s)`);
+    if (r.decor) parts.push(`${r.decor} décor/construction(s)`);
+    if (r.ground) parts.push(`${r.ground} objet(s) au sol`);
+    if (!parts.length) return ok('Carte déjà propre — rien à retirer (seed immuable conservé).');
+    return ok(`Map wipée: ${parts.join(', ')}. Seed monde (arbres, plage, panneaux…) conservé.`);
+  });
+
   register('decorremove', 'Retire un décor decorremove <id|nearest>', (args, meta) => {
     const q = (args[1] || 'nearest').toLowerCase();
     let target = null;
@@ -708,6 +795,7 @@ function createRcon(ctx) {
       target = ctx.decorItems.get(args[1]) || null;
     }
     if (!target) return fail(`Décor introuvable: ${args[1] || 'nearest'}`);
+    if (ctx.isDecorImmutable?.(target)) return fail('Décor immuable (seed S01) — utilise decorseed s01 reset');
     ctx.decorItems.delete(target.id);
     ctx.persistDecorDelete?.(target.id, target);
     broadcastDecorRemove(target.id);

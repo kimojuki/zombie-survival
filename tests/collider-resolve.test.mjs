@@ -1,12 +1,26 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
+  decorLocalToWorld,
   decorWorldToLocal,
   resolveAgentAgainstCollider,
   resolveAgentCollision,
   segmentBlockedByColliders,
   hasLineOfSight,
 } from '../packages/shared/src/collider-resolve.mjs';
+
+test('decorLocalToWorld matches Three.js rotation.y (lx=0, lz=2.04, rotY=0.55)', () => {
+  const rotY = 0.55;
+  const col = { cx: 165.1, cz: 7.1, rotY, baseY: 7 };
+  const w = decorLocalToWorld(0, 0, 2.04, col);
+  const c = Math.cos(rotY);
+  const s = Math.sin(rotY);
+  assert.ok(Math.abs(w.x - (165.1 + 2.04 * s)) < 0.001);
+  assert.ok(Math.abs(w.z - (7.1 + 2.04 * c)) < 0.001);
+  const back = decorWorldToLocal(w.x, 0, w.z, col);
+  assert.ok(Math.abs(back.lx) < 0.001);
+  assert.ok(Math.abs(back.lz - 2.04) < 0.001);
+});
 
 test('oriented decor box pushes agent out along rotY', () => {
   const col = {
@@ -96,10 +110,10 @@ test('barrier rail minY band must not disable ground collision', () => {
   assert.equal(out, null, 'sanity: inflated minY skips collision');
 });
 
-test('decorWorldToLocal inverts rotY for local coords', () => {
+test('decorWorldToLocal matches Three.js inverse rotY', () => {
   const col = { cx: 10, cz: 5, rotY: Math.PI / 2, baseY: 0 };
   const local = decorWorldToLocal(10, 0, 6, col);
-  assert.ok(Math.abs(local.lx - 1) < 0.001);
+  assert.ok(Math.abs(local.lx + 1) < 0.001);
   assert.ok(Math.abs(local.lz) < 0.001);
 });
 
@@ -118,6 +132,37 @@ test('segmentBlockedByColliders detects wall between two points', () => {
   };
   assert.equal(hasLineOfSight(-3, 0, 3, 0, [wall], 0), false);
   assert.equal(hasLineOfSight(-3, 0, -1.2, 0, [wall], 0), true);
+});
+
+test('oriented box pushes agent out when already inside footprint', () => {
+  const door = {
+    type: 'box',
+    cx: 0,
+    cz: -2.1,
+    hw: 0.62,
+    hd: 0.28,
+    rotY: 0,
+    baseY: 7.1,
+    decorId: 'shack_door',
+  };
+  const out = resolveAgentAgainstCollider(door, 0, -2.1, 0.4, 6.85);
+  assert.ok(out, 'agent inside thin door slab should be pushed out');
+});
+
+test('full-height decor door blocks agent below decor baseY on slope', () => {
+  const door = {
+    type: 'box',
+    cx: 0,
+    cz: -2.1,
+    hw: 0.62,
+    hd: 0.10,
+    rotY: 0,
+    baseY: 7.1,
+    decorId: 'shack_door',
+  };
+  const feetY = 6.8;
+  const out = resolveAgentAgainstCollider(door, 0, -1.95, 0.4, feetY);
+  assert.ok(out, 'door should block even when feet are below shack baseY');
 });
 
 test('segmentBlockedByColliders ignores upper-floor minY band at ground level', () => {

@@ -12,7 +12,7 @@ Voir aussi : [ARCHITECTURE.md — Server authority](./ARCHITECTURE.md#server-aut
 - **Client** : affiche l’inventaire reçu via `game-init` et `inventory-authoritative` ; n’envoie plus de `inventory-sync`.
 - **Consommation** : le client émet `use-item` avec `{ zone, index, type, trace }` ; le serveur résout le stack **par type en priorité**, applique l’effet, retire 1 qty, renvoie `{ ok, inventory, survival, serverBuild }`.
 
-Version courante (juin 2026) : `20260608-fix-inv-restart-269` (client + serveur alignés).
+Version courante (juin 2026) : `20260608-fix-health-sync-270` (client + serveur alignés).
 
 ---
 
@@ -133,7 +133,17 @@ Après toute modification **serveur** (`apps/server/index.js`, `inventory-ops.js
 
 **Fix** : redémarrage obligatoire ; champs `invDebugBuild` / `serverBuild` ; alertes UI + logs.
 
-### 6. Réveil depuis sleeper (`wokeFromSleep: true`)
+### 6. PV à zéro après consommation (sandwich / eau)
+
+**Symptôme** : la barre de vie tombe à 0 juste après `use-item`, sans lien avec l’aliment.
+
+**Causes** :
+1. **`_syncArmor` client** : après `applyAuthoritativeInv`, un `p.health` invalide (`null`) était traité comme `0` par `Math.min(max, null)`.
+2. **PV serveur non synchronisés** : le client affichait `localStorage` / 100 par défaut ; le `survival-update` forcé après consommation révélait les vrais PV serveur (blessure, infection, faim).
+
+**Fix (v270)** : `_syncArmor` ne modifie plus `p.health` ; `health` dans `game-init` et ack `use-item` ; application explicite côté client.
+
+### 7. Réveil depuis sleeper (`wokeFromSleep: true`)
 
 Inventaire restauré depuis `priorSleep.inv` (pas la DB, pas de kit starters). La migration `ensureSlotGrid` + `_cloneInv` à la connexion aligne sac/hotbar avant `game-init`.
 

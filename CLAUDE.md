@@ -37,6 +37,8 @@ Copy `.env.example` → `.env` for local development.
 | `docs/ARCHITECTURE.md` | Client/server flow, chat, sync |
 | `docs/RCON.md` | Admin commands, flags, API |
 | `docs/ROAD_NETWORK.md` | Roads, terrain corridors, spawn paths |
+| `docs/BUILDING_COLLIDERS.md` | Prefabs bâtiment : pivot mesh/collider, debug, pièges |
+| `design/BUILDING_PREFABS.md` | Registre pièces cabane S01 (workflow progressif) |
 | `.env.example` | New environment variables |
 
 ## Key files

@@ -410,49 +410,59 @@
   }
 
   /** Premier prefab bâtiment RCON : cabane simple, procédurale et réutilisable. */
-  function _buildSurvivorShack(parent, x, y, z, ry) {
+  /** Pièce 2/7. Miroir packages/shared/src/survivor-shack-wall-north.mjs */
+  function _buildSurvivorShackWallNorth(g) {
     const M = _campMats();
-    const g = new THREE.Group();
-    g.position.set(x, y, z);
-    g.rotation.y = ry || 0;
-    parent.add(g);
-
     const wallMat = M ? M.wood(0x9b6a3c) : new THREE.MeshLambertMaterial({ color: 0x9b6a3c });
+    const W = 5.25;
+    const H = 2.55;
+    const T = 0.18;
+    const CY = 1.32;
+    const Z = 2.04;
+    _add(g, new THREE.BoxGeometry(W, H, T), wallMat, 0, CY, Z);
+  }
+
+  /** Pièce 4/7. Miroir packages/shared/src/survivor-shack-wall-west.mjs */
+  function _buildSurvivorShackWallWest(g) {
+    const M = _campMats();
+    const wallMat = M ? M.wood(0x9b6a3c) : new THREE.MeshLambertMaterial({ color: 0x9b6a3c });
+    const T = 0.18;
+    const H = 2.55;
+    const D = 4.15;
+    const CY = 1.32;
+    const X = -2.54;
+    _add(g, new THREE.BoxGeometry(T, H, D), wallMat, X, CY, 0);
+  }
+
+  /** Pièce 5/7. Miroir packages/shared/src/survivor-shack-wall-east.mjs */
+  function _buildSurvivorShackWallEast(g) {
+    const M = _campMats();
+    const wallMat = M ? M.wood(0x9b6a3c) : new THREE.MeshLambertMaterial({ color: 0x9b6a3c });
+    const T = 0.18;
+    const H = 2.55;
+    const D = 4.15;
+    const CY = 1.32;
+    const X = 2.54;
+    _add(g, new THREE.BoxGeometry(T, H, D), wallMat, X, CY, 0);
+  }
+
+  /** Pièce 6/7. Miroir packages/shared/src/survivor-shack-door.mjs */
+  function _buildSurvivorShackDoor(g) {
+    const M = _campMats();
     const trimMat = M ? M.woodDark(0x5a371d) : new THREE.MeshLambertMaterial({ color: 0x5a371d });
-    const roofMat = new THREE.MeshLambertMaterial({ color: 0x30353a });
-    const floorMat = M ? M.woodFine(0x8a5f35) : new THREE.MeshLambertMaterial({ color: 0x8a5f35 });
-    const clothMat = M ? M.canvas(0x4b5d39) : new THREE.MeshLambertMaterial({ color: 0x4b5d39 });
-
-    _add(g, new THREE.BoxGeometry(5.25, 0.12, 4.25), floorMat, 0, 0.06, 0);
-
-    // Murs, avec ouverture de porte côté -Z.
-    _add(g, new THREE.BoxGeometry(5.25, 2.55, 0.18), wallMat, 0, 1.32, 2.04);
-    _add(g, new THREE.BoxGeometry(0.18, 2.55, 4.15), wallMat, -2.54, 1.32, 0);
-    _add(g, new THREE.BoxGeometry(0.18, 2.55, 4.15), wallMat, 2.54, 1.32, 0);
-    _add(g, new THREE.BoxGeometry(1.98, 2.55, 0.18), wallMat, -1.61, 1.32, -2.04);
-    _add(g, new THREE.BoxGeometry(1.98, 2.55, 0.18), wallMat, 1.61, 1.32, -2.04);
-    _add(g, new THREE.BoxGeometry(1.28, 0.42, 0.2), trimMat, 0, 2.36, -2.04);
-
-    // Renforts lisibles sur les murs.
-    for (const sx of [-2.64, 2.64]) {
-      for (const pz of [-1.2, 0, 1.2]) {
-        _add(g, new THREE.BoxGeometry(0.08, 2.62, 0.09), trimMat, sx, 1.34, pz);
-      }
-    }
-    for (const px of [-1.9, 0, 1.9]) {
-      _add(g, new THREE.BoxGeometry(0.09, 2.62, 0.08), trimMat, px, 1.34, 2.16);
-    }
-    _add(g, new THREE.BoxGeometry(0.1, 2.2, 0.08), trimMat, -2.05, 1.16, -2.16);
-    _add(g, new THREE.BoxGeometry(0.1, 2.2, 0.08), trimMat, 2.05, 1.16, -2.16);
-
     const DOOR_W = 1.24;
     const DOOR_H = 2.02;
     const DOOR_D = 0.14;
     const DOOR_HX = DOOR_W * 0.5;
+    const PIVOT_X = -DOOR_HX + 0.02;
+    const PIVOT_Y = 0.08;
+    const PIVOT_Z = -2.10;
+
+    _add(g, new THREE.BoxGeometry(1.28, 0.42, 0.2), trimMat, 0, 2.36, -2.04);
 
     const doorPivot = new THREE.Group();
     doorPivot.name = 'survivorShackDoorPivot';
-    doorPivot.position.set(-DOOR_HX + 0.02, 0.08, -2.10);
+    doorPivot.position.set(PIVOT_X, PIVOT_Y, PIVOT_Z);
     doorPivot.userData.isDoor = true;
     g.add(doorPivot);
     const door = new THREE.Mesh(new THREE.BoxGeometry(DOOR_W, DOOR_H, DOOR_D), trimMat);
@@ -463,17 +473,15 @@
     const handleMat = new THREE.MeshLambertMaterial({ color: 0xb99b52 });
     _add(doorPivot, new THREE.BoxGeometry(0.08, 0.08, 0.08), handleMat, DOOR_W - 0.18, DOOR_H * 0.82, -0.07);
 
-    const windowMat = new THREE.MeshLambertMaterial({
-      color: 0x93b7c4,
-      emissive: 0x0b1a20,
-      emissiveIntensity: 0.18,
-    });
-    _add(g, new THREE.BoxGeometry(0.74, 0.55, 0.08), windowMat, -2.64, 1.55, 0.62);
-    _add(g, new THREE.BoxGeometry(0.74, 0.08, 0.11), trimMat, -2.66, 1.86, 0.62);
-    _add(g, new THREE.BoxGeometry(0.74, 0.08, 0.11), trimMat, -2.66, 1.24, 0.62);
-    _add(g, new THREE.BoxGeometry(0.08, 0.62, 0.11), trimMat, -2.66, 1.55, 0.62);
+    g.userData.doorPivot = doorPivot;
+  }
 
-    // Toit à deux pans — ridge le long de X, pente en Z (rotations opposées corrigées).
+  /** Pièce 7/7. Miroir packages/shared/src/survivor-shack-roof.mjs */
+  function _buildSurvivorShackRoof(g) {
+    const M = _campMats();
+    const trimMat = M ? M.woodDark(0x5a371d) : new THREE.MeshLambertMaterial({ color: 0x5a371d });
+    const roofMat = new THREE.MeshLambertMaterial({ color: 0x30353a });
+    const gableMat = new THREE.MeshLambertMaterial({ color: 0x30353a, side: THREE.DoubleSide });
     const halfRun = 2.45;
     const rise = 0.93;
     const pitch = Math.atan2(rise, halfRun);
@@ -498,7 +506,6 @@
 
     _add(g, new THREE.BoxGeometry(roofW + 0.14, 0.14, 0.16), trimMat, 0, ridgeY, 0);
 
-    // Pignons est / ouest (ferment les triangles aux extrémités du faîtage).
     for (const sx of [-1, 1]) {
       const gableGeo = new THREE.BufferGeometry();
       const gx = sx * 2.68;
@@ -509,15 +516,65 @@
       ], 3));
       gableGeo.setIndex([0, 1, 2]);
       gableGeo.computeVertexNormals();
-      const gable = new THREE.Mesh(gableGeo, roofMat);
+      const gable = new THREE.Mesh(gableGeo, gableMat);
       gable.castShadow = gable.receiveShadow = true;
       g.add(gable);
     }
+  }
 
-    _add(g, new THREE.BoxGeometry(1.2, 0.08, 0.54), clothMat, -1.15, 0.08, -2.62, 0, 0.12, 0);
+  /** Pièce 3/7. Miroir packages/shared/src/survivor-shack-wall-south.mjs — 2 pans, ouverture porte au centre. */
+  function _buildSurvivorShackWallSouth(g) {
+    const M = _campMats();
+    const wallMat = M ? M.wood(0x9b6a3c) : new THREE.MeshLambertMaterial({ color: 0x9b6a3c });
+    const H = 2.55;
+    const T = 0.18;
+    const CY = 1.32;
+    const Z = -2.04;
+    const SEG_W = 1.98;
+    const SEG_X = 1.61;
+    _add(g, new THREE.BoxGeometry(SEG_W, H, T), wallMat, -SEG_X, CY, Z);
+    _add(g, new THREE.BoxGeometry(SEG_W, H, T), wallMat, SEG_X, CY, Z);
+  }
 
-    g.userData.doorPivot = doorPivot;
-    parent.userData.doorPivot = doorPivot;
+  /** Terrain cabossé : max hauteur sous les coins du sol (miroir survivor-shack-pad.mjs). */
+  function sampleShackPadHeight(x, z, rotY) {
+    const HW = 5.25 / 2;
+    const HD = 4.25 / 2;
+    const pts = [
+      [-HW, -HD], [HW, -HD], [HW, HD], [-HW, HD], [0, 0],
+    ];
+    const c = Math.cos(rotY || 0);
+    const s = Math.sin(rotY || 0);
+    let maxH = -Infinity;
+    for (const [lx, lz] of pts) {
+      const wx = x + lx * c + lz * s;
+      const wz = z - lx * s + lz * c;
+      const h = getDecorGroundHeight(wx, wz);
+      if (h > maxH) maxH = h;
+    }
+    return Number.isFinite(maxH) ? maxH : getDecorGroundHeight(x, z);
+  }
+
+  /** Pièce 1/?. Miroir packages/shared/src/survivor-shack-floor.mjs */
+  function _buildSurvivorShackFloor(g) {
+    const M = _campMats();
+    const floorMat = M ? M.woodFine(0x8a5f35) : new THREE.MeshLambertMaterial({ color: 0x8a5f35 });
+    const FLOOR_W = 5.25;
+    const FLOOR_D = 4.25;
+    const FLOOR_T = 0.12;
+    _add(g, new THREE.BoxGeometry(FLOOR_W, FLOOR_T, FLOOR_D), floorMat, 0, FLOOR_T * 0.5, 0);
+  }
+
+  /** Cabane S01 — assemblage progressif (1 pièce validée à la fois). Pivot = root (rotY sur root). */
+  function _buildSurvivorShack(parent) {
+    _buildSurvivorShackFloor(parent);
+    _buildSurvivorShackWallNorth(parent);
+    _buildSurvivorShackWallSouth(parent);
+    _buildSurvivorShackWallWest(parent);
+    _buildSurvivorShackWallEast(parent);
+    _buildSurvivorShackDoor(parent);
+    _buildSurvivorShackRoof(parent);
+    parent.userData.colliderPrefabId = 'building_survivor_shack';
   }
 
   function _buildStorageChest(parent, x, y, z, ry) {
@@ -995,7 +1052,7 @@
     build_stair_wood: { build(root) { _buildWoodStair(root, 0, 0, 0); }, buildKind: 'stair', w: 1.8, h: 2.6, t: 3.0 },
     build_door_wood: { build(root) { _buildWoodDoor(root, 0, 0, 0, 1.8); }, buildKind: 'door', w: 3.0, h: 2.6, t: 0.36 },
     build_large_door_wood: { build(root) { _buildWoodDoor(root, 0, 0, 0, 2.4); }, buildKind: 'door', w: 3.0, h: 2.6, t: 0.36 },
-    building_survivor_shack: { build(root) { _buildSurvivorShack(root, 0, 0, 0, 0); } },
+    building_survivor_shack: { build(root) { _buildSurvivorShack(root); } },
     smallcity_house_a: { build(root) { _buildSmallCityHouseA(root); } },
     smallcity_house_b: { build(root) { _buildSmallCityHouseB(root); } },
     spawn_flat_stone: {
@@ -1014,16 +1071,36 @@
     return Object.keys(DECOR_PREFABS);
   }
 
-  function _registerDecorCollision(decorId, spec) {
+  /** Garde decorSpec aligné sur le pivot Three.js (cx/cz/rotY/baseY des colliders). */
+  function _syncDecorSpecFromRoot(root) {
+    const spec = root?.userData?.decorSpec;
+    if (!spec || !root.position) return spec;
+    spec.x = root.position.x;
+    spec.z = root.position.z;
+    spec.baseY = root.position.y;
+    spec.rotY = root.rotation?.y ?? spec.rotY ?? 0;
+    spec.rotZ = root.rotation?.z ?? spec.rotZ ?? 0;
+    if (Number.isFinite(root.rotation?.x)) spec.rotX = root.rotation.x;
+    spec.scale = root.scale?.x ?? spec.scale ?? 1;
+    return spec;
+  }
+
+  function _registerDecorCollision(decorId, spec, root) {
     if (!decorId || !ZS.registerDecorColliders || !ZS.buildDecorColliders) return;
-    ZS.registerDecorColliders(decorId, ZS.buildDecorColliders(spec));
+    if (root?.userData?.decorSpec) spec = _syncDecorSpecFromRoot(root);
+    const cols = ZS.buildDecorColliders(spec);
+    ZS.registerDecorColliders(decorId, cols);
+    if (spec?.prefabId === 'building_survivor_shack') {
+      ZS.BuildingDebug?.onShackCollidersRegistered?.(spec, cols, root || null);
+    }
     ZS.Network?.syncWorldColliders?.();
   }
 
   function _refreshDecorCollision(root) {
     if (!root?.userData?.decorSpec) return;
     if (root.userData.collide === false) return;
-    _registerDecorCollision(root.userData.decorSpec.decorId, root.userData.decorSpec);
+    const spec = _syncDecorSpecFromRoot(root);
+    _registerDecorCollision(spec.decorId, spec, root);
   }
 
   function _setDoorVisual(entry, open, opts = {}) {
@@ -1032,9 +1109,13 @@
     const prevOpen = !!entry.open;
     entry.open = wantOpen;
     entry.targetOpen = wantOpen;
-    entry.root.userData.doorOpen = wantOpen;
-    if (entry.root.userData.decorSpec) entry.root.userData.decorSpec.doorOpen = wantOpen;
     const openTarget = Number.isFinite(entry.doorOpenAngle) ? entry.doorOpenAngle : DOOR_OPEN_ANGLE;
+    const doorAngle = wantOpen ? openTarget : 0;
+    entry.root.userData.doorOpen = wantOpen;
+    if (entry.root.userData.decorSpec) {
+      entry.root.userData.decorSpec.doorOpen = wantOpen;
+      entry.root.userData.decorSpec.doorAngle = doorAngle;
+    }
     if (opts.instant) {
       entry.openAngle = wantOpen ? openTarget : 0;
       entry.pivot.rotation.y = entry.openAngle;
@@ -1535,6 +1616,8 @@
         deckY = rawY;
       }
       opts = { ...opts, buildLevel };
+    } else if (prefabId === 'building_survivor_shack' && opts.grounded !== false) {
+      deckY = sampleShackPadHeight(x || 0, z || 0, opts.rotY || 0) + (Number.isFinite(groundLift) ? groundLift : 0);
     } else if (Number.isFinite(opts.baseY)) {
       deckY = opts.baseY;
     } else if (Number.isFinite(y) && y > 0.25) {
@@ -1659,7 +1742,7 @@
     }
 
     if (opts.collide !== false && !isMinableRock) {
-      _registerDecorCollision(decorId, decorSpec);
+      _registerDecorCollision(decorId, decorSpec, root);
     }
 
     if (prefab.buildKind === 'floor') {
@@ -2070,6 +2153,7 @@
   ZS.findNearestDecorDoor = findNearestDecorDoor;
   ZS.setDecorDoorLockState = setDecorDoorLockState;
   ZS.setDecorDoorState    = setDecorDoorState;
+  ZS.refreshDecorCollision = _refreshDecorCollision;
   ZS.unregisterDecorDoor  = unregisterDecorDoor;
   ZS.findNearestDecorStorage = findNearestDecorStorage;
   ZS.findNearestDecorSign = findNearestDecorSign;
@@ -2085,6 +2169,7 @@
   ZS.unregisterDecorBuild    = unregisterDecorBuild;
   ZS.tickDecorDoors       = tickDecorDoors;
   ZS.getDecorGroundHeight = getDecorGroundHeight;
+  ZS.sampleShackPadHeight = sampleShackPadHeight;
   ZS.getDecorSurfaceLift  = getDecorSurfaceLift;
   ZS.resyncBuildFloorMesh = _resyncBuildFloorMesh;
   ZS.reconcileAllBuildFloors = reconcileAllBuildFloors;

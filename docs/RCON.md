@@ -137,6 +137,12 @@ Erreurs : `403` (mauvais mot de passe), `503` (RCON non configuré ou serveur en
 | Commande | Description |
 |----------|-------------|
 | `tp 14 -18` | TP soi-même |
+| `tpcheck` | Liste les points de vérification S01 |
+| `tpcheck cabane` | TP vers la vue cabane #1 (recommandé) |
+| `tp check cabane` | Alias de `tpcheck cabane` |
+| `tp check cabane_pied` | TP au pied de la cabane |
+| `tp check sentier` | TP bouche du sentier (panneau) |
+| `tp check fin_sentier` | TP fin du sentier forêt |
 | `tp alice 0 -5` | TP un joueur (nom partiel OK) |
 | `bring bob` | TP un joueur vers vous |
 | `goto alice` | TP vers un joueur |
@@ -155,6 +161,10 @@ Erreurs : `403` (mauvais mot de passe), `503` (RCON non configuré ou serveur en
 | `loot status` | État du loot bâtiments |
 | `loot regen` | Régénère le loot monde |
 | `loot clear` | Supprime le loot généré |
+| `worldwipe` | Supprime constructions joueur (murs/sols bois, coffres posés, structures) — seed immuable conservé |
+| `worldwipe all` | + tout décor posé manuellement (`decoradd`, hors seed immuable) |
+| `worldwipe ground` | + objets au sol (drops, loot ramassable) |
+| `worldwipe full` | Équivalent `all` + `ground` |
 
 ### Objets monde (prefabs + items posés)
 

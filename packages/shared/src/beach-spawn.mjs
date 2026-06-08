@@ -24,7 +24,7 @@ export const BEACH_FOOTPRINT = Object.freeze({
   rz: 88,
 });
 
-/** Sentier : fin du sable → clairière forêt. */
+/** Sentier : bord sable → forêt → jonction sud (14, -18). */
 export const BEACH_TRAIL_PTS = Object.freeze([
   [242, -8],
   [215, -8],
@@ -114,6 +114,24 @@ export const isInCampFootprint = isInBeachFootprint;
 
 /** Poids côte minimal pour considérer un point comme « sable de plage » (spawn + zone sûre). */
 export const BEACH_SAFE_SAND_MIN_WEIGHT = 0.32;
+
+/**
+ * Seuil au-delà duquel on refuse arbres forêt / rochers (sable + lisière).
+ * La plage reste réservée aux palmiers et au décor plage.
+ */
+export const BEACH_FOREST_EXCLUDE_WEIGHT = 0.07;
+
+/** Marge (m) appliquée à isInBeachFootprint pour tampon herbe → sable. */
+export const BEACH_FOREST_FOOTPRINT_MARGIN = 5;
+
+/**
+ * @returns {boolean} true si arbres forêt (chêne/pin/etc.) et rochers minables sont autorisés.
+ */
+export function isForestTerrainAllowed(x, z) {
+  if (beachCoastWeight(x, z) >= BEACH_FOREST_EXCLUDE_WEIGHT) return false;
+  if (isInBeachFootprint(x, z, BEACH_FOREST_FOOTPRINT_MARGIN)) return false;
+  return true;
+}
 
 /** Zone sûre PvP / vol endormi — même critère que le spawn aléatoire sur le sable. */
 export function isOnBeachSafeSand(x, z) {

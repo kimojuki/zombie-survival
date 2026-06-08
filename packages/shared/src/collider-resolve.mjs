@@ -1,5 +1,7 @@
 /** Collision agent (joueur / zombie) contre colliders monde — sans dépendance Three.js. */
 
+import { doorLeafLocalXZ, doorLeafWorldXZ } from './door-leaf-collider.mjs';
+
 function _quatFromEulerXYZ(x, y, z) {
   const c1 = Math.cos(x / 2);
   const c2 = Math.cos(y / 2);
@@ -43,12 +45,12 @@ export function decorWorldToLocal(px, py, pz, col) {
     ly = v.y;
     lz = v.z;
   } else if (col.rotY) {
-    const c = Math.cos(-col.rotY);
-    const s = Math.sin(-col.rotY);
-    const x = lx;
-    const z = lz;
-    lx = x * c - z * s;
-    lz = x * s + z * c;
+    const c = Math.cos(col.rotY);
+    const s = Math.sin(col.rotY);
+    const dx = lx;
+    const dz = lz;
+    lx = dx * c - dz * s;
+    lz = dx * s + dz * c;
   }
   return { lx, ly, lz };
 }
@@ -68,8 +70,8 @@ export function decorLocalToWorld(lx, ly, lz, col) {
     const s = Math.sin(col.rotY);
     const x = wx;
     const z = wz;
-    wx = x * c - z * s;
-    wz = x * s + z * c;
+    wx = x * c + z * s;
+    wz = -x * s + z * c;
   }
   return { x: col.cx + wx, z: col.cz + wz };
 }
@@ -104,23 +106,53 @@ function _resolveSegment(col, px, pz, agentR, feetY, { skipJumpable = false } = 
 
 function _resolveOrientedBox(col, px, pz, agentR, feetY, { skipJumpable = false } = {}) {
   if (skipJumpable && col.maxY !== undefined && feetY >= col.maxY - 0.05) return null;
-  if (col.decorId && col.baseY != null && feetY < col.baseY - 0.35) return null;
+  if (col.maxY != null && col.decorId && col.baseY != null && feetY < col.baseY - 0.35) return null;
   if (col.minY !== undefined && feetY < col.minY - 0.05) return null;
 
   const local = decorWorldToLocal(px, feetY, pz, col);
-  const bx = local.lx - (col.lx || 0);
-  const bz = local.lz - (col.lz || 0);
+  const relX = local.lx - (col.lx || 0);
+  const relZ = local.lz - (col.lz || 0);
+  let bx = relX;
+  let bz = relZ;
+  if (col.localRotY) {
+    ({ bx, bz } = doorLeafLocalXZ(bx, bz, col.localRotY));
+  }
   const clampBX = Math.max(-col.hw, Math.min(col.hw, bx));
   const clampBZ = Math.max(-col.hd, Math.min(col.hd, bz));
-  const wdx = bx - clampBX;
-  const wdz = bz - clampBZ;
+  const wdxL = bx - clampBX;
+  const wdzL = bz - clampBZ;
+  let wdx = wdxL;
+  let wdz = wdzL;
+  if (col.localRotY) {
+    ({ bx: wdx, bz: wdz } = doorLeafWorldXZ(wdxL, wdzL, col.localRotY));
+  }
   const dist = Math.hypot(wdx, wdz);
-  if (dist >= agentR || dist <= 0.001) return null;
+  if (dist >= agentR) return null;
+
+  const toDecorRel = (leafX, leafZ) => {
+    if (!col.localRotY) return { x: leafX, z: leafZ };
+    return doorLeafWorldXZ(leafX, leafZ, col.localRotY);
+  };
+
+  if (dist <= 0.001) {
+    const penL = bx + col.hw;
+    const penR = col.hw - bx;
+    const penF = bz + col.hd;
+    const penB = col.hd - bz;
+    const m = Math.min(penL, penR, penF, penB);
+    let outBX = bx;
+    let outBZ = bz;
+    if (m === penL) outBX = -col.hw - agentR;
+    else if (m === penR) outBX = col.hw + agentR;
+    else if (m === penF) outBZ = -col.hd - agentR;
+    else outBZ = col.hd + agentR;
+    const outRel = toDecorRel(outBX, outBZ);
+    return decorLocalToWorld(outRel.x + (col.lx || 0), local.ly, outRel.z + (col.lz || 0), col);
+  }
 
   const pen = agentR - dist;
-  const outLX = bx + (wdx / dist) * pen + (col.lx || 0);
-  const outLZ = bz + (wdz / dist) * pen + (col.lz || 0);
-  return decorLocalToWorld(outLX, local.ly, outLZ, col);
+  const outRel = toDecorRel(bx + (wdxL / dist) * pen, bz + (wdzL / dist) * pen);
+  return decorLocalToWorld(outRel.x + (col.lx || 0), local.ly, outRel.z + (col.lz || 0), col);
 }
 
 function _resolveSimpleBox(col, px, pz, agentR) {

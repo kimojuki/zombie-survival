@@ -87,7 +87,50 @@ test('wreck colliders match body + cabin compound boxes', () => {
   assert.ok(cols[1].maxY > cols[0].maxY);
 });
 
-test('survivor shack door collider toggles with door state', () => {
+test('survivor shack has floor, walls, door and roof colliders (pieces 1-7)', () => {
+  const ZS = loadDecorColliders();
+  const baseY = 1.5;
+  const cols = ZS.buildDecorColliders({
+    kind: 'prefab',
+    prefabId: 'building_survivor_shack',
+    x: 0,
+    z: 0,
+    baseY,
+    rotY: 0,
+    scale: 1,
+    decorId: 'decor_shack',
+    doorOpen: false,
+  });
+  assert.equal(cols.length, 9, 'floor + north + 2 south + west + east + door + 2 roof');
+  const floor = cols.find((c) => c.lz === 0 && c.hw === 2.625);
+  assert.ok(floor);
+  assert.equal(floor.minY, baseY);
+  assert.equal(floor.maxY, baseY + 0.12);
+  const north = cols.find((c) => Math.abs(c.lz - 2.04) < 0.01);
+  assert.ok(north);
+  assert.equal(north.hw, 2.625);
+  assert.equal(north.hd, 0.22);
+  const south = cols.filter((c) => Math.abs(c.lz + 2.04) < 0.01);
+  assert.equal(south.length, 2);
+  assert.equal(south[0].hd, 0.22);
+  const west = cols.find((c) => Math.abs((c.lx || 0) + 2.54) < 0.05 && Math.abs(c.lz) < 0.01);
+  assert.ok(west);
+  assert.equal(west.hw, 0.22);
+  assert.ok(Math.abs(west.hd - 4.15 / 2) < 0.01);
+  const east = cols.find((c) => Math.abs((c.lx || 0) - 2.54) < 0.05 && Math.abs(c.lz) < 0.01);
+  assert.ok(east);
+  assert.equal(east.hw, 0.22);
+  assert.ok(Math.abs(east.hd - 4.15 / 2) < 0.01);
+  const door = cols.find((c) => Math.abs(c.lz + 2.10) < 0.01 && Math.abs(c.hw - 0.62) < 0.01);
+  assert.ok(door);
+  assert.equal(door.lx, 0);
+  assert.equal(door.hd, 0.28);
+  const roofs = cols.filter((c) => c.rotX);
+  assert.equal(roofs.length, 2);
+  assert.ok(roofs[0].minY > baseY + 2.5);
+});
+
+test('survivor shack open door rotates leaf collider instead of removing it', () => {
   const ZS = loadDecorColliders();
   const closed = ZS.buildDecorColliders({
     kind: 'prefab',
@@ -95,9 +138,9 @@ test('survivor shack door collider toggles with door state', () => {
     x: 0,
     z: 0,
     baseY: 0,
-    rotY: 0,
+    rotY: 0.55,
     scale: 1,
-    decorId: 'decor_shack',
+    decorId: 'decor_shack_door',
     doorOpen: false,
   });
   const open = ZS.buildDecorColliders({
@@ -106,14 +149,17 @@ test('survivor shack door collider toggles with door state', () => {
     x: 0,
     z: 0,
     baseY: 0,
-    rotY: 0,
+    rotY: 0.55,
     scale: 1,
-    decorId: 'decor_shack',
+    decorId: 'decor_shack_door',
     doorOpen: true,
   });
-  assert.equal(closed.length, open.length + 1);
-  assert.ok(closed.some((c) => c.cz < -2.05 && c.hw > 0.55 && c.hw < 0.7));
-  assert.equal(open.some((c) => c.cz < -2.05 && c.hw > 0.55), false);
+  assert.equal(closed.length, open.length);
+  const closedDoor = closed.find((c) => Math.abs(c.lz + 2.10) < 0.01 && Math.abs(c.hw - 0.62) < 0.01);
+  const openDoor = open.find((c) => Math.abs(c.hw - 0.62) < 0.01 && c.localRotY);
+  assert.ok(closedDoor);
+  assert.ok(openDoor);
+  assert.notEqual(openDoor.lx, closedDoor.lx);
 });
 
 test('barrier rail uses segment collider between posts', () => {
@@ -158,9 +204,11 @@ test('build door leaf collider toggles with door state', () => {
     decorId: 'decor_door',
     doorOpen: true,
   });
-  assert.equal(closed.length, open.length + 1);
-  assert.ok(closed.some((c) => Math.abs(c.cz + 0.11) < 0.02 && c.hw > 0.8));
-  assert.equal(open.some((c) => Math.abs(c.cz + 0.11) < 0.02), false);
+  assert.equal(closed.length, open.length);
+  const closedLeaf = closed.find((c) => Math.abs(c.lz + 0.11) < 0.02 && c.hw > 0.8);
+  assert.ok(closedLeaf);
+  assert.ok(open.some((c) => c.hw > 0.8 && c.localRotY));
+  assert.equal(open.some((c) => Math.abs(c.lz + 0.11) < 0.02 && c.hw > 0.8), false);
 });
 
 test('doorway wall prefab leaves a walkable opening', () => {
@@ -177,7 +225,7 @@ test('doorway wall prefab leaves a walkable opening', () => {
   });
   assert.equal(cols.length, 3);
   assert.ok(cols.every((c) => c.type === 'box'));
-  assert.ok(cols.some((c) => Math.abs(c.cx) > 1));
+  assert.ok(cols.some((c) => Math.abs(c.lx) > 1));
 });
 
 test('build ceiling prefab has horizontal slab collider', () => {

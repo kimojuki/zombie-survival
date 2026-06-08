@@ -23,7 +23,12 @@ const qaChecklist = createQaChecklist(pool, DB_CLIENT);
 const SERVER_ROLE = getServerRole();
 const invOps = require('./src/inventory-ops');
 const { invSnapshot: _invDebugSnapshot, logInv: _logInvDebug } = require('./src/inv-debug');
-const INV_DEBUG_SERVER_BUILD = '20260608-fix-inv-restart-269';
+const INV_DEBUG_SERVER_BUILD = '20260608-sleeper-survival-273';
+const {
+  resolveConnectHealthFlags,
+  connectHealthValue,
+  shouldEmitDeathOnConnect,
+} = require('./src/player-connect-health');
 log.info('inv-debug', 'server build', { build: INV_DEBUG_SERVER_BUILD });
 const {
   normalizeInv: _normalizeInv,
@@ -53,7 +58,11 @@ const {
   moveStorageTransfer: _moveStorageTransfer,
   lootMoveTransfer: _lootMoveTransfer,
 } = require('./src/storage-ops');
-const { tickPlayerSurvival } = require('./src/survival-tick');
+const {
+  tickPlayerSurvival,
+  tickSleeperSurvival,
+  catchUpSleeperSurvival,
+} = require('./src/survival-tick');
 const craftQueueMod = require('./src/craft-queue');
 const { createClientVersionLoader } = require('./src/client-version');
 const { pickZombiesToTrim } = require('./src/zombie-population');
@@ -351,6 +360,7 @@ function _gameInitPayload(socket, p, scenMod, wokeFromSleep) {
     qaEnabled: isQaServer(),
     onlineCount: players.size,
     playerKills: p.lifePlayerKills ?? 0,
+    health: Math.max(0, Math.floor(p.health ?? 100)),
     inventory: _cloneInv(p.inv),
     scenario: p.inv.scenario,
     survival: p.survival,
@@ -369,6 +379,7 @@ function _gameInitPayload(socket, p, scenMod, wokeFromSleep) {
       health: s.health ?? 100,
     })),
     killedWhileOffline: !!p._killedWhileOffline,
+    respawnReason: p._respawnReason || null,
     serverBuild: INV_DEBUG_SERVER_BUILD,
     invDebugBuild: INV_DEBUG_SERVER_BUILD,
   };
@@ -1375,12 +1386,12 @@ function _touchDecorItem(item) {
   if (item) worldPersist?.scheduleUpsertDecor(item);
 }
 
-function _removeDecorItem(id, { emit = true, force = false } = {}) {
+function _removeDecorItem(id, { emit = true, force = false, markRemoved = true } = {}) {
   const item = decorItems.get(id);
   if (!item) return false;
   if (!force && _isDecorImmutable(item)) return false;
   decorItems.delete(id);
-  worldPersist?.scheduleDeleteDecor(id, item);
+  worldPersist?.scheduleDeleteDecor(id, item, { markRemoved });
   if (emit) io.emit('decor-item-remove', id);
   return true;
 }
@@ -1685,19 +1696,36 @@ const S01_CAMP_POI_PREFABS = new Set([
   'spawn_supply_crate',
 ]);
 
+/** Supprime les arbres forêt dans les zones de dégagement bâtiments S01. */
+function _clearTreesInZones(zones, { broadcast = false } = {}) {
+  if (!zones?.length) return 0;
+  let n = 0;
+  for (const [id, d] of [...decorItems.entries()]) {
+    const pid = d.prefabId || '';
+    if (!pid.startsWith('tree_') || pid === 'tree_palm') continue;
+    for (const zone of zones) {
+      if (Math.hypot(d.x - zone.cx, d.z - zone.cz) < zone.r) {
+        if (_removeDecorItem(id, { emit: broadcast })) n++;
+        break;
+      }
+    }
+  }
+  if (n) log.info('seed', 'trees cleared for S01 buildings', { count: n });
+  return n;
+}
+
 /** Retire tout decor seed S01 persisté (station, cabanes, pont, hub…). */
-function _purgeAllS01Decor({ broadcast = false } = {}) {
+function _purgeAllS01Decor({ broadcast = false, reseed = false } = {}) {
   let n = 0;
   for (const [id, d] of [...decorItems.entries()]) {
     const pk = String(d.placementKey || '');
     const isS01Key = pk.startsWith('s01:');
     const isS01Prefab = S01_CAMP_POI_PREFABS.has(d.prefabId);
     if (!isS01Key && !isS01Prefab) continue;
-    if (pk) worldPersist?.markSeedRemoved?.(pk);
-    _removeDecorItem(id, { emit: broadcast, force: true });
+    _removeDecorItem(id, { emit: broadcast, force: true, markRemoved: !reseed });
     n++;
   }
-  if (n) log.info('seed', 's01 decor purged', { count: n });
+  if (n) log.info('seed', 's01 decor purged', { count: n, reseed });
   return n;
 }
 
@@ -1774,7 +1802,7 @@ async function _runWorldCleanSlateOnce() {
 
 /** POI forêt S01 — seed initial + complément après persistance. */
 function ensureS01World({ broadcast = false, reset = false } = {}) {
-  _purgeAllS01Decor({ broadcast });
+  _purgeAllS01Decor({ broadcast, reseed: true });
   if (reset) {
     for (const [id, d] of decorItems) {
       if (!_isDecorImmutable(d)) continue;
@@ -1782,12 +1810,18 @@ function ensureS01World({ broadcast = false, reset = false } = {}) {
     }
   }
   return Promise.all([s01BuildModPromise, s01SafeModPromise]).then(() =>
-    import(S01_WORLD_PLACEMENTS_URL).then(({ computeS01DecorPlacements }) => {
+    import(S01_WORLD_PLACEMENTS_URL).then(({ computeS01DecorPlacements, computeS01TreeClearZones }) => {
+      const placements = computeS01DecorPlacements();
+      const clearZones = computeS01TreeClearZones();
+      for (const p of placements) {
+        if (p.placementKey) worldPersist?.unmarkSeed?.(p.placementKey);
+      }
       const added = [];
-      for (const p of computeS01DecorPlacements()) {
+      for (const p of placements) {
         const item = _trySeedDecor(p);
         if (item) added.push(item);
       }
+      _clearTreesInZones(clearZones, { broadcast });
       if (added.length) {
         log.info('seed', 's01 world added', { count: added.length });
         if (broadcast && rcon?.broadcastDecorSpawn) {
@@ -2470,6 +2504,7 @@ setInterval(() => {
     }
     let nearestDist = Infinity;
     let nearestP = null;
+    // Cibles = joueurs connectés uniquement (pas les corps endormis / déco).
     if (z.tutorial && z.ownerPlayerId != null && scenarioBeach) {
       const near = scenarioBeach.getNearestForTutorial(z, pList);
       nearestP = near.nearestP;
@@ -2617,10 +2652,12 @@ setInterval(() => {
   });
 }, 5000);
 
-// Survie authoritaire (tick 1 s)
+// Survie authoritaire (tick 1 s) — connectés : faim/soif + dégâts ; endormis : faim/soif seulement
+const _lastSleeperSave = new Map();
 setInterval(async () => {
   const itemFx = await itemEffectsModPromise;
   const getMaxHp = (inv) => itemFx.getMaxHealthFromInv(inv, _normalizeInv);
+  const now = Date.now();
   players.forEach((p) => {
     const sock = io.sockets.sockets.get(p.socketId);
     if (!sock || p.health <= 0 || p._deathHandled) return;
@@ -2628,6 +2665,17 @@ setInterval(async () => {
     if (died) _handlePlayerDeath(p);
     else if (dmg > 0) p.dirty = true;
     _emitSurvivalUpdate(sock, p);
+  });
+  sleepingPlayers.forEach((sleep) => {
+    if (!sleep || sleep.dead || (sleep.health ?? 100) <= 0) return;
+    tickSleeperSurvival(sleep, 1);
+    sleep.lastSurvivalTickAt = now;
+    const key = sleep.playerId;
+    const last = _lastSleeperSave.get(key) || 0;
+    if (now - last >= 5000) {
+      _saveSleepingToDb(sleep).catch(() => {});
+      _lastSleeperSave.set(key, now);
+    }
   });
 }, 1000);
 
@@ -2749,6 +2797,7 @@ function _registerInvConsumeHandlers(socket, getPlayer) {
         ok: true,
         inventory: _cloneInv(pl.inv),
         survival: { ...(pl.survival || {}) },
+        health: Math.max(0, Math.floor(pl.health ?? 100)),
         debug: { before, after, used: { zone: useZone, idx: useIdx, type: stack.type }, build: INV_DEBUG_SERVER_BUILD },
       });
     } catch (err) {
@@ -2815,6 +2864,9 @@ io.on('connection', async (socket) => {
   const priorSleep = _getSleepingPlayer(userId);
   const killedWhileOffline = !!(priorSleep && (priorSleep.dead || priorSleep.health <= 0));
   const wokeFromSleep = !!priorSleep && !killedWhileOffline;
+  if (priorSleep && !killedWhileOffline) {
+    catchUpSleeperSurvival(priorSleep);
+  }
   if (priorSleep) {
     if (killedWhileOffline) _spawnDeathBagFromSleeper(priorSleep);
     sleepingPlayers.delete(_sleeperKey(userId));
@@ -2827,41 +2879,49 @@ io.on('connection', async (socket) => {
   }
 
   const restore = killedWhileOffline ? null : (liveSession || priorSleep || null);
+  const hasLiveRestore = !!restore;
+  const connectHealth = resolveConnectHealthFlags({
+    killedWhileOffline,
+    hasLiveRestore,
+    savedHealth: saved?.health,
+  });
+  const forceBeachRespawn = connectHealth.forceBeachRespawn;
   const dbId = saved?.id != null ? _normPlayerId(saved.id) : userId;
   // Réveil depuis le corps endormi : inventaire du sleeper (post-fouille), pas la DB players.
   const wakeInv = wokeFromSleep ? _cloneInv(priorSleep.inv) : null;
-  const respawnKit = killedWhileOffline ? JSON.parse(JSON.stringify(STARTING_ITEMS)) : null;
-  const freshBeachSpawn = (!restore && !killedWhileOffline
+  const respawnKit = forceBeachRespawn ? JSON.parse(JSON.stringify(STARTING_ITEMS)) : null;
+  const freshBeachSpawn = (!restore && !forceBeachRespawn
     && (saved?.pos_x == null || saved?.pos_y == null || saved?.pos_z == null))
     ? _randomBeachSpawn() : null;
-  const offlineKillSpawn = killedWhileOffline ? _randomBeachSpawn() : null;
+  const beachRespawnSpawn = forceBeachRespawn ? _randomBeachSpawn() : null;
   const p = {
     socketId: socket.id,
     id: dbId,
     username: socket.user.username,
-    x: offlineKillSpawn?.x ?? (restore?.x ?? ((saved && saved.pos_x != null) ? saved.pos_x : (freshBeachSpawn?.x ?? BEACH_SPAWN.x))),
-    y: offlineKillSpawn?.y ?? (restore?.y ?? ((saved && saved.pos_y != null) ? saved.pos_y : (freshBeachSpawn?.y ?? BEACH_SPAWN.y))),
-    z: offlineKillSpawn?.z ?? (restore?.z ?? ((saved && saved.pos_z != null) ? saved.pos_z : (freshBeachSpawn?.z ?? BEACH_SPAWN.z))),
-    rotY: offlineKillSpawn?.rotY ?? (restore?.rotY ?? ((saved && saved.rot_y != null) ? saved.rot_y : (freshBeachSpawn?.rotY ?? BEACH_SPAWN.rotY))),
-    health: killedWhileOffline ? 100 : (restore?.health ?? saved?.health ?? 100),
+    x: beachRespawnSpawn?.x ?? (restore?.x ?? ((saved && saved.pos_x != null) ? saved.pos_x : (freshBeachSpawn?.x ?? BEACH_SPAWN.x))),
+    y: beachRespawnSpawn?.y ?? (restore?.y ?? ((saved && saved.pos_y != null) ? saved.pos_y : (freshBeachSpawn?.y ?? BEACH_SPAWN.y))),
+    z: beachRespawnSpawn?.z ?? (restore?.z ?? ((saved && saved.pos_z != null) ? saved.pos_z : (freshBeachSpawn?.z ?? BEACH_SPAWN.z))),
+    rotY: beachRespawnSpawn?.rotY ?? (restore?.rotY ?? ((saved && saved.rot_y != null) ? saved.rot_y : (freshBeachSpawn?.rotY ?? BEACH_SPAWN.rotY))),
+    health: connectHealthValue({ forceBeachRespawn, restore, saved, wokeFromSleep }),
     kills:  restore?.kills ?? saved?.kills ?? 0,
     inv: respawnKit ?? wakeInv ?? (restore ? _cloneInv(restore.inv) : _save),
-    survival: killedWhileOffline ? { ...DEFAULT_SURVIVAL } : (restore ? { ...(restore.survival || DEFAULT_SURVIVAL) } : _survival),
-    equipped: killedWhileOffline ? null : (restore?.equipped ?? null),
+    survival: forceBeachRespawn ? { ...DEFAULT_SURVIVAL } : (restore ? { ...(restore.survival || DEFAULT_SURVIVAL) } : _survival),
+    equipped: forceBeachRespawn ? null : (restore?.equipped ?? null),
     dirty: true,
     invincible: true,
-    posSynced: killedWhileOffline,
+    posSynced: forceBeachRespawn,
     connectedAt: Date.now(),
     anchorX: 0,
     anchorY: 0,
     anchorZ: 0,
     _killedWhileOffline: killedWhileOffline,
+    _respawnReason: connectHealth.respawnReason,
   };
   p.anchorX = p.x;
   p.anchorY = p.y;
   p.anchorZ = p.z;
-  _initLifeStats(p, killedWhileOffline ? null : restore);
-  if (killedWhileOffline) _resetLifeStats(p);
+  _initLifeStats(p, forceBeachRespawn ? null : restore);
+  if (forceBeachRespawn) _resetLifeStats(p);
   if (restore?._deathHandled && p.health <= 0) {
     p._deathHandled = true;
     p._deathInv = restore._deathInv ? _cloneInv(restore._deathInv) : undefined;
@@ -2889,7 +2949,7 @@ io.on('connection', async (socket) => {
     setTimeout(() => { if (players.has(socket.id)) p.invincible = false; }, 5000);
   }
   // Pas de kit de départ si réveil après déco/fouille — inventaire vide = légitime.
-  if (!wokeFromSleep && !killedWhileOffline) {
+  if (!wokeFromSleep && !forceBeachRespawn) {
     const rockCh = ensureStarterRock(p);
     const torchCh = ensureStarterTorch(p);
     const rationCh = ensureStarterRations(p);
@@ -2906,10 +2966,12 @@ io.on('connection', async (socket) => {
       user: p.username,
       wokeFromSleep,
       killedWhileOffline,
+      forceBeachRespawn,
+      respawnReason: connectHealth.respawnReason,
       snap: _invDebugSnapshot(p.inv, _normalizeInv),
     });
   }
-  if (killedWhileOffline) {
+  if (forceBeachRespawn) {
     const keepScenario = p.inv?.scenario || _save?.scenario;
     if (keepScenario) p.inv.scenario = keepScenario;
   }
@@ -2925,6 +2987,8 @@ io.on('connection', async (socket) => {
     spawn: { x: +p.x.toFixed(1), y: +p.y.toFixed(1), z: +p.z.toFixed(1) },
     health: p.health,
     kills: p.kills,
+    respawnReason: connectHealth.respawnReason,
+    deathHandled: !!p._deathHandled,
   });
 
   const _initPayload = _gameInitPayload(socket, p, scenMod, wokeFromSleep);
@@ -2934,6 +2998,20 @@ io.on('connection', async (socket) => {
     snap: _invDebugSnapshot(p.inv, _normalizeInv),
   });
   socket.emit('game-init', _initPayload);
+  if (shouldEmitDeathOnConnect(p)) {
+    socket.emit('player-death', {
+      id: socket.id,
+      playerId: _normPlayerId(p.id),
+      username: p.username,
+      x: p.x,
+      y: p.y,
+      z: p.z,
+      rotY: p.rotY,
+      equipped: p._deathEquipped ?? null,
+      kills: p.kills,
+      recap: _lifeRecap(p),
+    });
+  }
   _emitInvAuth(socket, p);
   socket.emit('craft-queue-state', craftQueueMod.getCraftQueueState(p));
   socket.broadcast.emit('player-join', { id: socket.id, username: p.username, x: p.x, y: p.y, z: p.z, rotY: p.rotY, equipped: p.equipped });
@@ -2985,7 +3063,8 @@ io.on('connection', async (socket) => {
     const dt = Math.max(0.05, (now - (p.lastMoveAt || now)) / 1000);
     const maxDelta = 11 * dt * 1.5;
     const respawnGrace = p._respawnGraceUntil && now < p._respawnGraceUntil;
-    if (!respawnGrace && p.lastMoveAt && Number.isFinite(p.lastX) && Number.isFinite(p.lastZ)) {
+    const tpGrace = p._tpGraceUntil && now < p._tpGraceUntil;
+    if (!respawnGrace && !tpGrace && p.lastMoveAt && Number.isFinite(p.lastX) && Number.isFinite(p.lastZ)) {
       const dist = Math.hypot(d.x - p.lastX, d.z - p.lastZ);
       if (dist > maxDelta) {
         socket.emit('move-correction', { x: p.x, y: p.y, z: p.z, rotY: p.rotY });
@@ -4453,6 +4532,7 @@ io.on('connection', async (socket) => {
         lifeZombieKills: leaving.lifeZombieKills ?? 0,
         lifePlayerKills: leaving.lifePlayerKills ?? 0,
         since: Date.now(),
+        lastSurvivalTickAt: Date.now(),
       };
       _setSleepingPlayer(leaving.id, sleep);
       _saveSleepingToDb(sleep).catch(() => {});
@@ -4467,6 +4547,7 @@ io.on('connection', async (socket) => {
         equipped: leaving.equipped || null,
       });
     } else if (leaving.id) {
+      if (leaving._deathHandled) _spawnDeathBagFromPlayer(leaving);
       _persistPlayer(leaving);
     }
     _emitPlayersOnline();
@@ -4494,6 +4575,10 @@ async function loadPersistedWorld() {
   await ensureWorldSchema();
   await qaChecklist.ensureSchema();
   const loaded = await worldPersist.loadInto(decorItems, structures, items, zombies, sleepingPlayers);
+  for (const sleep of sleepingPlayers.values()) {
+    catchUpSleeperSurvival(sleep);
+    _saveSleepingToDb(sleep).catch(() => {});
+  }
   decorSeq = Math.max(decorSeq, loaded.decorSeq || 1);
   structureIdCounter = Math.max(structureIdCounter, loaded.structureIdCounter || 0);
   itemIdCounter = Math.max(itemIdCounter, loaded.itemIdCounter || 0);

@@ -159,6 +159,13 @@
     }
     if (res.survival) applyServerState(res.survival);
     if (res.inventory) ZS.Inventory?.applyAuthoritativeInv?.(res.inventory);
+    if (typeof res.health === 'number' && _state?.player) {
+      _state.player.health = Math.max(0, res.health);
+      ZS.UI.setHealth(
+        Math.floor(_state.player.health),
+        ZS.Inventory?.getMaxHealth?.() || 100,
+      );
+    }
     ZS.ConsumeDebug?.compare?.(res.inventory, 'use-item-ok');
   }
 

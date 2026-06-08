@@ -23,11 +23,15 @@
   let   _dayCount   = 0;
   let   _moonPhaseIndex = -1;
   const _DAY_LENGTH_SEC = 1800; // aligné serveur : 15 min jour + 15 min nuit
-  const _terrainTex = new THREE.TextureLoader().load('/img/terrain_atlas.png');
-  _terrainTex.wrapS = _terrainTex.wrapT = THREE.RepeatWrapping;
-  _terrainTex.magFilter = THREE.NearestFilter;
-  _terrainTex.minFilter = THREE.NearestMipmapNearestFilter;
-  _terrainTex.colorSpace = THREE.SRGBColorSpace;
+  function _terrainAtlasTex() {
+    return ZS.TerrainTextures?.getAtlas?.()
+      || _terrainTexFallback;
+  }
+  const _terrainTexFallback = new THREE.TextureLoader().load('/img/terrain_atlas.png');
+  _terrainTexFallback.wrapS = _terrainTexFallback.wrapT = THREE.RepeatWrapping;
+  _terrainTexFallback.magFilter = THREE.LinearFilter;
+  _terrainTexFallback.minFilter = THREE.LinearMipmapLinearFilter;
+  _terrainTexFallback.colorSpace = THREE.SRGBColorSpace;
   const _treeAtlas = new THREE.TextureLoader().load('/img/tree_atlas.png');
   _treeAtlas.wrapS = _treeAtlas.wrapT = THREE.RepeatWrapping;
   _treeAtlas.magFilter = THREE.NearestFilter;
@@ -318,7 +322,8 @@
   const _skyRootQuat = new THREE.Quaternion();
   const _fogWork = new THREE.Color();
   const _fogBeach = new THREE.Color(0x6aacc8);
-  const _fogForest = new THREE.Color(0x5a7a58);
+  const _fogForest = new THREE.Color(0x6a8a68);
+  const _hemiForestGround = new THREE.Color(0x5a7a48);
   let _dnFrame = 0;
 
   function tickDayNight(dt) {
@@ -403,9 +408,16 @@
     if (fwFog > 0.04) _fogWork.lerp(_fogForest, Math.min(0.42, fwFog * 0.42));
     _scene.fog.color.copy(_fogWork);
 
-    // Hémisphère : ciel = couleur actuelle du fond, sol = vert sombre constant
+    // Hémisphère : rebond sol plus clair sous le couvert forestier
     _hemiLight.color.setHex(k.sky);
-    _hemiLight.intensity = 0.06 + k.ambI * 0.22 + moonIntensity * 0.08;
+    let hemiI = 0.06 + k.ambI * 0.22 + moonIntensity * 0.08;
+    if (fwFog > 0.12) {
+      hemiI += Math.min(0.14, fwFog * 0.16);
+      _hemiLight.groundColor.copy(_hemiForestGround);
+    } else {
+      _hemiLight.groundColor.setHex(0x2a4a18);
+    }
+    _hemiLight.intensity = hemiI;
 
     // Brouillard de nuit moins agressif (profil options)
     const night = Math.max(0, Math.min(1, -sunY * 1.8));
@@ -580,6 +592,30 @@
   // ── Couleur terrain : hauteur + noise ────────────────────────────────────────
 
   function _terrainColor(x, z, h) {
+    const fw = ZS.forestFloorWeight?.(x, z) ?? 0;
+
+    if (fw > 0.12) {
+      let base;
+      if (h < 0) base = 0x5a6e52;
+      else if (h < 4) base = 0x627658;
+      else if (h < 8) base = 0x6a8060;
+      else if (h < 14) base = 0x748a6a;
+      else base = 0x7e9474;
+
+      const n1 = _tvn(x * 0.045, z * 0.045);
+      const n2 = _tvn(x * 0.18, z * 0.18);
+      const n = n1 * 0.58 + n2 * 0.42;
+      _cT.setHex(base);
+      if (n > 0.62) {
+        _cD.setHex(0x8a7048); _cT.lerp(_cD, 0.28 * fw);
+      } else if (n < 0.22) {
+        _cD.setHex(0x4e6248); _cT.lerp(_cD, 0.18 * fw);
+      } else if (n > 0.38 && n < 0.55) {
+        _cD.setHex(0x7a9468); _cT.lerp(_cD, 0.16 * fw);
+      }
+      return _cT.getHex();
+    }
+
     let base;
     if      (h < -4) base = 0x283c28;
     else if (h <  0) base = 0x325830;
@@ -598,19 +634,30 @@
 
     _cT.setHex(base);
     if (n > 0.70) {
-      _cD.setHex(h < 4 ? 0x7a5530 : 0x8a6840); _cT.lerp(_cD, 0.55); // terre nue
+      _cD.setHex(h < 4 ? 0x7a5530 : 0x8a6840); _cT.lerp(_cD, 0.55);
     } else if (n > 0.60) {
-      _cD.setHex(0x8c8838); _cT.lerp(_cD, 0.36); // herbe sèche
+      _cD.setHex(0x8c8838); _cT.lerp(_cD, 0.36);
     } else if (n < 0.20) {
-      _cD.setHex(0x285a28); _cT.lerp(_cD, 0.34); // mousse sombre
+      _cD.setHex(0x285a28); _cT.lerp(_cD, 0.34);
     } else if (n > 0.48 && n3 < 0.28 && h < 5) {
-      _cD.setHex(0x9aaa3a); _cT.lerp(_cD, 0.18); // patch fleurs
+      _cD.setHex(0x9aaa3a); _cT.lerp(_cD, 0.18);
     }
     return _cT.getHex();
   }
 
   function _terrainTint(x, z, h, slope, useDirt) {
+    const fw = ZS.forestFloorWeight?.(x, z) ?? 0;
+
     if (useDirt) {
+      if (fw > 0.15) {
+        _cT.setHex(h > 12 ? 0x8a7860 : 0x7a6850);
+        if (slope > 0.5) {
+          _cD.setHex(0x5a4838); _cT.lerp(_cD, Math.min(0.22, slope * 0.18));
+        } else if (_tvn(x * 0.2, z * 0.2) < 0.3) {
+          _cD.setHex(0x9a8060); _cT.lerp(_cD, 0.12);
+        }
+        return _cT.getHex();
+      }
       _cT.setHex(h > 13 ? 0x817760 : 0x7c5e38);
       if (slope > 0.6) {
         _cD.setHex(0x4b3724); _cT.lerp(_cD, Math.min(0.34, slope * 0.28));
@@ -621,6 +668,14 @@
     }
 
     _cT.setHex(_terrainColor(x, z, h));
+    if (fw > 0.2) {
+      if (_tvn(x * 0.3, z * 0.3) < 0.18) {
+        _cD.setHex(0x5a6e50); _cT.lerp(_cD, 0.1 * fw);
+      } else if (_tvn(x * 0.12 + 5, z * 0.12 - 3) > 0.72) {
+        _cD.setHex(0x8a7050); _cT.lerp(_cD, 0.1 * fw);
+      }
+      return _cT.getHex();
+    }
     if (_tvn(x * 0.25, z * 0.25) > 0.7) {
       _cD.setHex(0x70953f); _cT.lerp(_cD, 0.18);
     } else if (_tvn(x * 0.22 + 13, z * 0.22 - 7) < 0.2) {
@@ -713,9 +768,11 @@
     const vx = pa[idx * 3];
     const vy = pa[idx * 3 + 1];
     const vz = pa[idx * 3 + 2];
+    const fw = ZS.forestFloorWeight?.(vx, vz) ?? 0;
+    const scale = tileScale * (fw > 0.2 ? 0.65 : 1);
     const frac = (v) => v - Math.floor(v);
-    uvs[idx * 2] = uBase + frac((vx + 300) / tileScale) * uSpan;
-    uvs[idx * 2 + 1] = frac((vz + 300) / tileScale);
+    uvs[idx * 2] = uBase + frac((vx + 300) / scale) * uSpan;
+    uvs[idx * 2 + 1] = frac((vz + 300) / scale);
     const bwCorner = beachW[idx];
     if (bwCorner > 0.03) {
       const sandHex = _beachSandColor(vx, vz);
@@ -822,7 +879,7 @@
     geo.setAttribute('color', new THREE.BufferAttribute(cols, 3));
     geo.computeVertexNormals();
     const mesh = new THREE.Mesh(geo, new THREE.MeshLambertMaterial({
-      map: _terrainTex,
+      map: _terrainAtlasTex(),
       vertexColors: true,
       flatShading: true,
     }));
@@ -1815,12 +1872,12 @@
       _dcQ.setFromEuler(_dcE).invert();
       _dcV.applyQuaternion(_dcQ);
     } else if (col.rotY) {
-      const c = Math.cos(-col.rotY);
-      const s = Math.sin(-col.rotY);
-      const x = _dcV.x;
-      const z = _dcV.z;
-      _dcV.x = x * c - z * s;
-      _dcV.z = x * s + z * c;
+      const c = Math.cos(col.rotY);
+      const s = Math.sin(col.rotY);
+      const dx = _dcV.x;
+      const dz = _dcV.z;
+      _dcV.x = dx * c - dz * s;
+      _dcV.z = dx * s + dz * c;
     }
     return { lx: _dcV.x, ly: _dcV.y, lz: _dcV.z };
   }
@@ -1836,33 +1893,62 @@
       const s = Math.sin(col.rotY);
       const x = _dcV.x;
       const z = _dcV.z;
-      _dcV.x = x * c - z * s;
-      _dcV.z = x * s + z * c;
+      _dcV.x = x * c + z * s;
+      _dcV.z = -x * s + z * c;
     }
-    return { x: col.cx + _dcV.x, z: col.cz + _dcV.z };
+    return { x: col.cx + _dcV.x, y: (col.baseY ?? 0) + _dcV.y, z: col.cz + _dcV.z };
+  }
+
+  function _doorLeafLocalXZ(bx, bz, localRotY) {
+    if (!localRotY) return { bx, bz };
+    const c = Math.cos(localRotY);
+    const s = Math.sin(localRotY);
+    return { bx: bx * c - bz * s, bz: bx * s + bz * c };
+  }
+
+  function _doorLeafWorldXZ(bx, bz, localRotY) {
+    if (!localRotY) return { bx, bz };
+    const c = Math.cos(localRotY);
+    const s = Math.sin(localRotY);
+    return { bx: bx * c + bz * s, bz: -bx * s + bz * c };
   }
 
   function overBoxFootprint(px, pz, margin, col) {
     const { lx, lz } = decorWorldToLocal(px, col.baseY ?? 0, pz, col);
-    const bx = lx - (col.lx || 0);
-    const bz = lz - (col.lz || 0);
+    let bx = lx - (col.lx || 0);
+    let bz = lz - (col.lz || 0);
+    if (col.localRotY) ({ bx, bz } = _doorLeafLocalXZ(bx, bz, col.localRotY));
     return Math.abs(bx) <= col.hw + margin && Math.abs(bz) <= col.hd + margin;
   }
 
   function resolveDecorBoxCollision(col, px, pz, feetY, playerR) {
     if (col.maxY !== undefined && feetY >= col.maxY - 0.05) return null;
-    if (col.decorId && col.baseY != null && feetY < col.baseY - 0.35) return null;
+    // Bande verticale haute seulement — sinon murs/portes sur pente ignorés si pieds < baseY.
+    if (col.maxY != null && col.decorId && col.baseY != null && feetY < col.baseY - 0.35) return null;
     if (col.minY !== undefined && feetY < col.minY - 0.05) return null;
 
     const local = decorWorldToLocal(px, feetY, pz, col);
-    const bx = local.lx - (col.lx || 0);
-    const bz = local.lz - (col.lz || 0);
+    const relX = local.lx - (col.lx || 0);
+    const relZ = local.lz - (col.lz || 0);
+    let bx = relX;
+    let bz = relZ;
+    if (col.localRotY) ({ bx, bz } = _doorLeafLocalXZ(bx, bz, col.localRotY));
     const clampBX = Math.max(-col.hw, Math.min(col.hw, bx));
     const clampBZ = Math.max(-col.hd, Math.min(col.hd, bz));
-    const wdx = bx - clampBX;
-    const wdz = bz - clampBZ;
+    const wdxL = bx - clampBX;
+    const wdzL = bz - clampBZ;
+    let wdx = wdxL;
+    let wdz = wdzL;
+    if (col.localRotY) ({ bx: wdx, bz: wdz } = _doorLeafWorldXZ(wdxL, wdzL, col.localRotY));
     const dist = Math.hypot(wdx, wdz);
     if (dist >= playerR) return null;
+
+    const toDecorRel = (leafX, leafZ) => {
+      if (!col.localRotY) return { x: leafX, z: leafZ };
+      const w = _doorLeafWorldXZ(leafX, leafZ, col.localRotY);
+      return { x: w.bx, z: w.bz };
+    };
+
     if (dist <= 0.001) {
       const penL = bx + col.hw;
       const penR = col.hw - bx;
@@ -1875,13 +1961,13 @@
       else if (m === penR) outBX = col.hw + playerR;
       else if (m === penF) outBZ = -col.hd - playerR;
       else outBZ = col.hd + playerR;
-      return decorLocalToWorld(outBX + (col.lx || 0), local.ly, outBZ + (col.lz || 0), col);
+      const outRel = toDecorRel(outBX, outBZ);
+      return decorLocalToWorld(outRel.x + (col.lx || 0), local.ly, outRel.z + (col.lz || 0), col);
     }
 
     const pen = playerR - dist;
-    const outLX = bx + (wdx / dist) * pen + (col.lx || 0);
-    const outLZ = bz + (wdz / dist) * pen + (col.lz || 0);
-    return decorLocalToWorld(outLX, local.ly, outLZ, col);
+    const outRel = toDecorRel(bx + (wdxL / dist) * pen, bz + (wdzL / dist) * pen);
+    return decorLocalToWorld(outRel.x + (col.lx || 0), local.ly, outRel.z + (col.lz || 0), col);
   }
 
   function _distPointToSegment(px, pz, x0, z0, x1, z1) {
@@ -1923,8 +2009,8 @@
       const dz = pz - col.cz;
       let lx, lz;
       if (col.rotY) {
-        const c = Math.cos(-col.rotY);
-        const s = Math.sin(-col.rotY);
+        const c = Math.cos(col.rotY);
+        const s = Math.sin(col.rotY);
         lx = dx * c - dz * s;
         lz = dx * s + dz * c;
       } else {
@@ -1975,6 +2061,113 @@
     return false;
   }
 
+  function _segmentIntersectsAABB2D(x0, z0, x1, z1, minX, maxX, minZ, maxZ) {
+    let t0 = 0;
+    let t1 = 1;
+    const dx = x1 - x0;
+    const dz = z1 - z0;
+    const planes = [
+      [-dx, x0 - minX],
+      [dx, maxX - x0],
+      [-dz, z0 - minZ],
+      [dz, maxZ - z0],
+    ];
+    for (let i = 0; i < planes.length; i++) {
+      const p = planes[i][0];
+      const q = planes[i][1];
+      if (Math.abs(p) < 1e-8) {
+        if (q < 0) return false;
+      } else {
+        const t = q / p;
+        if (p < 0) {
+          if (t > t1) return false;
+          if (t > t0) t0 = t;
+        } else {
+          if (t < t0) return false;
+          if (t < t1) t1 = t;
+        }
+      }
+    }
+    return t0 <= t1;
+  }
+
+  function _colliderBlocksHeadLos(col, headY) {
+    if (!col) return false;
+    if (col.maxY !== undefined && headY > col.maxY + 0.06) return false;
+    if (col.minY !== undefined && headY < col.minY - 0.05) return false;
+    if (col.baseY != null && headY < col.baseY - 0.35) return false;
+    return true;
+  }
+
+  function _segmentIntersectsOrientedBox(col, x0, z0, x1, z1, headY) {
+    if (!_colliderBlocksHeadLos(col, headY)) return false;
+    const p0 = decorWorldToLocal(x0, headY, z0, col);
+    const p1 = decorWorldToLocal(x1, headY, z1, col);
+    const lx0 = p0.lx - (col.lx || 0);
+    const lz0 = p0.lz - (col.lz || 0);
+    const lx1 = p1.lx - (col.lx || 0);
+    const lz1 = p1.lz - (col.lz || 0);
+    return _segmentIntersectsAABB2D(lx0, lz0, lx1, lz1, -col.hw, col.hw, -col.hd, col.hd);
+  }
+
+  function _segmentIntersectsSimpleBox(col, x0, z0, x1, z1, headY) {
+    if (!_colliderBlocksHeadLos(col, headY)) return false;
+    return _segmentIntersectsAABB2D(
+      x0, z0, x1, z1,
+      col.cx - col.hw, col.cx + col.hw,
+      col.cz - col.hd, col.cz + col.hd,
+    );
+  }
+
+  function _segmentHitsCollider(col, x0, z0, x1, z1, headY) {
+    if (!col || !Number.isFinite(x0) || !Number.isFinite(z0)) return false;
+    if (col.type === 'seg') {
+      if (!_colliderBlocksHeadLos(col, headY)) return false;
+      const hitA = _distPointToSegment(col.x0, col.z0, x0, z0, x1, z1);
+      const hitB = _distPointToSegment(col.x1, col.z1, x0, z0, x1, z1);
+      const r = (col.r || 0.1) + 0.05;
+      return hitA.dist <= r || hitB.dist <= r;
+    }
+    if (col.type === 'box' || col.cx !== undefined) {
+      if (col.lx != null || col.rotX || col.rotZ || (col.rotY && col.baseY != null)) {
+        return _segmentIntersectsOrientedBox(col, x0, z0, x1, z1, headY);
+      }
+      if (col.rotY) {
+        return _segmentIntersectsOrientedBox(
+          { ...col, lx: 0, lz: 0, baseY: col.baseY ?? 0 },
+          x0, z0, x1, z1, headY,
+        );
+      }
+      return _segmentIntersectsSimpleBox(col, x0, z0, x1, z1, headY);
+    }
+    if (col.x !== undefined) {
+      const hit = _distPointToSegment(col.x, col.z, x0, z0, x1, z1);
+      return hit.dist <= (col.r || 0.3) + 0.05;
+    }
+    return false;
+  }
+
+  /** LOS tête → tête (nametags) — ignore sol / obstacles sous headY. */
+  function hasHeadLineOfSight(x0, z0, x1, z1, colliders, headY, opts = {}) {
+    if (!Array.isArray(colliders) || !colliders.length) return true;
+    const shrink = Number.isFinite(opts.endpointShrink) ? opts.endpointShrink : 0.4;
+    const dx = x1 - x0;
+    const dz = z1 - z0;
+    const len = Math.hypot(dx, dz);
+    if (len < 0.05) return true;
+    const ux = dx / len;
+    const uz = dz / len;
+    const pad = Math.min(shrink, len * 0.12);
+    const ax = x0 + ux * pad;
+    const az = z0 + uz * pad;
+    const bx = x1 - ux * pad;
+    const bz = z1 - uz * pad;
+    for (let i = 0; i < colliders.length; i++) {
+      if (_segmentHitsCollider(colliders[i], ax, az, bx, bz, headY)) return false;
+    }
+    return true;
+  }
+
   ZS.getColliders           = getColliders;
   ZS.getCollidersForServer  = getCollidersForServer;
   ZS.getCollidersNear       = getCollidersNear;
@@ -1990,6 +2183,10 @@
   ZS.resolveDecorBoxCollision = resolveDecorBoxCollision;
   ZS.resolveDecorSegmentCollision = resolveDecorSegmentCollision;
   ZS.decorWorldToLocal      = decorWorldToLocal;
+  ZS.decorLocalToWorld      = decorLocalToWorld;
+  ZS.getDecorCollidersForId = (id) => _decorColliders.get(id) || [];
+  ZS.listDecorColliderIds   = () => [..._decorColliders.keys()];
+  ZS.hasHeadLineOfSight     = hasHeadLineOfSight;
   ZS.chopTree              = chopTree;
   ZS.registerChoppableTree = registerChoppableTree;
   ZS.removeChoppableTree   = removeChoppableTree;

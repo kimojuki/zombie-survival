@@ -52,6 +52,7 @@ export const LEGACY_MODULES = [
   // qa-panel.js — chargé à la demande si serveur QA (network.js)
   // groups.js — chargé à la connexion socket (network.js)
   '/js/network.js',
+  '/js/building_debug.js',
   '/js/ui.js',
   '/js/panel_ui.js',
   '/js/options_ui.js',

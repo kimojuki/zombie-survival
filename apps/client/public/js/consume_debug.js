@@ -135,7 +135,12 @@
       const res = await fetch('/api/health');
       const h = await res.json();
       const clientV = window.__ZS_CLIENT_VERSION || '';
-      log('server-health', { ok: h.ok, invDebugBuild: h.invDebugBuild, clientVersion: clientV });
+      log('server-health', {
+        ok: h.ok,
+        invDebugBuild: h.invDebugBuild,
+        clientVersion: clientV,
+        serverClientVersion: h.clientVersion,
+      });
       if (!h.invDebugBuild) {
         console.warn(TAG, 'Serveur Node PAS REDÉMARRÉ — /api/health sans invDebugBuild. Arrêter le process node:3000 puis npm run dev:server', {
           client: clientV,
@@ -143,10 +148,11 @@
           commit: h.commit,
         });
         ZS.UI?.showNotif?.('Serveur pas redémarré — npm run dev:server');
-      } else if (clientV && h.invDebugBuild !== clientV) {
-        console.warn(TAG, 'VERSION MISMATCH — redémarrer le serveur Node (npm run dev:server)', {
-          client: clientV,
-          server: h.invDebugBuild,
+      }
+      if (clientV && h.clientVersion && h.clientVersion !== clientV) {
+        console.warn(TAG, 'CLIENT CACHE — Ctrl+F5 (client ≠ clientVersion serveur)', {
+          browser: clientV,
+          serverReads: h.clientVersion,
         });
       }
     } catch (err) {

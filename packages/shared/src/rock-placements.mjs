@@ -1,7 +1,8 @@
 /** Rochers minables — placements seed serveur (plage + forêt + secteurs). */
 
 import { TREE_EXCLUSIONS, SPAWN_TRAIL_PTS } from './tree-placements.mjs';
-import { BEACH_FOOTPRINT, isInBeachFootprint } from './beach-spawn.mjs';
+import { BEACH_FOOTPRINT, isForestTerrainAllowed, isInBeachFootprint } from './beach-spawn.mjs';
+import { isInsideSector01 } from './sector-bounds.mjs';
 
 /** Plage spawn — ellipse (alignée proc_spawn). */
 export const CAMP_FOOTPRINT = BEACH_FOOTPRINT;
@@ -28,20 +29,11 @@ export const ROCK_EXCLUSIONS = Object.freeze([
 
 export const ROCK_ZONES = Object.freeze([
   {
-    id: 'beach_ring',
-    cx: 270,
-    cz: -8,
-    count: 4,
-    radius: 44,
-    boulderWeight: 0.5,
-    seed: 89001,
-  },
-  {
     id: 'forest_scatter',
     cx: 0,
     cz: -6,
-    count: 18,
-    radius: 140,
+    count: 28,
+    radius: 155,
     boulderWeight: 0.72,
     seed: 89002,
   },
@@ -49,8 +41,8 @@ export const ROCK_ZONES = Object.freeze([
     id: 'forest_west',
     cx: -58,
     cz: 28,
-    count: 12,
-    radius: 88,
+    count: 18,
+    radius: 95,
     boulderWeight: 0.7,
     seed: 89008,
   },
@@ -58,8 +50,8 @@ export const ROCK_ZONES = Object.freeze([
     id: 'forest_north',
     cx: -28,
     cz: 58,
-    count: 10,
-    radius: 72,
+    count: 16,
+    radius: 82,
     boulderWeight: 0.66,
     seed: 89009,
   },
@@ -67,8 +59,8 @@ export const ROCK_ZONES = Object.freeze([
     id: 'forest_south',
     cx: 18,
     cz: -88,
-    count: 10,
-    radius: 78,
+    count: 16,
+    radius: 85,
     boulderWeight: 0.74,
     seed: 89010,
   },
@@ -76,11 +68,22 @@ export const ROCK_ZONES = Object.freeze([
     id: 'forest_east',
     cx: 55,
     cz: -75,
-    count: 10,
-    radius: 62,
+    count: 14,
+    radius: 72,
     boulderWeight: 0.68,
     seed: 89004,
   },
+  // Grille S01 — rochers minables dans toute la forêt
+  { id: 'forest_rocks_nw', cx: -52, cz: -82, shape: 'rect', rx: 50, rz: 40, count: 16, boulderWeight: 0.72, seed: 89101 },
+  { id: 'forest_rocks_nc', cx: 52, cz: -82, shape: 'rect', rx: 50, rz: 40, count: 16, boulderWeight: 0.7, seed: 89102 },
+  { id: 'forest_rocks_ne', cx: 152, cz: -82, shape: 'rect', rx: 46, rz: 40, count: 14, boulderWeight: 0.68, seed: 89103 },
+  { id: 'forest_rocks_w', cx: -52, cz: -12, shape: 'rect', rx: 50, rz: 40, count: 18, boulderWeight: 0.74, seed: 89104 },
+  { id: 'forest_rocks_c', cx: 52, cz: -12, shape: 'rect', rx: 50, rz: 40, count: 18, boulderWeight: 0.72, seed: 89105 },
+  { id: 'forest_rocks_e', cx: 152, cz: -12, shape: 'rect', rx: 46, rz: 40, count: 14, boulderWeight: 0.7, seed: 89106 },
+  { id: 'forest_rocks_sw', cx: -52, cz: 58, shape: 'rect', rx: 50, rz: 38, count: 14, boulderWeight: 0.7, seed: 89107 },
+  { id: 'forest_rocks_s', cx: 52, cz: 58, shape: 'rect', rx: 50, rz: 38, count: 14, boulderWeight: 0.68, seed: 89108 },
+  { id: 'forest_rocks_se', cx: 152, cz: 58, shape: 'rect', rx: 44, rz: 36, count: 12, boulderWeight: 0.66, seed: 89109 },
+  { id: 'forest_rocks_far_w', cx: -82, cz: -42, shape: 'rect', rx: 28, rz: 55, count: 10, boulderWeight: 0.75, seed: 89110 },
   {
     id: 'trail_side',
     cx: 10,
@@ -131,6 +134,15 @@ export const ROCK_ZONES = Object.freeze([
 /** zoneId des rochers seed statique (hors regen). */
 export const ROCK_SEED_ZONE_IDS = Object.freeze(ROCK_ZONES.map((z) => z.id));
 
+/** Zones rochers dans le secteur forêt S01 (regen + seed monde). */
+export function getForestRockZones() {
+  return ROCK_ZONES.filter((z) => (
+    z.id.startsWith('forest_')
+    || z.id === 'trail_side'
+    || z.id === 'east_wilds'
+  ));
+}
+
 function _mulberry32(seed) {
   let s = seed >>> 0;
   return () => {
@@ -167,6 +179,29 @@ function _inExclusion(x, z) {
   return false;
 }
 
+function _inForestSector(x, z) {
+  if (!isInsideSector01(x, z, 3)) return false;
+  if (!isForestTerrainAllowed(x, z)) return false;
+  return true;
+}
+
+function _sampleZonePoint(rng, zone) {
+  if (zone.shape === 'rect') {
+    const rx = zone.rx ?? zone.radius ?? 40;
+    const rz = zone.rz ?? zone.radius ?? 40;
+    return {
+      x: zone.cx + (rng() * 2 - 1) * rx,
+      z: zone.cz + (rng() * 2 - 1) * rz,
+    };
+  }
+  const ang = rng() * Math.PI * 2;
+  const dist = rng() * zone.radius;
+  return {
+    x: zone.cx + Math.cos(ang) * dist,
+    z: zone.cz + Math.sin(ang) * dist,
+  };
+}
+
 function _pickRockPrefab(rng, zone) {
   return rng() < (zone.boulderWeight ?? 0.7) ? 'rock_boulder' : 'rock_outcrop';
 }
@@ -175,14 +210,12 @@ function _placementsForZone(zone) {
   const rng = _mulberry32(zone.seed || 1);
   const out = [];
   let attempts = 0;
-  const maxAttempts = zone.count * 60;
+  const maxAttempts = zone.count * (zone.shape === 'rect' ? 75 : 60);
   while (out.length < zone.count && attempts < maxAttempts) {
     attempts++;
-    const ang = rng() * Math.PI * 2;
-    const dist = rng() * zone.radius;
-    const x = zone.cx + Math.cos(ang) * dist;
-    const z = zone.cz + Math.sin(ang) * dist;
+    const { x, z } = _sampleZonePoint(rng, zone);
     if (Math.hypot(x, z) < 3.5) continue;
+    if (!_inForestSector(x, z)) continue;
     if (_inExclusion(x, z)) continue;
     if (_nearTrail(x, z)) continue;
     const rockSeed = Math.floor(rng() * 0xffffff);

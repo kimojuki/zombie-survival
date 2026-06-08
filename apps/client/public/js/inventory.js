@@ -1185,15 +1185,14 @@
   // Vie max = 100 + valeur d'armure équipée (le joueur peut dépasser 100).
   function getMaxHealth() { return 100 + getArmorValue(); }
 
-  // Met à jour le plafond de vie selon l'armure (bonus HP accordé par le serveur via survival-update).
+  // Rafraîchit la barre de vie (max selon armure). Les PV sont authoritatifs serveur — ne pas les recalculer ici.
   function _syncArmor() {
-    const armor = getArmorValue();
-    const max = 100 + armor;
-    const p = _state && _state.player;
-    if (p) {
-      p.health = Math.max(0, Math.min(max, p.health));
-      ZS.UI?.setHealth?.(Math.floor(p.health), max);
-    }
+    const max = getMaxHealth();
+    const p = _state?.player;
+    if (!p) return;
+    const hp = Number(p.health);
+    if (!Number.isFinite(hp)) return;
+    ZS.UI?.setHealth?.(Math.floor(Math.max(0, Math.min(max, hp))), max);
   }
 
   // ── Sauvegarde ─────────────────────────────────────────────────────────────

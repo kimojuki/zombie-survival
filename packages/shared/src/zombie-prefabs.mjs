@@ -55,7 +55,7 @@ export function getZombiePrefab(id) {
 
 /** Poids relatif par secteur — plus de runners en ville, brutes en base militaire. */
 export const ZOMBIE_ZONE_WEIGHTS = Object.freeze({
-  forest:    { zombie_walker: 72, zombie_runner: 23, zombie_brute: 5 },
+  forest:    { zombie_walker: 100, zombie_runner: 0, zombie_brute: 0 },
   smalltown: { zombie_walker: 48, zombie_runner: 37, zombie_brute: 15 },
   military:  { zombie_walker: 28, zombie_runner: 32, zombie_brute: 40 },
   maincity:  { zombie_walker: 42, zombie_runner: 43, zombie_brute: 15 },

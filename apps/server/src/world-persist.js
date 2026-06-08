@@ -50,6 +50,14 @@ function createWorldPersist(db, log) {
     queueFlush();
   }
 
+  function unmarkSeed(placementKey) {
+    if (!placementKey) return;
+    const key = String(placementKey);
+    if (!removedSeedKeys.delete(key)) return;
+    pendingMeta.removedSeedKeys = [...removedSeedKeys];
+    queueFlush();
+  }
+
   function isSeedRemoved(placementKey) {
     if (!placementKey) return false;
     return removedSeedKeys.has(String(placementKey));
@@ -62,10 +70,10 @@ function createWorldPersist(db, log) {
     queueFlush();
   }
 
-  function scheduleDeleteDecor(id, item) {
+  function scheduleDeleteDecor(id, item, opts = {}) {
     const known = item || pendingDecorUpserts.get(id);
     if (known && !shouldPersistDecor(known)) return;
-    if (known?.placementKey) markSeedRemoved(known.placementKey);
+    if (opts.markRemoved !== false && known?.placementKey) markSeedRemoved(known.placementKey);
     pendingDecorUpserts.delete(id);
     pendingDecorDeletes.add(id);
     queueFlush();
@@ -385,6 +393,7 @@ function createWorldPersist(db, log) {
     shouldPersistDecor,
     shouldPersistGroundItem,
     markSeedRemoved,
+    unmarkSeed,
     isSeedRemoved,
     scheduleUpsertDecor,
     scheduleDeleteDecor,

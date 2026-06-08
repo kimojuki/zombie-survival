@@ -57,8 +57,33 @@ function tickPlayerSurvival(p, dt, getMaxHealth) {
   return { dmg, died: false };
 }
 
+/** Corps endormi (déco) : faim/soif seulement — pas de PV, infection ni saignement. */
+function tickSleeperSurvival(sleep, dt) {
+  const sv = sleep.survival || { faim: 80, soif: 80, infection: 0, saignement: false };
+  sv.faim = clampStat((sv.faim ?? 80) - HUNGER_DECAY * dt);
+  sv.soif = clampStat((sv.soif ?? 80) - THIRST_DECAY * dt);
+  sleep.survival = sv;
+  return { dt };
+}
+
+const SLEEPER_CATCHUP_MAX_SEC = 7 * 24 * 3600;
+
+/** Rattrapage offline (boot ou réveil) depuis lastSurvivalTickAt / since. */
+function catchUpSleeperSurvival(sleep, now = Date.now()) {
+  if (!sleep || sleep.dead || (sleep.health ?? 100) <= 0) return 0;
+  const last = sleep.lastSurvivalTickAt || sleep.since || now;
+  const dt = Math.min(SLEEPER_CATCHUP_MAX_SEC, Math.max(0, (now - last) / 1000));
+  if (dt <= 0) return 0;
+  tickSleeperSurvival(sleep, dt);
+  sleep.lastSurvivalTickAt = now;
+  return dt;
+}
+
 module.exports = {
   HUNGER_DECAY,
   THIRST_DECAY,
+  SLEEPER_CATCHUP_MAX_SEC,
   tickPlayerSurvival,
+  tickSleeperSurvival,
+  catchUpSleeperSurvival,
 };

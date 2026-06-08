@@ -189,9 +189,14 @@
     }
     const placementKey = d.placementKey ? String(d.placementKey) : '';
     if (placementKey.startsWith('s01:') && Number.isFinite(d.x) && Number.isFinite(d.z)) {
-      const ty = ZS.getTerrainHeight ? ZS.getTerrainHeight(d.x, d.z) : 0;
-      commonOpts.baseY = ty;
-      commonOpts.grounded = false;
+      const rotY = Number.isFinite(d.rotY) ? d.rotY : 0;
+      const gy = d.prefabId === 'building_survivor_shack' && ZS.sampleShackPadHeight
+        ? ZS.sampleShackPadHeight(d.x, d.z, rotY)
+        : (ZS.getDecorGroundHeight
+          ? ZS.getDecorGroundHeight(d.x, d.z)
+          : (ZS.getTerrainHeight ? ZS.getTerrainHeight(d.x, d.z) : 0));
+      commonOpts.baseY = gy;
+      commonOpts.grounded = true;
     }
     const onRoot = (root) => {
       if (!root) return;
@@ -270,6 +275,52 @@
       treeSeed: entry.data?.treeSeed,
       decorId: entry.data?.id,
     });
+  }
+
+  let _nameTagLosAcc = 0;
+
+  function _findNameTag(mesh) {
+    if (!mesh) return null;
+    if (mesh.userData.nameTag) return mesh.userData.nameTag;
+    for (let i = 0; i < mesh.children.length; i++) {
+      const ch = mesh.children[i];
+      if (ch?.isSprite && ch.userData?.isNameTag) return ch;
+    }
+    return null;
+  }
+
+  function _updateNameTagVisibility(mesh, camX, camZ, camHeadY) {
+    const tag = _findNameTag(mesh);
+    if (!tag) return;
+    if (!mesh.visible) {
+      tag.visible = false;
+      return;
+    }
+    const tx = mesh.position.x;
+    const tz = mesh.position.z;
+    const dist = Math.hypot(tx - camX, tz - camZ);
+    if (dist < 1.5) {
+      tag.visible = true;
+      return;
+    }
+    const targetHeadY = mesh.position.y + 1.55;
+    const headY = Math.max(camHeadY, targetHeadY) - 0.08;
+    const cols = ZS.getCollidersNear?.(
+      (camX + tx) * 0.5,
+      (camZ + tz) * 0.5,
+      dist * 0.5 + 8,
+    ) || [];
+    tag.visible = ZS.hasHeadLineOfSight
+      ? ZS.hasHeadLineOfSight(camX, camZ, tx, tz, cols, headY, { endpointShrink: 0.35 })
+      : true;
+  }
+
+  function _tickNameTagOcclusion(camX, camZ, camHeadY) {
+    _nameTagLosAcc++;
+    if (_nameTagLosAcc % 3 !== 0) return;
+    remotePlayers.forEach((rp) => _updateNameTagVisibility(rp.mesh, camX, camZ, camHeadY));
+    sleepingBodies.forEach((entry) => _updateNameTagVisibility(entry.mesh, camX, camZ, camHeadY));
+    deathCorpses.forEach((entry) => _updateNameTagVisibility(entry.mesh, camX, camZ, camHeadY));
   }
 
   function _tickDecorVisibility(px, pz) {
@@ -367,6 +418,32 @@
 
   function _loadDeferredScript(src) {
     return ZS.loadScript?.(src) ?? Promise.reject(new Error('ZS.loadScript missing'));
+  }
+
+  function _resnapS01Decor() {
+    if (!ZS.getDecorGroundHeight) return;
+    for (const { root, data } of decorItems.values()) {
+      const pk = String(data?.placementKey || '');
+      if (!pk.startsWith('s01:') || !root) continue;
+      const rotY = data.rotY ?? root.userData?.decorSpec?.rotY ?? root.rotation?.y ?? 0;
+      const px = root.position.x;
+      const pz = root.position.z;
+      const gy = data.prefabId === 'building_survivor_shack' && ZS.sampleShackPadHeight
+        ? ZS.sampleShackPadHeight(px, pz, rotY)
+        : ZS.getDecorGroundHeight(px, pz);
+      if (!Number.isFinite(gy)) continue;
+      root.position.y = gy;
+      data.baseY = gy;
+      ZS.refreshDecorCollision?.(root);
+    }
+  }
+
+  function _rebuildAllDecorColliders() {
+    for (const { root } of decorItems.values()) {
+      if (root?.userData?.decorSpec && root.userData.collide !== false) {
+        ZS.refreshDecorCollision?.(root);
+      }
+    }
   }
 
   function _clearSyncedWorldState() {
@@ -498,7 +575,9 @@
       if (s.dead) _addDeathCorpse(s);
       else _addSleepingBody(s);
     }
-    if (data.killedWhileOffline) {
+    if (data.respawnReason === 'stale_death') {
+      ZS.UI?.showNotif?.('Vous étiez mort — respawn à la plage avec un nouveau kit.');
+    } else if (data.respawnReason === 'offline_kill' || data.killedWhileOffline) {
       ZS.UI?.showNotif?.('Vous avez été tué pendant votre absence — respawn à la plage.');
     }
 
@@ -530,6 +609,11 @@
     console.info('[sync] décor', decorList.length, Math.round(performance.now() - tSync), 'ms');
     ZS.setDeferRockSnap?.(false);
     ZS.resnapAllMinableRocks?.(_scene);
+    _resnapS01Decor();
+    _rebuildAllDecorColliders();
+    requestAnimationFrame(() => {
+      ZS.BuildingDebug?.dumpShack?.();
+    });
     ZS.BuildAnchors?.syncRegistryFromDecor?.(decorList);
     ZS.reconcileAllBuildFloors?.();
     _endColliderBatch();
@@ -551,18 +635,15 @@
     for (const st of structList) ZS.Inventory.spawnStructure(st);
 
     const clientV = window.__ZS_CLIENT_VERSION || '';
-    const serverBuild = data.serverBuild || data.invDebugBuild || null;
+    const invDebugBuild = data.serverBuild || data.invDebugBuild || null;
     ZS.ConsumeDebug?.log('game-init-server-build', {
       clientVersion: clientV,
-      serverBuild,
+      invDebugBuild,
       wokeFromSleep: !!data.wokeFromSleep,
     });
-    if (clientV && serverBuild && clientV !== serverBuild) {
-      console.warn('[inv-debug] VERSION MISMATCH game-init', { client: clientV, server: serverBuild });
-      ZS.UI?.showNotif?.('Serveur pas à jour — redémarrer Node (npm run dev:server)');
-    } else if (clientV && !serverBuild) {
-      console.warn('[inv-debug] Serveur ancien (pas de serverBuild) — redémarrer Node');
-      ZS.UI?.showNotif?.('Serveur ancien — arrêter Node puis npm run dev:server');
+    if (!invDebugBuild) {
+      console.warn('[inv-debug] Serveur ancien (pas invDebugBuild) — npm run dev:server');
+      ZS.UI?.showNotif?.('Serveur ancien — npm run dev:server');
     }
 
     if (data.inventory) {
@@ -570,12 +651,20 @@
         trace: ZS.ConsumeDebug?.traceId?.('init'),
         serverFood: ZS.ConsumeDebug?.foodFromInv?.(data.inventory),
         wokeFromSleep: !!data.wokeFromSleep,
-        serverBuild,
+        invDebugBuild,
       });
       ZS.Inventory.loadFromSave(data.inventory);
       const cmp = ZS.ConsumeDebug?.compare?.(data.inventory, 'game-init');
       ZS.ConsumeDebug?.log('game-init-inv-loaded', { compare: cmp });
       requestInvDebugSnapshot(cmp?.trace, 'post-game-init');
+    }
+    if (typeof data.health === 'number' && _state?.player) {
+      _state.player.health = Math.max(0, data.health);
+      ZS.UI.setHealth(
+        Math.floor(_state.player.health),
+        ZS.Inventory?.getMaxHealth?.() || 100,
+      );
+      localStorage.setItem('zombie_health', String(Math.floor(_state.player.health)));
     }
     if (data.survival) ZS.Survival.loadFromSave(data.survival);
     const scenario = data.scenario || data.inventory?.scenario;
@@ -823,9 +912,22 @@
       state.player.x = d.x;
       state.player.y = d.y;
       state.player.z = d.z;
-      if (d.rotY != null) state.camera.yaw = d.rotY;
+      if (d.rotY != null) {
+        state.player.rotY = d.rotY;
+        state.camera.yaw = d.rotY;
+      }
       state.player.velocityY = 0;
       state.player.onGround = true;
+      if (ZS._camera) {
+        ZS._camera.position.set(d.x, d.y, d.z);
+        if (d.rotY != null) ZS._camera.rotation.y = d.rotY;
+      }
+      if (ZS._localAvatar) {
+        ZS._localAvatar.position.set(d.x, d.y - 1.7, d.z);
+        ZS._localAvatar.rotation.y = d.rotY ?? state.camera.yaw;
+      }
+      _syncPlayerPosToServer();
+      ZS.UI?.showNotif?.(`Téléporté → (${Math.round(d.x)}, ${Math.round(d.z)})`);
     });
 
     socket.on('server-announce', (d) => {
@@ -979,8 +1081,9 @@
       if (!d) return;
       ZS.Survival?.applyServerState?.(d);
       if (typeof d.health === 'number' && _state?.player) {
-        _state.player.health = d.health;
-        ZS.UI.setHealth(Math.floor(d.health), ZS.Inventory?.getMaxHealth?.() || 100);
+        _state.player.health = Math.max(0, d.health);
+        ZS.UI.setHealth(Math.floor(_state.player.health), ZS.Inventory?.getMaxHealth?.() || 100);
+        localStorage.setItem('zombie_health', String(Math.floor(_state.player.health)));
       }
     });
 
@@ -1037,6 +1140,8 @@
 
     socket.on('move-correction', (d) => {
       if (!_state?.player || !d) return;
+      const px = _state.player.x;
+      const pz = _state.player.z;
       _state.player.x = d.x;
       _state.player.y = d.y;
       _state.player.z = d.z;
@@ -1044,6 +1149,10 @@
       if (ZS._camera) {
         ZS._camera.position.set(d.x, d.y, d.z);
         ZS._camera.rotation.y = d.rotY ?? _state.camera.yaw;
+      }
+      if (Math.hypot(d.x - px, d.z - pz) > 8) {
+        console.warn('[sync] move-correction', { from: [px, pz], to: [d.x, d.z] });
+        ZS.UI?.showNotif?.(`Position corrigée → (${Math.round(d.x)}, ${Math.round(d.z)})`);
       }
     });
 
@@ -1134,6 +1243,8 @@
     const lp = getLocalXZ();
     _tickDecorVisibility(lp.x, lp.z);
     _tickDeferredTreeLoader();
+    const cam = ZS._camera;
+    if (cam) _tickNameTagOcclusion(cam.position.x, cam.position.z, cam.position.y);
 
     const LERP = 12;
     remotePlayers.forEach((rp) => {
@@ -1377,6 +1488,7 @@
 
     // Name tag sprite
     const tag = _makeNameTag(p.username);
+    mesh.userData.nameTag = tag;
     mesh.add(tag);
 
     remotePlayers.set(p.id, {
@@ -1415,6 +1527,7 @@
     _scene.add(mesh);
     const tag = _makeNameTag(`☠ ${s.username || ''}`);
     tag.position.set(0, 0.55, 0);
+    mesh.userData.nameTag = tag;
     mesh.add(tag);
     if (s.equipped) ZS.setRemoteHandItem(mesh, s.equipped);
     deathCorpses.set(playerId, {
@@ -1478,6 +1591,7 @@
     _scene.add(mesh);
     const tag = _makeNameTag(`💤 ${s.username || ''}`);
     tag.position.set(0, 0.55, 0);
+    mesh.userData.nameTag = tag;
     mesh.add(tag);
     if (s.equipped) ZS.setRemoteHandItem(mesh, s.equipped);
     sleepingBodies.set(playerId, {
@@ -1535,6 +1649,7 @@
     const tex = new THREE.CanvasTexture(canvas);
     const mat = new THREE.SpriteMaterial({ map: tex, transparent: true, depthTest: false });
     const sprite = new THREE.Sprite(mat);
+    sprite.userData.isNameTag = true;
     sprite.scale.set(1.6, 0.4, 1);
     sprite.position.set(0, 2.55, 0); // above head
     return sprite;
@@ -1759,6 +1874,10 @@
     return decorItems.get(id)?.root || null;
   }
 
+  function _forEachDecor(fn) {
+    decorItems.forEach((entry, id) => { fn(entry, id); });
+  }
+
   window.ZS = window.ZS || {};
   ZS.Network = {
     preconnect, init, tick, getLocalXZ, sendMove, sendShoot, sendRespawn, sendDied, sendSurvival, sendEquip, sendAttack, sendFootstep,
@@ -1775,6 +1894,7 @@
     requestCampfireCook,
     requestCampRest,
     getDecorRoot: _getDecorRoot,
+    forEachDecor: _forEachDecor,
     patchDecorFloorHeight: _patchDecorFloorHeight,
     syncDecorFloorHeight,
     resolveRemotePlayerCollision,

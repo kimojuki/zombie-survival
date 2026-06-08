@@ -1332,6 +1332,7 @@
 
     if (++_shadowTick >= _SHADOW_INTERVAL) { _shadowTick = 0; renderer.shadowMap.needsUpdate = true; }
 
+    ZS.BuildingDebug?.tick?.();
     renderer.render(scene, camera);
   }
 

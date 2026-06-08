@@ -79,8 +79,57 @@
     root.userData.signKind = 'beach_safe_zone';
   }
 
+  /** Torche balise — attire l'œil vers le panneau de sortie (jour + nuit). */
+  function _buildBeachExitTorch(root) {
+    const M = ZS.CampTextures?.materials?.();
+    const poleMat = M ? M.woodPole(0x6b4a20) : new THREE.MeshLambertMaterial({ color: 0x6b4a20 });
+    const metalMat = M ? M.metal() : new THREE.MeshLambertMaterial({ color: 0x6a6e72 });
+    const wrapMat = M ? M.canvas(0x4a3828) : new THREE.MeshLambertMaterial({ color: 0x4a3828 });
+
+    _add(root, new THREE.CylinderGeometry(0.055, 0.075, 2.05, 6), poleMat, 0, 1.02, 0);
+    _add(root, new THREE.CylinderGeometry(0.09, 0.09, 0.06, 8), metalMat, 0, 2.08, 0);
+    _add(root, new THREE.CylinderGeometry(0.07, 0.07, 0.28, 8), wrapMat, 0, 2.24, 0);
+
+    const flameCore = new THREE.Mesh(
+      new THREE.SphereGeometry(0.11, 7, 6),
+      new THREE.MeshBasicMaterial({ color: 0xff5a18 }),
+    );
+    flameCore.position.set(0, 2.42, 0);
+    root.add(flameCore);
+
+    const flameHalo = new THREE.Mesh(
+      new THREE.SphereGeometry(0.2, 7, 6),
+      new THREE.MeshBasicMaterial({ color: 0xffaa44, transparent: true, opacity: 0.42 }),
+    );
+    flameHalo.position.set(0, 2.46, 0);
+    root.add(flameHalo);
+
+    const light = new THREE.PointLight(0xff6620, 2.4, 20, 1.55);
+    light.position.set(0, 2.45, 0);
+    root.add(light);
+
+    const fill = new THREE.PointLight(0xffcc77, 0.65, 11, 2);
+    fill.position.set(0.15, 2.2, 0.12);
+    root.add(fill);
+
+    if (ZS.registerFireLight) {
+      ZS.registerFireLight(light, flameCore, {
+        baseIntensity: 2.4,
+        fillLight: fill,
+        onTick(t, flicker) {
+          const s = 1 + flicker * 0.22 + Math.sin(t * 0.011) * 0.06;
+          flameCore.scale.setScalar(s);
+          flameHalo.scale.setScalar(0.95 + flicker * 0.28);
+          flameHalo.material.opacity = 0.34 + flicker * 0.22;
+        },
+      });
+    }
+    root.userData.beachExitTorch = true;
+  }
+
   window.ZS = window.ZS || {};
   if (ZS.registerDecorPrefab) {
     ZS.registerDecorPrefab('sign_beach_exit', { build: _buildExitSign });
+    ZS.registerDecorPrefab('beach_exit_torch', { build: _buildBeachExitTorch });
   }
 }());

@@ -154,6 +154,274 @@ Copier dans la description de PR :
 - **Collisions** : murs extérieurs, cloisons et porte disposent de colliders composés.
 - **Version** : `20260608-smallcity-houses-270`
 
+### Completed — Cabane S01 complète + doc + push (2026-06-08)
+
+- **Prefab** `building_survivor_shack` : 7/7 pièces ✅ (sol, 4 murs, porte pivotée, toit)
+- **Colliders** : 9 fermé ; porte ouverte = battant pivoté (`door-leaf-collider.mjs`)
+- **Seed** : `s01:cabin01:shack` @ `(165.1, 7.1)`, `rotY: 0.55` ; dégagement arbres 10 m
+- **Docs** : `design/BUILDING_PREFABS.md` (registre + suite S01), `docs/BUILDING_COLLIDERS.md`, `S01_ROADMAP.md`
+- **Outils** : `building_debug.js`, `tools/debug-shack-*.mjs`, `tools/check-s01-decor.mjs`
+- **Version** : `20260608-shack-roof-301`
+
+### Completed — Cabane pièce 7 toit (2026-06-08)
+
+- **Porte** ✅ playtest Bruno (battant ouvert collisionne le panneau)
+- **Pièce 7** : 2 pans `rotX:±pitch` + faîtière + pignons `DoubleSide` ; colliders 2 boîtes inclinées `minY/maxY` 2.55→3.65
+- **Shared** : `survivor-shack-roof.mjs` ; test `survivor-shack-roof.test.mjs`
+- **Colliders totaux** : 9 (7 pièces + 2 pans toit)
+- **Version** : `20260608-shack-roof-301` — toit ✅ playtest Bruno
+
+### Completed — Porte ouverte : collision sur le battant pivoté (2026-06-08)
+
+- **Bug** : porte ouverte = collider supprimé → on traverse le panneau visible
+- **Fix** : `door-leaf-collider.mjs` — centre + `localRotY` autour du pivot ; `collider-resolve` + `world.js` + `decor_colliders.js`
+- **Version** : `20260608-shack-dooropen-300`
+
+### Completed — Cabane pièce 6 porte (2026-06-08)
+
+- **Mur est** ✅ playtest Bruno
+- **Pièce 6** : linteau `1.28×0.42` + battant `1.24×2.02` pivot `(-0.60, 0.08, -2.10)` ; collider `door:true`, `hd:0.28`
+- **Interaction** : `doorPivot` sur root → `DECOR_DOORS` + toggle E (fermé = bloque, ouvert = libre)
+- **Tests** : `survivor-shack-door.test.mjs` ; `decor-colliders` 7 colliders / toggle ouvert
+- **Colliders totaux** : 7 fermé, 6 ouvert
+- **Version** : `20260608-shack-door-299` — playtest Bruno porte
+
+### Completed — Cabane pièce 5 mur est (+X) (2026-06-08)
+
+- **Mur ouest** ✅ playtest Bruno
+- **Pièce 5** : pan `0.18×2.55×4.15` @ `lx:2.54` ; collider `hw:0.22`, `hd:2.075` (miroir ouest)
+- **Shared** : `survivor-shack-wall-east.mjs` ; test `survivor-shack-wall-east.test.mjs`
+- **Colliders totaux** : 6 (sol + nord + 2× sud + ouest + est)
+- **Version** : `20260608-shack-walle-298` — mur est ✅ playtest Bruno
+
+### Completed — Cabane pièce 4 mur ouest (−X) (2026-06-08)
+
+- **Mur sud** ✅ playtest Bruno
+- **Pièce 4** : pan `0.18×2.55×4.15` @ `lx:-2.54` ; collider `hw:0.22`, `hd:2.075`
+- **Shared** : `survivor-shack-wall-west.mjs` ; test `survivor-shack-wall-west.test.mjs`
+- **Version** : `20260608-shack-wallw-297` — mur ouest ✅ playtest Bruno
+
+### Completed — Cabane pièce 3 mur sud (−Z) + doc registre (2026-06-08)
+
+- **Mur nord** ✅ playtest Bruno (rotY Three.js corrigé en 295)
+- **Pièce 3** : 2 pans sud `lz:-2.04`, `lx:±1.61` — ouverture porte ~1.29 m au centre
+- **Shared** : `survivor-shack-wall-south.mjs` ; tests `survivor-shack-wall-south.test.mjs`
+- **Doc** : `design/BUILDING_PREFABS.md` (registre pièces + formule rotY + historique bugs)
+- **Mur sud** ✅ playtest Bruno
+- **Version** : `20260608-shack-walls-296`
+
+### Completed — Fix rotY colliders ≠ Three.js (traversée mur cabane) (2026-06-08)
+
+- **Cause** : `decorLocalToWorld` inversait le signe X vs `Object3D.rotation.y` → collision ~2,13 m décalée en X pour `rotY=0.55`
+- **Fix** : formule Three.js dans `world.js`, `collider-resolve.mjs`, `survivor-shack-pad.mjs`, `sampleShackPadHeight`
+- **Tests** : `survivor-shack-rotation.test.mjs` + test 0.55 dans `collider-resolve.test.mjs`
+- **Version** : `20260608-threerot-fix-295`
+
+### Completed — Fix game-init crash + mesure mesh/collider (2026-06-08)
+
+- **Bug** : `ReferenceError: serverBuild is not defined` dans `_finalizeGameInit` → boucle retry game-init
+- **Fix** : `invDebugBuild` ; `dumpShack` en `requestAnimationFrame` ; `updateMatrixWorld` avant mesure ; sync spec depuis root avant `buildDecorColliders`
+- **Version** : `20260608-shack-col-fix-294`
+
+### Completed — BuildingDebug + doc collisions prefab (2026-06-08)
+
+- **Doc** : `docs/BUILDING_COLLIDERS.md` — pièges cabane, workflow, checklist nouvelle pièce
+- **Debug** : `building_debug.js` — wireframes Shift+F8, `dumpShack()`, `probePlayer()`, compare mesh/collider
+- **Fix alerte** : `consume_debug` ne compare plus `invDebugBuild` ↔ `clientVersion` (champs différents)
+- **Version** : `20260608-building-debug-293`
+
+### Completed — Cabane : sync colliders pivot + murs fantômes (2026-06-08)
+
+- **Cause** : ancien `decor_colliders.js` (6 murs latéraux/sud/porte) en cache → collisions hors mesh (sol + mur nord seulement)
+- **Fix** : `_syncDecorSpecFromRoot` ; mesh cabane sur `root` sans sous-groupe ; `_rebuildAllDecorColliders` après resnap S01
+- **Version** : `20260608-shack-col-sync-292` — Ctrl+F5 obligatoire
+
+### Completed — Cabane : sol terrain cabossé + collision mur nord (2026-06-08)
+
+- **Sol** : `sampleShackPadHeight` — max terrain sur 4 coins + centre (`survivor-shack-pad.mjs`) ; spawn S01 + `_resnapS01Decor`
+- **Mur nord** : collider `hd: 0.22`, sans bande `minY`/`maxY` (évite skip sur pente / rotY)
+- **Tests** : `survivor-shack-pad.test.mjs` ; wall-north + decor-colliders mis à jour
+- **Version** : `20260608-shack-pad-walln-291` — playtest Bruno mur nord
+
+### Completed — Cabane : pièce 2 mur nord (+Z) (2026-06-08)
+
+- **Sol** ✅ playtest Bruno
+- **Mur nord** ✅ playtest Bruno (2026-06-08, après fix rotY 295)
+- **Ajout** : `_buildSurvivorShackWallNorth` + `survivor-shack-wall-north.mjs`
+- **Version** : `20260608-shack-walln-290`
+
+### Completed — Cabane : reset progressif — pièce 1 sol (2026-06-08)
+
+- **Décision** : reconstruction 1 élément / validation ; porte/murs/toit retirés temporairement
+- **Pièce 1** : mesh sol seul + collider `survivor-shack-floor.mjs` (`minY`/`maxY` 0→0.12)
+- **Version** : `20260608-shack-floor-289`
+
+### Completed — Porte shack : collider ancré au pivot prefab (2026-06-08)
+
+- **Règle** : offsets locaux `lx`/`lz` + `cx`/`cz` = pivot instance ; `packages/shared/src/survivor-shack-door.mjs`
+- **Tests** : `survivor-shack-door.test.mjs` (2 emplacements, même déf locale)
+- **Version** : `20260608-shack-door-288`
+
+### Completed — Cabane : fix porte traversable (collider trop fin) (2026-06-08)
+
+- **Cause** : `hd: 0.10` + cabane `rotY` → zone sans contact sur l’axe d’entrée ; resnap S01 sans refresh colliders
+- **Fix** : `hd: 0.28` ; push si agent déjà dans la boîte (`collider-resolve`) ; `refreshDecorCollision` après resnap S01
+- **Version** : `20260608-shack-door-287`
+
+### Completed — Workflow prefabs bâtiment réutilisables (2026-06-08)
+
+- **Règle** : une pièce = mesh + colliders + tests + fiche `design/BUILDING_PREFABS.md` ; validation playtest avant pièce suivante
+- **Cursor** : `.cursor/rules/building-prefabs.mdc`
+- **En cours** : porte shack 🔄 (pas encore ✅)
+
+### Completed — Cabane : fix collider porte sur pente (2026-06-08)
+
+- **Cause** : `minY`/`maxY` + garde `feetY < baseY - 0.35` désactivait la porte en approche basse (terrain S01)
+- **Fix** : battant pleine hauteur sans bande verticale ; garde `baseY` seulement si `maxY` défini
+- **Version** : `20260608-shack-door-286`
+
+### Completed — Cabane : collider porte (fermée / ouverte) (2026-06-08)
+
+- **Playtest 1/?** : battant `door: true` @ `(0.02, -2.10)` — actif fermé, retiré à l’ouverture
+- **Version** : `20260608-shack-door-285`
+
+### Completed — Cabane : zéro collider + pignons visibles (2026-06-08)
+
+- **Mesh** : maison d’origine conservée ; pignons triangulaires en `DoubleSide` (faces invisibles depuis l’extérieur)
+- **Colliders** : `building_survivor_shack: []` — ajout un par un en playtest
+- **Version** : `20260608-shack-nocol-284`
+
+### Completed — Cabane : revert toit + collisions simplifiées (2026-06-08)
+
+- **Régression** : « étanchéité » avait rallongé les murs au-dessus du toit et cassé la pente ; colliders sol/toit inclinés = collisions fantômes
+- **Fix** : mesh `_buildSurvivorShack` restauré (toit 2 pans + pignons d’origine) ; colliders = 5 murs fins + porte uniquement
+- **Version** : `20260608-shack-revert-283`
+
+### Completed — Cabane : étanchéité visuelle murs/toit (2026-06-08)
+
+- **Fix** : coins pleins, linteau, soffites, plafond intérieur, chevauchement pans toit, pignons double face + remplissage
+- **Version** : `20260608-shack-seal-282`
+
+### Completed — Nametags masqués derrière murs (LOS) (2026-06-08)
+
+- **Fix** : `hasHeadLineOfSight` (colliders décor, hauteur tête) ; nametags cachés si mur entre caméra et joueur
+- **Version** : `20260608-nametag-los-281`
+
+### Completed — Collisions cabane survivor_shack (2026-06-08)
+
+- **Fix** : colliders sol/murs/fenêtre/porte/toit/pignons alignés sur `_buildSurvivorShack` ; `rotX` par définition pour pans toit
+- **Version** : `20260608-shack-col-280`
+
+### Completed — Dégagement arbres autour bâtiments S01 (2026-06-08)
+
+- **Règle** : rayon 10 m autour de chaque `building_*` seed S01 — exclusion seed/regen + purge arbres au boot
+- **Cabane #1** : clairière auto @ `(165.1, 7.1)`
+- **Version** : `20260608-tree-clear-279`
+
+### Completed — Cabane #1 posée (emplacement validé) (2026-06-08)
+
+- **Playtest OK** : `(165.1, 7.1)` — repère retiré, `building_survivor_shack` seed `s01:cabin01:shack`
+- **Version** : `20260608-cabin01-shack-278`
+
+### Completed — Cabane #1 repère déplacé près plage (2026-06-08)
+
+- **Playtest** : `(108,-11)` trop loin — nouvelle ancre **`(165.1, 7.1)`** (pos Bruno via RCON `players`)
+- **Seed** : poteau + torche ; `tpcheck cabane` vue @ `(169.1, 7.1)`
+- **Version** : `20260608-cabin01-165-277`
+
+### Completed — Repère cabane #1 invisible depuis tpcheck cabane (2026-06-08)
+
+- **Cause** : `rotY` vue sentier pointait à l’opposé (~-2.35 au lieu de ~1.04) ; hauteur S01 via `getTerrainHeight` seul
+- **Fix** : rotY calculé vers `(108,-11)` ; `getDecorGroundHeight` + resnap post-sync ; torche `beach_exit_torch` à côté du poteau
+- **Version** : `20260608-marker-vis-276`
+
+### Completed — Fix double TP admin (move-correction) (2026-06-08)
+
+- **Symptôme** : `tpcheck` téléporte puis renvoie ailleurs — repère invisible
+- **Cause** : `lastX/lastZ` pas mis à jour au TP ; anti-cheat `move` / `move-correction` annule la position
+- **Fix** : grace TP serveur + sync `lastX/lastZ` ; client `admin-tp` → `_syncPlayerPosToServer` ; notif si correction > 8 m
+- **Version** : `20260608-tp-fix-275`
+
+### Completed — Cabane #1 : repère poteau avant shack (2026-06-08)
+
+- **Workflow** : `spawn_marker_right` @ `(108,-11)` clé `s01:cabin01:marker` — pas de cabane tant que repère non validé
+- **RCON** : `tpcheck repere` — TP sur l’emplacement exact
+
+### Completed — Fix tp check arguments invalides (2026-06-08)
+
+- **Cause** : mauvais chemin import `s01-checkpoints.mjs` depuis `apps/server/src/rcon.js`
+- **Fix** : `../../../packages/...` + commande `tpcheck cabane`
+
+### Completed — Téléportation points de vérification S01 (2026-06-08)
+
+- **RCON** : `tpcheck` / `tp check` — points S01 (`s01-checkpoints.mjs`)
+- **Client** : `admin-tp` sync caméra + notif
+- **Version** : `20260608-tp-check-274`
+
+### Completed — Fix seed cabane S01 invisible (2026-06-08)
+
+- **Cause** : `ensureS01World` purge + `markSeedRemoved` → reseed bloqué au boot suivant
+- **Fix** : purge `reseed` sans marquer supprimé ; `unmarkSeed` avant seed ; cabane déplacée `(108, -11)` plus proche sentier
+
+### Completed — Prototype cabane S01 (2026-06-08)
+
+- **Placement** : `building_survivor_shack` @ `(108, -11)` — sud du sentier, sans aplat terrain
+- **Seed** : `s01:cabin01:proto` ; redémarrer Node + Ctrl+F5
+
+### Completed — Roadmap S01 Phase 1 validée (2026-06-08)
+
+- **1.1** : fin sentier OK (`BEACH_TRAIL_PTS`) — note « ajuster plus tard » dans `S01_ROADMAP.md`
+- **1.2** : pas de zone dégagée — sentier dans forêt dense suffit
+- **1.3** : repère bouche plage = panneau + torche existants
+- **2.1 pont** : reporté jusqu’à rivière validée ; **prochain** = première cabane (tâtonnement)
+
+### Completed — Survie corps endormi (déco) (2026-06-08)
+
+- **Règles** : déco → faim/soif baissent ; PV gelés ; infection/saignement en pause ; zombies ignorent les dormeurs ; PvP seul peut blesser/tuer un dormeur
+- **Code** : `tickSleeperSurvival` + `catchUpSleeperSurvival` ; tick 1 s sur `sleepingPlayers` ; rattrapage boot + réveil ; `lastSurvivalTickAt` à la déco
+- **Réveil** : mêmes PV qu’à la déco (sauf si tapé par un joueur) ; faim/soif rattrapées
+- **Version** : `20260608-sleeper-survival-273`
+
+### Completed — Fix 0 PV à la connexion (2026-06-08)
+
+- **Symptôme** : reconnect avec 0 PV, mort au premier coup
+- **Cause** : `health=0` persisté en DB après mort sans respawn ; pas d’écran de mort à la reconnexion
+- **Hors-ligne vérifié** : zombies n’attaquent pas les corps endormis ; faim/soif ne tick pas offline
+- **Fix** : `player-connect-health.js` — respawn plage si DB à 0 PV sans session ; `player-death` si mort en cours (refresh) ; sac de mort au disconnect si mort
+- **Version** : `20260608-fix-connect-health-272`
+
+### Completed — Placement S01 au tâtonnement (coords v1 obsolètes) (2026-06-08)
+
+- **Décision** : ne plus suivre les `(x,z)` de la doc map v1 ; POI un par un en jeu
+- **Doc** : `START_FOREST.md`, `S01_ROADMAP.md` — workflow + tableau *Ancres validées*
+- **Code** : `S01_BUILD_EXCLUSION_POIS` vide jusqu’à ancrage réel ; placeholders commentés dans `s01-poi.mjs` ; seed décor S01 vide ; client `s01_bounds.js` sans POI ni zone safe camp v1 (plage seule)
+- **Version** : `20260608-s01-placement-tatonnement-271`
+
+### Completed — Roadmap S01 forêt de départ (2026-06-08)
+
+- **Doc** : `design/secteur/S01_ROADMAP.md` — intentions, phases, ordre de travail
+
+### Completed — Exclusion plage arbres forêt / rochers (2026-06-08)
+
+- **Règle** : sable = palmiers + décor plage uniquement ; pas de chêne/pin/rochers minables sur la plage
+- **Fix** : `isForestTerrainAllowed()` dans `beach-spawn.mjs` ; suppression zone `coastal_edge` + `beach_ring` ; lisière `forest_coast_west` ; regen arbres sans `coastal_edge`
+- **Tests** : plage safe sand rejetée pour trees/rocks
+
+### Completed — Densité forêt S01 arbres + rochers (2026-06-08)
+
+- **Demande** : combler les zones vides de la forêt S01 (arbres + rochers minables sur tout le secteur)
+- **Fix** : grille rect `forest_grid_*` / `forest_rocks_*` (9+1 cellules) ; filtre `isInsideSector01` + hors plage ; `treeTargetStanding` 580 ; `rockTargetWorld` 140 ; regen rochers limité aux zones forêt
+- **Fichiers** : `tree-placements.mjs`, `rock-placements.mjs`, `resource-spawn.mjs`
+- **Reseed** : redémarrer serveur ou RCON `decorseed trees reset` + `decorseed rocks reset`
+
+### Completed — Fix PV à zéro après consommation (2026-06-08)
+
+- **Symptôme** : sandwich / eau → barre de vie à 0
+- **Cause** : `_syncArmor` écrasait `p.health` si `null` ; PV serveur jamais envoyés au `game-init` (localStorage obsolète)
+- **Fix** : `_syncArmor` UI-only ; `health` dans `game-init` + ack `use-item` ; sync `survival-update` → localStorage
+- **Version** : `20260608-fix-health-sync-270`
+>>>>>>> 55fea22 (feat: cabane S01 compl?te, seed cabin01 et documentation b?timents)
+
 ### Completed — Doc inventaire / consommation (2026-06-08)
 
 - **Doc** : `docs/INVENTORY_CONSUMPTION.md` — flux `use-item`, bugs corrigés, debug `[inv-debug]`, checklist redémarrage serveur

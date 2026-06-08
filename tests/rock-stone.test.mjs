@@ -6,7 +6,8 @@ import {
   isMinableRockPrefab,
   ROCK_STONE_STOCK,
 } from '../packages/shared/src/rock-stone.mjs';
-import { computeRockPlacements, computeCampRockAnchors, isInCampFootprint } from '../packages/shared/src/rock-placements.mjs';
+import { computeRockPlacements, computeCampRockAnchors, isInCampFootprint, getForestRockZones } from '../packages/shared/src/rock-placements.mjs';
+import { isOnBeachSafeSand, isForestTerrainAllowed } from '../packages/shared/src/beach-spawn.mjs';
 import { isRockSpawnClear, isRockAnchorClear } from '../packages/shared/src/resource-spawn.mjs';
 import { computeCampBorderLogPlacements } from '../packages/shared/src/camp-border-logs.mjs';
 
@@ -65,5 +66,21 @@ test('rock placements produce valid entries', () => {
     assert.ok(Number.isFinite(p.x));
     assert.ok(Number.isFinite(p.z));
     assert.ok(p.zoneId);
+  }
+});
+
+test('forest rock zones never include beach ring', () => {
+  const ids = getForestRockZones().map((z) => z.id);
+  assert.ok(!ids.includes('beach_ring'));
+});
+
+test('forest rock placements stay off beach safe sand', () => {
+  const forest = computeRockPlacements().filter((p) => (
+    p.zoneId?.startsWith('forest_') || p.zoneId === 'trail_side' || p.zoneId === 'east_wilds'
+  ));
+  assert.ok(forest.length >= 30);
+  for (const p of forest) {
+    assert.ok(isForestTerrainAllowed(p.x, p.z), `rock on sand at ${p.x},${p.z}`);
+    assert.ok(!isOnBeachSafeSand(p.x, p.z));
   }
 });

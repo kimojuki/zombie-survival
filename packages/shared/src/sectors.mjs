@@ -59,11 +59,11 @@ export const SECTORS_ALL = Object.freeze([
     xMax: -125,
     zMin: -55,
     zMax: 55,
-    status: 'locked',
+    status: 'open',
     fill: '#6a5040',
     stroke: '#4a3020',
     pattern: 'town',
-    mapNote: 'Village abandonné — loot intermédiaire',
+    mapNote: 'OUVERT — village abandonné, loot intermédiaire',
   },
   {
     id: 's03',

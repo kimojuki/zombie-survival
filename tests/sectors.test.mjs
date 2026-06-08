@@ -17,6 +17,11 @@ describe('sectors registry', () => {
     assert.equal(SECTOR_01.status, 'open');
   });
 
+  it('sector 02 small town is open', () => {
+    const s02 = SECTORS_ALL.find((s) => s.id === 's02');
+    assert.equal(s02?.status, 'open');
+  });
+
   it('beach spawn resolves to sector 01', () => {
     const s = getSectorAt(BEACH_SPAWN.x, BEACH_SPAWN.z);
     assert.equal(s?.id, 's01_start_forest');

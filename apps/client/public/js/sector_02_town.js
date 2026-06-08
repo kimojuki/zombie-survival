@@ -22,6 +22,11 @@
       taperEnd: 14,
     },
   ];
+
+  // Maisons prefab S02 : terrain aplati avant génération pour éviter que la terre
+  // traverse le plancher des pièces.
+  ZS.registerFlatZone?.(-141, -22, 6.4, 5.6, 4);
+  ZS.registerFlatZone?.(-141,  23, 5.9, 6.1, 4);
   // ── Build ─────────────────────────────────────────────────────────────────────
 
   function build(scene) {
@@ -441,15 +446,16 @@
   // ── Maisons résidentielles + intérieurs ───────────────────────────────────────
 
   function _buildHouses(scene, B) {
+    _buildPrefabHouse(scene, 'smallcity_house_a', -141, -22, 0, 11.0, 9.5);
+    _buildPrefabHouse(scene, 'smallcity_house_b', -141,  23, Math.PI, 10.0, 10.5);
+
     const houses = [
       // [cx, cz, W, D, wallH, wallMat, roofMat, door]
       // Rangée nord (cz=-22, porte vers rue sud)
-      [-141, -22, 9.0, 8.0, 3.2, B.M.brick,    B.M.roofRed,  'S'],
       [-163, -22, 9.0, 8.0, 3.1, B.M.wood,     B.M.roofDark, 'S'],
       [-192, -22, 9.0, 8.0, 3.0, B.M.concrete, B.M.roofGray, 'S'],
       [-212, -22, 9.0, 8.0, 3.0, B.M.brick2,   B.M.roofDark, 'S'],
       // Rangée sud (cz=+23, porte vers rue nord)
-      [-141,  23, 9.0, 8.0, 3.2, B.M.wood,     B.M.roofRed,  'N'],
       [-163,  23, 9.0, 8.0, 3.0, B.M.brick,    B.M.roofDark, 'N'],
       [-192,  23, 9.0, 8.0, 2.8, B.M.wood2,    B.M.roofGray, 'N'],
       [-212,  23, 9.0, 8.0, 2.9, B.M.concrete, B.M.roofDark, 'N'],
@@ -468,6 +474,17 @@
     // Deuxième rangée sud
     B.house(scene, -145,  33, 6.5, 6.0, 2.8, B.M.brick2,   B.M.roofGray, 'N');
     B.house(scene, -220,  27, 6.5, 6.0, 2.7, B.M.concrete, B.M.roofDark, 'N');
+  }
+
+  function _buildPrefabHouse(scene, prefabId, cx, cz, rotY, w, d) {
+    ZS.registerLoot('maison', cx, cz, w, d);
+    if (!ZS.spawnDecorPrefab) return;
+    ZS.spawnDecorPrefab(scene, prefabId, cx, 0, cz, {
+      decorId: `static_s02_${prefabId}_${Math.round(cx)}_${Math.round(cz)}`,
+      rotY,
+      scale: 1,
+      doorOpen: true,
+    });
   }
 
   function _furnishHouse(scene, B, cx, cz, baseY, W, D, doorDir) {

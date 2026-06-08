@@ -50,9 +50,9 @@
 
       xMin: -295, xMax: -125, zMin: -55, zMax: 55,
 
-      status: 'locked', fill: '#6a5040', stroke: '#4a3020', pattern: 'town',
+      status: 'open', fill: '#6a5040', stroke: '#4a3020', pattern: 'town',
 
-      mapNote: 'Village abandonné — loot intermédiaire',
+      mapNote: 'OUVERT — village abandonné, loot intermédiaire',
 
     },
 
@@ -157,10 +157,22 @@
 
 
   const SECTOR_01 = SECTORS_ALL[0];
+  const SECTOR_02 = SECTORS_ALL.find((s) => s.id === 's02');
 
 
 
   const SECTORS_LOCKED = SECTORS_ALL.filter((s) => s.status === 'locked');
+  const PLAYABLE_AREAS = [
+    SECTOR_01,
+    SECTOR_02,
+    SECTOR_02 && {
+      id: 's01_s02_corridor',
+      xMin: Math.min(SECTOR_01.xMin, SECTOR_02.xMax),
+      xMax: Math.max(SECTOR_01.xMin, SECTOR_02.xMax),
+      zMin: SECTOR_02.zMin,
+      zMax: SECTOR_02.zMax,
+    },
+  ].filter(Boolean);
 
 
 
@@ -293,30 +305,49 @@
 
 
   function clamp(x, z) {
+    for (let i = 0; i < PLAYABLE_AREAS.length; i++) {
+      if (_contains(PLAYABLE_AREAS[i], x, z, 0)) return { x, z };
+    }
+    let best = _clampToArea(SECTOR_01, x, z);
+    let bestD = _dist2(best, x, z);
+    for (let i = 0; i < PLAYABLE_AREAS.length; i++) {
+      const c = _clampToArea(PLAYABLE_AREAS[i], x, z);
+      const d = _dist2(c, x, z);
+      if (d < bestD) {
+        best = c;
+        bestD = d;
+      }
+    }
+    return best;
 
+  }
+
+  function _contains(area, x, z, margin) {
+    const m = margin || 0;
+    return x >= area.xMin - m
+      && x <= area.xMax + m
+      && z >= area.zMin - m
+      && z <= area.zMax + m;
+  }
+
+  function _clampToArea(area, x, z) {
     return {
-
-      x: Math.max(SECTOR_01.xMin, Math.min(SECTOR_01.xMax, x)),
-
-      z: Math.max(SECTOR_01.zMin, Math.min(SECTOR_01.zMax, z)),
-
+      x: Math.max(area.xMin, Math.min(area.xMax, x)),
+      z: Math.max(area.zMin, Math.min(area.zMax, z)),
     };
+  }
 
+  function _dist2(a, x, z) {
+    return ((a.x - x) ** 2) + ((a.z - z) ** 2);
   }
 
 
 
   function isInside(x, z, margin) {
-
-    const m = margin || 0;
-
-    return x >= SECTOR_01.xMin - m
-
-      && x <= SECTOR_01.xMax + m
-
-      && z >= SECTOR_01.zMin - m
-
-      && z <= SECTOR_01.zMax + m;
+    for (let i = 0; i < PLAYABLE_AREAS.length; i++) {
+      if (_contains(PLAYABLE_AREAS[i], x, z, margin)) return true;
+    }
+    return false;
 
   }
 
@@ -364,7 +395,11 @@
 
     SECTOR_01,
 
+    SECTOR_02,
+
     SECTORS_LOCKED,
+
+    PLAYABLE_AREAS,
 
     SECTOR_01_GATES,
 

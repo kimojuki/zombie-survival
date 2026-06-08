@@ -50,6 +50,110 @@ Copier dans la description de PR :
 
 ## 2026-06-07
 
+### Completed — Hauteur porte small city (2026-06-08)
+
+- **Porte** : vantail small city augmenté jusqu'au linteau pour supprimer le trou visible au-dessus.
+- **Version** : `20260608-smallcity-door-height-284`
+
+### Completed — Porte small city ouverte vers intérieur (2026-06-08)
+
+- **Porte** : inversion du sens d'ouverture des entrées small city pour que le vantail s'ouvre vers l'intérieur de la maison.
+- **Version** : `20260608-smallcity-door-inward-283`
+
+### Completed — Alignement porte maisons small city (2026-06-08)
+
+- **Porte** : vantail élargi et gond replacé sur le montant du cadre pour couvrir l'ouverture en position fermée.
+- **Ouverture** : sens de rotation séparé pour entrée sud et entrée ouest afin que la porte s'ouvre/se ferme dans l'axe du passage.
+- **Version** : `20260608-smallcity-door-swing-282`
+
+### Completed — Interaction porte maisons small city (2026-06-08)
+
+- **Client** : les portes small city assignent maintenant `doorPivot`, donc l'interaction `E` les détecte.
+- **Serveur** : `smallcity_house_a/b` ajoutés aux prefabs de porte reconnus par `decor-door-toggle`.
+- **Map** : maisons statiques S02 avec porte ouverte par défaut.
+- **Version** : `20260608-smallcity-door-interact-281`
+
+### Completed — Porte small city calquée building_survivor (2026-06-08)
+
+- **Porte** : helper `_shackStyleDoor` basé sur la structure de porte `building_survivor_shack` (pivot, vantail, poignée).
+- **Orientation** : porte placée en position fermée dans l'ouverture puis ouverte vers l'extérieur depuis son gond.
+- **Version** : `20260608-smallcity-building-door-280`
+
+### Completed — Porte maison alignée sur cabane (2026-06-08)
+
+- **Porte** : pivot/gond et placement repris plus fidèlement de `building_survivor_shack`.
+- **Alignement** : vantail centré dans l'ouverture avant rotation, puis ouvert depuis le montant.
+- **Version** : `20260608-smallcity-shack-door-279`
+
+### Completed — Porte maison inspirée cabane (2026-06-08)
+
+- **Porte** : remplacement du panneau décalé par un vantail sur pivot, inspiré de `building_survivor_shack`.
+- **Entrée** : porte placée dans l'ouverture, légèrement ouverte, sans bordure doublon.
+- **Version** : `20260608-smallcity-shack-door-278`
+
+### Completed — Porte visible + murs intérieurs complets (2026-06-08)
+
+- **Porte** : ajout de vantaux ouverts plus visibles, avec matériau foncé et poignée.
+- **Bordure** : suppression du petit cadre doublon autour de l'entrée.
+- **Murs beiges** : cloisons intérieures prolongées jusqu'au plafond avec linteaux alignés.
+- **Version** : `20260608-smallcity-door-wall-277`
+
+### Completed — Entrée maisons Petite ville complétée (2026-06-08)
+
+- **Entrée** : ajout d'une porte ouverte visuelle sur chaque modèle de maison.
+- **Bordures** : cadres, seuils et linteaux renforcés autour des portes pour fermer les manques de mur.
+- **Gameplay** : passage toujours non bloquant côté collisions.
+- **Version** : `20260608-smallcity-entry-frame-276`
+
+### Completed — Maisons Petite ville toit/sol/meubles (2026-06-08)
+
+- **Toit** : ajout d'un plafond intérieur et de pans de toit plus larges pour supprimer l'ouverture visible.
+- **Sol** : plancher renforcé + zones plates S02 sous les maisons statiques pour éviter la terre dans les pièces.
+- **Objets** : sanitaires reculés/alignés pour ne plus traverser les murs.
+- **Version** : `20260608-smallcity-floor-roof-275`
+
+### Completed — Accès pièces maisons Petite ville (2026-06-08)
+
+- **Intérieur** : cloisons segmentées avec passages ouverts entre salon, chambre et salle de bain.
+- **Toit** : maison A corrigée avec deux vrais pans inclinés alignés sur la structure.
+- **Collisions** : colliders internes segmentés, ouvertures non bloquantes au niveau joueur.
+- **Version** : `20260608-smallcity-room-access-274`
+
+### Completed — Maisons Petite ville agrandies + sortie (2026-06-08)
+
+- **Prefabs** : `smallcity_house_a` / `smallcity_house_b` agrandis pour moins coincer le joueur.
+- **Sortie** : retrait des panneaux pleins qui bloquaient visuellement l'entrée ; ajout de cadres de porte ouverts.
+- **Collisions** : empreintes mises à jour avec ouverture praticable.
+- **Version** : `20260608-smallcity-house-doors-273`
+
+### Completed — Ouverture passage secteur 02 Petite ville (2026-06-08)
+
+- **Secteurs** : `s02` passe en `open` côté shared + client.
+- **Déplacement** : clamp jouable étendu à S01 + S02 + couloir de liaison route ouest.
+- **Gate ouest** : panneau/barrière "bientôt" masqué pour la Petite ville ouverte.
+- **Version** : `20260608-open-sector02-272`
+
+### Completed — Fix chargement modules client 55/60 (2026-06-08)
+
+- **Cause** : `legacy-modules.js` listait encore 5 scripts S01/terrain supprimés du checkout (`s01_prefabs.js`, `terrain_textures.js`, `s01_bounds.js`, `s01_roads.js`, `s01_terrain.js`).
+- **Fix** : modules compat restaurés côté client ; `S01Bounds.isS01BuildBlocked` reste branché sur l'interdiction de build plage.
+- **Test** : `tests/legacy-modules.test.mjs` vérifie que tous les scripts legacy existent.
+- **Version** : `20260608-fix-legacy-modules-271`
+
+### Completed — Fix boot local modules S01 manquants (2026-06-08)
+
+- **Shared** : restauration de `s01-world-placements.mjs`, `s01-build-exclusions.mjs`, `s01-safe-zones.mjs`.
+- **Comportement** : S01 reste en clean slate sans POI seed ; protection build/safe zone basée sur la plage spawn.
+- **Test** : `tests/s01-modules.test.mjs`.
+
+### Completed — Small city : deux maisons prefab (2026-06-08)
+
+- **Prefabs** : `smallcity_house_a` et `smallcity_house_b` ajoutés au registre décor.
+- **Contenu** : chaque maison contient salon, chambre, salle de bain, fenêtres et porte d'entrée/sortie.
+- **Secteur 02** : deux anciennes maisons génériques remplacées par ces prefabs dans la Petite ville.
+- **Collisions** : murs extérieurs, cloisons et porte disposent de colliders composés.
+- **Version** : `20260608-smallcity-houses-270`
+
 ### Completed — Doc inventaire / consommation (2026-06-08)
 
 - **Doc** : `docs/INVENTORY_CONSUMPTION.md` — flux `use-item`, bugs corrigés, debug `[inv-debug]`, checklist redémarrage serveur

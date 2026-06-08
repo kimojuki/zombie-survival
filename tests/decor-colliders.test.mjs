@@ -217,6 +217,55 @@ test('storage chest prefab has a blocking box collider', () => {
   assert.ok(cols[0].maxY > 0.7);
 });
 
+test('small city house prefabs expose compound room colliders', () => {
+  const ZS = loadDecorColliders();
+  for (const prefabId of ['smallcity_house_a', 'smallcity_house_b']) {
+    const closed = ZS.buildDecorColliders({
+      kind: 'prefab',
+      prefabId,
+      x: -141,
+      z: -22,
+      baseY: 0.5,
+      rotY: Math.PI / 2,
+      scale: 1,
+      decorId: prefabId,
+      doorOpen: false,
+    });
+    assert.ok(closed.length >= 8);
+    assert.equal(closed.some((c) => c.door), false);
+    assert.ok(closed.some((c) => c.maxY >= 3));
+    assert.ok(closed.every((c) => c.decorId === prefabId));
+  }
+});
+
+test('small city house room doorways stay walkable', () => {
+  const ZS = loadDecorColliders();
+  const cases = [
+    ['smallcity_house_a', -1.8, 0.3],
+    ['smallcity_house_a', 0, 1.0],
+    ['smallcity_house_b', -0.4, -1.0],
+    ['smallcity_house_b', 2.4, 1.15],
+  ];
+  for (const [prefabId, lx, lz] of cases) {
+    const cols = ZS.buildDecorColliders({
+      kind: 'prefab',
+      prefabId,
+      x: 0,
+      z: 0,
+      baseY: 0,
+      rotY: 0,
+      scale: 1,
+      decorId: prefabId,
+    });
+    const blocking = cols.some((c) => {
+      if (c.type !== 'box') return false;
+      if ((c.minY || 0) > 1.8) return false;
+      return Math.abs(lx - c.cx) <= c.hw && Math.abs(lz - c.cz) <= c.hd;
+    });
+    assert.equal(blocking, false, `${prefabId} doorway ${lx},${lz} should be open`);
+  }
+});
+
 test('unknown item type falls back to default collider', () => {
   const ZS = loadDecorColliders();
   const cols = ZS.buildDecorColliders({

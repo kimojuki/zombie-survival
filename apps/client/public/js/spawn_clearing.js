@@ -680,6 +680,155 @@
     parent.userData.doorPivot = doorPivot;
   }
 
+  function _houseMats() {
+    const M = _campMats();
+    return {
+      wallA: M ? M.wood(0xa47b55) : new THREE.MeshLambertMaterial({ color: 0xa47b55 }),
+      wallB: new THREE.MeshLambertMaterial({ color: 0xb6b0a0 }),
+      trim: M ? M.woodDark(0x4b3320) : new THREE.MeshLambertMaterial({ color: 0x4b3320 }),
+      door: M ? M.woodDark(0x3a1f12) : new THREE.MeshLambertMaterial({ color: 0x3a1f12 }),
+      roofRed: new THREE.MeshLambertMaterial({ color: 0x7d2f24 }),
+      roofDark: new THREE.MeshLambertMaterial({ color: 0x303238 }),
+      floor: M ? M.woodFine(0x9a6a3a) : new THREE.MeshLambertMaterial({ color: 0x9a6a3a }),
+      plaster: new THREE.MeshLambertMaterial({ color: 0xd8d0be }),
+      tile: new THREE.MeshLambertMaterial({ color: 0xb7c4c8 }),
+      glass: new THREE.MeshLambertMaterial({ color: 0x7fb1c1, transparent: true, opacity: 0.55, emissive: 0x0b1a20, emissiveIntensity: 0.12 }),
+      sofa: new THREE.MeshLambertMaterial({ color: 0x4b526f }),
+      bed: new THREE.MeshLambertMaterial({ color: 0xd8c8b8 }),
+      water: new THREE.MeshLambertMaterial({ color: 0xe7ece8 }),
+    };
+  }
+
+  function _raisedHouseFloor(parent, M, W, D) {
+    _box(parent, M.trim, W + 0.25, 0.16, D + 0.25, 0, 0.08, 0);
+    _box(parent, M.floor, W, 0.18, D, 0, 0.20, 0);
+  }
+
+  function _box(parent, mat, w, h, d, x, y, z) {
+    return _add(parent, new THREE.BoxGeometry(w, h, d), mat, x, y, z);
+  }
+
+  function _shackStyleDoor(parent, M, x, z, closedRotY, openAngle, name) {
+    const DOOR_W = 2.08;
+    const DOOR_H = 2.34;
+    const DOOR_D = 0.14;
+    const DOOR_HX = DOOR_W * 0.5;
+    const base = new THREE.Group();
+    base.name = `${name || 'smallCityHouseDoor'}Base`;
+    base.position.set(x, 0.08, z);
+    base.rotation.y = closedRotY || 0;
+    parent.add(base);
+
+    const doorPivot = new THREE.Group();
+    doorPivot.name = name || 'smallCityHouseDoorPivot';
+    doorPivot.position.set(0, 0, 0);
+    doorPivot.userData.isDoor = true;
+    doorPivot.userData.openAngle = Number.isFinite(openAngle) ? openAngle : DOOR_OPEN_ANGLE;
+    base.add(doorPivot);
+    const door = new THREE.Mesh(new THREE.BoxGeometry(DOOR_W, DOOR_H, DOOR_D), M.door);
+    door.name = 'smallCityHouseDoor';
+    door.position.set(DOOR_HX - 0.02, DOOR_H * 0.5, 0);
+    door.castShadow = door.receiveShadow = true;
+    doorPivot.add(door);
+    _add(doorPivot, new THREE.BoxGeometry(0.08, 0.08, 0.08), new THREE.MeshLambertMaterial({ color: 0xb99b52 }), DOOR_W - 0.22, DOOR_H * 0.82, -0.07);
+    parent.userData.doorPivot = doorPivot;
+    return doorPivot;
+  }
+
+  function _openSouthEntry(parent, M, D) {
+    const z = D / 2 + 0.055;
+    _box(parent, M.trim, 0.18, 2.55, 0.22, -1.18, 1.27, z);
+    _box(parent, M.trim, 0.18, 2.55, 0.22, 1.18, 1.27, z);
+    _box(parent, M.trim, 2.55, 0.20, 0.22, 0, 2.42, z);
+    _box(parent, M.trim, 2.55, 0.12, 0.28, 0, 0.28, z);
+    _shackStyleDoor(parent, M, -1.04, z + 0.01, 0, Math.PI * 0.52, 'smallCitySouthDoorPivot');
+  }
+
+  function _openWestEntry(parent, M, W) {
+    const x = -W / 2 - 0.055;
+    _box(parent, M.trim, 0.22, 2.55, 0.18, x, 1.27, -1.18);
+    _box(parent, M.trim, 0.22, 2.55, 0.18, x, 1.27, 1.18);
+    _box(parent, M.trim, 0.22, 0.20, 2.55, x, 2.42, 0);
+    _box(parent, M.trim, 0.28, 0.12, 2.55, x, 0.28, 0);
+    _shackStyleDoor(parent, M, x + 0.01, 1.04, Math.PI / 2, -Math.PI * 0.52, 'smallCityWestDoorPivot');
+  }
+
+  function _buildSmallCityHouseA(parent) {
+    const M = _houseMats();
+    const W = 11.0, D = 9.5, H = 3.1, T = 0.22;
+    _raisedHouseFloor(parent, M, W, D);
+    _box(parent, M.wallA, W, H, T, 0, H / 2, -D / 2);
+    _box(parent, M.wallA, T, H, D, -W / 2, H / 2, 0);
+    _box(parent, M.wallA, T, H, D, W / 2, H / 2, 0);
+    _box(parent, M.wallA, 4.5, H, T, -3.25, H / 2, D / 2);
+    _box(parent, M.wallA, 4.5, H, T, 3.25, H / 2, D / 2);
+    _box(parent, M.wallA, 2.0, 0.65, T, 0, 2.78, D / 2);
+    _openSouthEntry(parent, M, D);
+
+    _box(parent, M.plaster, T, H, 2.6, -1.8, H / 2, -2.65);
+    _box(parent, M.plaster, T, H, 1.8, -1.8, H / 2, 2.85);
+    _box(parent, M.plaster, T, 0.35, 3.3, -1.8, H - 0.18, 0.3);
+    _box(parent, M.plaster, 1.8, H, T, -2.0, H / 2, 1.0);
+    _box(parent, M.plaster, 4.2, H, T, 3.2, H / 2, 1.0);
+    _box(parent, M.plaster, 2.2, 0.35, T, 0, H - 0.18, 1.0);
+
+    for (const [wx, wz, ww, wd] of [[-3.6, -D / 2 - 0.02, 1.35, 0.06], [3.4, -D / 2 - 0.02, 1.35, 0.06], [-W / 2 - 0.02, -1.7, 0.06, 1.25], [W / 2 + 0.02, 1.6, 0.06, 1.15]]) {
+      _box(parent, M.glass, ww, 0.75, wd, wx, 1.55, wz);
+    }
+
+    _box(parent, M.sofa, 2.4, 0.45, 0.82, 2.8, 0.36, 3.0);
+    _box(parent, M.sofa, 2.4, 0.65, 0.14, 2.8, 0.78, 2.6);
+    _box(parent, M.trim, 1.55, 0.08, 0.95, 2.5, 0.5, 1.2);
+    _box(parent, M.bed, 1.65, 0.32, 2.25, -3.75, 0.38, -2.0);
+    _box(parent, M.trim, 1.75, 0.62, 0.12, -3.75, 0.72, -3.15);
+    _box(parent, M.water, 0.78, 0.42, 0.78, 3.35, 0.62, -1.4);
+    _box(parent, M.water, 1.18, 0.42, 0.62, 3.25, 0.60, -3.0);
+
+    _box(parent, M.plaster, W - 0.15, 0.12, D - 0.15, 0, H + 0.06, 0);
+    _add(parent, new THREE.BoxGeometry(W + 1.35, 0.22, D / 2 + 1.05), M.roofRed, 0, H + 0.66, -D / 4 - 0.12, -0.20, 0, 0);
+    _add(parent, new THREE.BoxGeometry(W + 1.35, 0.22, D / 2 + 1.05), M.roofRed, 0, H + 0.66, D / 4 + 0.12, 0.20, 0, 0);
+    _box(parent, M.trim, W + 1.45, 0.22, 0.24, 0, H + 0.86, 0);
+    _box(parent, M.roofRed, W + 0.75, 0.45, 0.28, 0, H + 0.35, -D / 2 - 0.06);
+    _box(parent, M.roofRed, W + 0.75, 0.45, 0.28, 0, H + 0.35, D / 2 + 0.06);
+  }
+
+  function _buildSmallCityHouseB(parent) {
+    const M = _houseMats();
+    const W = 10.0, D = 10.5, H = 3.2, T = 0.24;
+    _raisedHouseFloor(parent, M, W, D);
+    _box(parent, M.wallB, W, H, T, 0, H / 2, -D / 2);
+    _box(parent, M.wallB, W, H, T, 0, H / 2, D / 2);
+    _box(parent, M.wallB, T, H, 4.25, -W / 2, H / 2, -3.125);
+    _box(parent, M.wallB, T, H, 4.25, -W / 2, H / 2, 3.125);
+    _box(parent, M.wallB, T, H, D, W / 2, H / 2, 0);
+    _box(parent, M.wallB, T, 0.65, 2.0, -W / 2, 2.78, 0);
+    _openWestEntry(parent, M, W);
+
+    _box(parent, M.plaster, 2.6, H, T, -2.65, H / 2, -1.0);
+    _box(parent, M.plaster, 4.1, H, T, 2.6, H / 2, -1.0);
+    _box(parent, M.plaster, 1.85, 0.35, T, -0.4, H - 0.18, -1.0);
+    _box(parent, M.plaster, T, H, 1.7, 2.4, H / 2, 2.9);
+    _box(parent, M.plaster, T, 0.35, 1.55, 2.4, H - 0.18, 1.15);
+
+    for (const [wx, wz, ww, wd] of [[-2.5, -D / 2 - 0.02, 1.35, 0.06], [2.8, -D / 2 - 0.02, 1.25, 0.06], [W / 2 + 0.02, -2.0, 0.06, 1.35], [W / 2 + 0.02, 2.8, 0.06, 1.2]]) {
+      _box(parent, M.glass, ww, 0.75, wd, wx, 1.55, wz);
+    }
+
+    _box(parent, M.sofa, 0.45, 0.45, 2.35, -2.15, 0.36, 3.0);
+    _box(parent, M.sofa, 0.14, 0.65, 2.35, -2.55, 0.78, 3.0);
+    _box(parent, M.trim, 1.35, 0.08, 1.0, -0.5, 0.5, 1.4);
+    _box(parent, M.bed, 1.65, 0.32, 2.25, -2.7, 0.38, -3.0);
+    _box(parent, M.trim, 1.75, 0.62, 0.12, -2.7, 0.72, -4.15);
+    _box(parent, M.tile, 1.55, 0.05, 2.0, 3.45, 0.19, 1.9);
+    _box(parent, M.water, 0.78, 0.42, 0.78, 3.1, 0.62, 1.0);
+    _box(parent, M.water, 1.22, 0.40, 0.62, 3.1, 0.61, 3.0);
+
+    _box(parent, M.plaster, W - 0.15, 0.12, D - 0.15, 0, H + 0.06, 0);
+    _box(parent, M.roofDark, W + 0.9, 0.28, D + 0.9, 0, H + 0.28, 0);
+    _box(parent, M.trim, W + 0.65, 0.45, 0.22, 0, H + 0.42, -D / 2);
+    _box(parent, M.trim, W + 0.65, 0.45, 0.22, 0, H + 0.42, D / 2);
+  }
+
   /** Vertical marker that stays readable from far away. */
   function _buildMarkerPole(parent, x, y, z, side) {
     const M = _campMats();
@@ -847,6 +996,8 @@
     build_door_wood: { build(root) { _buildWoodDoor(root, 0, 0, 0, 1.8); }, buildKind: 'door', w: 3.0, h: 2.6, t: 0.36 },
     build_large_door_wood: { build(root) { _buildWoodDoor(root, 0, 0, 0, 2.4); }, buildKind: 'door', w: 3.0, h: 2.6, t: 0.36 },
     building_survivor_shack: { build(root) { _buildSurvivorShack(root, 0, 0, 0, 0); } },
+    smallcity_house_a: { build(root) { _buildSmallCityHouseA(root); } },
+    smallcity_house_b: { build(root) { _buildSmallCityHouseB(root); } },
     spawn_flat_stone: {
       build(root) {
         _add(root, new THREE.BoxGeometry(0.28, 0.06, 0.22),
@@ -883,8 +1034,9 @@
     entry.targetOpen = wantOpen;
     entry.root.userData.doorOpen = wantOpen;
     if (entry.root.userData.decorSpec) entry.root.userData.decorSpec.doorOpen = wantOpen;
+    const openTarget = Number.isFinite(entry.doorOpenAngle) ? entry.doorOpenAngle : DOOR_OPEN_ANGLE;
     if (opts.instant) {
-      entry.openAngle = wantOpen ? DOOR_OPEN_ANGLE : 0;
+      entry.openAngle = wantOpen ? openTarget : 0;
       entry.pivot.rotation.y = entry.openAngle;
     } else if (prevOpen !== wantOpen) {
       const px = entry.root?.position?.x;
@@ -939,7 +1091,8 @@
   function tickDecorDoors(dt) {
     for (const entry of DECOR_DOORS.values()) {
       if (!entry?.pivot?.parent) continue;
-      const target = entry.targetOpen ? DOOR_OPEN_ANGLE : 0;
+      const openTarget = Number.isFinite(entry.doorOpenAngle) ? entry.doorOpenAngle : DOOR_OPEN_ANGLE;
+      const target = entry.targetOpen ? openTarget : 0;
       let angle = Number.isFinite(entry.openAngle) ? entry.openAngle : entry.pivot.rotation.y;
       const delta = target - angle;
       if (Math.abs(delta) < 0.008) {
@@ -1458,6 +1611,9 @@
         open: !!opts.doorOpen,
         targetOpen: !!opts.doorOpen,
         openAngle: 0,
+        doorOpenAngle: Number.isFinite(root.userData.doorPivot.userData?.openAngle)
+          ? root.userData.doorPivot.userData.openAngle
+          : DOOR_OPEN_ANGLE,
         locked: !!opts.locked,
         lockId: opts.lockId || null,
         lockOwner: opts.lockOwner || null,

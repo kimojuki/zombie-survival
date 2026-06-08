@@ -594,6 +594,8 @@ const decorPrefabs = [
   'build_stair_wood',
   'build_door_wood',
   'build_large_door_wood',
+  'smallcity_house_a',
+  'smallcity_house_b',
   'wreck_sedan',
   'wreck_pickup',
   'tree_oak',
@@ -621,7 +623,13 @@ const DECOR_PREFAB_BY_ITEM = {
   struct_porte_bois: 'build_door_wood',
   struct_grande_porte_bois: 'build_large_door_wood',
 };
-const DOOR_PREFABS = new Set(['building_survivor_shack', 'build_door_wood', 'build_large_door_wood']);
+const DOOR_PREFABS = new Set([
+  'building_survivor_shack',
+  'build_door_wood',
+  'build_large_door_wood',
+  'smallcity_house_a',
+  'smallcity_house_b',
+]);
 const STORAGE_CHEST_CAPACITY = 27;
 const STORAGE_CHEST_BREAK_HITS = 3;
 let zombieIdCounter    = 0;

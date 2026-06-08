@@ -106,6 +106,7 @@ async function main() {
   results.push(await expectOk('decorprefabs barrier', 'decorprefabs barrier', (t) => t.includes('road_barrier_post')));
   results.push(await expectOk('decorprefabs filter', 'decorprefabs stump', (t) => t.includes('spawn_stump')));
   results.push(await expectOk('decorprefabs building', 'decorprefabs building', (t) => t.includes('building_survivor_shack')));
+  results.push(await expectOk('decorprefabs small city houses', 'decorprefabs smallcity', (t) => t.includes('smallcity_house_a') && t.includes('smallcity_house_b')));
   results.push(await expectOk('decorprefabs storage', 'decorprefabs storage', (t) => t.includes('storage_chest')));
   results.push(await expectOk('decoritems', 'decoritems eau', (t) => t.includes('food_eau_bouteille')));
   results.push(await expectOk('decorlist seed', 'decorlist', (t) => t.includes('decor_')));

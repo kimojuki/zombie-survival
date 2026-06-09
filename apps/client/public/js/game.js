@@ -226,6 +226,14 @@
     return camera.getWorldPosition(_camWorld);
   }
 
+  /** Cible E / UI : coffre ou porte sous le réticule (pas la plus proche en XZ). */
+  function _pickInteractRay(maxDist = 3.5) {
+    if (!ZS.pickDecorInteractRay) return null;
+    raycaster.setFromCamera(screenCenter, camera);
+    return ZS.pickDecorInteractRay(raycaster, maxDist);
+  }
+  ZS.pickWorldInteract = _pickInteractRay;
+
   // Position camera at spawn before first render
   state.player.y = (ZS.getDecorGroundHeight
     ? ZS.getDecorGroundHeight(state.player.x, state.player.z)
@@ -1000,31 +1008,38 @@
     return true;
   }
 
-  function _interactStorage() {
-    const storage = ZS.findNearestDecorStorage?.(state.player.x, state.player.z, 2.8);
-    if (!storage) return false;
-    return _openStorageById(storage.decorId);
+  function _doorFromPick(pick) {
+    if (!pick || pick.kind !== 'door') return null;
+    return ZS.getDecorDoorForInteract?.(pick.decorId) || null;
+  }
+
+  function _storageFromPick(pick) {
+    if (!pick || pick.kind !== 'storage') return null;
+    return ZS.getDecorStorageForInteract?.(pick.decorId) || null;
   }
 
   function _interactDoorTap() {
-    if (_interactStorage()) return true;
-    const door = ZS.findNearestDecorDoor?.(state.player.x, state.player.z, 3.2);
+    const pick = _pickInteractRay(3.2);
+    const storage = _storageFromPick(pick);
+    if (storage) return _openStorageById(storage.decorId);
+    const door = _doorFromPick(pick);
     if (!door) return false;
     const active = ZS.Inventory?.getActiveItem?.();
     if (active?.type === 'tool_verrou' && !door.locked) {
-      return ZS.Inventory?.installDoorLockOnNearestDoor?.() || false;
+      return ZS.Inventory?.installDoorLockOnAimedDoor?.() || false;
     }
     return _toggleNearbyDoor(door);
   }
 
   function _interactHoldStart() {
-    const storage = ZS.findNearestDecorStorage?.(state.player.x, state.player.z, 2.8);
+    const pick = _pickInteractRay(3.2);
+    const storage = _storageFromPick(pick);
     if (storage && _isDesktopMode() && !ZS.StorageUI?.isOpen?.()) {
       if (_interactHold?.kind === 'storage-pickup' && _interactHold.decorId === storage.decorId) return true;
       _interactHold = { kind: 'storage-pickup', decorId: storage.decorId, t: 0, started: performance.now() };
       return true;
     }
-    const door = ZS.findNearestDecorDoor?.(state.player.x, state.player.z, 3.2);
+    const door = _doorFromPick(pick);
     if (!door || !door.locked) return false;
     const active = ZS.Inventory?.getActiveItem?.();
     if (active?.type === 'tool_verrou') return false;
@@ -1043,8 +1058,8 @@
     if (hold.t < INTERACT_TAP_MAX_S) {
       if (hold.kind === 'storage-pickup') _openStorageById(hold.decorId);
       else if (hold.kind === 'door-unlock') {
-        const door = ZS.findNearestDecorDoor?.(state.player.x, state.player.z, 3.2);
-        if (door && door.decorId === hold.decorId) _toggleNearbyDoor(door);
+        const door = ZS.getDecorDoorForInteract?.(hold.decorId);
+        if (door) _toggleNearbyDoor(door);
       }
     }
   }
@@ -1117,16 +1132,21 @@
   let _doorUiTick = 0;
   let _doorUiX = NaN;
   let _doorUiZ = NaN;
+  let _doorUiYaw = NaN;
   function _updateDoorInteractUi() {
     const px = state.player.x;
     const pz = state.player.z;
+    const yaw = state.camera?.yaw ?? 0;
     const moved = Math.hypot(px - _doorUiX, pz - _doorUiZ) > 0.45;
-    if (!moved && !_interactHold && ++_doorUiTick < 6) return;
+    const turned = Math.abs(yaw - _doorUiYaw) > 0.035;
+    if (!moved && !turned && !_interactHold && ++_doorUiTick < 2) return;
     _doorUiTick = 0;
     _doorUiX = px;
     _doorUiZ = pz;
-    const storage = ZS.findNearestDecorStorage?.(px, pz, 2.8) || null;
-    const door = ZS.findNearestDecorDoor?.(px, pz, 3.2) || null;
+    _doorUiYaw = yaw;
+    const pick = _pickInteractRay(3.5);
+    const storage = _storageFromPick(pick);
+    const door = _doorFromPick(pick);
     const campProp = (!storage && !door)
       ? ZS.findNearestDecorInteract?.(px, pz, 3.2) : null;
     const sign = (!storage && !door && !campProp)

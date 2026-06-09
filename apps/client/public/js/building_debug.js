@@ -4,8 +4,8 @@
 
   const TAG = '[building-debug]';
   const SHACK_PREFAB = 'building_survivor_shack';
-  /** Miroir design/BUILDING_PREFABS.md — incrémenter à chaque pièce validée. */
-  const SHACK_EXPECTED_COLLIDERS = 5;
+  /** Miroir decor_colliders.js _survivorShackColliderDefs() — 7/7 validé (sol+4 murs+porte+2 toit). */
+  const SHACK_EXPECTED_COLLIDERS = 9;
   const _v3a = new THREE.Vector3();
   const _v3b = new THREE.Vector3();
   const _box3 = new THREE.Box3();
@@ -386,7 +386,7 @@
         count: cols?.length,
         expected: SHACK_EXPECTED_COLLIDERS,
         cols: (cols || []).map((c) => ({ lx: c.lx, lz: c.lz, hw: c.hw, hd: c.hd })),
-        hint: 'Ctrl+F5 — voir design/BUILDING_PREFABS.md',
+        hint: 'Ctrl+F5 — voir decor_colliders.js _survivorShackColliderDefs()',
       });
     }
     if (!_enabled && !_lsOn()) return;

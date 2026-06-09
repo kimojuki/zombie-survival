@@ -12,8 +12,8 @@ export const S01_CABIN_SOUTH = Object.freeze({ x: -80, z: 42 });
 export const S01_GAS_STATION = Object.freeze({ x: 82, z: -100 });
 export const S01_BRIDGE = Object.freeze({ x: -90, z: -9 });
 
-/** Prototype cabane #1 — position tentative (voir S01_CABIN01_PROTO). */
-export const S01_CABIN01_PROTO = Object.freeze({ x: 108, z: -11 });
+/** Cabane #1 — ancre validée playtest 2026-06-08 (Bruno @ 165.1, 7.1). */
+export const S01_CABIN01_PROTO = Object.freeze({ x: 165.1, z: 7.1, rotY: 0.55 });
 
 /** Cercles d'exclusion construction joueur autour des POI immuables (m). */
 export const S01_POI_BUILD_EXCLUSION_R = 10;
@@ -21,8 +21,7 @@ export const S01_POI_BUILD_EXCLUSION_R = 10;
 /** @deprecated — campements retirés ; conservé pour compat doc. */
 export const S01_CAMP_SAFE_RADIUS = 25;
 
-/**
- * Exclusions build autour des POI seed actifs — remplir une entrée par POI validé en jeu.
- * Vide tant qu'aucun POI n'est seed (coords v1 non fiables).
- */
-export const S01_BUILD_EXCLUSION_POIS = Object.freeze([]);
+/** POI seed actifs — une entrée par ancre validée en jeu. */
+export const S01_BUILD_EXCLUSION_POIS = Object.freeze([
+  { x: 165.1, z: 7.1, r: S01_POI_BUILD_EXCLUSION_R, id: 'cabin01' },
+]);

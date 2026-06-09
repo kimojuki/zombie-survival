@@ -71,14 +71,22 @@
     _finishDoorLockAttempt(d);
   }
 
-  /** Verrou en main + porte battante à proximité → pose le cadenas (sync serveur). */
+  function _aimedDecorDoor(maxDist = 3.6) {
+    const pick = ZS.pickWorldInteract?.(maxDist);
+    if (pick?.kind === 'door') return ZS.getDecorDoorForInteract?.(pick.decorId) || null;
+    return null;
+  }
+
+  /** Verrou en main + porte sous le viseur → pose le cadenas (sync serveur). */
   function installDoorLockOnNearestDoor() {
+    return installDoorLockOnAimedDoor();
+  }
+
+  function installDoorLockOnAimedDoor() {
     if (!_state?.player) return false;
-    const px = _state.player.x;
-    const pz = _state.player.z;
-    const door = ZS.findNearestDecorDoor?.(px, pz, 3.6);
+    const door = _aimedDecorDoor(3.6);
     if (!door) {
-      ZS.UI?.showNotif?.('Approchez une porte (objet Porte / Grande Porte)');
+      ZS.UI?.showNotif?.('Visez une porte (objet Porte / Grande Porte)');
       return false;
     }
     if (door.locked) {
@@ -2231,7 +2239,7 @@
     spawnWorldItem, removeWorldItem, receivePickup, spawnStructure, collectBag,
     countItem, findItemSlot, addItem, addItemSlot, removeItem, removeStack, getStorageStacks, getStorageSlots, canAddItem, canAddStack, consumeOne,
     getInvSnapshot, syncToServer, applyAuthoritativeInv,
-    placeActiveStructure, getActiveItem, hasDoorKey, removeDoorKey, installDoorLockOnNearestDoor, getWeaponAmmo, decrementAmmo, reloadWeapon, wearActiveWeapon,
+    placeActiveStructure, getActiveItem, hasDoorKey, removeDoorKey, installDoorLockOnNearestDoor, installDoorLockOnAimedDoor, getWeaponAmmo, decrementAmmo, reloadWeapon, wearActiveWeapon,
     getArmorValue, getMaxHealth, togglePanel, loadFromSave, loadRespawnKit,
     ensureStarterCaillou, ensureStarterTorche, ensureStarterRations, clear,
   };

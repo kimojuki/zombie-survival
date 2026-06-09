@@ -18,6 +18,7 @@ Vue d'ensemble pour onboarding et reviews PR.
 │  network.js ─ Socket.io sync                                │
 │  rcon.js ─ console admin UI                                 │
 │  spawn_clearing.js ─ prefabs décor camp + clairière spawn   │
+│    (coffre : yaw mesh interne — voir docs/S01_DECOR_PLACEMENT.md) │
 │  camp_textures.js ─ textures bois/toile (prefabs décor)     │
 │  sector_*.js ─ contenu monde par zone                       │
 └──────────────────────┬──────────────────────────────────────┘

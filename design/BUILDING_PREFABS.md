@@ -56,7 +56,7 @@ Fichiers : `world.js`, `collider-resolve.mjs`, `survivor-shack-pad.mjs`, `sample
 
 ### Suite prévue (gameplay / contenu)
 
-1. **Loot intérieur** — coffre `storage_chest` ou caisses starter dans la cabane (seed `cabin01:*`)
+1. **Loot intérieur** — coffre `s01:cabin01:chest` 🔄 playtest (`S01_CABIN_CHEST_LOOT`)
 2. **Safe zone optionnelle** — si la cabane devient « refuge débutant » (`s01-safe-zones.mjs`)
 3. **Deuxième cabane** — réutiliser le même prefab, autre ancre (`cabin02`), workflow identique
 4. **Détails visuels optionnels** — fenêtre ouest, renforts murs, literie (sans casser les 9 colliders)

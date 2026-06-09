@@ -30,10 +30,10 @@ describe('s01 build exclusions', () => {
 
 
 
-  it('no POI build exclusion until anchors registered in s01-poi', () => {
+  it('blocks build within 10 m of seeded cabin01', () => {
+    assert.equal(isInS01PoiBuildExclusion(165.1, 7.1), true);
+    assert.equal(isS01BuildBlocked(165.1, 7.1), true);
     assert.equal(isInS01PoiBuildExclusion(S01_FOREST_HUB.x, S01_FOREST_HUB.z), false);
-    assert.equal(isS01BuildBlocked(S01_FOREST_HUB.x, S01_FOREST_HUB.z), false);
-    assert.equal(isInS01PoiBuildExclusion(0, -6), false);
   });
 
 

@@ -1043,7 +1043,11 @@
     rock_boulder: { build(root, opts) { ZS.RockWorldPrefabs?.buildBoulder?.(root, opts); } },
     rock_outcrop: { build(root, opts) { ZS.RockWorldPrefabs?.buildOutcrop?.(root, opts); } },
     spawn_workbench: { build(root) { _buildWorkbench(root, 0, 0, 0, 0); } },
-    storage_chest: { build(root) { _buildStorageChest(root, 0, 0, 0, 0); } },
+    storage_chest: { build(root, opts = {}) {
+      root.rotation.y = 0;
+      const ry = Number.isFinite(opts.rotY) ? opts.rotY : 0;
+      _buildStorageChest(root, 0, 0, 0, ry);
+    } },
     build_wall_wood: { build(root) { _buildWoodWall(root, 0, 0, 0); }, buildKind: 'wall', w: 3.0, h: 2.6, t: 0.36 },
     build_doorway_wood: { build(root) { _buildWoodDoorway(root, 0, 0, 0, 1.8); }, buildKind: 'door', w: 3.0, h: 2.6, t: 0.36, gap: 1.8 },
     build_large_doorway_wood: { build(root) { _buildWoodDoorway(root, 0, 0, 0, 2.4); }, buildKind: 'door', w: 3.0, h: 2.6, t: 0.36, gap: 2.4 },
@@ -1071,6 +1075,15 @@
     return Object.keys(DECOR_PREFABS);
   }
 
+  /** Yaw décor — coffre : rotation sur le groupe mesh interne, pas le root. */
+  function _decorYawFromRoot(root) {
+    if (root?.userData?.prefabId === 'storage_chest') {
+      const inner = root.children[0];
+      if (inner) return inner.rotation.y || 0;
+    }
+    return root.rotation?.y ?? 0;
+  }
+
   /** Garde decorSpec aligné sur le pivot Three.js (cx/cz/rotY/baseY des colliders). */
   function _syncDecorSpecFromRoot(root) {
     const spec = root?.userData?.decorSpec;
@@ -1078,7 +1091,7 @@
     spec.x = root.position.x;
     spec.z = root.position.z;
     spec.baseY = root.position.y;
-    spec.rotY = root.rotation?.y ?? spec.rotY ?? 0;
+    spec.rotY = _decorYawFromRoot(root) ?? spec.rotY ?? 0;
     spec.rotZ = root.rotation?.z ?? spec.rotZ ?? 0;
     if (Number.isFinite(root.rotation?.x)) spec.rotX = root.rotation.x;
     spec.scale = root.scale?.x ?? spec.scale ?? 1;
@@ -1372,6 +1385,92 @@
   }
 
   const _doorRayHits = [];
+  const _storageRayHits = [];
+
+  /**
+   * True si un mur décor (cabane, etc.) bloque le rayon avant la cible.
+   * Le mesh coffre est testé seul — sans ça on peut interagir à travers les murs.
+   */
+  function _interactRayOccluded(raycaster, hitDist, excludeDecorId) {
+    if (!raycaster?.ray || !ZS.hasHeadLineOfSight || !ZS.getCollidersNear) return false;
+    if (!Number.isFinite(hitDist) || hitDist < 0.05) return false;
+    const ray = raycaster.ray;
+    const ox = ray.origin.x;
+    const oz = ray.origin.z;
+    const dx = ray.direction.x;
+    const dz = ray.direction.z;
+    const t = Math.max(0.05, hitDist - 0.12);
+    const ex = ox + dx * t;
+    const ez = oz + dz * t;
+    const eyeY = ray.origin.y;
+    const span = Math.hypot(ex - ox, ez - oz);
+    const midX = (ox + ex) * 0.5;
+    const midZ = (oz + ez) * 0.5;
+    const colliders = ZS.getCollidersNear(midX, midZ, span * 0.5 + 8);
+    const filtered = [];
+    for (let i = 0; i < colliders.length; i++) {
+      const c = colliders[i];
+      if (c.decorId === excludeDecorId) continue;
+      filtered.push(c);
+    }
+    return !ZS.hasHeadLineOfSight(ox, oz, ex, ez, filtered, eyeY, { endpointShrink: 0.12 });
+  }
+
+  function getDecorDoorForInteract(decorId) {
+    const entry = DECOR_DOORS.get(decorId);
+    if (!entry?.root?.parent) return null;
+    return {
+      decorId,
+      open: !!entry.open,
+      dist: 0,
+      prefabId: entry.root.userData.prefabId,
+      locked: !!entry.locked,
+      lockId: entry.lockId || null,
+      lockOwner: entry.lockOwner || null,
+    };
+  }
+
+  function getDecorStorageForInteract(decorId) {
+    const entry = DECOR_STORAGES.get(decorId);
+    if (!entry?.root?.parent) return null;
+    return { decorId, dist: 0, prefabId: entry.root.userData.prefabId };
+  }
+
+  /** Visée écran → coffre (mesh décor, prioritaire sur proximité). */
+  function hitDecorStorageRay(raycaster, maxDist = 3.5) {
+    if (!raycaster) return null;
+    _storageRayHits.length = 0;
+    for (const [decorId, entry] of DECOR_STORAGES) {
+      if (!entry.root?.parent) continue;
+      entry.root.traverse((o) => {
+        if (o.isMesh) {
+          o.userData.decorId = decorId;
+          _storageRayHits.push(o);
+        }
+      });
+    }
+    if (!_storageRayHits.length) return null;
+    const prevFar = raycaster.far;
+    raycaster.far = maxDist;
+    const hits = raycaster.intersectObjects(_storageRayHits, false);
+    raycaster.far = prevFar;
+    if (!hits.length) return null;
+    let node = hits[0].object;
+    while (node) {
+      const id = node.userData?.decorId;
+      if (id && DECOR_STORAGES.has(id)) {
+        const dist = hits[0].distance;
+        if (_interactRayOccluded(raycaster, dist, id)) return null;
+        return {
+          decorId: id,
+          dist,
+          prefabId: DECOR_STORAGES.get(id).root.userData.prefabId,
+        };
+      }
+      node = node.parent;
+    }
+    return null;
+  }
 
   /** Visée écran → porte verrouillée (cabanes, etc. hors DECOR_BUILDS). */
   function hitDecorDoorRay(raycaster, maxDist = 3.5) {
@@ -1407,6 +1506,20 @@
       }
       node = node.parent;
     }
+    return null;
+  }
+
+  /** Coffre vs porte : le mesh le plus proche sur le rayon caméra (viseur). */
+  function pickDecorInteractRay(raycaster, maxDist = 3.5) {
+    const storage = hitDecorStorageRay(raycaster, maxDist);
+    const door = hitDecorDoorRay(raycaster, maxDist);
+    if (storage && door) {
+      return storage.dist <= door.dist
+        ? { kind: 'storage', ...storage }
+        : { kind: 'door', ...door };
+    }
+    if (storage) return { kind: 'storage', ...storage };
+    if (door) return { kind: 'door', ...door };
     return null;
   }
 
@@ -1648,7 +1761,11 @@
       : deckY;
     const root = new THREE.Group();
     root.position.set(x || 0, groundedY, z || 0);
-    root.rotation.set(opts.rotX || 0, opts.rotY || 0, opts.rotZ || 0);
+    root.rotation.set(
+      opts.rotX || 0,
+      prefabId === 'storage_chest' ? 0 : (opts.rotY || 0),
+      opts.rotZ || 0,
+    );
     root.scale.setScalar(s);
     root.userData.prefabId = prefabId;
     root.userData.collide = opts.collide !== false;
@@ -1677,7 +1794,7 @@
         x: root.position.x,
         z: root.position.z,
         baseY: root.position.y,
-        rotY: root.rotation.y,
+        rotY: _decorYawFromRoot(root),
         rotZ: root.rotation.z,
         scale: s,
         wreckTilt: isWreck ? root.rotation.z : undefined,
@@ -2158,9 +2275,13 @@
   ZS.findNearestDecorStorage = findNearestDecorStorage;
   ZS.findNearestDecorSign = findNearestDecorSign;
   ZS.hitDecorStorage        = hitDecorStorage;
+  ZS.hitDecorStorageRay     = hitDecorStorageRay;
   ZS.hitDecorBuild          = hitDecorBuild;
   ZS.hitDecorBuildRay       = hitDecorBuildRay;
   ZS.hitDecorDoorRay        = hitDecorDoorRay;
+  ZS.pickDecorInteractRay   = pickDecorInteractRay;
+  ZS.getDecorDoorForInteract = getDecorDoorForInteract;
+  ZS.getDecorStorageForInteract = getDecorStorageForInteract;
   ZS.getDecorDoorMeta       = getDecorDoorMeta;
   ZS.setDecorStorageState    = setDecorStorageState;
   ZS.unregisterDecorStorage  = unregisterDecorStorage;

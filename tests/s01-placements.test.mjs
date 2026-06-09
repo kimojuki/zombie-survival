@@ -25,14 +25,19 @@ describe('s01 world placements', () => {
     assert.equal(zones[0].placementKey, 's01:cabin01:shack');
   });
 
-  it('seeds cabin01 shack at playtest-validated anchor', () => {
+  it('seeds cabin01 shack + starter chest at playtest-validated anchor', () => {
     const placements = computeS01DecorPlacements();
-    assert.equal(placements.length, 1);
-    assert.equal(placements[0].prefabId, 'building_survivor_shack');
-    assert.equal(placements[0].placementKey, 's01:cabin01:shack');
-    assert.equal(placements[0].x, 165.1);
-    assert.equal(placements[0].z, 7.1);
-    assert.equal(placements[0].rotY, 0.55);
+    assert.equal(placements.length, 2);
+    const shack = placements.find((p) => p.placementKey === 's01:cabin01:shack');
+    assert.ok(shack);
+    assert.equal(shack.prefabId, 'building_survivor_shack');
+    assert.equal(shack.x, 165.1);
+    assert.equal(shack.z, 7.1);
+    assert.equal(shack.rotY, 0.55);
+    const chest = placements.find((p) => p.placementKey === 's01:cabin01:chest');
+    assert.ok(chest);
+    assert.equal(chest.prefabId, 'storage_chest');
+    assert.ok(chest.storage?.length >= 3);
   });
 
 

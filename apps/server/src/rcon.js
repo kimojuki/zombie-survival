@@ -757,7 +757,13 @@ function createRcon(ctx) {
       if (!n && !reset) return ok('Rochers déjà présents — rien à ajouter.');
       return ok(`${n} rocher(s) minable(s) ${reset ? 'repositionné(s)' : 'ajouté(s)'} (camp: ${camp}, monde: ${world}).`);
     }
-    return fail('Usage: decorseed wrecks|trees|palms|signs|barriers|rocks [reset]');
+    if (kind === 's01') {
+      if (!ctx.ensureS01World) return fail('ensureS01World indisponible');
+      const n = await ctx.ensureS01World({ broadcast: true, reset });
+      if (!n && !reset) return ok('POI S01 déjà présents — rien à ajouter.');
+      return ok(`${n} décor(s) S01 ${reset ? 'repositionné(s)' : 'ajouté(s)'} et synchronisé(s).`);
+    }
+    return fail('Usage: decorseed wrecks|trees|palms|signs|barriers|rocks|s01 [reset]');
   });
 
   register('decoritems', 'Liste les items posables comme décor [filtre]', (args) => {

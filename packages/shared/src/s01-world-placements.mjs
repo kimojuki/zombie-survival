@@ -1,22 +1,21 @@
 /** Placements decor immuables S01 — ajoutés un par un (seed vide par défaut). */
 
-
-
 import {
-
   S01_BRIDGE,
-
+  S01_CABIN01_PROTO,
   S01_CABIN_NORTH,
-
   S01_CABIN_SOUTH,
-
   S01_FOREST_HUB,
-
   S01_GAS_STATION,
-
 } from './s01-poi.mjs';
+import {
+  S01_CABIN01_CHEST_LOCAL,
+  cabin01ChestWorldXZ,
+} from './s01-cabin01-chest.mjs';
 
 
+
+export { S01_CABIN01_PROTO } from './s01-poi.mjs';
 
 export const S01_ZONE_ID = 's01_start_forest';
 
@@ -96,16 +95,12 @@ function _p(prefabId, x, z, rotY, key, extra = {}) {
 
 
 
-function _chest(x, z, rotY, key, storage) {
-
+function _chest(x, z, rotY, key, storage, extra = {}) {
   return _p('storage_chest', x, z, rotY, key, {
-
     storage: storage.map((s) => ({ ...s })),
-
     storageOpen: false,
-
+    ...extra,
   });
-
 }
 
 
@@ -210,16 +205,19 @@ export function _hubMarkers() {
 
  */
 
-/** Cabane #1 — ancre validée playtest 2026-06-08 (Bruno @ 165.1, 7.1). */
-export const S01_CABIN01_PROTO = Object.freeze({ x: 165.1, z: 7.1, rotY: 0.55 });
-
 /** Dégagement arbres autour des bâtiments S01 seedés (m). */
 export const S01_BUILDING_TREE_CLEAR_R = 10;
 
+/** Seed S01 actif — voir docs/S01_DECOR_PLACEMENT.md (position, rotY, shackFloorY). */
 export function computeS01DecorPlacements() {
   const { x, z, rotY } = S01_CABIN01_PROTO;
+  const chest = cabin01ChestWorldXZ();
   return [
     _p('building_survivor_shack', x, z, rotY, 'cabin01:shack'),
+    _chest(chest.x, chest.z, chest.rotY, 'cabin01:chest', S01_CABIN_CHEST_LOOT, {
+      shackAnchor: { x, z, rotY },
+      shackFloorY: S01_CABIN01_CHEST_LOCAL.floorY,
+    }),
   ];
 }
 

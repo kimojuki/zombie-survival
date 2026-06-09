@@ -142,7 +142,7 @@
     const isBuildWood = d.prefabId?.startsWith('build_') && d.prefabId.endsWith('_wood');
     const commonOpts = {
       decorId: d.id,
-      rotY: d.rotY || 0,
+      rotY: Number.isFinite(d.rotY) ? d.rotY : 0,
       rotZ: d.rotZ || 0,
       scale: Number.isFinite(d.scale) ? d.scale : 1,
       grounded: !d.prefabId?.startsWith('wreck_'),
@@ -190,13 +190,19 @@
     const placementKey = d.placementKey ? String(d.placementKey) : '';
     if (placementKey.startsWith('s01:') && Number.isFinite(d.x) && Number.isFinite(d.z)) {
       const rotY = Number.isFinite(d.rotY) ? d.rotY : 0;
-      const gy = d.prefabId === 'building_survivor_shack' && ZS.sampleShackPadHeight
-        ? ZS.sampleShackPadHeight(d.x, d.z, rotY)
-        : (ZS.getDecorGroundHeight
-          ? ZS.getDecorGroundHeight(d.x, d.z)
-          : (ZS.getTerrainHeight ? ZS.getTerrainHeight(d.x, d.z) : 0));
-      commonOpts.baseY = gy;
-      commonOpts.grounded = true;
+      if (d.shackAnchor && ZS.sampleShackPadHeight && Number.isFinite(d.shackFloorY)) {
+        const a = d.shackAnchor;
+        commonOpts.baseY = ZS.sampleShackPadHeight(a.x, a.z, a.rotY || 0) + d.shackFloorY;
+        commonOpts.grounded = true;
+      } else {
+        const gy = d.prefabId === 'building_survivor_shack' && ZS.sampleShackPadHeight
+          ? ZS.sampleShackPadHeight(d.x, d.z, rotY)
+          : (ZS.getDecorGroundHeight
+            ? ZS.getDecorGroundHeight(d.x, d.z)
+            : (ZS.getTerrainHeight ? ZS.getTerrainHeight(d.x, d.z) : 0));
+        commonOpts.baseY = gy;
+        commonOpts.grounded = true;
+      }
     }
     const onRoot = (root) => {
       if (!root) return;
@@ -420,17 +426,26 @@
     return ZS.loadScript?.(src) ?? Promise.reject(new Error('ZS.loadScript missing'));
   }
 
+  function _s01DecorGroundY(data, px, pz, rotY) {
+    if (data?.shackAnchor && ZS.sampleShackPadHeight && Number.isFinite(data.shackFloorY)) {
+      const a = data.shackAnchor;
+      return ZS.sampleShackPadHeight(a.x, a.z, a.rotY || 0) + data.shackFloorY;
+    }
+    if (data?.prefabId === 'building_survivor_shack' && ZS.sampleShackPadHeight) {
+      return ZS.sampleShackPadHeight(px, pz, rotY);
+    }
+    return ZS.getDecorGroundHeight?.(px, pz);
+  }
+
   function _resnapS01Decor() {
-    if (!ZS.getDecorGroundHeight) return;
+    if (!ZS.getDecorGroundHeight && !ZS.sampleShackPadHeight) return;
     for (const { root, data } of decorItems.values()) {
       const pk = String(data?.placementKey || '');
       if (!pk.startsWith('s01:') || !root) continue;
       const rotY = data.rotY ?? root.userData?.decorSpec?.rotY ?? root.rotation?.y ?? 0;
       const px = root.position.x;
       const pz = root.position.z;
-      const gy = data.prefabId === 'building_survivor_shack' && ZS.sampleShackPadHeight
-        ? ZS.sampleShackPadHeight(px, pz, rotY)
-        : ZS.getDecorGroundHeight(px, pz);
+      const gy = _s01DecorGroundY(data, px, pz, rotY);
       if (!Number.isFinite(gy)) continue;
       root.position.y = gy;
       data.baseY = gy;

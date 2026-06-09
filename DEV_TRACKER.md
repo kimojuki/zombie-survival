@@ -50,6 +50,80 @@ Copier dans la description de PR :
 
 ## 2026-06-07
 
+### Ajust — Coffre cabane #1 écart mur coin NE (2026-06-09)
+
+- **Placement** : `WALL_CLEARANCE` 0.06 → 0.10 — local `(1.64, 1.36)` (+4 cm vers intérieur)
+- **Playtest** : redémarrer serveur + `decorseed s01 reset` + Ctrl+F5
+
+### Fix — Interaction coffre à travers murs cabane (2026-06-09)
+
+- **Cause** : `hitDecorStorageRay` ne testait que les meshes coffre — le rayon traversait les murs shack
+- **Client** : `_interactRayOccluded` — `hasHeadLineOfSight` + colliders décor avant le coffre (murs shack inclus)
+- **Version** : `20260609-chest-los-309` — Ctrl+F5
+
+### Completed — Raccourcis bureau serveur local (2026-06-09)
+
+- **Scripts** : `tools/desktop/zs-server-{start,stop,restart}.bat` — Node 20 nvm, port 3000
+- **Bureau** : `ZS - Demarrer serveur`, `ZS - Arreter serveur`, `ZS - Redemarrer serveur` (`.lnk`)
+- **Regenerer** : `powershell -File tools/desktop/create-desktop-shortcuts.ps1`
+
+### Completed — Cabane #1 loot coffre intérieur (2026-06-08)
+
+- **Seed** : `s01:cabin01:chest` — `storage_chest` @ local `(0, 1.0)` face porte ; loot `S01_CABIN_CHEST_LOOT`
+- **Shared** : `s01-cabin01-chest.mjs` ; `shackFloorY` + `shackAnchor` pour baseY sur dalle cabane
+- **Exclusion build** : `cabin01` @ `(165.1, 7.1)` rayon 10 m
+- **Version** : `20260608-cabin01-chest-302` — playtest Bruno coffre
+
+### Fix — Coffre cabane invisible (2026-06-08)
+
+- **Cause** : serveur non redémarré après ajout du seed → SQLite n’avait que `s01:cabin01:shack` (1 row)
+- **Client** : `_resnapS01Decor` écrasait la hauteur du coffre avec le terrain au lieu de `shackAnchor` + `shackFloorY`
+- **Shared** : `S01_CABIN01_PROTO` déplacé dans `s01-poi.mjs` (casse import circulaire placements ↔ chest)
+- **RCON** : `decorseed s01 [reset]` pour reseeder sans reboot complet
+- **Version** : `20260608-cabin01-chest-303` — redémarrer serveur + Ctrl+F5
+
+### Fix — Orientation coffre cabane #1 (2026-06-08)
+
+- **rotY local** : `Math.PI` — devant mesh vers porte sud (fond nord cabane)
+- **Client** : `storage_chest` build réapplique `opts.rotY` sur le root (le seed seul ne pivotait pas le mesh)
+- **Version** : `20260608-cabin01-chest-305` — `decorseed s01` + Ctrl+F5
+
+### Fix — Orientation coffre v2 (2026-06-08)
+
+- **Cause** : seed `shack.rotY + π` (≈3.69 en DB) — devant mesh (−Z) pointait vers le mur nord, pas la porte
+- **Shared** : `cabin01ChestFaceDoorRotY()` — `atan2` vers pivot porte `SURVIVOR_SHACK_DOOR.pivotZ`
+- **Client** : yaw sur le groupe mesh interne du coffre (`root.rotation.y = 0`), colliders via `_decorYawFromRoot`
+- **Version** : `20260608-cabin01-chest-306` — `decorseed s01` + Ctrl+F5
+- **Playtest** : ✅ orientation validée Bruno
+
+### Fix — Interaction coffre vs porte par viseur (2026-06-09)
+
+- **Cause** : `findNearestDecorStorage` prioritaire sur `findNearestDecorDoor` (proximité XZ)
+- **Client** : `pickDecorInteractRay` / `hitDecorStorageRay` — mesh le plus proche sur rayon caméra
+- **UI E** : mise à jour quand la caméra tourne (pas seulement déplacement joueur)
+- **Verrou** : `installDoorLockOnAimedDoor` — porte sous le réticule
+- **Version** : `20260608-interact-raycast-307`
+
+### Décor — coffre cabane #1 coin nord-est (2026-06-09)
+
+- **Placement** : `S01_CABIN01_CHEST_LOCAL` `(1.68, 1.40)` — coin fond + mur droit, 6 cm des murs intérieurs
+- **Orientation** : toujours `cabin01ChestFaceDoorRotY()` (vise la porte depuis le coin)
+- **Tests** : `s01-cabin01-chest.test.mjs` — clearance murs est/nord
+- **Playtest** : redémarrer serveur + `decorseed s01` + Ctrl+F5
+
+### Fix — building-debug cabane 9 colliders (2026-06-09)
+
+- **Cause** : `SHACK_EXPECTED_COLLIDERS` restait à 5 (ancien palier pièces) alors que la cabane 7/7 en a 9
+- **Client** : `building_debug.js` — `expected: 9`, hint vers `decor_colliders.js`
+- **Version** : `20260608-shack-colliders-308`
+
+### Docs — Placement décor S01 + coffre cabane (2026-06-09)
+
+- **Guide** : `docs/S01_DECOR_PLACEMENT.md` — repère shack, rotY Three.js, `shackAnchor`/`shackFloorY`, pièges, checklist
+- **Roadmap** : `design/secteur/S01_ROADMAP.md` — ancres validées cabane #1 + coffre
+- **Index** : `docs/README.md`, `START_FOREST.md`, `ARCHITECTURE.md`, `RCON.md` (`decorseed s01`)
+- **Outil** : `tools/check-s01-decor.mjs` affiche `rotY` + sanity check mur vs porte
+
 ### Completed — Hauteur porte small city (2026-06-08)
 
 - **Porte** : vantail small city augmenté jusqu'au linteau pour supprimer le trou visible au-dessus.
@@ -420,7 +494,6 @@ Copier dans la description de PR :
 - **Cause** : `_syncArmor` écrasait `p.health` si `null` ; PV serveur jamais envoyés au `game-init` (localStorage obsolète)
 - **Fix** : `_syncArmor` UI-only ; `health` dans `game-init` + ack `use-item` ; sync `survival-update` → localStorage
 - **Version** : `20260608-fix-health-sync-270`
->>>>>>> 55fea22 (feat: cabane S01 compl?te, seed cabin01 et documentation b?timents)
 
 ### Completed — Doc inventaire / consommation (2026-06-08)
 

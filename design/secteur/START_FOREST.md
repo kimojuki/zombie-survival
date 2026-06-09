@@ -69,7 +69,8 @@ loot basique dans les coffres seed (quand POI posés)
 - Seed boot : `ensureS01World()` dans `apps/server/index.js`
 - Routes : `packages/shared/src/s01-roads.mjs` — tracé après POI, pas depuis doc v1
 - Rivière : `s01_terrain.js` / `s01-river.mjs`
+- **Objets dans / près d'un shack** (position, rotY, hauteur, pièges) : **[docs/S01_DECOR_PLACEMENT.md](../../docs/S01_DECOR_PLACEMENT.md)**
 
 ## Roadmap
 
-Voir **[S01_ROADMAP.md](./S01_ROADMAP.md)** — workflow placement + phases.
+Voir **[S01_ROADMAP.md](./S01_ROADMAP.md)** — ancres validées + phases.

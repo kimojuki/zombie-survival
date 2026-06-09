@@ -38,4 +38,20 @@ if (chestDb && chestExp) {
   console.log(ok ? '\n✓ chest rotY OK (faces door)' : '\n✗ chest rotY mismatch or faces wall (shack+PI)');
 }
 
+const bedExp = expected.find((p) => p.placementKey === 's01:cabin01:bed');
+const bedDb = rows.find((r) => r.id.includes('cabin01:bed') || r.payload.includes('s01:cabin01:bed'));
+if (bedExp) {
+  const ok = bedDb
+    && JSON.parse(bedDb.payload).prefabId === 'spawn_single_bed'
+    && Math.abs(JSON.parse(bedDb.payload).x - bedExp.x) < 0.05;
+  console.log(ok ? '✓ lit seed OK' : '✗ lit missing or stale — redémarrer serveur ou `decorseed s01 reset`');
+}
+
+const oldBedroll = rows.find((r) => r.payload.includes('cabin01:bedroll'));
+if (oldBedroll) {
+  console.log('⚠ ancien sac seed encore en DB — `decorseed s01 reset`');
+}
+
+console.log('\nExpected count:', expected.length, '(shack + chest + bed)');
+
 db.close();

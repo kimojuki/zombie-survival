@@ -27,7 +27,7 @@ describe('s01 world placements', () => {
 
   it('seeds cabin01 shack + starter chest at playtest-validated anchor', () => {
     const placements = computeS01DecorPlacements();
-    assert.equal(placements.length, 2);
+    assert.equal(placements.length, 3);
     const shack = placements.find((p) => p.placementKey === 's01:cabin01:shack');
     assert.ok(shack);
     assert.equal(shack.prefabId, 'building_survivor_shack');

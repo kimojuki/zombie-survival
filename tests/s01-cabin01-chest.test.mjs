@@ -76,7 +76,7 @@ test('seed includes shack + chest with loot and floor anchor', () => {
 
   const placements = computeS01DecorPlacements();
 
-  assert.equal(placements.length, 2);
+  assert.equal(placements.length, 3);
 
   const chest = placements.find((p) => p.placementKey === 's01:cabin01:chest');
 

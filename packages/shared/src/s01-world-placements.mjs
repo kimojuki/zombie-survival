@@ -9,6 +9,10 @@ import {
   S01_GAS_STATION,
 } from './s01-poi.mjs';
 import {
+  S01_CABIN01_BED_LOCAL,
+  cabin01BedWorldXZ,
+} from './s01-cabin01-bed.mjs';
+import {
   S01_CABIN01_CHEST_LOCAL,
   cabin01ChestWorldXZ,
 } from './s01-cabin01-chest.mjs';
@@ -99,6 +103,13 @@ function _chest(x, z, rotY, key, storage, extra = {}) {
   return _p('storage_chest', x, z, rotY, key, {
     storage: storage.map((s) => ({ ...s })),
     storageOpen: false,
+    ...extra,
+  });
+}
+
+function _bed(x, z, rotY, key, extra = {}) {
+  return _p('spawn_single_bed', x, z, rotY, key, {
+    interactRole: 'bed',
     ...extra,
   });
 }
@@ -212,11 +223,16 @@ export const S01_BUILDING_TREE_CLEAR_R = 10;
 export function computeS01DecorPlacements() {
   const { x, z, rotY } = S01_CABIN01_PROTO;
   const chest = cabin01ChestWorldXZ();
+  const bed = cabin01BedWorldXZ();
   return [
     _p('building_survivor_shack', x, z, rotY, 'cabin01:shack'),
     _chest(chest.x, chest.z, chest.rotY, 'cabin01:chest', S01_CABIN_CHEST_LOOT, {
       shackAnchor: { x, z, rotY },
       shackFloorY: S01_CABIN01_CHEST_LOCAL.floorY,
+    }),
+    _bed(bed.x, bed.z, bed.rotY, 'cabin01:bed', {
+      shackAnchor: { x, z, rotY },
+      shackFloorY: S01_CABIN01_BED_LOCAL.floorY,
     }),
   ];
 }

@@ -26,6 +26,30 @@ Chaque feature ou refonte doit laisser une trace pour l'équipe :
 
 Index complet : [README.md](README.md#documentation-à-lire-avant-un-push--review)
 
+### Completed — catalogue prefabs admin auto-sync (2026-06-09)
+
+- **URL** : `/prefab-catalog.html` — réservée aux comptes admin (même auth JWT que WebRCON).
+- **API** : `GET /api/admin/prefab-catalog`.
+- **Auto-discovery** : `packages/shared/src/decor-prefab-discover.mjs` scanne `DECOR_PREFABS` + `registerDecorPrefab()` dans `apps/client/public/js` — **nouveau prefab = catalogue + RCON sans liste manuelle**.
+- **Sync client** : event `decor-prefab-registry` (labels `def.label` via `ZS.getDecorPrefabMeta()`).
+- **Métadonnées optionnelles** : `DECOR_PREFAB_META` dans `decor-prefab-catalog.mjs` (prioritaire sur l’inférence auto).
+- **Tests** : `tests/decor-prefab-catalog.test.mjs`.
+- **Aperçu 3D** : vignettes + modal interactif (`prefab-catalog-preview.js`) — rendu via `ZS.spawnDecorPrefab`.
+- **Modal 3D v2 (2026-06-09)** : clic sur miniature → popup avec OrbitControls (rotation souris, zoom molette), recentrage, copie RCON, description/catégorie ; OrbitControls via importmap local (plus unpkg dynamique).
+- **Fix aperçu catalogue** : cache-bust JS legacy via `client-version` (`?v=…`), `window.THREE = THREE` (namespace complet), message d’erreur explicite si prefab absent du client.
+- **Prefab #1 catalogue enrichi** : `spawn_cabin_table` — table rustique cabane (textures `tableTop`/`tableLeg`, collider, mesh `_buildCabinTable`).
+- **Prefab #2 catalogue** : `spawn_cabin_chair` — chaise bois assortée (réutilise textures table, mesh `_buildCabinChair`).
+- **Prefab #3 catalogue** : `spawn_cabin_shelf` — étagère 3 niveaux + fond lattes, conserve/bocal décor (`_buildCabinShelf`).
+- **Orientation prefabs** : `decor-prefab-orientation.mjs` + `docs/DECOR_PREFAB_ORIENTATION.md` — convention −Z, repères cabane/table/chaise/étagère/lit/coffre ; colonne **Orientation** catalogue admin + modale 3D.
+- **Hub admin** : menu hamburger / sidebar — sections **Catalogue** + **Carte monde** (`/admin.html` alias).
+- **Carte admin** : `GET /api/admin/world-map` + `admin-world-map.js` — zoom/pan, filtres couches, tooltip (pos exacte, seed, `decorremove`).
+- **POI précis** : `admin-map-pois.mjs` — positions live serveur > seed S01 ; marqueurs rétrécissent au zoom + réticule précision.
+- **Édition décor carte** : clic POI → panneau admin (`PATCH /api/admin/decor/:id`) — position, rotY, scale, épave, ancre coffre ; persist + sync in-game.
+- **Carte admin zoom/POI** : zoom max 3600% ; seeds plage (panneau + torche) + coffre cabane en couches dédiées (stockage/signalisation) ; arbres/rochers/barrières masqués par défaut (plus en couche POI-live).
+- **Sac de couchage cabane S01** : texture ripstop v2 ; seed cabane remplacé par **lit** `spawn_single_bed` (`s01-cabin01-bed.mjs`, coin NO).
+- **Statique carte** : `packages/shared/src/admin-map-static.mjs` (secteurs, routes, POI S01).
+- **Doc** : `docs/RCON.md`.
+
 ## Checklist PR (pour les collègues)
 
 Copier dans la description de PR :
@@ -49,6 +73,12 @@ Copier dans la description de PR :
 ## 2026-06-06
 
 ## 2026-06-07
+
+### Docs — Workflow Git équipe + règles IA (2026-06-09)
+
+- **IA** : `.cursor/rules/git-team-workflow.mdc` — pull début/fin session, fusion S01+S02, interdits
+- **Humain** : `docs/GIT_WORKFLOW.md` — procédure Bruno+Georges, conflits, checklist push
+- **Index** : `docs/README.md`, `studio-workflow.mdc` pointe vers les deux
 
 ### Fix — Restauration bounds S02 (Georges) fusionné avec S01 (2026-06-09)
 

@@ -19,6 +19,18 @@
     spawn_bedroll: [
       { type: 'box', lx: 0, lz: 0, hw: 0.38, hd: 0.85, maxY: 0.12 },
     ],
+    spawn_single_bed: [
+      { type: 'box', lx: 0, lz: 0, hw: 0.46, hd: 0.89, maxY: 0.52 },
+    ],
+    spawn_cabin_table: [
+      { type: 'box', lx: 0, lz: 0, hw: 0.58, hd: 0.36, maxY: 0.76 },
+    ],
+    spawn_cabin_chair: [
+      { type: 'box', lx: 0, lz: 0, hw: 0.22, hd: 0.20, maxY: 0.88 },
+    ],
+    spawn_cabin_shelf: [
+      { type: 'box', lx: 0, lz: 0, hw: 0.40, hd: 0.13, maxY: 1.12 },
+    ],
     spawn_backpack: [
       { type: 'box', lx: 0, lz: 0, hw: 0.20, hd: 0.16, maxY: 0.32 },
     ],

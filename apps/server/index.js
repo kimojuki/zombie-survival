@@ -22,6 +22,7 @@ const worldPersist = createWorldPersist(db, log);
 const qaChecklist = createQaChecklist(pool, DB_CLIENT);
 const SERVER_ROLE = getServerRole();
 const invOps = require('./src/inventory-ops');
+const { applyAdminDecorPatch, adminDecorSnapshot } = require('./src/admin-decor-ops');
 const { invSnapshot: _invDebugSnapshot, logInv: _logInvDebug } = require('./src/inv-debug');
 const INV_DEBUG_SERVER_BUILD = '20260608-sleeper-survival-273';
 const {
@@ -177,6 +178,8 @@ function _registerClientStatic() {
   app.get('/index.html', (req, res) => _sendClientHtml(res, 'index.html'));
   app.get('/game.html', (req, res) => _sendClientHtml(res, 'game.html'));
   app.get('/webrcon.html', (req, res) => _sendClientHtml(res, 'webrcon.html'));
+  app.get('/prefab-catalog.html', (req, res) => _sendClientHtml(res, 'prefab-catalog.html'));
+  app.get('/admin.html', (req, res) => _sendClientHtml(res, 'prefab-catalog.html'));
   app.get('/arm-preview.html', (req, res) => _sendClientHtml(res, 'arm-preview.html'));
   app.get('/models-preview.html', (req, res) => _sendClientHtml(res, 'models-preview.html'));
 
@@ -451,6 +454,188 @@ app.post('/api/rcon', async (req, res) => {
   }
 });
 
+const DECOR_PREFAB_CATALOG_URL = pathToFileURL(
+  path.join(__dirname, '../../packages/shared/src/decor-prefab-catalog.mjs'),
+).href;
+const ADMIN_MAP_STATIC_URL = pathToFileURL(
+  path.join(__dirname, '../../packages/shared/src/admin-map-static.mjs'),
+).href;
+const ADMIN_MAP_POIS_URL = pathToFileURL(
+  path.join(__dirname, '../../packages/shared/src/admin-map-pois.mjs'),
+).href;
+
+function _adminDecorLayer(d) {
+  const pid = d.prefabId || '';
+  if (d.kind === 'item') return 'item';
+  if (pid.startsWith('tree_')) return pid === 'tree_palm' ? 'palm' : 'tree';
+  if (pid.startsWith('rock_') || pid === 'spawn_stone') return 'rock';
+  if (pid.startsWith('building_') || pid.startsWith('smallcity_') || pid.startsWith('s01_')) return 'building';
+  if (pid.startsWith('sign_') || pid.startsWith('beach_')) return 'sign';
+  if (pid.startsWith('wreck_')) return 'wreck';
+  if (pid.startsWith('road_')) return 'barrier';
+  if (pid === 'storage_chest') return 'storage';
+  if (pid.startsWith('spawn_') || pid.startsWith('build_')) return 'camp';
+  return 'other';
+}
+
+function _adminDecorMarker(d) {
+  return {
+    id: d.id,
+    kind: d.kind || 'item',
+    prefabId: d.prefabId || null,
+    type: d.type || null,
+    x: d.x,
+    z: d.z,
+    y: d.y,
+    rotY: d.rotY,
+    scale: d.scale,
+    layer: _adminDecorLayer(d),
+    immutable: _isDecorImmutable(d),
+    placementKey: d.placementKey || _getPlacementKey(d) || null,
+    createdBy: d.createdBy || null,
+    anchorId: d.anchorId || null,
+    zoneId: d.zoneId ?? null,
+  };
+}
+
+app.get('/api/admin/world-map', async (req, res) => {
+  const user = authFromHeader(req);
+  if (!user) return res.status(401).json({ ok: false, error: 'Non authentifié' });
+  if (!isAdminUser(user.username) && !RCON_AUTO_ADMIN) {
+    return res.status(403).json({ ok: false, error: 'Accès admin requis' });
+  }
+  try {
+    const [staticMod, poisMod] = await Promise.all([
+      import(ADMIN_MAP_STATIC_URL),
+      import(ADMIN_MAP_POIS_URL),
+    ]);
+    const staticData = staticMod.getAdminMapStaticData();
+    const decor = Array.from(decorItems.values()).map(_adminDecorMarker);
+    const seedPlacements = poisMod.computeAdminMapSeedPlacements?.() || [];
+    const pois = poisMod.buildAdminMapPois({
+      decor,
+      seedPlacements,
+      designLandmarks: staticData.designLandmarks || [],
+    });
+    const online = [];
+    for (const p of players.values()) {
+      online.push({
+        id: p.id,
+        username: p.username,
+        x: p.x,
+        z: p.z,
+        y: p.y,
+        health: p.health,
+        rotY: p.rotY,
+      });
+    }
+    const byLayer = {};
+    for (const d of decor) byLayer[d.layer] = (byLayer[d.layer] || 0) + 1;
+    res.json({
+      ok: true,
+      world: staticData.world,
+      sectors: staticData.sectors,
+      roads: staticData.roads,
+      gates: staticData.gates,
+      pois,
+      decor,
+      players: online,
+      waterZones: worldWaterZones,
+      lootBuildings,
+      stats: {
+        decor: decor.length,
+        players: online.length,
+        byLayer,
+      },
+      updatedAt: Date.now(),
+    });
+  } catch (err) {
+    log.error('admin', 'world-map failed', { err: err.message });
+    res.status(500).json({ ok: false, error: 'Erreur serveur' });
+  }
+});
+
+function _adminDecorAuth(req, res) {
+  const user = authFromHeader(req);
+  if (!user) {
+    res.status(401).json({ ok: false, error: 'Non authentifié' });
+    return null;
+  }
+  if (!isAdminUser(user.username) && !RCON_AUTO_ADMIN) {
+    res.status(403).json({ ok: false, error: 'Accès admin requis' });
+    return null;
+  }
+  return user;
+}
+
+app.get('/api/admin/decor/:id', (req, res) => {
+  const user = _adminDecorAuth(req, res);
+  if (!user) return;
+  const id = String(req.params.id || '').trim();
+  const item = decorItems.get(id);
+  if (!item) return res.status(404).json({ ok: false, error: 'Décor introuvable' });
+  res.json({
+    ok: true,
+    item: adminDecorSnapshot(item),
+    editable: true,
+    immutable: _isDecorImmutable(item),
+  });
+});
+
+app.patch('/api/admin/decor/:id', (req, res) => {
+  const user = _adminDecorAuth(req, res);
+  if (!user) return;
+  const id = String(req.params.id || '').trim();
+  const item = decorItems.get(id);
+  if (!item) return res.status(404).json({ ok: false, error: 'Décor introuvable' });
+  const patch = req.body?.patch || req.body || {};
+  const changed = applyAdminDecorPatch(item, patch, user.username);
+  if (!changed.length) {
+    return res.json({ ok: true, changed: [], item: adminDecorSnapshot(item), message: 'Aucun changement' });
+  }
+  if (item.prefabId?.startsWith('wreck_') && Number.isFinite(item.wreckTilt)) {
+    item.rotZ = item.wreckTilt;
+  }
+  decorItems.set(id, item);
+  worldPersist?.scheduleUpsertDecor(item);
+  io.emit('decor-item-spawn', item);
+  log.info('admin', 'decor patched', { id, changed, by: user.username });
+  res.json({ ok: true, changed, item: adminDecorSnapshot(item) });
+});
+
+app.delete('/api/admin/decor/:id', (req, res) => {
+  const user = _adminDecorAuth(req, res);
+  if (!user) return;
+  const id = String(req.params.id || '').trim();
+  const force = req.query.force === '1' || req.body?.force === true;
+  const removed = _removeDecorItem(id, { emit: true, force: force || true });
+  if (!removed) return res.status(404).json({ ok: false, error: 'Décor introuvable ou non supprimable' });
+  log.info('admin', 'decor deleted', { id, by: user.username });
+  res.json({ ok: true, id });
+});
+
+app.get('/api/admin/prefab-catalog', async (req, res) => {
+  const user = authFromHeader(req);
+  if (!user) return res.status(401).json({ ok: false, error: 'Non authentifié' });
+  if (!isAdminUser(user.username) && !RCON_AUTO_ADMIN) {
+    return res.status(403).json({ ok: false, error: 'Accès admin requis' });
+  }
+  try {
+    const mod = await import(DECOR_PREFAB_CATALOG_URL);
+    if (!decorPrefabCatalogCache.length) await _reloadDecorPrefabCatalog();
+    res.json({
+      ok: true,
+      prefabs: decorPrefabCatalogCache,
+      categories: mod.DECOR_PREFAB_CATEGORIES,
+      count: decorPrefabCatalogCache.length,
+      autoDiscovered: true,
+    });
+  } catch (err) {
+    log.error('admin', 'prefab catalog failed', { err: err.message });
+    res.status(500).json({ ok: false, error: 'Erreur serveur' });
+  }
+});
+
 app.post('/api/rcon/session', async (req, res) => {
   const user = authFromHeader(req);
   if (!user) return res.status(401).json({ ok: false, error: 'Non authentifié' });
@@ -578,51 +763,11 @@ const items      = new Map(); // world pickup items (+ butins de mort : bag:true
 const structures = new Map(); // structures construites par les joueurs (base)
 const decorItems = new Map(); // props monde (seed + constructions joueurs)
 let decorSeq = 1;
-const decorPrefabs = [
-  'spawn_campfire',
-  'spawn_log_pile',
-  'spawn_border_log',
-  'spawn_supply_crate',
-  'spawn_marker_left',
-  'spawn_marker_right',
-  'spawn_bedroll',
-  'spawn_backpack',
-  'spawn_lean_to',
-  'spawn_stump_seat',
-  'spawn_drink_set',
-  'spawn_lantern',
-  'spawn_stone',
-  'rock_boulder',
-  'rock_outcrop',
-  'spawn_workbench',
-  'spawn_flat_stone',
-  'storage_chest',
-  'build_wall_wood',
-  'build_doorway_wood',
-  'build_large_doorway_wood',
-  'build_floor_wood',
-  'build_ceiling_wood',
-  'build_stair_wood',
-  'build_door_wood',
-  'build_large_door_wood',
-  'smallcity_house_a',
-  'smallcity_house_b',
-  'wreck_sedan',
-  'wreck_pickup',
-  'tree_oak',
-  'tree_pine',
-  'tree_birch',
-  'tree_dead',
-  'tree_palm',
-  'road_barrier_post',
-  'road_barrier_rail',
-  'building_survivor_shack',
-  'sign_beach_exit',
-  'beach_exit_torch',
-  's01_gas_station',
-  's01_military_tent',
-  'sign_sector_gate',
-];
+/** IDs prefabs RCON — découverts depuis le client JS + sync clients connectés. */
+const decorPrefabs = [];
+const CLIENT_PUBLIC_JS = path.join(__dirname, '../client/public/js');
+let decorPrefabCatalogCache = [];
+const clientDecorPrefabMeta = {};
 const DECOR_PREFAB_BY_ITEM = {
   struct_storage_chest: 'storage_chest',
   struct_mur_bois: 'build_wall_wood',
@@ -2387,57 +2532,78 @@ async function ensureZombiePopulation(opts = {}) {
 
 _getScenarioBeach().catch((err) => log.error('boot', 'scenario beach init failed', { err: err.message }));
 
-rcon = createRcon({
-  io,
-  players,
-  zombies,
-  items,
-  structures,
-  decorItems,
-  decorPrefabs,
-  flags: serverFlags,
-  worldColliders: () => worldColliders,
-  lootBuildings: () => lootBuildings,
-  worldWaterZones: () => worldWaterZones,
-  getWorldTime: () => _worldTime,
-  setWorldTime,
-  makeZombie,
-  loadZombiePrefabs,
-  ensureZombiePopulation,
-  listZombiePrefabs: () => (_zombiePrefabs ? _zombiePrefabs.listZombiePrefabIds() : []),
-  getZombiePrefab: (id) => (_zombiePrefabs ? _zombiePrefabs.getZombiePrefab(id) : null),
-  savePlayerState,
-  saveBlob,
-  generateLoot,
-  clearLoot,
-  makeDecorItemId: () => `decor_${decorSeq++}`,
-  persistDecorUpsert: (item) => worldPersist.scheduleUpsertDecor(item),
-  persistDecorDelete: (id, item) => worldPersist.scheduleDeleteDecor(id, item),
-  ensureRoadWrecks,
-  ensureRoadBarriers,
-  ensureWorldTrees,
-  ensureBeachPalms,
-  ensureBeachSigns,
-  ensureS01World,
-  wipePlayerWorld,
-  isDecorImmutable: _isDecorImmutable,
-  ensureCampRocks,
-  ensureWorldRocks,
-  itemTypes: ALL_ITEMS,
-  addStackToInv: _addStackToInv,
-  cloneInv: _cloneInv,
-  handlePlayerDeath: _handlePlayerDeath,
-  resetPlayerScenario: async (target, sock) => {
-    const sc = await _getScenarioBeach();
-    sc.resetScenario(target, sock);
-  },
-  emitSurvivalUpdate: (target) => {
-    const sock = io.sockets.sockets.get(target.socketId);
-    if (sock) _emitSurvivalUpdate(sock, target);
-  },
-  qaChecklist,
-  log,
-});
+async function _reloadDecorPrefabCatalog(extraIds = []) {
+  const mod = await import(DECOR_PREFAB_CATALOG_URL);
+  const discovered = mod.discoverDecorPrefabIds(CLIENT_PUBLIC_JS);
+  const ids = [...new Set([...discovered, ...extraIds, ...decorPrefabs])].sort();
+  decorPrefabs.splice(0, decorPrefabs.length, ...ids);
+  decorPrefabCatalogCache = mod.buildDecorPrefabCatalog(ids, clientDecorPrefabMeta);
+  return { ids, catalog: decorPrefabCatalogCache };
+}
+
+function _initRcon() {
+  rcon = createRcon({
+    io,
+    players,
+    zombies,
+    items,
+    structures,
+    decorItems,
+    decorPrefabs,
+    flags: serverFlags,
+    worldColliders: () => worldColliders,
+    lootBuildings: () => lootBuildings,
+    worldWaterZones: () => worldWaterZones,
+    getWorldTime: () => _worldTime,
+    setWorldTime,
+    makeZombie,
+    loadZombiePrefabs,
+    ensureZombiePopulation,
+    listZombiePrefabs: () => (_zombiePrefabs ? _zombiePrefabs.listZombiePrefabIds() : []),
+    getZombiePrefab: (id) => (_zombiePrefabs ? _zombiePrefabs.getZombiePrefab(id) : null),
+    savePlayerState,
+    saveBlob,
+    generateLoot,
+    clearLoot,
+    makeDecorItemId: () => `decor_${decorSeq++}`,
+    persistDecorUpsert: (item) => worldPersist.scheduleUpsertDecor(item),
+    persistDecorDelete: (id, item) => worldPersist.scheduleDeleteDecor(id, item),
+    ensureRoadWrecks,
+    ensureRoadBarriers,
+    ensureWorldTrees,
+    ensureBeachPalms,
+    ensureBeachSigns,
+    ensureS01World,
+    wipePlayerWorld,
+    isDecorImmutable: _isDecorImmutable,
+    ensureCampRocks,
+    ensureWorldRocks,
+    itemTypes: ALL_ITEMS,
+    addStackToInv: _addStackToInv,
+    cloneInv: _cloneInv,
+    handlePlayerDeath: _handlePlayerDeath,
+    resetPlayerScenario: async (target, sock) => {
+      const sc = await _getScenarioBeach();
+      sc.resetScenario(target, sock);
+    },
+    emitSurvivalUpdate: (target) => {
+      const sock = io.sockets.sockets.get(target.socketId);
+      if (sock) _emitSurvivalUpdate(sock, target);
+    },
+    qaChecklist,
+    log,
+  });
+}
+
+_reloadDecorPrefabCatalog()
+  .then(({ ids }) => {
+    _initRcon();
+    log.info('boot', 'decor prefab catalog', { count: ids.length, source: 'client-js-discovery' });
+  })
+  .catch((err) => {
+    log.error('boot', 'decor prefab catalog load failed — RCON prefabs vides', { err: err.message });
+    _initRcon();
+  });
 
 let resourceRegen = null;
 import(RESOURCE_REGEN_URL).then(({ createResourceRegen }) => {
@@ -3031,6 +3197,21 @@ io.on('connection', async (socket) => {
       log.info('world', 'colliders loaded', { terrain: terrain.length, from: p.username });
       worldPersist?.scheduleWorldState?.({ worldColliders });
     }
+  });
+
+  socket.on('decor-prefab-registry', (payload) => {
+    if (!payload || !Array.isArray(payload.ids)) return;
+    if (payload.meta && typeof payload.meta === 'object') {
+      for (const [id, meta] of Object.entries(payload.meta)) {
+        if (!meta || typeof meta !== 'object') continue;
+        clientDecorPrefabMeta[id] = { ...clientDecorPrefabMeta[id], ...meta };
+      }
+    }
+    _reloadDecorPrefabCatalog(payload.ids)
+      .then(({ ids }) => {
+        log.info('world', 'decor prefab registry', { count: ids.length, from: p.username });
+      })
+      .catch((err) => log.error('world', 'decor prefab registry failed', { err: err.message }));
   });
 
   socket.on('world-water-zones', (zones) => {
@@ -3916,7 +4097,8 @@ io.on('connection', async (socket) => {
     const reply = (payload) => { if (typeof cb === 'function') cb(payload); };
     const decorId = String(d?.decorId || '');
     const item = decorItems.get(decorId);
-    if (!item || (item.prefabId !== 'spawn_bedroll' && item.prefabId !== 'spawn_lean_to')) {
+    if (!item || (item.prefabId !== 'spawn_bedroll' && item.prefabId !== 'spawn_lean_to'
+        && item.prefabId !== 'spawn_single_bed')) {
       reply({ ok: false, error: 'Aucun couchage à proximité' });
       return;
     }

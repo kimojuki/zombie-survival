@@ -20,6 +20,7 @@ Référence validée playtest : **coffre `s01:cabin01:chest`** @ cabane `buildin
 | Hauteur S01 + resnap | `apps/client/public/js/network.js` → `_s01DecorGroundY`, `_resnapS01Decor` |
 | Tests | `tests/s01-cabin01-chest.test.mjs`, `tests/s01-placements.test.mjs` |
 | Vérif SQLite locale | `node tools/check-s01-decor.mjs` |
+| **Orientation prefabs** | [DECOR_PREFAB_ORIENTATION.md](DECOR_PREFAB_ORIENTATION.md) · `packages/shared/src/decor-prefab-orientation.mjs` |
 
 ---
 
@@ -216,10 +217,16 @@ Dans la cabane, porte et coffre peuvent être proches : l’UI et la touche **E*
 
 ## Prochains objets cabane #1
 
-| Objet | Suggestion |
-|-------|------------|
-| Table / chaise | Offset local + `cabin01*Face*RotY()` si orientation gameplay |
-| Second coffre | Nouveau `placementKey`, réutiliser `shackAnchor` / `floorY` |
-| Route terre | Hors shack — `getDecorGroundHeight` ou RoadNetwork, pas `shackFloorY` |
+| Objet | Devant / dos | Suggestion seed |
+|-------|----------------|-----------------|
+| Table `spawn_cabin_table` | Devant **−Z** (assiette) · dos +Z | Centre pièce, rotY vers porte ou chaises |
+| Chaise `spawn_cabin_chair` | Devant **−Z** (assise) · dossier +Z | Face table : devant −Z vers plateau |
+| Étagère `spawn_cabin_shelf` | Face **−Z** · dos **+Z** contre mur | Mur ouest ou nord, dos collé au mur |
+| Lit `spawn_single_bed` | Tête **+Z** · pieds −Z | Coin NO — déjà seed `s01:cabin01:bed` |
+| Coffre `storage_chest` | Serrure **−Z** | `cabin01ChestFaceDoorRotY()` |
+| Second coffre | −Z forward | Nouveau `placementKey`, réutiliser `shackAnchor` / `floorY` |
+| Route terre | — | Hors shack — `getDecorGroundHeight`, pas `shackFloorY` |
+
+Référence complète : [DECOR_PREFAB_ORIENTATION.md](DECOR_PREFAB_ORIENTATION.md).
 
 Voir aussi : [design/secteur/START_FOREST.md](../design/secteur/START_FOREST.md), [design/secteur/S01_ROADMAP.md](../design/secteur/S01_ROADMAP.md).

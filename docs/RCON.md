@@ -173,6 +173,10 @@ Objets visibles par tous les joueurs, synchronisés via `decorItems` au `game-in
 | Commande | Description |
 |----------|-------------|
 | `decorprefabs` | Liste les prefabs (`spawn_campfire`, `storage_chest`, `building_survivor_shack`, `smallcity_house_a`, …) |
+| **Hub admin** | **`/prefab-catalog.html`** ou **`/admin.html`** — menu latéral (catalogue prefabs + **carte monde**). Auth JWT admin. |
+| **Catalogue prefabs** | `GET /api/admin/prefab-catalog` — auto-sync, aperçu 3D, **colonne Orientation** (devant/dos). Voir [DECOR_PREFAB_ORIENTATION.md](DECOR_PREFAB_ORIENTATION.md). |
+| **Carte monde admin** | `GET /api/admin/world-map` — secteurs, routes, POI, tous les `decorItems`, joueurs en ligne. UI : `admin-world-map.js` (zoom, pan, filtres, clic = panneau édition). |
+| **Édition décor admin** | `GET/PATCH/DELETE /api/admin/decor/:id` — modifier position, orientation, scale, épave, ancre coffre ; sync clients via `decor-item-spawn`. |
 | `decoritems [filtre]` | Liste les items de jeu posables comme objet décor |
 | `decoradd prefab spawn_border_log [x z] [rotY] [scale]` | Pose un rondin de lisière (scale ≈ longueur / 0.42 m) |
 | `decoradd prefab storage_chest [here\|x z] [rotY] [scale]` | Pose un coffre prefab interactif : `E` / bouton tactile pour déposer ou reprendre des items |

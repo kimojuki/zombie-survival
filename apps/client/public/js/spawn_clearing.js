@@ -1,4 +1,5 @@
 // Décor visuel de la clairière de spawn (lisière, sentier, détails)
+// Orientation prefabs : packages/shared/src/decor-prefab-orientation.mjs · docs/DECOR_PREFAB_ORIENTATION.md
 (function () {
   'use strict';
 
@@ -276,23 +277,258 @@
     _add(g, new THREE.BoxGeometry(0.08, 0.06, 0.04), strap, 0, 0.38, 0.08);
   }
 
-  /** Tapis de sol + couverture roulée + oreiller */
+  /** Sac de couchage déroulé — tapis + rouleau + capuche (prefab `spawn_bedroll`, pas un lit). */
   function _buildBedroll(parent, x, y, z, ry) {
     const M = _campMats();
     const g = new THREE.Group();
     g.position.set(x, y, z);
     g.rotation.y = ry || 0;
     parent.add(g);
-    const mat = M ? M.canvas(0x4a5838) : new THREE.MeshLambertMaterial({ color: 0x4a5838 });
-    const blanket = M ? M.canvasTight(0x5a4030) : new THREE.MeshLambertMaterial({ color: 0x5a4030 });
-    const pillow = M ? M.canvasTight(0x6a6050) : new THREE.MeshLambertMaterial({ color: 0x6a6050 });
-    _add(g, new THREE.BoxGeometry(1.75, 0.05, 0.72), mat, 0, 0.025, 0);
-    const roll = new THREE.Mesh(new THREE.CylinderGeometry(0.11, 0.11, 0.65, 8), blanket);
+    const mat = M?.bedrollBody?.() || new THREE.MeshLambertMaterial({ color: 0x3a4548 });
+    const blanket = M?.bedrollRoll?.() || new THREE.MeshLambertMaterial({ color: 0x2e3638 });
+    const pillow = M?.bedrollPillow?.() || new THREE.MeshLambertMaterial({ color: 0x5a6468 });
+    const body = _add(g, new THREE.BoxGeometry(1.75, 0.05, 0.72), mat, 0, 0.025, 0);
+    body.castShadow = body.receiveShadow = true;
+    const roll = new THREE.Mesh(new THREE.CylinderGeometry(0.11, 0.11, 0.65, 10), blanket);
     roll.rotation.z = Math.PI / 2;
     roll.position.set(0.52, 0.12, 0);
-    roll.castShadow = true;
+    roll.castShadow = roll.receiveShadow = true;
     g.add(roll);
-    _add(g, new THREE.BoxGeometry(0.32, 0.08, 0.22), pillow, -0.68, 0.06, 0);
+    const hood = _add(g, new THREE.BoxGeometry(0.32, 0.08, 0.22), pillow, -0.68, 0.06, 0);
+    hood.castShadow = hood.receiveShadow = true;
+  }
+
+  /**
+   * Lit une place — ~0,92 × 1,78 m (réaliste pour un perso).
+   * Pivot = centre sol ; tête local +Z, pieds −Z.
+   */
+  function _buildSingleBed(parent, x, y, z, ry) {
+    const M = _campMats();
+    const g = new THREE.Group();
+    g.position.set(x, y, z);
+    g.rotation.y = ry || 0;
+    parent.add(g);
+
+    const frame = M?.bedFrame?.() || new THREE.MeshLambertMaterial({ color: 0x5c4030 });
+    const mattress = M?.bedMattress?.() || new THREE.MeshLambertMaterial({ color: 0xc8c4b8 });
+    const blanket = M?.bedBlanket?.() || new THREE.MeshLambertMaterial({ color: 0x4a5a48 });
+    const pillow = M?.bedPillow?.() || new THREE.MeshLambertMaterial({ color: 0xd8dce0 });
+
+    const HW = 0.46;
+    const HL = 0.89;
+    const LEG = 0.07;
+    const RAIL_H = 0.22;
+    const RAIL_Y = 0.11;
+
+    const legPos = [
+      [-HW + LEG * 0.5, HL - LEG * 0.5],
+      [HW - LEG * 0.5, HL - LEG * 0.5],
+      [-HW + LEG * 0.5, -HL + LEG * 0.5],
+      [HW - LEG * 0.5, -HL + LEG * 0.5],
+    ];
+    for (const [lx, lz] of legPos) {
+      const leg = _add(g, new THREE.BoxGeometry(LEG, RAIL_Y, LEG), frame, lx, RAIL_Y * 0.5, lz);
+      leg.castShadow = leg.receiveShadow = true;
+    }
+
+    for (const lz of [HL - LEG * 0.5, -HL + LEG * 0.5]) {
+      const rail = _add(g, new THREE.BoxGeometry(HW * 2 - LEG, 0.06, LEG * 0.9), frame, 0, RAIL_Y, lz);
+      rail.castShadow = rail.receiveShadow = true;
+    }
+    for (const lx of [-HW + LEG * 0.5, HW - LEG * 0.5]) {
+      const rail = _add(g, new THREE.BoxGeometry(LEG * 0.9, 0.06, HL * 2 - LEG * 1.2), frame, lx, RAIL_Y, 0);
+      rail.castShadow = rail.receiveShadow = true;
+    }
+
+    const head = _add(g, new THREE.BoxGeometry(HW * 2, 0.48, 0.06), frame, 0, 0.24, HL - 0.03);
+    head.castShadow = head.receiveShadow = true;
+    const foot = _add(g, new THREE.BoxGeometry(HW * 2, 0.28, 0.05), frame, 0, 0.14, -HL + 0.025);
+    foot.castShadow = foot.receiveShadow = true;
+
+    for (let i = -3; i <= 3; i++) {
+      const slat = _add(g, new THREE.BoxGeometry(HW * 2 - 0.12, 0.03, 0.08), frame, 0, RAIL_Y + 0.02, i * 0.22);
+      slat.castShadow = true;
+    }
+
+    const mat = _add(g, new THREE.BoxGeometry(0.88, 0.11, 1.72), mattress, 0, RAIL_Y + 0.075, 0);
+    mat.castShadow = mat.receiveShadow = true;
+
+    const pil = _add(g, new THREE.BoxGeometry(0.42, 0.1, 0.28), pillow, 0, RAIL_Y + 0.16, HL - 0.38);
+    pil.castShadow = pil.receiveShadow = true;
+
+    const cov = _add(g, new THREE.BoxGeometry(0.78, 0.05, 1.22), blanket, 0.04, RAIL_Y + 0.155, -0.12, 0.04, 0, 0);
+    cov.castShadow = cov.receiveShadow = true;
+  }
+
+  /**
+   * Table rustique cabane — ~1,15 × 0,70 m, hauteur ~0,74 m.
+   * Pivot = centre sol ; plateau horizontal (XZ).
+   */
+  function _buildCabinTable(parent, x, y, z, ry) {
+    const M = _campMats();
+    const g = new THREE.Group();
+    g.position.set(x, y, z);
+    g.rotation.y = ry || 0;
+    parent.add(g);
+
+    const topMat = M?.tableTop?.() || new THREE.MeshLambertMaterial({ color: 0xb8875a });
+    const legMat = M?.tableLeg?.() || new THREE.MeshLambertMaterial({ color: 0x4a3224 });
+    const metal = M?.metal?.() || new THREE.MeshLambertMaterial({ color: 0x8a9098 });
+
+    const HW = 0.575;
+    const HD = 0.35;
+    const LEG = 0.06;
+    const TOP_T = 0.038;
+    const LEG_H = 0.72;
+    const TOP_Y = LEG_H + TOP_T * 0.5;
+    const inset = 0.09;
+
+    const legPos = [
+      [-HW + inset, HD - inset],
+      [HW - inset, HD - inset],
+      [-HW + inset, -HD + inset],
+      [HW - inset, -HD + inset],
+    ];
+    for (const [lx, lz] of legPos) {
+      const leg = _add(g, new THREE.BoxGeometry(LEG, LEG_H, LEG), legMat, lx, LEG_H * 0.5, lz);
+      leg.castShadow = leg.receiveShadow = true;
+    }
+
+    for (const lz of [HD - inset * 0.6, -HD + inset * 0.6]) {
+      const rail = _add(g, new THREE.BoxGeometry(HW * 2 - inset * 2, 0.05, 0.035), legMat, 0, LEG_H - 0.025, lz);
+      rail.castShadow = true;
+    }
+    for (const lx of [-HW + inset * 0.6, HW - inset * 0.6]) {
+      const rail = _add(g, new THREE.BoxGeometry(0.035, 0.05, HD * 2 - inset * 2), legMat, lx, LEG_H - 0.025, 0);
+      rail.castShadow = true;
+    }
+
+    const stretch = _add(g, new THREE.BoxGeometry(HW * 2 - inset * 2.2, 0.04, 0.035), legMat, 0, 0.12, 0);
+    stretch.castShadow = true;
+
+    const top = _add(g, new THREE.BoxGeometry(HW * 2, TOP_T, HD * 2), topMat, 0, TOP_Y, 0);
+    top.castShadow = top.receiveShadow = true;
+
+    const mugY = TOP_Y + TOP_T * 0.5;
+    const mug = _add(g, new THREE.CylinderGeometry(0.034, 0.037, 0.055, 8), metal, 0.24, mugY + 0.028, 0.1);
+    mug.castShadow = true;
+    _add(g, new THREE.CylinderGeometry(0.026, 0.026, 0.022, 6), metal, 0.24, mugY + 0.058, 0.1);
+    const plate = _add(g, new THREE.CylinderGeometry(0.09, 0.088, 0.012, 12),
+      new THREE.MeshLambertMaterial({ color: 0xd8dce0 }), -0.18, mugY + 0.006, -0.06);
+    plate.castShadow = true;
+  }
+
+  /**
+   * Chaise rustique cabane — ~0,42 × 0,40 m, assise ~0,45 m, dossier ~0,86 m total.
+   * Pivot = centre sol ; face avant local −Z, dossier +Z.
+   */
+  function _buildCabinChair(parent, x, y, z, ry) {
+    const M = _campMats();
+    const g = new THREE.Group();
+    g.position.set(x, y, z);
+    g.rotation.y = ry || 0;
+    parent.add(g);
+
+    const seatMat = M?.tableTop?.() || new THREE.MeshLambertMaterial({ color: 0xb8875a });
+    const frameMat = M?.tableLeg?.() || new THREE.MeshLambertMaterial({ color: 0x4a3224 });
+
+    const HW = 0.21;
+    const HD = 0.19;
+    const LEG = 0.045;
+    const SEAT_T = 0.032;
+    const SEAT_Y = 0.44;
+    const inset = 0.06;
+
+    const legPos = [
+      [-HW + inset, HD - inset],
+      [HW - inset, HD - inset],
+      [-HW + inset, -HD + inset],
+      [HW - inset, -HD + inset],
+    ];
+    for (const [lx, lz] of legPos) {
+      const leg = _add(g, new THREE.BoxGeometry(LEG, SEAT_Y, LEG), frameMat, lx, SEAT_Y * 0.5, lz);
+      leg.castShadow = leg.receiveShadow = true;
+    }
+
+    _add(g, new THREE.BoxGeometry(HW * 2 - inset * 1.6, 0.035, 0.03), frameMat, 0, 0.11, 0);
+
+    const seat = _add(g, new THREE.BoxGeometry(HW * 2, SEAT_T, HD * 2), seatMat, 0, SEAT_Y + SEAT_T * 0.5, 0);
+    seat.castShadow = seat.receiveShadow = true;
+
+    const backPostZ = HD - inset * 0.5;
+    for (const lx of [-HW + inset * 0.8, HW - inset * 0.8]) {
+      const post = _add(g, new THREE.BoxGeometry(LEG * 0.95, 0.42, LEG * 0.95), frameMat,
+        lx, SEAT_Y + 0.21, backPostZ);
+      post.castShadow = post.receiveShadow = true;
+    }
+
+    for (let i = 0; i < 3; i++) {
+      const slat = _add(g, new THREE.BoxGeometry(HW * 2 - inset * 1.4, 0.028, 0.025), seatMat,
+        0, SEAT_Y + 0.12 + i * 0.11, backPostZ - 0.01);
+      slat.castShadow = true;
+    }
+
+    const rail = _add(g, new THREE.BoxGeometry(HW * 2 - inset * 1.2, 0.03, 0.025), frameMat,
+      0, SEAT_Y - 0.02, -HD + inset * 0.7);
+    rail.castShadow = true;
+  }
+
+  /**
+   * Étagère cabane — ~0,78 × 0,24 m, 3 niveaux + fond lattes, ~1,12 m.
+   * Pivot = centre sol ; face ouverte −Z, dos +Z (contre mur).
+   */
+  function _buildCabinShelf(parent, x, y, z, ry) {
+    const M = _campMats();
+    const g = new THREE.Group();
+    g.position.set(x, y, z);
+    g.rotation.y = ry || 0;
+    parent.add(g);
+
+    const shelfMat = M?.tableTop?.() || new THREE.MeshLambertMaterial({ color: 0xb8875a });
+    const frameMat = M?.tableLeg?.() || new THREE.MeshLambertMaterial({ color: 0x4a3224 });
+    const tinMat = new THREE.MeshLambertMaterial({ color: 0x8a9098 });
+    const jarMat = new THREE.MeshLambertMaterial({ color: 0x6a8070 });
+
+    const HW = 0.39;
+    const HD = 0.12;
+    const POST = 0.038;
+    const SHELF_T = 0.024;
+    const TOTAL_H = 1.10;
+    const inset = 0.04;
+
+    const postPos = [
+      [-HW + inset, HD - inset],
+      [HW - inset, HD - inset],
+      [-HW + inset, -HD + inset],
+      [HW - inset, -HD + inset],
+    ];
+    for (const [px, pz] of postPos) {
+      const post = _add(g, new THREE.BoxGeometry(POST, TOTAL_H, POST), frameMat, px, TOTAL_H * 0.5, pz);
+      post.castShadow = post.receiveShadow = true;
+    }
+
+    const shelfYs = [0.04, 0.38, 0.72, 1.06];
+    for (const sy of shelfYs) {
+      const board = _add(g, new THREE.BoxGeometry(HW * 2 - inset * 1.2, SHELF_T, HD * 2 - inset * 0.8),
+        shelfMat, 0, sy, 0);
+      board.castShadow = board.receiveShadow = true;
+    }
+
+    const backZ = HD - inset * 0.6;
+    for (let i = -2; i <= 2; i++) {
+      const slat = _add(g, new THREE.BoxGeometry(0.028, TOTAL_H - 0.12, 0.018), frameMat,
+        i * 0.14, TOTAL_H * 0.5, backZ);
+      slat.castShadow = true;
+    }
+
+    _add(g, new THREE.BoxGeometry(HW * 2 - inset * 2, 0.022, 0.018), frameMat, 0, TOTAL_H - 0.01, backZ);
+
+    const midY = 0.38 + SHELF_T * 0.5;
+    const can = _add(g, new THREE.CylinderGeometry(0.038, 0.038, 0.09, 10), tinMat, -0.12, midY + 0.045, 0.02);
+    can.castShadow = true;
+    const jar = _add(g, new THREE.CylinderGeometry(0.032, 0.028, 0.11, 8), jarMat, 0.14, midY + 0.055, -0.03);
+    jar.castShadow = true;
+    _add(g, new THREE.CylinderGeometry(0.022, 0.022, 0.025, 6), tinMat, 0.14, midY + 0.115, -0.03);
   }
 
   /** Gourde + tasse près du feu */
@@ -1014,6 +1250,15 @@
 
   const DECOR_DOORS = new Map();
   const DECOR_STORAGES = new Map();
+  const DECOR_INTERACTS = new Map();
+
+  const INTERACT_ROLE_BY_PREFAB = {
+    spawn_bedroll: 'bedroll',
+    spawn_single_bed: 'bed',
+    spawn_lean_to: 'bedroll',
+    spawn_workbench: 'workbench',
+    spawn_campfire: 'campfire',
+  };
   const DECOR_SIGNS = new Map();
   const DECOR_BUILDS = new Map();
   const _buildRayHits = [];
@@ -1034,6 +1279,10 @@
     spawn_marker_left: { build(root) { _buildMarkerPole(root, 0, 0, 0, -1); } },
     spawn_marker_right: { build(root) { _buildMarkerPole(root, 0, 0, 0, 1); } },
     spawn_bedroll: { build(root) { _buildBedroll(root, 0, 0, 0, 0); } },
+    spawn_single_bed: { build(root) { _buildSingleBed(root, 0, 0, 0, 0); } },
+    spawn_cabin_table: { build(root) { _buildCabinTable(root, 0, 0, 0, 0); } },
+    spawn_cabin_chair: { build(root) { _buildCabinChair(root, 0, 0, 0, 0); } },
+    spawn_cabin_shelf: { build(root) { _buildCabinShelf(root, 0, 0, 0, 0); } },
     spawn_backpack: { build(root) { _buildBackpack(root, 0, 0, 0, 0); } },
     spawn_lean_to: { build(root) { _buildLeanToShelter(root, 0, 0, 0, 0); } },
     spawn_stump_seat: { build(root) { _buildStumpSeat(root, 0, 0, 0, 0.20, 0); } },
@@ -1067,8 +1316,23 @@
     },
   };
 
+  const DECOR_PREFAB_META_CLIENT = {};
+
   function registerDecorPrefab(id, def) {
-    if (id && def) DECOR_PREFABS[id] = def;
+    if (!id || !def) return;
+    DECOR_PREFABS[id] = def;
+    if (def.label || def.category || def.desc || def.notes) {
+      DECOR_PREFAB_META_CLIENT[id] = {
+        label: def.label,
+        category: def.category,
+        desc: def.desc,
+        notes: def.notes,
+      };
+    }
+  }
+
+  function getDecorPrefabMeta() {
+    return { ...DECOR_PREFAB_META_CLIENT };
   }
 
   function listDecorPrefabs() {
@@ -1236,6 +1500,10 @@
     DECOR_STORAGES.delete(decorId);
   }
 
+  function unregisterDecorInteract(decorId) {
+    DECOR_INTERACTS.delete(decorId);
+  }
+
   function unregisterDecorSign(decorId) {
     DECOR_SIGNS.delete(decorId);
   }
@@ -1294,6 +1562,25 @@
       const dist = Math.hypot(entry.root.position.x - x, entry.root.position.z - z);
       if (dist > maxDist) continue;
       if (!best || dist < best.dist) best = { decorId, dist, prefabId: entry.root.userData.prefabId };
+    }
+    return best;
+  }
+
+  function findNearestDecorInteract(x, z, maxDist = 3.2, roleFilter = null) {
+    let best = null;
+    for (const [decorId, entry] of DECOR_INTERACTS) {
+      if (!entry.root?.parent) continue;
+      if (roleFilter && entry.role !== roleFilter) continue;
+      const dist = Math.hypot(entry.root.position.x - x, entry.root.position.z - z);
+      if (dist > maxDist) continue;
+      if (!best || dist < best.dist) {
+        best = {
+          decorId,
+          dist,
+          role: entry.role,
+          prefabId: entry.prefabId || entry.root.userData.prefabId,
+        };
+      }
     }
     return best;
   }
@@ -1787,6 +2074,7 @@
       prefab.build(root, isBuildFloor ? { supportDrop } : opts);
     }
 
+    const interactRole = opts.interactRole || INTERACT_ROLE_BY_PREFAB[prefabId] || null;
     const decorSpec = {
         decorId,
         kind: 'prefab',
@@ -1801,8 +2089,17 @@
         doorOpen: !!opts.doorOpen,
         railLen: Number.isFinite(opts.railLen) ? opts.railLen : undefined,
         rotX: Number.isFinite(opts.rotX) ? opts.rotX : undefined,
+        interactRole: interactRole || undefined,
       };
     root.userData.decorSpec = decorSpec;
+
+    if (interactRole) {
+      DECOR_INTERACTS.set(decorId, {
+        root,
+        role: interactRole,
+        prefabId,
+      });
+    }
 
     if (root.userData.doorPivot) {
       const entry = {
@@ -2265,6 +2562,7 @@
   }
 
   ZS.registerDecorPrefab = registerDecorPrefab;
+  ZS.getDecorPrefabMeta = getDecorPrefabMeta;
   ZS.upgradeTreeLod = upgradeTreeLod;
   ZS.listDecorPrefabs   = listDecorPrefabs;
   ZS.findNearestDecorDoor = findNearestDecorDoor;
@@ -2273,6 +2571,8 @@
   ZS.refreshDecorCollision = _refreshDecorCollision;
   ZS.unregisterDecorDoor  = unregisterDecorDoor;
   ZS.findNearestDecorStorage = findNearestDecorStorage;
+  ZS.findNearestDecorInteract = findNearestDecorInteract;
+  ZS.unregisterDecorInteract = unregisterDecorInteract;
   ZS.findNearestDecorSign = findNearestDecorSign;
   ZS.hitDecorStorage        = hitDecorStorage;
   ZS.hitDecorStorageRay     = hitDecorStorageRay;

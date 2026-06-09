@@ -1,0 +1,956 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Admin — Zombie Survival</title>
+  <style>
+    :root {
+      --bg: #0e1713;
+      --panel: #16231d;
+      --panel-2: #203129;
+      --text: #e7f1ea;
+      --muted: #94a79b;
+      --accent: #9fdf7a;
+      --accent-2: #d8b45f;
+      --err: #ff7d7d;
+      --ok: #8fe388;
+      --border: rgba(255,255,255,0.08);
+      --sidebar-w: 248px;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: Consolas, "SFMono-Regular", Menlo, monospace;
+      background: linear-gradient(180deg, #101a15, #0a100d 60%);
+      color: var(--text);
+      min-height: 100vh;
+    }
+    .hidden { display: none !important; }
+    .err { color: var(--err); padding: 20px; }
+
+    .hamburger {
+      position: fixed;
+      top: 14px;
+      left: 14px;
+      z-index: 1200;
+      width: 44px;
+      height: 44px;
+      border-radius: 12px;
+      border: 1px solid var(--border);
+      background: var(--panel-2);
+      color: var(--text);
+      font-size: 22px;
+      cursor: pointer;
+    }
+    .sidebar-backdrop {
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.45);
+      z-index: 1090;
+      display: none;
+    }
+    .sidebar-backdrop.open { display: block; }
+    .sidebar {
+      position: fixed;
+      top: 0;
+      left: 0;
+      z-index: 1100;
+      width: var(--sidebar-w);
+      height: 100vh;
+      background: linear-gradient(180deg, #1a2a22, #121c17);
+      border-right: 1px solid var(--border);
+      transform: translateX(-100%);
+      transition: transform 0.22s ease;
+      padding: 68px 14px 20px;
+    }
+    .sidebar.open { transform: translateX(0); }
+    .sidebar h2 {
+      margin: 0 0 14px;
+      font-size: 14px;
+      color: var(--muted);
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
+    .nav-item {
+      display: block;
+      width: 100%;
+      text-align: left;
+      margin-bottom: 8px;
+      padding: 12px 14px;
+      border-radius: 12px;
+      border: 1px solid transparent;
+      background: transparent;
+      color: var(--text);
+      text-decoration: none;
+      cursor: pointer;
+      font: inherit;
+    }
+    .nav-item:hover, .nav-item.active {
+      border-color: rgba(159,223,122,0.35);
+      background: rgba(159,223,122,0.08);
+    }
+    .nav-item.active { color: var(--accent); font-weight: 700; }
+    .nav-sep {
+      border: none;
+      border-top: 1px solid var(--border);
+      margin: 14px 0;
+    }
+
+    .main {
+      margin-left: 0;
+      padding: 20px 20px 40px;
+      min-height: 100vh;
+    }
+    @media (min-width: 1100px) {
+      .hamburger { display: none; }
+      .sidebar {
+        transform: none;
+        padding-top: 20px;
+      }
+      .main {
+        margin-left: var(--sidebar-w);
+        padding: 24px 28px 40px;
+      }
+      .sidebar-backdrop { display: none !important; }
+    }
+
+    .hero, .panel {
+      background: linear-gradient(180deg, rgba(32,49,41,0.95), rgba(22,35,29,0.98));
+      border: 1px solid var(--border);
+      border-radius: 18px;
+      box-shadow: 0 20px 60px rgba(0,0,0,0.35);
+    }
+    .hero { padding: 20px 22px; margin-bottom: 16px; }
+    h1 { margin: 0 0 8px; font-size: 28px; letter-spacing: 0.04em; }
+    .sub, .meta { color: var(--muted); }
+    .meta { font-size: 13px; margin-top: 8px; }
+    .panel { padding: 16px; }
+
+    .toolbar {
+      display: grid;
+      grid-template-columns: 1fr auto auto;
+      gap: 12px;
+      align-items: center;
+      margin-bottom: 16px;
+    }
+    input, select, button {
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      font: inherit;
+    }
+    input, select {
+      padding: 10px 14px;
+      background: #0d1511;
+      color: var(--text);
+      width: 100%;
+    }
+    button {
+      background: var(--panel-2);
+      color: var(--text);
+      padding: 10px 14px;
+      cursor: pointer;
+      white-space: nowrap;
+    }
+    button:hover { border-color: rgba(159,223,122,0.45); }
+    button.copy, button.preview-btn { font-size: 12px; padding: 6px 10px; margin-top: 6px; margin-right: 6px; }
+    button.copy.done { color: var(--ok); border-color: var(--ok); }
+    .stats { color: var(--muted); font-size: 13px; margin-bottom: 12px; }
+
+    .table-wrap {
+      overflow: auto;
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      max-height: 70vh;
+    }
+    table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    th, td {
+      text-align: left;
+      padding: 10px 12px;
+      border-bottom: 1px solid var(--border);
+      vertical-align: top;
+    }
+    th { position: sticky; top: 0; background: #142019; z-index: 1; }
+    tr:hover td { background: rgba(255,255,255,0.02); }
+    .id { color: var(--accent-2); font-weight: 700; }
+    .cat {
+      display: inline-block;
+      padding: 2px 8px;
+      border-radius: 8px;
+      background: rgba(159,223,122,0.12);
+      color: var(--accent);
+      font-size: 11px;
+    }
+    .rcon { color: var(--ok); word-break: break-all; }
+    .notes { color: var(--muted); font-size: 12px; margin-top: 4px; }
+    .orient {
+      font-size: 12px;
+      line-height: 1.45;
+      color: #c8ddd0;
+      max-width: 240px;
+    }
+    .orient.undoc { color: var(--muted); font-style: italic; }
+    .auto {
+      display: inline-block;
+      margin-top: 4px;
+      padding: 1px 6px;
+      border-radius: 6px;
+      background: rgba(216,180,95,0.15);
+      color: var(--accent-2);
+      font-size: 10px;
+    }
+    .preview-cell { width: 140px; vertical-align: top; }
+    .preview-hit {
+      position: relative;
+      display: block;
+      width: 128px;
+      padding: 0;
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      background: #0d1511;
+      cursor: pointer;
+      overflow: hidden;
+      font: inherit;
+      color: inherit;
+      transition: border-color 0.15s, box-shadow 0.15s;
+    }
+    .preview-hit:hover, .preview-hit:focus-visible {
+      border-color: var(--accent);
+      box-shadow: 0 0 0 2px rgba(159,223,122,0.18);
+      outline: none;
+    }
+    .preview-thumb {
+      display: block;
+      width: 128px;
+      height: 96px;
+      pointer-events: none;
+    }
+    .preview-overlay {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      align-items: flex-end;
+      justify-content: center;
+      padding-bottom: 8px;
+      background: linear-gradient(180deg, transparent 45%, rgba(0,0,0,0.72));
+      color: #e7f1ea;
+      font-size: 11px;
+      font-weight: 600;
+      letter-spacing: 0.04em;
+      pointer-events: none;
+    }
+    .preview-loading { color: var(--muted); font-size: 11px; margin-top: 6px; }
+
+    .map-toolbar {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      align-items: center;
+      margin-bottom: 12px;
+    }
+    .map-toolbar .stats { margin: 0; flex: 1; min-width: 200px; }
+    .layer-filters {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-bottom: 12px;
+    }
+    .layer-chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 6px 10px;
+      border-radius: 999px;
+      border: 1px solid var(--border);
+      background: #0d1511;
+      font-size: 11px;
+      cursor: pointer;
+      user-select: none;
+    }
+    .layer-chip input { width: auto; margin: 0; accent-color: var(--accent); }
+    .layer-chip.off { opacity: 0.45; }
+    .layer-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      flex-shrink: 0;
+    }
+    .map-viewport {
+      position: relative;
+      height: min(72vh, 720px);
+      min-height: 360px;
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      overflow: hidden;
+      background: #0d1511;
+    }
+    #admin-map-canvas {
+      display: block;
+      width: 100%;
+      height: 100%;
+      cursor: grab;
+    }
+    #admin-map-canvas:active { cursor: grabbing; }
+    .map-tooltip {
+      position: absolute;
+      z-index: 5;
+      max-width: 280px;
+      padding: 10px 12px;
+      border-radius: 12px;
+      border: 1px solid var(--border);
+      background: rgba(14,23,19,0.96);
+      font-size: 11px;
+      line-height: 1.55;
+      pointer-events: none;
+      box-shadow: 0 12px 30px rgba(0,0,0,0.45);
+    }
+    .map-tooltip b { color: var(--accent-2); }
+    .map-tooltip .dim { color: var(--muted); }
+    .map-tooltip .tag {
+      display: inline-block;
+      margin-top: 4px;
+      padding: 1px 6px;
+      border-radius: 6px;
+      background: rgba(159,223,122,0.15);
+      color: var(--accent);
+    }
+    .map-tooltip .tag.warn { background: rgba(255,159,107,0.15); color: #ff9f6b; }
+    .map-hint {
+      color: var(--muted);
+      font-size: 12px;
+      margin-top: 10px;
+    }
+
+    .map-layout {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 12px;
+    }
+    @media (min-width: 1100px) {
+      .map-layout.has-panel {
+        grid-template-columns: 1fr min(360px, 34vw);
+      }
+    }
+    .decor-edit-panel {
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      background: linear-gradient(180deg, rgba(22,35,29,0.98), rgba(14,23,19,0.98));
+      max-height: min(72vh, 720px);
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+    .decor-edit-panel.hidden { display: none; }
+    .dep-head {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      gap: 10px;
+      padding: 12px 14px;
+      border-bottom: 1px solid var(--border);
+    }
+    .dep-title { margin: 0; font-size: 15px; color: var(--accent-2); }
+    .dep-sub { margin: 4px 0 0; font-size: 11px; color: var(--muted); }
+    .dep-close {
+      background: transparent;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      color: var(--text);
+      font-size: 18px;
+      line-height: 1;
+      padding: 2px 8px;
+      cursor: pointer;
+    }
+    .dep-body {
+      padding: 12px 14px;
+      overflow: auto;
+      flex: 1;
+      font-size: 12px;
+    }
+    .dep-readonly {
+      margin-bottom: 12px;
+      padding: 10px;
+      border-radius: 10px;
+      background: rgba(0,0,0,0.22);
+      line-height: 1.6;
+      color: var(--muted);
+    }
+    .dep-readonly b { color: var(--text); }
+    .dep-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+    }
+    .dep-field {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      margin-bottom: 8px;
+    }
+    .dep-field span { color: var(--muted); font-size: 11px; }
+    .dep-field input, .dep-field select {
+      padding: 8px 10px;
+      background: #0d1511;
+      color: var(--text);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      font: inherit;
+      width: 100%;
+    }
+    .dep-section {
+      margin: 12px 0 8px;
+      font-size: 11px;
+      color: var(--accent);
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+    }
+    .dep-foot {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      padding: 12px 14px;
+      border-top: 1px solid var(--border);
+    }
+    .dep-foot button.primary {
+      background: linear-gradient(180deg, #9fdf7a, #7db95b);
+      color: #102010;
+      font-weight: 700;
+    }
+    .dep-foot button.danger { border-color: rgba(255,125,125,0.45); color: #ff9f9f; }
+    .dep-msg { padding: 0 14px 10px; font-size: 11px; color: var(--muted); min-height: 16px; }
+    .dep-msg.ok { color: var(--ok); }
+    .dep-msg.err { color: var(--err); }
+
+    .preview-modal {
+      position: fixed;
+      inset: 0;
+      z-index: 2000;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+    }
+    .preview-modal.hidden { display: none; }
+    .preview-modal-backdrop { position: absolute; inset: 0; background: rgba(0,0,0,0.72); }
+    .preview-modal-panel {
+      position: relative;
+      width: min(960px, calc(100vw - 32px));
+      background: linear-gradient(180deg, #1a2a22, #121c17);
+      border: 1px solid var(--border);
+      border-radius: 18px;
+      overflow: hidden;
+    }
+    .preview-modal-head {
+      display: flex;
+      justify-content: space-between;
+      padding: 14px 16px;
+      border-bottom: 1px solid var(--border);
+    }
+    .preview-modal-id { color: var(--accent-2); font-weight: 700; }
+    .preview-modal-label { color: var(--muted); font-size: 13px; margin-top: 4px; }
+    .preview-modal-close {
+      background: transparent;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      font-size: 22px;
+      padding: 4px 10px;
+      cursor: pointer;
+    }
+    .preview-modal-cat { color: var(--accent); font-size: 11px; margin-top: 4px; text-transform: uppercase; letter-spacing: 0.06em; }
+    .preview-modal-orient {
+      color: #c8ddd0;
+      font-size: 12px;
+      margin-top: 6px;
+      line-height: 1.45;
+      max-width: 520px;
+    }
+    .preview-modal-viewport {
+      position: relative;
+      width: 100%;
+      height: min(54vh, 540px);
+      background: #0a100d;
+    }
+    #prefab-preview-canvas {
+      display: block;
+      width: 100%;
+      height: 100%;
+      cursor: grab;
+    }
+    #prefab-preview-canvas:active { cursor: grabbing; }
+    .preview-modal-loading {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: rgba(10,16,13,0.82);
+      color: var(--muted);
+      font-size: 13px;
+      z-index: 2;
+    }
+    .preview-modal-loading.hidden { display: none; }
+    .preview-modal-foot {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+      align-items: flex-start;
+      justify-content: space-between;
+      padding: 12px 16px;
+      border-top: 1px solid var(--border);
+    }
+    .preview-modal-desc { margin: 0; flex: 1 1 280px; color: var(--muted); font-size: 13px; line-height: 1.45; }
+    .preview-modal-actions { display: flex; gap: 8px; flex-shrink: 0; }
+    .preview-modal-action {
+      font-size: 12px;
+      padding: 7px 12px;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+      background: #152019;
+      color: var(--text);
+      cursor: pointer;
+    }
+    .preview-modal-action.primary {
+      background: linear-gradient(180deg, #9fdf7a, #7db95b);
+      color: #102010;
+      font-weight: 700;
+      border-color: transparent;
+    }
+    .preview-modal-hint { margin: 0; padding: 8px 16px 14px; color: var(--muted); font-size: 12px; }
+
+    @media (max-width: 900px) {
+      .toolbar { grid-template-columns: 1fr; }
+      th:nth-child(5), td:nth-child(5) { display: none; }
+    }
+  </style>
+  <script type="importmap">
+  {
+    "imports": {
+      "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+      "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+    }
+  }
+  </script>
+</head>
+<body>
+  <button type="button" class="hamburger" id="nav-toggle" aria-label="Menu">☰</button>
+  <div class="sidebar-backdrop" id="sidebar-backdrop"></div>
+  <aside class="sidebar" id="sidebar">
+    <h2>Admin ZS</h2>
+    <button type="button" class="nav-item active" data-section="catalog">📦 Catalogue prefabs</button>
+    <button type="button" class="nav-item" data-section="map">🗺️ Carte monde</button>
+    <hr class="nav-sep">
+    <a class="nav-item" href="/webrcon.html">⌨️ WebRCON</a>
+    <a class="nav-item" href="/game.html">🎮 Jeu</a>
+    <a class="nav-item" href="/">🏠 Accueil</a>
+  </aside>
+
+  <main class="main" id="main">
+    <section class="hero">
+      <h1 id="page-title">Admin — Catalogue prefabs</h1>
+      <div class="sub" id="page-sub">Références décor, aperçu 3D interactif au clic sur la miniature, commandes RCON et carte monde live.</div>
+      <div class="meta" id="meta">Vérification de session…</div>
+    </section>
+
+    <section id="section-catalog">
+      <div class="panel hidden" id="panel-catalog">
+        <div class="toolbar">
+          <input id="search" type="search" placeholder="Rechercher prefab…" autocomplete="off" spellcheck="false">
+          <select id="category" aria-label="Catégorie"><option value="">Toutes catégories</option></select>
+          <button id="refresh-catalog" type="button">Actualiser</button>
+        </div>
+        <div class="stats" id="stats"></div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Aperçu</th>
+                <th>Référence</th>
+                <th>Catégorie</th>
+                <th>Description</th>
+                <th>Orientation</th>
+                <th>Commande RCON</th>
+              </tr>
+            </thead>
+            <tbody id="rows"></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <section id="section-map" class="hidden">
+      <div class="panel hidden" id="panel-map">
+        <div class="map-toolbar">
+          <div class="stats" id="map-stats">Chargement carte…</div>
+          <button type="button" id="map-fit">Recentrer</button>
+          <button type="button" id="map-refresh">Actualiser</button>
+        </div>
+        <div class="layer-filters" id="layer-filters"></div>
+        <div class="map-layout" id="map-layout">
+          <div class="map-viewport">
+            <canvas id="admin-map-canvas"></canvas>
+            <div id="admin-map-tooltip" class="map-tooltip hidden"></div>
+          </div>
+          <aside id="decor-edit-panel" class="decor-edit-panel hidden">
+            <div class="dep-head">
+              <div>
+                <h3 class="dep-title" id="dep-title">Objet</h3>
+                <div class="dep-sub" id="dep-sub"></div>
+              </div>
+              <button type="button" class="dep-close" id="dep-close" aria-label="Fermer">×</button>
+            </div>
+            <div class="dep-body" id="dep-body"></div>
+            <div class="dep-msg" id="dep-msg"></div>
+            <div class="dep-foot">
+              <button type="button" class="primary" id="dep-save">Enregistrer</button>
+              <button type="button" id="dep-copy-rcon">Copier RCON</button>
+              <button type="button" class="danger" id="dep-delete">Supprimer</button>
+            </div>
+          </aside>
+        </div>
+        <p class="map-hint">Molette = zoom (jusqu’à 3600%) · glisser = déplacer · clic POI = édition · double-clic = recentrer · arbres, rochers et barrières masqués par défaut</p>
+      </div>
+    </section>
+
+    <section class="panel err hidden" id="denied"></section>
+  </main>
+
+  <script src="/js/admin-world-map.js"></script>
+  <script type="module">
+    import * as THREE from 'three';
+    import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+    window.THREE = THREE;
+    window.__OrbitControls = OrbitControls;
+    let previewVer = '';
+    try {
+      const vr = await fetch('/api/client-version', { cache: 'no-store' });
+      if (vr.ok) previewVer = (await vr.json()).version || '';
+    } catch { /* ignore */ }
+    await new Promise((resolve, reject) => {
+      const s = document.createElement('script');
+      s.src = '/js/prefab-catalog-preview.js' + (previewVer ? `?v=${encodeURIComponent(previewVer)}` : '');
+      s.onload = resolve;
+      s.onerror = reject;
+      document.head.appendChild(s);
+    });
+    window.__prefabPreviewReady = true;
+    window.dispatchEvent(new Event('prefab-preview-ready'));
+  </script>
+
+  <script>
+    const els = {
+      meta: document.getElementById('meta'),
+      pageTitle: document.getElementById('page-title'),
+      pageSub: document.getElementById('page-sub'),
+      denied: document.getElementById('denied'),
+      panelCatalog: document.getElementById('panel-catalog'),
+      panelMap: document.getElementById('panel-map'),
+      search: document.getElementById('search'),
+      category: document.getElementById('category'),
+      refreshCatalog: document.getElementById('refresh-catalog'),
+      stats: document.getElementById('stats'),
+      rows: document.getElementById('rows'),
+      mapStats: document.getElementById('map-stats'),
+      mapCanvas: document.getElementById('admin-map-canvas'),
+      mapTooltip: document.getElementById('admin-map-tooltip'),
+      layerFilters: document.getElementById('layer-filters'),
+      mapRefresh: document.getElementById('map-refresh'),
+      mapFit: document.getElementById('map-fit'),
+      mapLayout: document.getElementById('map-layout'),
+      depPanel: document.getElementById('decor-edit-panel'),
+      depTitle: document.getElementById('dep-title'),
+      depSub: document.getElementById('dep-sub'),
+      depBody: document.getElementById('dep-body'),
+      depMsg: document.getElementById('dep-msg'),
+      depSave: document.getElementById('dep-save'),
+      depDelete: document.getElementById('dep-delete'),
+      depCopyRcon: document.getElementById('dep-copy-rcon'),
+      depClose: document.getElementById('dep-close'),
+      sidebar: document.getElementById('sidebar'),
+      sidebarBackdrop: document.getElementById('sidebar-backdrop'),
+      navToggle: document.getElementById('nav-toggle'),
+    };
+
+    let token = localStorage.getItem('zombie_token') || '';
+    let me = null;
+    let prefabs = [];
+    let categories = {};
+    let previewReady = false;
+    let mapReady = false;
+    let activeSection = 'catalog';
+
+    const SECTION_META = {
+      catalog: {
+        title: 'Admin — Catalogue prefabs',
+        sub: 'Cliquez sur une miniature pour l’aperçu 3D interactif — enrichissement progressif pour placement in-game.',
+      },
+      map: {
+        title: 'Admin — Carte monde',
+        sub: 'Secteurs, routes, POI, décors posés et joueurs connectés — temps réel.',
+      },
+    };
+
+    function closeSidebar() {
+      els.sidebar.classList.remove('open');
+      els.sidebarBackdrop.classList.remove('open');
+    }
+    function toggleSidebar() {
+      els.sidebar.classList.toggle('open');
+      els.sidebarBackdrop.classList.toggle('open');
+    }
+
+    function showSection(name) {
+      activeSection = name;
+      document.querySelectorAll('.nav-item[data-section]').forEach((n) => {
+        n.classList.toggle('active', n.dataset.section === name);
+      });
+      document.getElementById('section-catalog').classList.toggle('hidden', name !== 'catalog');
+      document.getElementById('section-map').classList.toggle('hidden', name !== 'map');
+      const meta = SECTION_META[name] || SECTION_META.catalog;
+      els.pageTitle.textContent = meta.title;
+      els.pageSub.textContent = meta.sub;
+      location.hash = name;
+      closeSidebar();
+      if (name === 'map') initMapOnce();
+    }
+
+    function waitPreviewReady() {
+      if (previewReady && window.PrefabCatalogPreview) return Promise.resolve();
+      return new Promise((resolve) => {
+        if (window.__prefabPreviewReady && window.PrefabCatalogPreview) {
+          previewReady = true;
+          resolve();
+          return;
+        }
+        window.addEventListener('prefab-preview-ready', () => {
+          previewReady = true;
+          resolve();
+        }, { once: true });
+      });
+    }
+
+    async function whoAmI() {
+      if (!token) throw new Error('Aucune session. Connectez-vous via l’accueil ou le jeu, puis rouvrez cette page.');
+      const res = await fetch('/api/auth/me', {
+        headers: { Authorization: 'Bearer ' + token },
+        cache: 'no-store',
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || 'Session invalide');
+      if (!data.isAdmin) throw new Error('Compte non admin — accès réservé aux administrateurs.');
+      return data;
+    }
+
+    async function loadCatalog() {
+      const res = await fetch('/api/admin/prefab-catalog', {
+        headers: { Authorization: 'Bearer ' + token },
+        cache: 'no-store',
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || 'Impossible de charger le catalogue');
+      prefabs = data.prefabs || [];
+      categories = data.categories || {};
+      return data;
+    }
+
+    function esc(s) {
+      return String(s || '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;');
+    }
+
+    function filtered() {
+      const q = els.search.value.trim().toLowerCase();
+      const cat = els.category.value;
+      return prefabs.filter((p) => {
+        if (cat && p.category !== cat) return false;
+        if (!q) return true;
+        const hay = [p.id, p.label, p.desc, p.rcon, p.notes, p.orientation, p.orientationDetail, categories[p.category] || p.category]
+          .filter(Boolean).join(' ').toLowerCase();
+        return hay.includes(q);
+      });
+    }
+
+    function bindRowActions() {
+      els.rows.querySelectorAll('button.copy').forEach((btn) => {
+        btn.addEventListener('click', async () => {
+          const cmd = btn.dataset.rcon || '';
+          try {
+            await navigator.clipboard.writeText(cmd);
+            btn.textContent = 'Copié !';
+            btn.classList.add('done');
+            setTimeout(() => { btn.textContent = 'Copier'; btn.classList.remove('done'); }, 1600);
+          } catch { btn.textContent = 'Échec'; }
+        });
+      });
+      const openPreviewFromEl = (el) => {
+        waitPreviewReady()
+          .then(() => window.PrefabCatalogPreview.openModal(el.dataset.prefabId, {
+            label: el.dataset.label,
+            rcon: el.dataset.rcon,
+            desc: el.dataset.desc,
+            category: el.dataset.category,
+            orientation: el.dataset.orientation,
+            orientationDetail: el.dataset.orientationDetail,
+          }))
+          .catch((err) => console.warn('[catalog] preview', err));
+      };
+      els.rows.querySelectorAll('.preview-hit').forEach((btn) => {
+        btn.addEventListener('click', () => openPreviewFromEl(btn));
+      });
+    }
+
+    function renderRows() {
+      const list = filtered();
+      els.stats.textContent = `${list.length} / ${prefabs.length} prefab(s)`;
+      els.rows.innerHTML = list.map((p) => {
+        const catLabel = categories[p.category] || p.category;
+        const notes = p.notes ? `<div class="notes">${esc(p.notes)}</div>` : '';
+        const auto = p.auto ? '<div class="auto">auto-détecté</div>' : '';
+        const orientCls = p.orientationDocumented ? 'orient' : 'orient undoc';
+        const orientCell = `<div class="${orientCls}">${esc(p.orientation || '−Z (défaut)')}</div>`;
+        return `<tr>
+          <td class="preview-cell">
+            <button type="button" class="preview-hit"
+              data-prefab-id="${esc(p.id)}"
+              data-label="${esc(p.label)}"
+              data-rcon="${esc(p.rcon)}"
+              data-desc="${esc(p.desc)}"
+              data-category="${esc(catLabel)}"
+              data-orientation="${esc(p.orientation || '')}"
+              data-orientation-detail="${esc(p.orientationDetail || '')}"
+              aria-label="Aperçu 3D ${esc(p.label)}">
+              <canvas class="preview-thumb" width="128" height="96" data-prefab-id="${esc(p.id)}"></canvas>
+              <span class="preview-overlay">Aperçu 3D</span>
+            </button>
+            <div class="preview-loading">chargement…</div>
+          </td>
+          <td><div class="id">${esc(p.id)}</div><div>${esc(p.label)}</div>${auto}</td>
+          <td><span class="cat">${esc(catLabel)}</span></td>
+          <td>${esc(p.desc)}${notes}</td>
+          <td>${orientCell}</td>
+          <td><div class="rcon">${esc(p.rcon)}</div><button class="copy" type="button" data-rcon="${esc(p.rcon)}">Copier</button></td>
+        </tr>`;
+      }).join('');
+      bindRowActions();
+      waitPreviewReady().then(() => window.PrefabCatalogPreview.scheduleThumbnails(els.rows));
+    }
+
+    els.rows.addEventListener('prefab-thumb-done', (e) => {
+      const cell = e.target.closest('.preview-cell');
+      const loading = cell?.querySelector('.preview-loading');
+      if (loading) loading.textContent = '';
+    });
+
+    function fillCategories() {
+      const cats = [...new Set(prefabs.map((p) => p.category))].sort();
+      const prev = els.category.value;
+      els.category.innerHTML = '<option value="">Toutes catégories</option>' +
+        cats.map((c) => `<option value="${esc(c)}">${esc(categories[c] || c)}</option>`).join('');
+      els.category.value = prev;
+    }
+
+    function updateMapStats(d) {
+      if (!d?.stats) return;
+      const parts = [`${d.stats.decor} décors`, `${d.stats.players} joueur(s)`];
+      const top = Object.entries(d.stats.byLayer || {}).sort((a, b) => b[1] - a[1]).slice(0, 4);
+      if (top.length) parts.push(top.map(([k, n]) => `${k}:${n}`).join(' · '));
+      els.mapStats.textContent = parts.join(' — ');
+    }
+
+    function buildLayerFilters() {
+      const meta = window.AdminWorldMap.getLayerMeta();
+      const defaultsOff = new Set(['tree', 'rock', 'palm', 'barrier', 'poi-design']);
+      els.layerFilters.innerHTML = Object.entries(meta).map(([key, m]) => {
+        const on = !defaultsOff.has(key);
+        return `<label class="layer-chip${on ? '' : ' off'}" data-layer="${key}">
+          <input type="checkbox" ${on ? 'checked' : ''} data-layer="${key}">
+          <span class="layer-dot" style="background:${m.color}"></span>${m.label}
+        </label>`;
+      }).join('');
+      els.layerFilters.querySelectorAll('input[type=checkbox]').forEach((cb) => {
+        cb.addEventListener('change', () => {
+          const enabled = [...els.layerFilters.querySelectorAll('input:checked')].map((x) => x.dataset.layer);
+          els.layerFilters.querySelectorAll('.layer-chip').forEach((chip) => {
+            const cb2 = chip.querySelector('input');
+            chip.classList.toggle('off', !cb2.checked);
+          });
+          window.AdminWorldMap.setLayers(enabled);
+        });
+      });
+    }
+
+    function initMapOnce() {
+      if (mapReady) return;
+      mapReady = true;
+      buildLayerFilters();
+      const enabled = [...els.layerFilters.querySelectorAll('input:checked')].map((x) => x.dataset.layer);
+      window.AdminWorldMap.init({
+        canvas: els.mapCanvas,
+        tooltip: els.mapTooltip,
+        token,
+        onStats: updateMapStats,
+        defaultLayers: enabled,
+        editPanel: {
+          layout: els.mapLayout,
+          panel: els.depPanel,
+          title: els.depTitle,
+          sub: els.depSub,
+          body: els.depBody,
+          msg: els.depMsg,
+          save: els.depSave,
+          delete: els.depDelete,
+          copyRcon: els.depCopyRcon,
+          close: els.depClose,
+        },
+      }).then(() => window.AdminWorldMap.setLayers(enabled))
+        .catch((err) => { els.mapStats.textContent = err.message || String(err); });
+    }
+
+    function deny(msg) {
+      els.denied.textContent = msg;
+      els.denied.classList.remove('hidden');
+      els.panelCatalog.classList.add('hidden');
+      els.panelMap.classList.add('hidden');
+      els.meta.textContent = 'Accès refusé';
+    }
+
+    async function init() {
+      try {
+        me = await whoAmI();
+        els.meta.textContent = `Admin : ${me.username}`;
+        await loadCatalog();
+        fillCategories();
+        renderRows();
+        els.panelCatalog.classList.remove('hidden');
+        els.panelMap.classList.remove('hidden');
+        waitPreviewReady().then(() => window.PrefabCatalogPreview.ensureReady().catch(() => {}));
+        const hash = (location.hash || '#catalog').replace('#', '');
+        showSection(hash === 'map' ? 'map' : 'catalog');
+      } catch (err) {
+        deny(err.message || String(err));
+      }
+    }
+
+    document.querySelectorAll('.nav-item[data-section]').forEach((btn) => {
+      btn.addEventListener('click', () => showSection(btn.dataset.section));
+    });
+    els.navToggle.addEventListener('click', toggleSidebar);
+    els.sidebarBackdrop.addEventListener('click', closeSidebar);
+    els.search.addEventListener('input', renderRows);
+    els.category.addEventListener('change', renderRows);
+    els.refreshCatalog.addEventListener('click', () => {
+      loadCatalog().then(() => { fillCategories(); renderRows(); }).catch((err) => deny(err.message));
+    });
+    els.mapRefresh.addEventListener('click', () => {
+      window.AdminWorldMap.refresh().then(updateMapStats).catch((err) => {
+        els.mapStats.textContent = err.message || String(err);
+      });
+    });
+    els.mapFit.addEventListener('click', () => window.AdminWorldMap.fitView());
+
+    init();
+  </script>
+</body>
+</html>

@@ -287,14 +287,15 @@
     }
 
     function bedroll(cx, cz, baseY, rotY) {
+      const M = ZS.CampTextures?.materials?.();
       const g = new THREE.Group();
       g.position.set(cx, baseY, cz);
       g.rotation.y = Number.isFinite(rotY) ? rotY : 0;
       state.scene.add(g);
-      addMesh(g, new THREE.BoxGeometry(1.65, 0.06, 0.72),
-        new THREE.MeshLambertMaterial({ color: 0x4a5838, map: texCanvas }), 0, 0.03, 0);
-      const roll = new THREE.Mesh(new THREE.CylinderGeometry(0.11, 0.11, 0.62, 8),
-        new THREE.MeshLambertMaterial({ color: 0x5a4030, map: texCanvas }));
+      const mat = M?.bedrollBody?.() || new THREE.MeshLambertMaterial({ color: 0x3a4548, map: texCanvas });
+      const rollMat = M?.bedrollRoll?.() || new THREE.MeshLambertMaterial({ color: 0x2e3638, map: texCanvas });
+      addMesh(g, new THREE.BoxGeometry(1.65, 0.06, 0.72), mat, 0, 0.03, 0);
+      const roll = new THREE.Mesh(new THREE.CylinderGeometry(0.11, 0.11, 0.62, 10), rollMat);
       roll.rotation.z = Math.PI / 2;
       roll.position.set(0.5, 0.12, 0);
       roll.castShadow = true;

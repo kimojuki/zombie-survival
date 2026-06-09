@@ -13,4 +13,4 @@ alwaysApply: true
 - Preserve `/api/health`, auth routes, Socket.io event names and local SQLite compatibility when restructuring server code.
 - Keep the legacy `window.ZS` facade until the client migration is complete.
 - Run or document `npm run lint`, `npm test`, `npm run build`, and smoke/manual checks before preparing a PR.
-- **Fusion Bruno + Georges** : ne jamais écraser le travail de l'autre — toujours **fusionner** (S01 cabane/coffre **et** S02 petite ville / prefabs / bounds). Avant de modifier un fichier touché par les deux : `git log -2 -- <fichier>` et conserver les deux comportements. Fichiers sensibles : `sector-bounds.mjs`, `sector_bounds.js`, `spawn_clearing.js`, `sectors.mjs`, `sector_02_town.js`.
+- **Git équipe** : suivre `.cursor/rules/git-team-workflow.mdc` et `docs/GIT_WORKFLOW.md` — pull au début, pull avant push, fusionner S01+S02 sans écraser.

@@ -12,6 +12,10 @@ Zombie Survival uses a strict staging workflow so `master` can stay production-r
 
 Never push secrets, SQLite local databases, `notes-local/`, generated screenshots or build output.
 
+## Daily Git (équipe parallèle)
+
+Voir **[docs/GIT_WORKFLOW.md](docs/GIT_WORKFLOW.md)** : `git pull` au début, `git pull` avant `git push`, fusionner les changements des deux devs (S01 + S02) sans écraser. Règles IA : `.cursor/rules/git-team-workflow.mdc`.
+
 ## Definition Of Done
 
 - The change is scoped and documented.

@@ -31,6 +31,24 @@
     spawn_cabin_shelf: [
       { type: 'box', lx: 0, lz: 0, hw: 0.40, hd: 0.13, maxY: 1.12 },
     ],
+    spawn_cabin_stove: [
+      { type: 'box', lx: 0.03, lz: 0.04, hw: 0.28, hd: 0.22, maxY: 1.14 },
+    ],
+    spawn_cabin_lantern: [
+      { type: 'cyl', lx: 0, lz: 0, r: 0.11, minY: 1.52, maxY: 2.35 },
+    ],
+    spawn_cabin_wood_box: [
+      { type: 'box', lx: 0, lz: 0.02, hw: 0.26, hd: 0.18, maxY: 0.72 },
+    ],
+    spawn_cabin_rug: [
+      { type: 'box', lx: 0, lz: 0, hw: 0.49, hd: 0.32, maxY: 0.03 },
+    ],
+    spawn_cabin_bench: [
+      { type: 'box', lx: 0, lz: -0.01, hw: 0.52, hd: 0.19, maxY: 0.88 },
+    ],
+    spawn_cabin_basin: [
+      { type: 'box', lx: 0, lz: 0, hw: 0.25, hd: 0.16, maxY: 1.02 },
+    ],
     spawn_backpack: [
       { type: 'box', lx: 0, lz: 0, hw: 0.20, hd: 0.16, maxY: 0.32 },
     ],

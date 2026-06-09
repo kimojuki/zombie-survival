@@ -41,6 +41,14 @@ Index complet : [README.md](README.md#documentation-à-lire-avant-un-push--revie
 - **Prefab #2 catalogue** : `spawn_cabin_chair` — chaise bois assortée (réutilise textures table, mesh `_buildCabinChair`).
 - **Prefab #3 catalogue** : `spawn_cabin_shelf` — étagère 3 niveaux + fond lattes, conserve/bocal décor (`_buildCabinShelf`).
 - **Orientation prefabs** : `decor-prefab-orientation.mjs` + `docs/DECOR_PREFAB_ORIENTATION.md` — convention −Z, repères cabane/table/chaise/étagère/lit/coffre ; colonne **Orientation** catalogue admin + modale 3D.
+- **Prefab #4 catalogue** : `spawn_cabin_stove` — poêle fonte + porte vitrée −Z, conduit +Z (`stoveBody`/`stoveDoor`, `_buildCabinStove`).
+- **Poêle feu actif** : `ZS.attachStoveFire` (campfire.js) — flammes billboards + PointLight pulsée dans la vitre.
+- **Aperçu catalogue animé** : `prefab-catalog-preview.js` — hooks `registerFireLight` / `registerBillboards` locaux, tick feu + billboards en modale et vignettes (feu de camp, poêle, torche plage, etc.) ; scène assombrie pour prefabs lumineux.
+- **Prefab #5 catalogue** : `spawn_cabin_lantern` — lanterne suspendue chaîne + cage métal/vitre, `ZS.attachLanternFlame` (flammes + lueur).
+- **Prefab #6 catalogue** : `spawn_cabin_wood_box` — caisse à bûches intérieur (bac bois, rondins, hache) — assortie poêle cabane.
+- **Prefab #7 catalogue** : `spawn_cabin_rug` — tapis tissé laine (texture `cabinRug`, bordure, franges, bande −Z).
+- **Prefab #8 catalogue** : `spawn_cabin_bench` — banc mural v2 : cleat mur + boulons, assise 3 planches, cubby bottes, dossier incliné, couverture.
+- **Prefab #9 catalogue** : `spawn_cabin_basin` — lavabo cabane v2 : cuvette porcelaine encastrée, eau disque opaque (fix shimmer), robinet fer, sans barre métal traversante.
 - **Hub admin** : menu hamburger / sidebar — sections **Catalogue** + **Carte monde** (`/admin.html` alias).
 - **Carte admin** : `GET /api/admin/world-map` + `admin-world-map.js` — zoom/pan, filtres couches, tooltip (pos exacte, seed, `decorremove`).
 - **POI précis** : `admin-map-pois.mjs` — positions live serveur > seed S01 ; marqueurs rétrécissent au zoom + réticule précision.

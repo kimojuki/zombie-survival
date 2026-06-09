@@ -531,6 +531,537 @@
     _add(g, new THREE.CylinderGeometry(0.022, 0.022, 0.025, 6), tinMat, 0.14, midY + 0.115, -0.03);
   }
 
+  /**
+   * Poêle à bois cabane — ~0,52 × 0,40 m, corps ~0,62 m + conduit ~0,45 m.
+   * Pivot = centre sol ; porte foyer −Z, conduit vers +Z/arrière.
+   */
+  function _buildCabinStove(parent, x, y, z, ry) {
+    const M = _campMats();
+    const g = new THREE.Group();
+    g.position.set(x, y, z);
+    g.rotation.y = ry || 0;
+    parent.add(g);
+
+    const bodyMat = M?.stoveBody?.() || new THREE.MeshLambertMaterial({ color: 0x3a3c40 });
+    const doorMat = M?.stoveDoor?.() || new THREE.MeshBasicMaterial({
+      color: 0xffffff, transparent: true, opacity: 0.78, depthWrite: false, side: THREE.DoubleSide,
+    });
+    const metal = M?.metal?.() || new THREE.MeshLambertMaterial({ color: 0x6a6e74 });
+
+    const HW = 0.26;
+    const HD = 0.20;
+    const LEG_H = 0.09;
+    const BODY_H = 0.58;
+    const BODY_Y = LEG_H + BODY_H * 0.5;
+    const DOOR_Y = LEG_H + 0.30;
+    const DOOR_Z = -HD - 0.012;
+
+    for (const [lx, lz] of [
+      [-HW + 0.06, HD - 0.05],
+      [HW - 0.06, HD - 0.05],
+      [-HW + 0.06, -HD + 0.05],
+      [HW - 0.06, -HD + 0.05],
+    ]) {
+      const leg = _add(g, new THREE.BoxGeometry(0.05, LEG_H, 0.05), bodyMat, lx, LEG_H * 0.5, lz);
+      leg.castShadow = leg.receiveShadow = true;
+    }
+
+    const body = _add(g, new THREE.BoxGeometry(HW * 2, BODY_H, HD * 2), bodyMat, 0, BODY_Y, 0);
+    body.castShadow = body.receiveShadow = true;
+
+    const topPlate = _add(g, new THREE.BoxGeometry(HW * 2 - 0.04, 0.025, HD * 2 - 0.04), metal, 0, LEG_H + BODY_H + 0.012, 0);
+    topPlate.castShadow = true;
+
+    if (ZS.attachStoveFire) {
+      ZS.attachStoveFire(g, { x: 0, y: DOOR_Y, z: -HD + 0.05 });
+    }
+
+    const doorW = 0.30;
+    const doorH = 0.34;
+    const frameT = 0.028;
+    for (const [fw, fh, fx, fy] of [
+      [doorW + frameT * 2, frameT, 0, DOOR_Y + doorH * 0.5 - frameT * 0.5],
+      [doorW + frameT * 2, frameT, 0, DOOR_Y - doorH * 0.5 + frameT * 0.5],
+      [frameT, doorH, -doorW * 0.5 - frameT * 0.5, DOOR_Y],
+      [frameT, doorH, doorW * 0.5 + frameT * 0.5, DOOR_Y],
+    ]) {
+      const fr = _add(g, new THREE.BoxGeometry(fw, fh, 0.025), bodyMat, fx, fy, DOOR_Z);
+      fr.castShadow = true;
+    }
+
+    const door = new THREE.Mesh(new THREE.PlaneGeometry(doorW, doorH), doorMat);
+    door.position.set(0, DOOR_Y, DOOR_Z);
+    door.rotation.y = Math.PI;
+    door.renderOrder = 9;
+    g.add(door);
+
+    const handle = _add(g, new THREE.CylinderGeometry(0.012, 0.012, 0.08, 6), metal, 0, LEG_H + 0.18, DOOR_Z - 0.04);
+    handle.rotation.x = Math.PI / 2;
+    handle.castShadow = true;
+
+    const pipeBase = _add(g, new THREE.BoxGeometry(0.14, 0.08, 0.14), bodyMat, 0.06, LEG_H + BODY_H + 0.04, HD - 0.08);
+    pipeBase.castShadow = true;
+    const pipe = _add(g, new THREE.BoxGeometry(0.10, 0.42, 0.10), bodyMat, 0.06, LEG_H + BODY_H + 0.29, HD - 0.08);
+    pipe.castShadow = true;
+    const pipeCap = _add(g, new THREE.BoxGeometry(0.12, 0.04, 0.12), metal, 0.06, LEG_H + BODY_H + 0.52, HD - 0.08);
+    pipeCap.castShadow = true;
+
+    const ash = _add(g, new THREE.BoxGeometry(0.08, 0.04, 0.06), metal, -HW + 0.12, LEG_H + 0.06, -HD + 0.06);
+    ash.castShadow = true;
+  }
+
+  /**
+   * Lanterne suspendue cabane — crochet plafond ~2,30 m, cage métal + flamme animée.
+   * Pivot = centre sol sous la lanterne ; face vitrée −Z.
+   */
+  function _buildCabinLantern(parent, x, y, z, ry) {
+    const M = _campMats();
+    const g = new THREE.Group();
+    g.position.set(x, y, z);
+    g.rotation.y = ry || 0;
+    parent.add(g);
+
+    const metalMat = M?.metal?.() || new THREE.MeshLambertMaterial({ color: 0x6a6e74 });
+    const ironMat = M?.stoveBody?.() || new THREE.MeshLambertMaterial({ color: 0x3a3c40 });
+    const glassMat = new THREE.MeshBasicMaterial({
+      color: 0xfff0c8, transparent: true, opacity: 0.38, depthWrite: false, side: THREE.DoubleSide,
+    });
+
+    const HOOK_Y = 2.30;
+    const LANTERN_Y = 1.72;
+    const CAGE_H = 0.26;
+    const CAGE_HW = 0.075;
+    const CAGE_HD = 0.075;
+
+    const hook = _add(g, new THREE.TorusGeometry(0.035, 0.008, 6, 10), metalMat, 0, HOOK_Y, 0);
+    hook.rotation.x = Math.PI / 2;
+    hook.castShadow = true;
+
+    const chainTop = HOOK_Y - 0.04;
+    const chainBot = LANTERN_Y + CAGE_H * 0.5 + 0.06;
+    const linkCount = 4;
+    const linkSpan = (chainTop - chainBot) / linkCount;
+    for (let i = 0; i < linkCount; i++) {
+      const ly = chainTop - linkSpan * (i + 0.5);
+      const link = _add(g, new THREE.TorusGeometry(0.014, 0.004, 5, 8), metalMat, 0, ly, 0);
+      link.rotation.x = Math.PI / 2;
+      link.castShadow = true;
+    }
+
+    const cap = _add(g, new THREE.CylinderGeometry(0.09, 0.10, 0.05, 10), ironMat, 0, LANTERN_Y + CAGE_H * 0.5 + 0.025, 0);
+    cap.castShadow = true;
+    const vent = _add(g, new THREE.CylinderGeometry(0.04, 0.04, 0.03, 8), metalMat, 0, LANTERN_Y + CAGE_H * 0.5 + 0.055, 0);
+    vent.castShadow = true;
+
+    const topRing = _add(g, new THREE.BoxGeometry(CAGE_HW * 2 + 0.02, 0.018, CAGE_HD * 2 + 0.02), ironMat, 0, LANTERN_Y + CAGE_H * 0.5 - 0.01, 0);
+    topRing.castShadow = true;
+    const botRing = _add(g, new THREE.BoxGeometry(CAGE_HW * 2 + 0.02, 0.018, CAGE_HD * 2 + 0.02), ironMat, 0, LANTERN_Y - CAGE_H * 0.5 + 0.01, 0);
+    botRing.castShadow = true;
+
+    for (const [lx, lz] of [
+      [-CAGE_HW, 0],
+      [CAGE_HW, 0],
+      [0, -CAGE_HD],
+      [0, CAGE_HD],
+    ]) {
+      const bar = _add(g, new THREE.BoxGeometry(0.012, CAGE_H - 0.03, 0.012), ironMat, lx, LANTERN_Y, lz);
+      bar.castShadow = true;
+    }
+
+    for (const [lx, lz, rw, rh] of [
+      [0, -CAGE_HD - 0.004, CAGE_HW * 2 - 0.02, CAGE_H - 0.04],
+      [0, CAGE_HD + 0.004, CAGE_HW * 2 - 0.02, CAGE_H - 0.04],
+      [-CAGE_HW - 0.004, 0, CAGE_H - 0.04, CAGE_HW * 2 - 0.02],
+      [CAGE_HW + 0.004, 0, CAGE_H - 0.04, CAGE_HW * 2 - 0.02],
+    ]) {
+      const pane = new THREE.Mesh(new THREE.PlaneGeometry(rw, rh), glassMat);
+      pane.position.set(lx, LANTERN_Y, lz);
+      if (lz < 0) pane.rotation.y = Math.PI;
+      if (lx < 0) pane.rotation.y = Math.PI / 2;
+      if (lx > 0) pane.rotation.y = -Math.PI / 2;
+      pane.renderOrder = 5;
+      g.add(pane);
+    }
+
+    const drip = _add(g, new THREE.CylinderGeometry(0.05, 0.07, 0.03, 8), ironMat, 0, LANTERN_Y - CAGE_H * 0.5 - 0.015, 0);
+    drip.castShadow = true;
+
+    if (ZS.attachLanternFlame) {
+      ZS.attachLanternFlame(g, { x: 0, y: LANTERN_Y - 0.02, z: 0 });
+    }
+  }
+
+  /**
+   * Caisse à bûches cabane — ~0,50 × 0,34 m, face ouverte −Z (vers poêle / pièce).
+   * Pivot = centre sol ; dos +Z contre mur.
+   */
+  function _buildCabinWoodBox(parent, x, y, z, ry) {
+    const M = _campMats();
+    const g = new THREE.Group();
+    g.position.set(x, y, z);
+    g.rotation.y = ry || 0;
+    parent.add(g);
+
+    const plankMat = M?.tableTop?.() || new THREE.MeshLambertMaterial({ color: 0xb8875a });
+    const frameMat = M?.tableLeg?.() || new THREE.MeshLambertMaterial({ color: 0x4a3224 });
+    const bark = M?.bark?.() || new THREE.MeshLambertMaterial({ color: 0x4a3018 });
+    const endW = M?.endWood?.() || new THREE.MeshLambertMaterial({ color: 0xc4a070 });
+
+    const HW = 0.25;
+    const HD = 0.17;
+    const BOX_H = 0.36;
+    const WALL_T = 0.022;
+    const FRONT_Z = -HD;
+
+    const floor = _add(g, new THREE.BoxGeometry(HW * 2, 0.028, HD * 2), plankMat, 0, 0.014, 0);
+    floor.castShadow = floor.receiveShadow = true;
+
+    const backZ = HD - WALL_T * 0.5;
+    const back = _add(g, new THREE.BoxGeometry(HW * 2, BOX_H, WALL_T), frameMat, 0, BOX_H * 0.5, backZ);
+    back.castShadow = true;
+
+    for (const sx of [-HW + WALL_T * 0.5, HW - WALL_T * 0.5]) {
+      const side = _add(g, new THREE.BoxGeometry(WALL_T, BOX_H, HD * 2 - WALL_T), frameMat, sx, BOX_H * 0.5, -WALL_T * 0.5);
+      side.castShadow = true;
+    }
+
+    for (let i = -2; i <= 2; i++) {
+      const slat = _add(g, new THREE.BoxGeometry(0.032, BOX_H - 0.06, 0.016), frameMat,
+        i * 0.09, BOX_H * 0.5, backZ - 0.008);
+      slat.castShadow = true;
+    }
+
+    const lip = _add(g, new THREE.BoxGeometry(HW * 2 - 0.04, 0.024, 0.028), frameMat, 0, 0.04, FRONT_Z + 0.014);
+    lip.castShadow = true;
+
+    const logs = [
+      { lx: -0.10, lz: 0.02, ry: 0.08, len: 0.30, r: 0.052, lift: 0.06 },
+      { lx: 0.04, lz: -0.03, ry: -0.12, len: 0.28, r: 0.048, lift: 0.06 },
+      { lx: 0.12, lz: 0.04, ry: 0.22, len: 0.26, r: 0.045, lift: 0.06 },
+      { lx: -0.02, lz: 0.05, ry: Math.PI / 2 + 0.1, len: 0.24, r: 0.042, lift: 0.14 },
+      { lx: 0.08, lz: -0.02, ry: Math.PI / 2 - 0.15, len: 0.22, r: 0.04, lift: 0.13 },
+    ];
+    for (const lg of logs) {
+      const lift = lg.lift || 0.05;
+      const log = new THREE.Mesh(
+        new THREE.CylinderGeometry(lg.r * 0.9, lg.r, lg.len, 7), bark);
+      log.rotation.z = Math.PI / 2;
+      log.rotation.y = lg.ry;
+      log.position.set(lg.lx, lift + lg.r, lg.lz);
+      log.castShadow = true;
+      g.add(log);
+      const cap = new THREE.Mesh(new THREE.CircleGeometry(lg.r * 0.82, 7), endW);
+      cap.rotation.y = lg.ry;
+      cap.rotation.x = Math.PI / 2;
+      cap.position.set(
+        lg.lx + Math.cos(lg.ry) * lg.len * 0.44,
+        lift + lg.r,
+        lg.lz + Math.sin(lg.ry) * lg.len * 0.44,
+      );
+      g.add(cap);
+    }
+
+    const axeHandle = _add(g, new THREE.BoxGeometry(0.028, 0.34, 0.028), frameMat, HW - 0.05, BOX_H + 0.17, FRONT_Z + 0.06);
+    axeHandle.castShadow = true;
+    const axeHead = _add(g, new THREE.BoxGeometry(0.11, 0.06, 0.024),
+      M?.metal?.() || new THREE.MeshLambertMaterial({ color: 0x6a6e74 }),
+      HW - 0.02, BOX_H + 0.30, FRONT_Z + 0.06);
+    axeHead.rotation.z = -0.35;
+    axeHead.castShadow = true;
+  }
+
+  /**
+   * Tapis tissé cabane — ~0,96 × 0,62 m au sol, bande décorative côté −Z.
+   * Pivot = centre sol ; tête / franges avant −Z (vers table ou porte).
+   */
+  function _buildCabinRug(parent, x, y, z, ry) {
+    const M = _campMats();
+    const g = new THREE.Group();
+    g.position.set(x, y, z);
+    g.rotation.y = ry || 0;
+    parent.add(g);
+
+    const rugMat = M?.cabinRug?.() || new THREE.MeshLambertMaterial({ color: 0x6a4a32 });
+    const borderMat = M?.cabinRugBorder?.() || new THREE.MeshLambertMaterial({ color: 0x3e2a1c });
+    const fringeMat = M?.tableLeg?.() || new THREE.MeshLambertMaterial({ color: 0x4a3224 });
+
+    const W = 0.96;
+    const D = 0.62;
+    const THICK = 0.014;
+
+    const body = _add(g, new THREE.BoxGeometry(W, THICK, D), rugMat, 0, THICK * 0.5, 0);
+    body.receiveShadow = true;
+
+    const bandZ = -D * 0.5 + 0.05;
+    const headBand = _add(g, new THREE.BoxGeometry(W - 0.10, 0.006, 0.09), borderMat, 0, THICK + 0.002, bandZ);
+    headBand.receiveShadow = true;
+
+    for (const [lx, lz, bw, bd] of [
+      [0, -D * 0.5 + 0.018, W - 0.06, 0.028],
+      [0, D * 0.5 - 0.018, W - 0.06, 0.028],
+      [-W * 0.5 + 0.018, 0, 0.028, D - 0.10],
+      [W * 0.5 - 0.018, 0, 0.028, D - 0.10],
+    ]) {
+      const rim = _add(g, new THREE.BoxGeometry(bw, 0.005, bd), borderMat, lx, THICK + 0.001, lz);
+      rim.receiveShadow = true;
+    }
+
+    const tasselCount = 13;
+    for (let i = 0; i < tasselCount; i++) {
+      const tx = -W * 0.44 + (i / (tasselCount - 1)) * W * 0.88;
+      for (const tz of [-D * 0.5 - 0.018, D * 0.5 + 0.018]) {
+        const tassel = _add(g, new THREE.BoxGeometry(0.010, 0.006, 0.032), fringeMat, tx, 0.003, tz);
+        tassel.receiveShadow = true;
+      }
+    }
+  }
+
+  /**
+   * Banc mural cabane — ~1,02 × 0,36 m, fixé au mur (+Z), cubby sous assise.
+   * Pivot = centre sol ; assise −Z, dossier incliné contre mur.
+   */
+  function _buildCabinBench(parent, x, y, z, ry) {
+    const M = _campMats();
+    const g = new THREE.Group();
+    g.position.set(x, y, z);
+    g.rotation.y = ry || 0;
+    parent.add(g);
+
+    const seatMat = M?.tableTop?.() || new THREE.MeshLambertMaterial({ color: 0xb8875a });
+    const frameMat = M?.tableLeg?.() || new THREE.MeshLambertMaterial({ color: 0x4a3224 });
+    const metal = M?.metal?.() || new THREE.MeshLambertMaterial({ color: 0x7d7f84 });
+    const blanketMat = M?.bedBlanket?.() || new THREE.MeshLambertMaterial({ color: 0x5a4a38 });
+
+    const HW = 0.51;
+    const HD = 0.18;
+    const SEAT_Y = 0.42;
+    const SEAT_T = 0.028;
+    const inset = 0.055;
+    const wallZ = HD - 0.02;
+    const frontZ = -HD + inset;
+
+    const cleat = _add(g, new THREE.BoxGeometry(HW * 2, 0.10, 0.032), frameMat, 0, SEAT_Y + 0.22, wallZ + 0.012);
+    cleat.castShadow = true;
+    for (const lx of [-HW + 0.12, 0, HW - 0.12]) {
+      const bolt = _add(g, new THREE.CylinderGeometry(0.008, 0.008, 0.012, 6), metal, lx, SEAT_Y + 0.28, wallZ + 0.028);
+      bolt.rotation.x = Math.PI / 2;
+    }
+
+    for (const lx of [-HW + inset, HW - inset]) {
+      const leg = _add(g, new THREE.BoxGeometry(0.05, SEAT_Y, 0.05), frameMat, lx, SEAT_Y * 0.5, frontZ);
+      leg.castShadow = leg.receiveShadow = true;
+      const brace = _add(g, new THREE.BoxGeometry(0.028, 0.16, 0.028), frameMat, lx, SEAT_Y - 0.06, frontZ + 0.06);
+      brace.rotation.x = -0.55;
+      brace.castShadow = true;
+    }
+
+    const midLeg = _add(g, new THREE.BoxGeometry(0.04, SEAT_Y - 0.08, 0.04), frameMat, 0, (SEAT_Y - 0.08) * 0.5, frontZ + 0.04);
+    midLeg.castShadow = true;
+
+    for (const lz of [frontZ + 0.02, wallZ - 0.04]) {
+      const rail = _add(g, new THREE.BoxGeometry(HW * 2 - inset * 2, 0.038, 0.03), frameMat, 0, SEAT_Y - 0.02, lz);
+      rail.castShadow = true;
+    }
+    for (const lx of [-HW + inset, HW - inset]) {
+      const side = _add(g, new THREE.BoxGeometry(0.03, 0.038, HD * 2 - inset * 2), frameMat, lx, SEAT_Y - 0.02, 0);
+      side.castShadow = true;
+    }
+
+    const plankW = (HW * 2 - inset * 2.4) / 3;
+    for (let i = 0; i < 3; i++) {
+      const px = -HW + inset * 1.2 + plankW * 0.5 + i * (plankW + 0.012);
+      const plank = _add(g, new THREE.BoxGeometry(plankW, SEAT_T, HD * 2 - inset * 1.6), seatMat,
+        px, SEAT_Y + SEAT_T * 0.5, -inset * 0.3);
+      plank.castShadow = plank.receiveShadow = true;
+    }
+
+    const cubbyFloor = _add(g, new THREE.BoxGeometry(HW * 2 - inset * 2, 0.02, HD * 2 - inset * 2.4), seatMat,
+      0, 0.10, -inset * 0.3);
+    cubbyFloor.castShadow = true;
+    const cubbyLip = _add(g, new THREE.BoxGeometry(HW * 2 - inset * 2, 0.024, 0.022), frameMat,
+      0, 0.12, frontZ + 0.01);
+    cubbyLip.castShadow = true;
+    const cubbyBack = _add(g, new THREE.BoxGeometry(HW * 2 - inset * 2, SEAT_Y - 0.14, 0.018), frameMat,
+      0, (SEAT_Y - 0.14) * 0.5 + 0.10, wallZ - 0.01);
+    cubbyBack.castShadow = true;
+    const divider = _add(g, new THREE.BoxGeometry(0.022, SEAT_Y - 0.16, HD * 2 - inset * 2.6), frameMat,
+      0.08, (SEAT_Y - 0.16) * 0.5 + 0.10, -inset * 0.3);
+    divider.castShadow = true;
+
+    const bootL = _add(g, new THREE.BoxGeometry(0.14, 0.12, 0.22),
+      new THREE.MeshLambertMaterial({ color: 0x3a2e24 }), -0.22, 0.16, -0.02);
+    bootL.castShadow = true;
+    const bootR = _add(g, new THREE.BoxGeometry(0.13, 0.11, 0.20),
+      new THREE.MeshLambertMaterial({ color: 0x4a3828 }), 0.24, 0.15, 0.04);
+    bootR.castShadow = true;
+
+    const backRoot = new THREE.Group();
+    backRoot.position.set(0, SEAT_Y + 0.08, wallZ - 0.03);
+    backRoot.rotation.x = -0.14;
+    g.add(backRoot);
+
+    for (const lx of [-HW + inset, HW - inset]) {
+      const post = _add(backRoot, new THREE.BoxGeometry(0.042, 0.44, 0.042), frameMat, lx, 0.22, 0);
+      post.castShadow = true;
+    }
+    for (let i = 0; i < 5; i++) {
+      const slat = _add(backRoot, new THREE.BoxGeometry(HW * 2 - inset * 2, 0.024, 0.026), seatMat,
+        0, 0.06 + i * 0.085, -0.01);
+      slat.castShadow = true;
+    }
+    const backCap = _add(backRoot, new THREE.BoxGeometry(HW * 2 - inset, 0.03, 0.028), frameMat, 0, 0.46, -0.01);
+    backCap.castShadow = true;
+
+    for (const lx of [-HW + 0.04, HW - 0.04]) {
+      const arm = _add(g, new THREE.BoxGeometry(0.07, 0.026, 0.10), seatMat, lx, SEAT_Y + 0.02, frontZ - 0.04);
+      arm.castShadow = true;
+    }
+
+    const blanket = _add(g, new THREE.BoxGeometry(0.22, 0.04, 0.16), blanketMat, 0.28, SEAT_Y + SEAT_T + 0.02, -0.04);
+    blanket.rotation.y = 0.12;
+    blanket.castShadow = true;
+    const blanketFold = _add(g, new THREE.BoxGeometry(0.14, 0.055, 0.12), blanketMat, 0.36, SEAT_Y + SEAT_T + 0.045, -0.02);
+    blanketFold.rotation.y = 0.2;
+    blanketFold.castShadow = true;
+  }
+
+  /**
+   * Lavabo cabane — meuble bois ~0,46 m, cuvette porcelaine encastrée, robinet mural.
+   * Pivot = centre sol ; face −Z, dos +Z contre mur.
+   */
+  function _buildCabinBasin(parent, x, y, z, ry) {
+    const M = _campMats();
+    const g = new THREE.Group();
+    g.position.set(x, y, z);
+    g.rotation.y = ry || 0;
+    parent.add(g);
+
+    const woodMat = M?.tableTop?.() || new THREE.MeshLambertMaterial({ color: 0xb8875a });
+    const frameMat = M?.tableLeg?.() || new THREE.MeshLambertMaterial({ color: 0x4a3224 });
+    const iron = new THREE.MeshLambertMaterial({ color: 0x5a5e64 });
+    const enamel = new THREE.MeshLambertMaterial({ color: 0xf0f2ee });
+    const enamelDark = new THREE.MeshLambertMaterial({ color: 0xd8dcd6 });
+    const waterMat = new THREE.MeshLambertMaterial({ color: 0x4a7088 });
+    const towelMat = M?.canvas?.(0x6a5a48) || new THREE.MeshLambertMaterial({ color: 0x6a5a48 });
+    const bucketMat = new THREE.MeshLambertMaterial({ color: 0x5a4030 });
+    const pottery = new THREE.MeshLambertMaterial({ color: 0x9a9088 });
+
+    const HW = 0.23;
+    const HD = 0.14;
+    const TOP_Y = 0.76;
+    const LEG_H = TOP_Y - 0.035;
+    const inset = 0.038;
+    const wallZ = HD - 0.015;
+    const frontZ = -HD + inset;
+    const basinX = -0.02;
+    const basinZ = -0.03;
+
+    for (const [lx, lz] of [
+      [-HW + inset, frontZ],
+      [HW - inset, frontZ],
+      [-HW + inset, wallZ - 0.025],
+      [HW - inset, wallZ - 0.025],
+    ]) {
+      const leg = _add(g, new THREE.BoxGeometry(0.04, LEG_H, 0.04), frameMat, lx, LEG_H * 0.5, lz);
+      leg.castShadow = leg.receiveShadow = true;
+    }
+
+    const stretchF = _add(g, new THREE.BoxGeometry(HW * 2 - inset * 2, 0.032, 0.028), frameMat,
+      0, 0.09, frontZ + 0.02);
+    stretchF.castShadow = true;
+    const stretchB = _add(g, new THREE.BoxGeometry(HW * 2 - inset * 2, 0.032, 0.028), frameMat,
+      0, 0.09, wallZ - 0.02);
+    stretchB.castShadow = true;
+
+    const top = _add(g, new THREE.BoxGeometry(HW * 2, 0.034, HD * 2), woodMat, 0, TOP_Y, 0);
+    top.castShadow = top.receiveShadow = true;
+
+    const shelfY = 0.32;
+    const shelf = _add(g, new THREE.BoxGeometry(HW * 2 - inset, 0.02, HD * 2 - inset * 1.2), woodMat,
+      0, shelfY, -inset * 0.15);
+    shelf.castShadow = true;
+
+    const splashW = 0.34;
+    const splash = _add(g, new THREE.BoxGeometry(splashW, 0.38, 0.016), woodMat, 0, TOP_Y + 0.19, wallZ + 0.004);
+    splash.castShadow = true;
+    const splashCap = _add(g, new THREE.BoxGeometry(splashW + 0.02, 0.022, 0.022), frameMat,
+      0, TOP_Y + 0.39, wallZ + 0.002);
+    splashCap.castShadow = true;
+
+    const bowlY = TOP_Y + 0.018;
+    const bowl = _add(g, new THREE.CylinderGeometry(0.10, 0.072, 0.075, 16), enamel,
+      basinX, bowlY + 0.038, basinZ);
+    bowl.castShadow = true;
+    const rim = _add(g, new THREE.CylinderGeometry(0.112, 0.112, 0.014, 16), enamel,
+      basinX, bowlY + 0.078, basinZ);
+    rim.castShadow = true;
+    const bowlInner = _add(g, new THREE.CylinderGeometry(0.092, 0.078, 0.06, 16), enamelDark,
+      basinX, bowlY + 0.042, basinZ);
+    bowlInner.castShadow = true;
+
+    const water = new THREE.Mesh(new THREE.CircleGeometry(0.078, 18), waterMat);
+    water.rotation.x = -Math.PI / 2;
+    water.position.set(basinX, bowlY + 0.018, basinZ);
+    water.renderOrder = 2;
+    g.add(water);
+
+    const tapY = TOP_Y + 0.12;
+    const tapZ = wallZ - 0.02;
+    const tapStem = _add(g, new THREE.CylinderGeometry(0.014, 0.016, 0.08, 8), iron, basinX + 0.08, tapY, tapZ);
+    tapStem.castShadow = true;
+    const tapArm = _add(g, new THREE.BoxGeometry(0.042, 0.014, 0.014), iron, basinX + 0.05, tapY - 0.02, tapZ - 0.02);
+    tapArm.rotation.x = 0.42;
+    tapArm.castShadow = true;
+    const tapTip = _add(g, new THREE.CylinderGeometry(0.008, 0.01, 0.025, 6), iron,
+      basinX + 0.03, tapY - 0.05, tapZ - 0.05);
+    tapTip.rotation.x = Math.PI / 2;
+    const tapKnob = _add(g, new THREE.CylinderGeometry(0.018, 0.018, 0.012, 8), iron,
+      basinX + 0.10, tapY + 0.04, tapZ);
+    tapKnob.castShadow = true;
+
+    const pitcher = _add(g, new THREE.CylinderGeometry(0.048, 0.062, 0.14, 10), pottery,
+      HW - 0.10, TOP_Y + 0.10, 0.05);
+    pitcher.castShadow = true;
+    _add(g, new THREE.CylinderGeometry(0.034, 0.038, 0.028, 8), pottery, HW - 0.10, TOP_Y + 0.184, 0.05);
+    const soap = _add(g, new THREE.BoxGeometry(0.042, 0.014, 0.028),
+      new THREE.MeshLambertMaterial({ color: 0xd4c8b0 }), HW - 0.06, TOP_Y + 0.022, 0.02);
+    soap.castShadow = true;
+
+    const bucket = _add(g, new THREE.CylinderGeometry(0.095, 0.082, 0.20, 12), bucketMat, 0.05, shelfY + 0.10, -0.01);
+    bucket.castShadow = true;
+    const bucketBand = _add(g, new THREE.CylinderGeometry(0.098, 0.098, 0.012, 12), iron, 0.05, shelfY + 0.19, -0.01);
+    const bucketWater = new THREE.Mesh(new THREE.CircleGeometry(0.072, 14), waterMat);
+    bucketWater.rotation.x = -Math.PI / 2;
+    bucketWater.position.set(0.05, shelfY + 0.12, -0.01);
+    g.add(bucketWater);
+
+    const hook = _add(g, new THREE.BoxGeometry(0.018, 0.04, 0.018), iron, -HW + 0.06, TOP_Y + 0.08, frontZ - 0.01);
+    const towel = _add(g, new THREE.BoxGeometry(0.11, 0.18, 0.01), towelMat, -HW + 0.06, TOP_Y - 0.04, frontZ - 0.015);
+    towel.rotation.x = 0.06;
+    towel.castShadow = true;
+
+    const mirY = TOP_Y + 0.24;
+    const mirZ = wallZ + 0.01;
+    const mirW = 0.14;
+    const mirH = 0.18;
+    const mirT = 0.012;
+    for (const [fw, fh, fx, fy] of [
+      [mirW + mirT * 2, mirT, 0, mirY + mirH * 0.5 - mirT * 0.5],
+      [mirW + mirT * 2, mirT, 0, mirY - mirH * 0.5 + mirT * 0.5],
+      [mirT, mirH, -mirW * 0.5 - mirT * 0.5, mirY],
+      [mirT, mirH, mirW * 0.5 + mirT * 0.5, mirY],
+    ]) {
+      _add(g, new THREE.BoxGeometry(fw, fh, mirT), frameMat, fx, fy, mirZ);
+    }
+    const mirror = new THREE.Mesh(
+      new THREE.PlaneGeometry(mirW, mirH),
+      new THREE.MeshLambertMaterial({ color: 0xb8ccd8, emissive: 0x1a2830, emissiveIntensity: 0.15 }),
+    );
+    mirror.position.set(0, mirY, mirZ + mirT * 0.5 + 0.001);
+    mirror.rotation.y = Math.PI;
+    g.add(mirror);
+  }
+
   /** Gourde + tasse près du feu */
   function _buildDrinkSet(parent, x, y, z) {
     const gourde = new THREE.MeshLambertMaterial({ color: 0x6a8070 });
@@ -1283,6 +1814,12 @@
     spawn_cabin_table: { build(root) { _buildCabinTable(root, 0, 0, 0, 0); } },
     spawn_cabin_chair: { build(root) { _buildCabinChair(root, 0, 0, 0, 0); } },
     spawn_cabin_shelf: { build(root) { _buildCabinShelf(root, 0, 0, 0, 0); } },
+    spawn_cabin_stove: { build(root) { _buildCabinStove(root, 0, 0, 0, 0); } },
+    spawn_cabin_lantern: { build(root) { _buildCabinLantern(root, 0, 0, 0, 0); } },
+    spawn_cabin_wood_box: { build(root) { _buildCabinWoodBox(root, 0, 0, 0, 0); } },
+    spawn_cabin_rug: { build(root) { _buildCabinRug(root, 0, 0, 0, 0); } },
+    spawn_cabin_bench: { build(root) { _buildCabinBench(root, 0, 0, 0, 0); } },
+    spawn_cabin_basin: { build(root) { _buildCabinBasin(root, 0, 0, 0, 0); } },
     spawn_backpack: { build(root) { _buildBackpack(root, 0, 0, 0, 0); } },
     spawn_lean_to: { build(root) { _buildLeanToShelter(root, 0, 0, 0, 0); } },
     spawn_stump_seat: { build(root) { _buildStumpSeat(root, 0, 0, 0, 0.20, 0); } },

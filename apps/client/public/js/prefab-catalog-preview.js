@@ -39,8 +39,85 @@
 
   const thumbCache = new Map();
   const pendingThumbs = new Set();
+  const _liveThumbs = new Map();
+  const _previewAnim = { fireLights: [], billboards: [] };
+  let _spawnAnimTarget = _previewAnim;
+  const _billboardVec = new THREE.Vector3();
+  let _modalAmbient = null;
 
   function _noop() {}
+
+  function _clearPreviewAnim() {
+    _previewAnim.fireLights.length = 0;
+    _previewAnim.billboards.length = 0;
+  }
+
+  function _stopThumbAnim(canvas) {
+    const state = _liveThumbs.get(canvas);
+    if (!state) return;
+    if (state.raf) cancelAnimationFrame(state.raf);
+    _liveThumbs.delete(canvas);
+    if (state.root) {
+      if (state.scene) state.scene.remove(state.root);
+      else if (thumbScene) thumbScene.remove(state.root);
+    }
+  }
+
+  function _stopAllThumbAnims() {
+    for (const cv of [..._liveThumbs.keys()]) _stopThumbAnim(cv);
+  }
+
+  function _updatePreviewBillboards(camX, camZ, anim = _previewAnim) {
+    for (const m of anim.billboards) {
+      if (!m?.parent) continue;
+      m.getWorldPosition(_billboardVec);
+      m.rotation.set(0, Math.atan2(camX - _billboardVec.x, camZ - _billboardVec.z), 0);
+    }
+  }
+
+  function _tickPreviewAnim(camera, night = 0.88, anim = _previewAnim) {
+    if (!camera) return;
+    _updatePreviewBillboards(camera.position.x, camera.position.z, anim);
+    if (!anim.fireLights.length) return;
+    const t = Date.now();
+    const f = 0.82 + Math.sin(t * 0.011) * 0.09 + Math.sin(t * 0.019) * 0.06 + Math.sin(t * 0.034) * 0.04;
+    const nightBoost = 0.4 + night * 1.1;
+    for (const fl of anim.fireLights) {
+      if (!fl.light?.parent) continue;
+      const base = fl.baseIntensity ?? 2.2;
+      fl.light.intensity = f * base * nightBoost;
+      if (fl.fillLight?.parent) fl.fillLight.intensity = (fl.fillBase ?? 0.65) * (0.75 + f * 0.35) * nightBoost;
+      if (fl.mesh?.parent) fl.mesh.scale.y = 0.85 + f * 0.22;
+      if (fl.onTick) fl.onTick(t, f, night);
+    }
+  }
+
+  function _hasPreviewAnim(anim = _previewAnim) {
+    return anim.fireLights.length > 0 || anim.billboards.length > 0;
+  }
+
+  function _installPreviewAnimHooks() {
+    ZS.registerBillboards = (meshes) => {
+      for (const m of meshes) if (m) _spawnAnimTarget.billboards.push(m);
+    };
+    ZS.registerFireLight = (light, mesh, opts = {}) => {
+      _spawnAnimTarget.fireLights.push({
+        light,
+        mesh: mesh || null,
+        baseIntensity: opts.baseIntensity,
+        fillLight: opts.fillLight || null,
+        fillBase: opts.fillLight?.intensity,
+        onTick: opts.onTick || null,
+      });
+    };
+    ZS.updateBillboards = (camX, camZ) => _updatePreviewBillboards(camX, camZ, _spawnAnimTarget);
+  }
+
+  function _applyModalPreviewLighting(animated) {
+    if (!modalScene) return;
+    modalScene.background = new THREE.Color(animated ? 0x050807 : 0x0d1511);
+    if (_modalAmbient) _modalAmbient.intensity = animated ? 0.22 : 0.62;
+  }
 
   function _stubZS() {
     window.ZS = window.ZS || {};
@@ -61,6 +138,7 @@
     };
     ZS.Network = { syncWorldColliders: _noop, patchDecorFloorHeight: _noop, getDecorRoot: () => null };
     ZS.Audio = { door: _noop, spatialAt: () => null };
+    _installPreviewAnimHooks();
   }
 
   async function _fetchAssetVer() {
@@ -120,8 +198,28 @@
     return !!(ZS.listDecorPrefabs && ZS.listDecorPrefabs().includes(prefabId));
   }
 
-  async function _spawnRoot(prefabId) {
+  function _makeThumbScene(dark = false) {
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color(dark ? 0x050807 : 0x0d1511);
+    scene.add(new THREE.AmbientLight(0xffffff, dark ? 0.22 : 0.62));
+    const dir = new THREE.DirectionalLight(0xffffff, 0.92);
+    dir.position.set(5, 9, 6);
+    scene.add(dir);
+    const ground = new THREE.Mesh(
+      new THREE.PlaneGeometry(60, 60),
+      new THREE.MeshLambertMaterial({ color: 0x152019 }),
+    );
+    ground.rotation.x = -Math.PI / 2;
+    ground.position.y = -0.02;
+    scene.add(ground);
+    return scene;
+  }
+
+  async function _spawnRoot(prefabId, animTarget = _previewAnim) {
     await ensureReady();
+    _spawnAnimTarget = animTarget;
+    animTarget.fireLights.length = 0;
+    animTarget.billboards.length = 0;
     const scene = new THREE.Scene();
     let root = ZS.spawnDecorPrefab(scene, prefabId, 0, 0, 0, _previewOpts(prefabId));
     if (root) return root;
@@ -214,6 +312,7 @@
   }
 
   function _clearThumbScene() {
+    if (!thumbScene) return;
     const stale = thumbScene.children.filter((c) => c !== thumbLights && c !== thumbGround);
     for (const c of stale) thumbScene.remove(c);
   }
@@ -240,17 +339,40 @@
       return true;
     }
     try {
-      const root = await _spawnRoot(prefabId);
+      _stopThumbAnim(canvas);
+      _ensureThumbRenderer();
+      _clearThumbScene();
+
+      const thumbAnim = { fireLights: [], billboards: [] };
+      const root = await _spawnRoot(prefabId, thumbAnim);
       if (!root) {
         _drawPlaceholder(canvas, 'introuvable');
         console.warn('[prefab-preview]', _missingPrefabMsg(prefabId));
         return false;
       }
-      _ensureThumbRenderer();
-      _clearThumbScene();
-      thumbScene.add(root);
       _fitCamera(thumbCamera, root, canvas.width / canvas.height, 1.45);
       thumbRenderer.setSize(canvas.width, canvas.height, false);
+
+      if (_hasPreviewAnim(thumbAnim)) {
+        const scene = _makeThumbScene(true);
+        scene.add(root);
+        const tick = () => {
+          if (!canvas.isConnected) {
+            _stopThumbAnim(canvas);
+            return;
+          }
+          _tickPreviewAnim(thumbCamera, 0.88, thumbAnim);
+          thumbRenderer.render(scene, thumbCamera);
+          const ctx = canvas.getContext('2d');
+          if (ctx) ctx.drawImage(thumbRenderer.domElement, 0, 0, canvas.width, canvas.height);
+          _liveThumbs.set(canvas, { raf: requestAnimationFrame(tick), root, scene, anim: thumbAnim });
+        };
+        tick();
+        canvas.dispatchEvent(new CustomEvent('prefab-thumb-done', { bubbles: true }));
+        return true;
+      }
+
+      thumbScene.add(root);
       thumbRenderer.render(thumbScene, thumbCamera);
       _clearThumbScene();
 
@@ -286,6 +408,8 @@
 
   function scheduleThumbnails(container) {
     if (!container) return;
+    _stopAllThumbAnims();
+    _clearThumbScene();
     const canvases = container.querySelectorAll('canvas.preview-thumb[data-prefab-id]');
     if (!canvases.length) return;
 
@@ -318,6 +442,8 @@
     modalScene.remove(modalRoot);
     modalRoot = null;
     modalFitState = null;
+    _clearPreviewAnim();
+    _applyModalPreviewLighting(false);
   }
 
   function _setModalLoading(on, msg) {
@@ -375,7 +501,7 @@
             <button type="button" class="preview-modal-action primary" id="prefab-preview-copy">Copier RCON</button>
           </div>
         </div>
-        <p class="preview-modal-hint">Glisser pour tourner · molette pour zoomer · clic droit pour déplacer · Échap pour fermer</p>
+        <p class="preview-modal-hint" id="prefab-preview-hint">Glisser pour tourner · molette pour zoomer · clic droit pour déplacer · Échap pour fermer</p>
       </div>`;
     document.body.appendChild(modal);
 
@@ -428,7 +554,8 @@
       modalScene = new THREE.Scene();
       modalScene.background = new THREE.Color(0x0d1511);
       modalCamera = new THREE.PerspectiveCamera(45, 16 / 9, 0.05, 300);
-      modalScene.add(new THREE.AmbientLight(0xffffff, 0.62));
+      _modalAmbient = new THREE.AmbientLight(0xffffff, 0.62);
+      modalScene.add(_modalAmbient);
       const dir = new THREE.DirectionalLight(0xffffff, 0.95);
       dir.position.set(6, 10, 7);
       modalScene.add(dir);
@@ -466,6 +593,14 @@
     modalScene.add(modalRoot);
     _modalResize();
     modalFitState = _fitCamera(modalCamera, modalRoot, modalCamera.aspect, 1.55);
+    _applyModalPreviewLighting(_hasPreviewAnim());
+
+    const hintEl = modal.querySelector('#prefab-preview-hint');
+    if (hintEl) {
+      hintEl.textContent = _hasPreviewAnim()
+        ? 'Aperçu animé (feu / flammes) · glisser pour tourner · molette pour zoomer · Échap pour fermer'
+        : 'Glisser pour tourner · molette pour zoomer · clic droit pour déplacer · Échap pour fermer';
+    }
 
     const OrbitControls = _getOrbitControls();
     modalControls = new OrbitControls(modalCamera, canvas);
@@ -479,6 +614,7 @@
     const tick = () => {
       modalAnim = requestAnimationFrame(tick);
       modalControls.update();
+      _tickPreviewAnim(modalCamera);
       modalRenderer.render(modalScene, modalCamera);
     };
     tick();

@@ -280,6 +280,163 @@
     return root;
   }
 
+  /**
+   * Flammes intérieures poêle cabane — billboards + lumière (visible à travers la grille).
+   * @param {THREE.Object3D} parent
+   * @param {{ x?: number, y?: number, z?: number }} [opts]
+   */
+  function attachStoveFire(parent, opts = {}) {
+    const fireRoot = new THREE.Group();
+    fireRoot.position.set(opts.x || 0, opts.y || 0, opts.z || 0);
+    parent.add(fireRoot);
+
+    const emberMat = new THREE.MeshBasicMaterial({
+      map: _getEmberTex(), transparent: true, depthWrite: false, blending: THREE.AdditiveBlending,
+    });
+    const fireMat = new THREE.MeshBasicMaterial({
+      map: _getFireTex(), transparent: true, depthWrite: false,
+      blending: THREE.AdditiveBlending, side: THREE.DoubleSide,
+    });
+
+    const fireLayers = [
+      { w: 0.24, h: 0.30, y: 0.02, x: 0, phase: 0 },
+      { w: 0.17, h: 0.22, y: 0.06, x: 0.015, phase: 1.1 },
+      { w: 0.11, h: 0.15, y: 0.09, x: -0.01, phase: 2.3 },
+    ];
+    const billboards = [];
+    for (const L of fireLayers) {
+      const m = _addMesh(fireRoot, new THREE.PlaneGeometry(L.w, L.h), fireMat, L.x, L.y, 0);
+      m.renderOrder = 8;
+      m.userData.billboard = true;
+      L.mesh = m;
+      billboards.push(m);
+    }
+
+    const embers = [];
+    for (let i = 0; i < 3; i++) {
+      const e = _addMesh(fireRoot, new THREE.PlaneGeometry(0.11, 0.11), emberMat,
+        (i - 1) * 0.055, 0.03, 0.01);
+      e.renderOrder = 7;
+      e.userData.billboard = true;
+      embers.push({ mesh: e, phase: i * 1.2, speed: 1.0 + i * 0.18 });
+      billboards.push(e);
+    }
+
+    const glow = _addMesh(fireRoot, new THREE.PlaneGeometry(0.20, 0.16),
+      new THREE.MeshBasicMaterial({ color: 0xff5500, transparent: true, opacity: 0.55, depthWrite: false, blending: THREE.AdditiveBlending }),
+      0, 0.02, 0.02);
+    glow.renderOrder = 6;
+    billboards.push(glow);
+
+    const light = new THREE.PointLight(0xff6620, 1.6, 9, 1.55);
+    light.position.set(0, 0.10, 0.05);
+    fireRoot.add(light);
+    const fill = new THREE.PointLight(0xffaa44, 0.42, 5.5, 2);
+    fill.position.set(0.04, 0.08, 0.08);
+    fireRoot.add(fill);
+
+    if (ZS.registerFireLight) {
+      ZS.registerFireLight(light, fireLayers[0].mesh, {
+        baseIntensity: 1.6,
+        fillLight: fill,
+        onTick(t, flicker, night) {
+          const vis = 0.75 + (night || 0) * 0.25;
+          for (const L of fireLayers) {
+            const wob = Math.sin(t * 0.012 + L.phase) * 0.09 + Math.sin(t * 0.024 + L.phase * 2) * 0.05;
+            L.mesh.scale.set(1 + wob, 0.82 + flicker * 0.22 + wob * 0.38, 1);
+            L.mesh.material.opacity = vis * (0.88 + wob * 0.4);
+          }
+          for (const e of embers) {
+            const p = e.phase + t * 0.0012 * e.speed;
+            e.mesh.material.opacity = vis * (0.6 + Math.sin(p) * 0.38);
+            e.mesh.scale.setScalar(0.88 + Math.sin(p * 1.15) * 0.2);
+          }
+          glow.material.opacity = vis * (0.42 + flicker * 0.22);
+          glow.scale.setScalar(0.95 + flicker * 0.12 + Math.sin(t * 0.015) * 0.06);
+          if (fill) fill.intensity = (0.18 + flicker * 0.14) * (0.65 + (night || 0) * 0.75);
+        },
+      });
+    }
+    if (ZS.registerBillboards) ZS.registerBillboards(billboards);
+    return fireRoot;
+  }
+
+  /**
+   * Flamme intérieure lanterne suspendue — petite flamme + lueur chaude.
+   * @param {THREE.Object3D} parent
+   * @param {{ x?: number, y?: number, z?: number }} [opts]
+   */
+  function attachLanternFlame(parent, opts = {}) {
+    const fireRoot = new THREE.Group();
+    fireRoot.position.set(opts.x || 0, opts.y || 0, opts.z || 0);
+    parent.add(fireRoot);
+
+    const fireMat = new THREE.MeshBasicMaterial({
+      map: _getFireTex(), transparent: true, depthWrite: false,
+      blending: THREE.AdditiveBlending, side: THREE.DoubleSide,
+    });
+    const emberMat = new THREE.MeshBasicMaterial({
+      map: _getEmberTex(), transparent: true, depthWrite: false, blending: THREE.AdditiveBlending,
+    });
+
+    const fireLayers = [
+      { w: 0.10, h: 0.14, y: 0.01, x: 0, phase: 0 },
+      { w: 0.07, h: 0.10, y: 0.04, x: 0.008, phase: 1.3 },
+    ];
+    const billboards = [];
+    for (const L of fireLayers) {
+      const m = _addMesh(fireRoot, new THREE.PlaneGeometry(L.w, L.h), fireMat, L.x, L.y, 0);
+      m.renderOrder = 8;
+      m.userData.billboard = true;
+      L.mesh = m;
+      billboards.push(m);
+    }
+
+    const ember = _addMesh(fireRoot, new THREE.PlaneGeometry(0.06, 0.06), emberMat, 0, 0.02, 0.01);
+    ember.renderOrder = 7;
+    ember.userData.billboard = true;
+    billboards.push(ember);
+
+    const glow = _addMesh(fireRoot, new THREE.PlaneGeometry(0.12, 0.10),
+      new THREE.MeshBasicMaterial({
+        color: 0xffcc66, transparent: true, opacity: 0.45, depthWrite: false, blending: THREE.AdditiveBlending,
+      }),
+      0, 0.02, 0);
+    glow.renderOrder = 6;
+    billboards.push(glow);
+
+    const light = new THREE.PointLight(0xffbb55, 1.15, 11, 1.6);
+    light.position.set(0, 0.06, 0);
+    fireRoot.add(light);
+    const fill = new THREE.PointLight(0xffdd99, 0.32, 6, 2);
+    fill.position.set(0, 0.04, 0.03);
+    fireRoot.add(fill);
+
+    if (ZS.registerFireLight) {
+      ZS.registerFireLight(light, fireLayers[0].mesh, {
+        baseIntensity: 1.15,
+        fillLight: fill,
+        onTick(t, flicker, night) {
+          const vis = 0.7 + (night || 0) * 0.3;
+          for (const L of fireLayers) {
+            const wob = Math.sin(t * 0.013 + L.phase) * 0.08 + Math.sin(t * 0.027 + L.phase * 2) * 0.05;
+            L.mesh.scale.set(1 + wob, 0.86 + flicker * 0.18 + wob * 0.32, 1);
+            L.mesh.material.opacity = vis * (0.9 + wob * 0.35);
+          }
+          ember.material.opacity = vis * (0.55 + Math.sin(t * 0.014) * 0.32);
+          ember.scale.setScalar(0.9 + flicker * 0.14);
+          glow.material.opacity = vis * (0.38 + flicker * 0.2);
+          glow.scale.setScalar(0.94 + flicker * 0.1 + Math.sin(t * 0.016) * 0.05);
+          if (fill) fill.intensity = (0.14 + flicker * 0.1) * (0.6 + (night || 0) * 0.7);
+        },
+      });
+    }
+    if (ZS.registerBillboards) ZS.registerBillboards(billboards);
+    return fireRoot;
+  }
+
   window.ZS = window.ZS || {};
   ZS.buildCampfire = buildCampfire;
+  ZS.attachStoveFire = attachStoveFire;
+  ZS.attachLanternFlame = attachLanternFlame;
 }());

@@ -1101,6 +1101,11 @@
       ZS.Network?.requestCampRest?.(bed.decorId);
       return true;
     }
+    const bedFurniture = ZS.findNearestDecorInteract?.(px, pz, 3.2, 'bed');
+    if (bedFurniture) {
+      ZS.Network?.requestCampRest?.(bedFurniture.decorId);
+      return true;
+    }
     return false;
   }
 
@@ -1177,7 +1182,8 @@
     }
     else if (campProp?.role === 'workbench') label = 'Établi';
     else if (campProp?.role === 'campfire') label = 'Cuire au feu';
-    else if (campProp?.role === 'bedroll') label = 'Repos';
+    else if (campProp?.role === 'bed') label = 'Repos';
+    else if (campProp?.role === 'bedroll') label = 'Repos (sac)';
     else if (sign) label = 'Lire le panneau';
     else label = 'Fouiller';
     btn.textContent = mobile ? label : `E — ${label}`;

@@ -222,6 +222,12 @@ Dans la cabane, porte et coffre peuvent être proches : l’UI et la touche **E*
 | Table `spawn_cabin_table` | Devant **−Z** (assiette) · dos +Z | Centre pièce, rotY vers porte ou chaises |
 | Chaise `spawn_cabin_chair` | Devant **−Z** (assise) · dossier +Z | Face table : devant −Z vers plateau |
 | Étagère `spawn_cabin_shelf` | Face **−Z** · dos **+Z** contre mur | Mur ouest ou nord, dos collé au mur |
+| Poêle `spawn_cabin_stove` | Porte **−Z** · conduit **+Z** | Mur nord/est — dos vers mur, porte vers salle |
+| Lanterne `spawn_cabin_lantern` | Face **−Z** · quasi symétrique | Centre pièce ou au-dessus table — pivot sol |
+| Caisse bûches `spawn_cabin_wood_box` | Ouverture **−Z** · dos **+Z** | Près poêle — dos au mur, face vers pièce |
+| Tapis `spawn_cabin_rug` | Bande **−Z** · quasi symétrique | Centre pièce ou sous table — bande vers porte |
+| Banc `spawn_cabin_bench` | Assise **−Z** · dossier **+Z** | Mur ouest — dos collé, face vers pièce |
+| Lavabo `spawn_cabin_basin` | Face **−Z** · dos **+Z** | Mur est/ouest — coin eau intérieur |
 | Lit `spawn_single_bed` | Tête **+Z** · pieds −Z | Coin NO — déjà seed `s01:cabin01:bed` |
 | Coffre `storage_chest` | Serrure **−Z** | `cabin01ChestFaceDoorRotY()` |
 | Second coffre | −Z forward | Nouveau `placementKey`, réutiliser `shackAnchor` / `floorY` |

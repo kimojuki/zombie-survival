@@ -44,6 +44,7 @@ ADMIN_USERS=votre_username
 |----------|---------|
 | [DEV_TRACKER.md](DEV_TRACKER.md) | Journal de dev, règles Git, checklist PR |
 | [CONTRIBUTING.md](CONTRIBUTING.md) | Workflow `feature/* -> dev -> master`, Definition of Done |
+| [docs/GIT_WORKFLOW.md](docs/GIT_WORKFLOW.md) | Git équipe — travail parallèle, pull/push, fusion conflits |
 | [SECURITY.md](SECURITY.md) | Secrets, données locales, signalement sécurité |
 | [docs/RCON.md](docs/RCON.md) | Console admin in-game + API |
 | [docs/DEPLOY.md](docs/DEPLOY.md) | Prod Infomaniak, auto-deploy (cron / webhook) |

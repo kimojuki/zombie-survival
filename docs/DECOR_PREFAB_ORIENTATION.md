@@ -60,6 +60,12 @@ Seed cabane #1 : `(165.1, 7.1)`, `rotY ≈ 0.55`.
 | `spawn_cabin_table` | **−Z** (côté assiette) | +Z (gobelet) | Plateau quasi symétrique ; rotY pour orienter vers porte ou chaises |
 | `spawn_cabin_chair` | **−Z** (assise) | +Z (dossier) | Face à la table : devant −Z vers le plateau |
 | `spawn_cabin_shelf` | **−Z** (face ouverte) | +Z (lattes, **contre mur**) | Dos +Z collé au mur |
+| `spawn_cabin_stove` | **−Z** (porte vitrée) | +Z (conduit fumée) | Dos +Z vers mur ; porte −Z vers pièce |
+| `spawn_cabin_lantern` | **−Z** (face vitrée) | +Z | Suspendue plafond ; pivot sol sous la cage |
+| `spawn_cabin_wood_box` | **−Z** (face ouverte) | +Z (fond) | Près poêle ; dos contre mur |
+| `spawn_cabin_rug` | **−Z** (bande décor) | +Z | Sol centre pièce ; bande vers table/porte |
+| `spawn_cabin_bench` | **−Z** (assise) | +Z (dossier) | Mur ouest/nord — dos contre mur |
+| `spawn_cabin_basin` | **−Z** (cuvette) | +Z (miroir) | Coin eau — dos contre mur |
 | `spawn_single_bed` | **+Z** (tête / oreiller) | −Z (pieds) | ⚠️ **Exception** : tête = +Z, pas −Z |
 | `storage_chest` | **−Z** (serrure / couvercle) | +Z | rotY via `cabin01ChestFaceDoorRotY()` |
 

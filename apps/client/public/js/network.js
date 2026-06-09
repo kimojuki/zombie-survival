@@ -60,6 +60,14 @@
     return ZS.getCollidersForServer?.() || ZS.getColliders?.() || [];
   }
 
+  function _syncDecorPrefabRegistry() {
+    if (!_socket?.connected || !ZS.listDecorPrefabs) return;
+    _socket.emit('decor-prefab-registry', {
+      ids: ZS.listDecorPrefabs(),
+      meta: ZS.getDecorPrefabMeta?.() || {},
+    });
+  }
+
   function _syncWorldColliders(force = false) {
     if (!_socket || !ZS.getColliders) return;
     if (_serverCollidersReady) return;
@@ -532,6 +540,7 @@
       if (!_worldReady) {
         window.ZS?.Loading?.setPhase?.('socket', 0.72, 'Serveur joint', 'Construction du monde…');
       }
+      _syncDecorPrefabRegistry();
     });
     socket.on('game-init', _onGameInitReceived);
   }

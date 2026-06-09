@@ -50,6 +50,13 @@ Copier dans la description de PR :
 
 ## 2026-06-07
 
+### Fix — Restauration bounds S02 (Georges) fusionné avec S01 (2026-06-09)
+
+- **Cause** : `sector-bounds.mjs` réduit à S01 seul dans cf49bd8 — passage serveur vers petite ville bloqué
+- **Fix** : `SECTOR_02`, `PLAYABLE_AREAS`, couloir `s01_s02_corridor` restaurés (version d1aca90 Georges)
+- **Règle** : `.cursor/rules/studio-workflow.mdc` — fusion Bruno+Georges, ne jamais écraser
+- **Tests** : `sector-bounds.test.mjs` — redémarrer serveur après deploy shared
+
 ### Ajust — Coffre cabane #1 écart mur coin NE (2026-06-09)
 
 - **Placement** : `WALL_CLEARANCE` 0.06 → 0.10 — local `(1.64, 1.36)` (+4 cm vers intérieur)

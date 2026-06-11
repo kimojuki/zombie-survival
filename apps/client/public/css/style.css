@@ -506,6 +506,22 @@ body.chat-open #chat-btn {
 }
 .admin-hub-foot { margin: 12px 2px 0; font-size: 11px; color: #7a8494; line-height: 1.4; }
 .admin-hub-empty { margin: 8px 2px; font-size: 12px; color: #9aa8b8; }
+.admin-hub-calib-toolbar {
+  display: flex; flex-wrap: wrap; gap: 8px; margin: 0 2px 12px; align-items: center;
+}
+.admin-hub-calib-toolbar input[type="search"] {
+  flex: 1 1 180px; min-width: 140px; padding: 8px 10px; border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.14); background: rgba(12, 16, 24, 0.9); color: #e8ecf4;
+}
+.admin-hub-calib-toolbar button {
+  padding: 8px 12px; border-radius: 8px; border: 1px solid rgba(212, 184, 122, 0.35);
+  background: rgba(42, 74, 58, 0.85); color: #e8f4e8; cursor: pointer; font-size: 12px;
+}
+.admin-hub-calib-section { margin-bottom: 16px; }
+.admin-hub-calib-section-title {
+  margin: 0 2px 8px; font-size: 11px; font-weight: 700; letter-spacing: 0.06em;
+  text-transform: uppercase; color: #8a9ab0;
+}
 .admin-hub-role-line { margin: 0 2px 12px; font-size: 12px; color: #b8c4d4; }
 .admin-role-badge {
   display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 10px; font-weight: 700;

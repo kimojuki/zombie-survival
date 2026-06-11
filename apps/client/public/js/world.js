@@ -916,6 +916,30 @@
     return h;
   }
 
+  /** Raycast depuis un rayon caméra → point sol (terrain + meshes enregistrés). */
+  function raycastViewToGround(raycaster, maxDist = 120) {
+    if (!raycaster) return null;
+    const prevFar = raycaster.far;
+    raycaster.far = maxDist;
+    let best = null;
+    if (_terrainMesh) {
+      const hits = raycaster.intersectObject(_terrainMesh, false);
+      if (hits.length) {
+        best = { x: hits[0].point.x, y: hits[0].point.y, z: hits[0].point.z, dist: hits[0].distance };
+      }
+    }
+    for (const mesh of _groundMeshes) {
+      if (!mesh?.isMesh) continue;
+      const hits = raycaster.intersectObject(mesh, false);
+      if (!hits.length) continue;
+      if (!best || hits[0].distance < best.dist) {
+        best = { x: hits[0].point.x, y: hits[0].point.y, z: hits[0].point.z, dist: hits[0].distance };
+      }
+    }
+    raycaster.far = prevFar;
+    return best;
+  }
+
   /** Hauteur réelle du mesh terrain (raycast vertical). */
   function raycastTerrainHeight(x, z) {
     if (!Number.isFinite(x) || !Number.isFinite(z)) return 0;
@@ -1738,6 +1762,7 @@
   ZS.getVisibleTerrainHeight = getVisibleTerrainHeight;
   ZS.raycastTerrainHeight    = raycastTerrainHeight;
   ZS.raycastGroundHeight     = raycastGroundHeight;
+  ZS.raycastViewToGround     = raycastViewToGround;
   ZS.tickDayNight         = tickDayNight;
   ZS.setWorldTime         = setWorldTime;
   ZS.getWorldTime         = getWorldTime;

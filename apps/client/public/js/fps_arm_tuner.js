@@ -115,6 +115,40 @@
     return JSON.parse(JSON.stringify(p || {}));
   }
 
+  const ARM_CHAIN_KEYS = ['shoulder', 'elbow', 'wrist', 'lShoulder', 'lElbow', 'lWrist'];
+
+  function _copyArmChainSections(src, dst) {
+    if (!src || !dst) return;
+    for (const key of ARM_CHAIN_KEYS) {
+      if (src[key] && typeof src[key] === 'object') {
+        dst[key] = { ...(dst[key] || {}), ...JSON.parse(JSON.stringify(src[key])) };
+      }
+    }
+  }
+
+  function _readValidatedPose(profileId) {
+    const prof = PROFILES[profileId];
+    if (!prof) return null;
+    try {
+      let raw = localStorage.getItem(prof.storageKey);
+      if (!raw && prof.legacyStorageKey) raw = localStorage.getItem(prof.legacyStorageKey);
+      return raw ? JSON.parse(raw) : null;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  function _listValidatedArmSources(excludeProfileId) {
+    const out = [];
+    for (const [id, prof] of Object.entries(PROFILES)) {
+      if (id === excludeProfileId) continue;
+      const pose = _readValidatedPose(id);
+      if (!pose?.shoulder && !pose?.lShoulder) continue;
+      out.push({ id, label: prof.presetLabel || id, pose });
+    }
+    return out;
+  }
+
   /** Source de vérité — torche calibrée (épaule / coude / poignet / item). */
   const TORCH_POSE = {
     shoulder: { x: 0.47, y: -0.31, z: -0.44, rx: -0.18, ry: 0.08, rz: -0.04 },
@@ -204,7 +238,7 @@
     },
     tool_hachette: {
       title: 'Réglage FPS — hachette (arme/outil)',
-      hint: 'Modèle référence pour outils & mêlée · presets partagés',
+      hint: 'Référence outils & mêlée 1 main · presets partagés',
       storageKey: 'zs_arm_tuner_weapon',
       gripType: 'tool_hachette',
       equip: 'tool_hachette',
@@ -212,12 +246,7 @@
       walkPreview: false,
       validateItem: 'tool_hachette',
       presetLabel: 'Hachette',
-      defaultPose: {
-        shoulder: { x: 0.47, y: -0.31, z: -0.44, rx: -0.18, ry: 0.08, rz: -0.04 },
-        elbow: { rx: 1.35, ry: -0.18, rz: -0.18 },
-        wrist: { rx: -0.77, ry: 0.11, rz: 0.11 },
-        item: { x: 0.54, y: -0.78, z: 0.22, rx: 0.06, ry: 0.88, rz: -0.52 },
-      },
+      dynamicBase: true,
       fields: () => ARM_FIELDS.concat(ITEM_FIELDS),
     },
     remote_view: {
@@ -310,13 +339,16 @@
     if (changed) _writePresets(presets);
   }
 
-  /** Copie uniquement les champs compatibles avec le profil cible. */
-  function _mergePoseForProfile(sourcePose, targetProfileId) {
+  /** Copie les champs compatibles ; sections bras toujours transférées si présentes. */
+  function _mergePoseForProfile(sourcePose, targetProfileId, opts = {}) {
     const profile = PROFILES[targetProfileId];
     if (!profile || !sourcePose) return _clonePose(profile?.defaultPose);
     const out = _clonePose(profile.defaultPose);
+    if (!opts.skipArmChain) _copyArmChainSections(sourcePose, out);
     const paths = profile.fields().map((f) => f.path);
     for (const path of paths) {
+      const top = path.split('.')[0];
+      if (!opts.skipArmChain && ARM_CHAIN_KEYS.includes(top)) continue;
       const src = _getPath(sourcePose, path);
       if (!Number.isFinite(src.parent[src.key])) continue;
       const dst = _getPath(out, path);
@@ -327,6 +359,130 @@
 
   function _profileLabel(id) {
     return PROFILES[id]?.presetLabel || PROFILES[id]?.validateItem || id || '?';
+  }
+
+  function _resolveProfileDefaultPose(profile) {
+    if (!profile) return {};
+    if (profile.dynamicBase && profile.gripType) {
+      return _buildDefaultPoseForGrip(profile.gripType);
+    }
+    const raw = profile.defaultPose;
+    return _clonePose(typeof raw === 'function' ? raw() : raw);
+  }
+
+  function _resolveItemPoseForGrip(gripType, entry) {
+    if (entry?.itemFrom) {
+      const fromPose = _readValidatedPose(entry.itemFrom);
+      if (fromPose?.item) return _clonePose(fromPose.item);
+    }
+    const grip = ZS.getGrip?.(gripType);
+    if (grip?.item) return _clonePose(grip.item);
+    return { x: 0, y: 0, z: 0, rx: 0, ry: 0, rz: 0 };
+  }
+
+  function _resolveBaseOneHandArms() {
+    for (const id of ['tool_hachette', 'empty_hand', 'tool_torche']) {
+      const p = _readValidatedPose(id);
+      if (p?.shoulder) {
+        return {
+          shoulder: { ...p.shoulder },
+          elbow: { ...(p.elbow || {}) },
+          wrist: { ...(p.wrist || {}) },
+        };
+      }
+    }
+    return _clonePose(VALIDATED_EMPTY_ARM);
+  }
+
+  function _resolveBaseTwoHandArms() {
+    const from = _readValidatedPose('tool_caillou');
+    if (from?.shoulder) {
+      const out = {};
+      for (const key of ARM_CHAIN_KEYS) {
+        if (from[key]) out[key] = JSON.parse(JSON.stringify(from[key]));
+      }
+      if (from.rArm) out.rArm = { ...from.rArm };
+      if (from.lArm) out.lArm = { ...from.lArm };
+      return out;
+    }
+    return _clonePose(PROFILES.tool_caillou.defaultPose);
+  }
+
+  function _buildDefaultPoseForGrip(gripType) {
+    const entry = ZS.FpsGripCalibration?.getEntry?.(gripType);
+    const grip = ZS.getGrip?.(gripType);
+    const twoHanded = entry?.twoHanded || grip?.twoHanded;
+    const out = twoHanded ? _resolveBaseTwoHandArms() : _resolveBaseOneHandArms();
+    out.item = _resolveItemPoseForGrip(gripType, entry);
+    if (twoHanded && grip?.sharedItem) {
+      out.center = { x: 0, y: 0, z: 0, rx: 0, ry: 0, rz: 0 };
+      out.itemScale = grip.itemScale ?? 0.60;
+    }
+    if (twoHanded && grip?.rArm) out.rArm = { ...(out.rArm || {}), ..._clonePose(grip.rArm) };
+    if (twoHanded && grip?.lArm) out.lArm = { ...(out.lArm || {}), ..._clonePose(grip.lArm) };
+    return out;
+  }
+
+  function _twoHandTunerFields(gripType) {
+    const grip = ZS.getGrip?.(gripType);
+    const fields = RCHAIN_FIELDS
+      .concat(_fullMcFields('rArm', 'Bras droit — micro-ajust'))
+      .concat(LCHAIN_FIELDS)
+      .concat(_fullMcFields('lArm', 'Bras gauche — micro-ajust'))
+      .concat(ITEM_FIELDS);
+    if (grip?.sharedItem) {
+      fields.push(
+        ...ROCK_ITEM_FIELDS.filter((f) => f.path.startsWith('center') || f.path === 'itemScale'),
+      );
+    }
+    return fields;
+  }
+
+  function _registerCatalogProfiles() {
+    for (const entry of (ZS.FpsGripCalibration?.listAuto?.() || [])) {
+      if (PROFILES[entry.id]) continue;
+      const grip = ZS.getGrip?.(entry.id);
+      const twoHanded = entry.twoHanded || grip?.twoHanded;
+      PROFILES[entry.id] = {
+        title: `FPS — ${entry.label}`,
+        hint: 'Bras dérivés des calibrages validés · presets partagés · <b>Valider</b> = live',
+        storageKey: ZS.FpsGripCalibration.storageKey(entry.id),
+        gripType: entry.id,
+        equip: entry.id,
+        freezeAnim: true,
+        walkPreview: false,
+        validateItem: entry.id,
+        presetLabel: entry.label,
+        dynamicBase: true,
+        fields: () => (twoHanded ? _twoHandTunerFields(entry.id) : ARM_FIELDS.concat(ITEM_FIELDS)),
+      };
+    }
+  }
+
+  function _ensureDerivedCalibrationsSeeded() {
+    _registerCatalogProfiles();
+    for (const entry of (ZS.FpsGripCalibration?.listAuto?.() || [])) {
+      const key = ZS.FpsGripCalibration.storageKey(entry.id);
+      try {
+        if (localStorage.getItem(key)) continue;
+        localStorage.setItem(key, JSON.stringify(_buildDefaultPoseForGrip(entry.id)));
+      } catch (_) { /* ignore */ }
+    }
+  }
+
+  const DEFAULT_PROFILE_ID = 'empty_hand';
+
+  function _registerCalibrationTools() {
+    ZS.Calibration?.register?.({
+      id: 'fps_arm_tuner',
+      title: 'Calibrage FPS — bras & items',
+      icon: '🎯',
+      desc: 'Pose bras et position des objets en main. Choisir l\'item dans le menu du panneau.',
+      tags: ['fps', 'viewmodel', 'arms'],
+      open: () => ArmTuner.show(DEFAULT_PROFILE_ID),
+      close: () => ArmTuner.hide(),
+      isOpen: () => !!ArmTuner.open,
+    });
   }
 
   function _readChainIntoPose(pose, prefix, chain) {
@@ -430,26 +586,71 @@
       return !!(this.open && this._profile()?.walkPreview);
     },
 
-    show(profileId) {
+    _loadProfilePose(profileId) {
       const profile = PROFILES[profileId];
-      if (!profile || !this._arms) return;
-      if (this.open && this.profileId === profileId) return;
-      if (this.open) this.hide();
-      this._clearShowTimer();
-      _ensurePresetsMigrated();
-      this.profileId = profileId;
-      this.pose = _clonePose(profile.defaultPose);
+      if (!profile) return {};
+      let pose = _resolveProfileDefaultPose(profile);
       try {
         let raw = localStorage.getItem(profile.storageKey);
         if (!raw && profile.legacyStorageKey) raw = localStorage.getItem(profile.legacyStorageKey);
-        if (raw) this.pose = { ...this.pose, ...JSON.parse(raw) };
+        if (raw) pose = { ..._resolveProfileDefaultPose(profile), ...JSON.parse(raw) };
       } catch (_) { /* ignore */ }
-      this.walkPreviewOn = false;
-      this.open = true;
+      return pose;
+    },
+
+    _resolveEquipType(profileId, profile) {
+      if (!profileId || profileId === 'empty_hand' || profileId === 'remote_view') return null;
+      if (profile?.equip) return profile.equip;
+      if (profile?.gripType) return profile.gripType;
+      if (profile?.validateItem && profile.validateItem !== 'empty_hand' && profile.validateItem !== 'remote_view') {
+        return profile.validateItem;
+      }
+      return ZS.getGrip?.(profileId) ? profileId : null;
+    },
+
+    _applyProfileRuntime(profile) {
+      if (!profile) return;
       window.ZS._armTunerActive = !!profile.freezeAnim;
       window.ZS._armTunerWalkPreview = !!profile.walkPreview;
-      if (profile.equip) ZS.setHandItem?.(profile.equip);
-      else if (profile.validateItem === 'remote_view') ZS.setHandItem?.(null);
+    },
+
+    _equipForProfile(profileId, profile) {
+      if (!this._arms) return;
+      this._arms.userData.debugPoseId = null;
+      const type = this._resolveEquipType(profileId, profile);
+      ZS.updateHandItem?.(this._arms, type, { force: true });
+    },
+
+    switchProfile(profileId) {
+      const profile = PROFILES[profileId];
+      if (!profile || !this._arms) return;
+      if (this.profileId === profileId) return;
+      this.profileId = profileId;
+      this.pose = this._loadProfilePose(profileId);
+      this.walkPreviewOn = false;
+      this._applyProfileRuntime(profile);
+      this._equipForProfile(profileId, profile);
+      this._apply();
+      if (this._panel) this._updatePanelForProfile();
+    },
+
+    show(profileId) {
+      const pid = profileId || DEFAULT_PROFILE_ID;
+      const profile = PROFILES[pid];
+      if (!profile || !this._arms) return;
+      if (this.open && this.profileId === pid) return;
+      if (this.open) {
+        this.switchProfile(pid);
+        return;
+      }
+      this._clearShowTimer();
+      _ensurePresetsMigrated();
+      this.profileId = pid;
+      this.pose = this._loadProfilePose(pid);
+      this.walkPreviewOn = false;
+      this.open = true;
+      this._applyProfileRuntime(profile);
+      this._equipForProfile(pid, profile);
       this._showTimer = setTimeout(() => {
         this._showTimer = null;
         if (!this.open) return;
@@ -494,20 +695,26 @@
     _apply() {
       if (!this._arms) return;
       const profile = this._profile();
-      if (!profile) return;
-      if (profile.validateItem === 'remote_view') {
+      const pid = this.profileId;
+      if (!profile || !pid) return;
+      if (pid === 'remote_view') {
         ZS.applyFPSRemoteTune?.(this.pose);
         return;
       }
-      if (profile.gripType) {
-        ZS.applyFPSGripTuneToArms?.(this._arms, profile.gripType, this.pose, { freeze: profile.freezeAnim });
+      if (pid === 'empty_hand') {
+        ZS.applyFPSEmptyTuneToArms?.(this._arms, this.pose);
         return;
       }
-      if (profile.validateItem === 'empty_hand') {
-        ZS.applyFPSEmptyTuneToArms?.(this._arms, this.pose);
-      } else {
+      if (pid === 'tool_torche') {
+        ZS.applyFPSTorchTune?.(this.pose);
         ZS.applyFPSDebugPose?.(this._arms, this.pose);
+        return;
       }
+      if (ZS.getGrip?.(pid)) {
+        ZS.applyFPSGripTuneToArms?.(this._arms, pid, this.pose, { freeze: profile.freezeAnim });
+        return;
+      }
+      ZS.applyFPSDebugPose?.(this._arms, this.pose);
     },
 
     _syncInputs() {
@@ -523,6 +730,43 @@
       }
       const walkCb = this._panel.querySelector('#zs-arm-tuner-walk-preview');
       if (walkCb) walkCb.checked = this.walkPreviewOn;
+    },
+
+    _refreshImportArmsSelect(rootEl) {
+      const root = rootEl || this._panel;
+      const sel = root?.querySelector('#zs-arm-tuner-import-arms');
+      if (!sel) return;
+      const sources = _listValidatedArmSources(this.profileId);
+      sel.innerHTML = sources.length
+        ? '<option value="">— Bras validés d\'un autre profil —</option>'
+        : '<option value="">— Aucune pose validée ailleurs —</option>';
+      for (const s of sources) {
+        const opt = document.createElement('option');
+        opt.value = s.id;
+        opt.textContent = s.label;
+        sel.appendChild(opt);
+      }
+    },
+
+    _refreshProfileSelect(rootEl) {
+      const root = rootEl || this._panel;
+      const sel = root?.querySelector('#zs-arm-tuner-profile');
+      if (!sel) return;
+      const groups = ZS.FpsGripCalibration?.listByCategory?.() || [];
+      sel.innerHTML = '';
+      for (const g of groups) {
+        const og = document.createElement('optgroup');
+        og.label = g.label || g.id;
+        for (const entry of g.items) {
+          if (!PROFILES[entry.id]) continue;
+          const opt = document.createElement('option');
+          opt.value = entry.id;
+          opt.textContent = entry.icon ? `${entry.icon} ${entry.label}` : entry.label;
+          og.appendChild(opt);
+        }
+        if (og.children.length) sel.appendChild(og);
+      }
+      if (this.profileId) sel.value = this.profileId;
     },
 
     _refreshPresetSelect(selectedId, rootEl) {
@@ -544,6 +788,7 @@
       if (selectedId) sel.value = selectedId;
       const countEl = root?.querySelector('#zs-arm-tuner-preset-count');
       if (countEl) countEl.textContent = `${presets.length} preset${presets.length !== 1 ? 's' : ''} (toutes animations)`;
+      this._refreshImportArmsSelect(root);
     },
 
     savePreset(name) {
@@ -578,7 +823,7 @@
       this._setStatus(`Preset « ${label} » sauvegardé.`);
     },
 
-    loadPreset(id) {
+    loadPreset(id, opts = {}) {
       if (!id) {
         this._setStatus('Sélectionnez un preset à charger.');
         return;
@@ -588,14 +833,39 @@
         this._setStatus('Preset introuvable.');
         return;
       }
-      this.pose = _mergePoseForProfile(preset.pose, this.profileId);
+      if (opts.armsOnly) {
+        const out = _clonePose(this.pose);
+        _copyArmChainSections(preset.pose, out);
+        this.pose = out;
+      } else {
+        this.pose = _mergePoseForProfile(preset.pose, this.profileId);
+      }
       this._syncInputs();
       this._apply();
       const src = _profileLabel(preset.sourceProfile);
       const same = preset.sourceProfile === this.profileId;
+      const mode = opts.armsOnly ? ' (bras seulement)' : '';
       this._setStatus(same
-        ? `Preset « ${preset.name} » chargé.`
-        : `Preset « ${preset.name} » chargé (depuis ${src}) — champs compatibles uniquement.`);
+        ? `Preset « ${preset.name} » chargé${mode}.`
+        : `Preset « ${preset.name} » chargé${mode} (depuis ${src}).`);
+    },
+
+    importArmsFromProfile(sourceProfileId) {
+      if (!sourceProfileId) {
+        this._setStatus('Choisissez un profil source.');
+        return;
+      }
+      const pose = _readValidatedPose(sourceProfileId);
+      if (!pose?.shoulder && !pose?.lShoulder) {
+        this._setStatus(`Aucune pose bras validée pour ${_profileLabel(sourceProfileId)}.`);
+        return;
+      }
+      const out = _clonePose(this.pose);
+      _copyArmChainSections(pose, out);
+      this.pose = out;
+      this._syncInputs();
+      this._apply();
+      this._setStatus(`Bras copiés depuis ${_profileLabel(sourceProfileId)} validée.`);
     },
 
     deletePreset(id) {
@@ -613,68 +883,35 @@
       this._setStatus(`Preset « ${preset.name} » supprimé.`);
     },
 
-    _buildPanel() {
-      if (this._panel?.parent) this._panel.parent.remove(this._panel);
+    _updatePanelForProfile() {
       const profile = this._profile();
-      if (!profile) return;
+      if (!profile || !this._panel) return;
+      const hint = this._panel.querySelector('#zs-arm-tuner-hint');
+      if (hint) hint.innerHTML = profile.hint || '';
+      const walkHost = this._panel.querySelector('#zs-arm-tuner-walk-host');
+      if (walkHost) {
+        walkHost.innerHTML = profile.walkPreview
+          ? '<label class="walk-prev"><input type="checkbox" id="zs-arm-tuner-walk-preview"> Preview marche (balancement)</label>'
+          : '';
+        walkHost.querySelector('#zs-arm-tuner-walk-preview')?.addEventListener('change', (e) => {
+          this.walkPreviewOn = !!e.target.checked;
+          this._setStatus(this.walkPreviewOn ? 'Preview marche activée.' : 'Preview repos.');
+        });
+        if (profile.walkPreview) {
+          const walkCb = walkHost.querySelector('#zs-arm-tuner-walk-preview');
+          if (walkCb) walkCb.checked = this.walkPreviewOn;
+        }
+      }
+      this._rebuildFields();
+      this._refreshProfileSelect(this._panel);
+      this._refreshPresetSelect(null, this._panel);
+    },
 
-      const panel = document.createElement('div');
-      panel.id = 'zs-arm-tuner';
-      const walkRow = profile.walkPreview
-        ? '<label class="walk-prev"><input type="checkbox" id="zs-arm-tuner-walk-preview"> Preview marche (balancement)</label>'
-        : '';
-      panel.innerHTML = [
-        '<style>',
-        '#zs-arm-tuner{position:fixed;top:0;right:0;width:min(360px,92vw);height:100vh;',
-        'background:rgba(12,16,24,0.94);color:#e8ecf4;font:12px/1.35 Consolas,Monaco,monospace;',
-        'z-index:13000;overflow:auto;padding:10px 12px 16px;box-sizing:border-box;',
-        'border-left:1px solid rgba(255,255,255,0.12);pointer-events:auto;}',
-        '#zs-arm-tuner h2{margin:0 0 6px;font-size:14px;}',
-        '#zs-arm-tuner .hint{opacity:0.75;margin-bottom:10px;font-size:11px;}',
-        '#zs-arm-tuner .walk-prev{display:block;margin:8px 0;font-size:11px;cursor:pointer;}',
-        '#zs-arm-tuner .sec{margin:10px 0 4px;font-size:10px;text-transform:uppercase;letter-spacing:0.05em;opacity:0.6;}',
-        '#zs-arm-tuner .preset-row{display:flex;flex-direction:column;gap:6px;margin:6px 0 10px;}',
-        '#zs-arm-tuner select,#zs-arm-tuner .preset-name{width:100%;background:#1a2230;color:#fff;border:1px solid #445;',
-        'padding:5px 6px;border-radius:4px;font:inherit;box-sizing:border-box;}',
-        '#zs-arm-tuner .row{display:grid;grid-template-columns:1fr 52px;gap:6px;align-items:center;margin:5px 0;}',
-        '#zs-arm-tuner label{font-size:11px;}',
-        '#zs-arm-tuner input[type=range]{width:100%;}',
-        '#zs-arm-tuner input[type=number]{width:52px;background:#1a2230;color:#fff;border:1px solid #445;padding:2px 4px;border-radius:3px;}',
-        '#zs-arm-tuner .btns{display:flex;flex-wrap:wrap;gap:6px;margin:8px 0;}',
-        '#zs-arm-tuner button{background:#2a4a7a;color:#fff;border:none;padding:6px 10px;border-radius:4px;cursor:pointer;font:inherit;}',
-        '#zs-arm-tuner button.primary{background:#2a7a4a;}',
-        '#zs-arm-tuner button.warn{background:#7a3a2a;}',
-        '#zs-arm-tuner textarea{width:100%;height:120px;background:#0a0e14;color:#9fe8b0;border:1px solid #354;',
-        'border-radius:4px;padding:6px;font:inherit;resize:vertical;}',
-        '#zs-arm-tuner .status{margin-top:8px;padding:6px 8px;background:rgba(40,80,50,0.5);border-radius:4px;min-height:32px;}',
-        '</style>',
-        `<h2>${profile.title}</h2>`,
-        `<div class="hint">${profile.hint}</div>`,
-        '<div class="sec">Presets <span id="zs-arm-tuner-preset-count" style="opacity:0.7;font-weight:normal"></span></div>',
-        '<div class="preset-row">',
-        '  <select id="zs-arm-tuner-presets"></select>',
-        '  <input type="text" id="zs-arm-tuner-preset-name" class="preset-name" placeholder="Nom du preset (ex. bras relâché v2)" maxlength="48">',
-        '</div>',
-        '<div class="btns">',
-        '  <button type="button" data-act="preset-save">💾 Sauver preset</button>',
-        '  <button type="button" data-act="preset-load">📂 Charger</button>',
-        '  <button type="button" class="warn" data-act="preset-delete">🗑 Supprimer</button>',
-        '</div>',
-        walkRow,
-        '<div class="btns">',
-        '  <button type="button" data-act="read">Lire pose actuelle</button>',
-        '  <button type="button" data-act="reset">Réinitialiser</button>',
-        '  <button type="button" class="warn" data-act="close">Retour calibrages</button>',
-        '</div>',
-        '<div id="zs-arm-tuner-fields"></div>',
-        '<div class="btns">',
-        '  <button type="button" class="primary" data-act="validate">Valider la pose</button>',
-        '</div>',
-        '<textarea id="zs-arm-tuner-export" placeholder="JSON validé…"></textarea>',
-        '<div class="status" id="zs-arm-tuner-status">Prêt.</div>',
-      ].join('');
-
-      const fieldsEl = panel.querySelector('#zs-arm-tuner-fields');
+    _rebuildFields() {
+      const profile = this._profile();
+      const fieldsEl = this._panel?.querySelector('#zs-arm-tuner-fields');
+      if (!profile || !fieldsEl) return;
+      fieldsEl.innerHTML = '';
       const allFields = profile.fields();
       let lastSection = '';
       for (const f of allFields) {
@@ -737,11 +974,83 @@
         num.addEventListener('change', () => onChange(num.value));
         slider.addEventListener('input', () => onChange(slider.value));
       }
+    },
+
+    _buildPanel() {
+      if (this._panel?.parent) this._panel.parent.remove(this._panel);
+      const profile = this._profile();
+      if (!profile) return;
+
+      const panel = document.createElement('div');
+      panel.id = 'zs-arm-tuner';
+      panel.innerHTML = [
+        '<style>',
+        '#zs-arm-tuner{position:fixed;top:0;right:0;width:min(360px,92vw);height:100vh;',
+        'background:rgba(12,16,24,0.94);color:#e8ecf4;font:12px/1.35 Consolas,Monaco,monospace;',
+        'z-index:13000;overflow:auto;padding:10px 12px 16px;box-sizing:border-box;',
+        'border-left:1px solid rgba(255,255,255,0.12);pointer-events:auto;}',
+        '#zs-arm-tuner h2{margin:0 0 6px;font-size:14px;}',
+        '#zs-arm-tuner .hint{opacity:0.75;margin-bottom:10px;font-size:11px;}',
+        '#zs-arm-tuner .walk-prev{display:block;margin:8px 0;font-size:11px;cursor:pointer;}',
+        '#zs-arm-tuner .sec{margin:10px 0 4px;font-size:10px;text-transform:uppercase;letter-spacing:0.05em;opacity:0.6;}',
+        '#zs-arm-tuner .preset-row{display:flex;flex-direction:column;gap:6px;margin:6px 0 10px;}',
+        '#zs-arm-tuner select,#zs-arm-tuner .preset-name{width:100%;background:#1a2230;color:#fff;border:1px solid #445;',
+        'padding:5px 6px;border-radius:4px;font:inherit;box-sizing:border-box;}',
+        '#zs-arm-tuner .row{display:grid;grid-template-columns:1fr 52px;gap:6px;align-items:center;margin:5px 0;}',
+        '#zs-arm-tuner label{font-size:11px;}',
+        '#zs-arm-tuner input[type=range]{width:100%;}',
+        '#zs-arm-tuner input[type=number]{width:52px;background:#1a2230;color:#fff;border:1px solid #445;padding:2px 4px;border-radius:3px;}',
+        '#zs-arm-tuner .btns{display:flex;flex-wrap:wrap;gap:6px;margin:8px 0;}',
+        '#zs-arm-tuner button{background:#2a4a7a;color:#fff;border:none;padding:6px 10px;border-radius:4px;cursor:pointer;font:inherit;}',
+        '#zs-arm-tuner button.primary{background:#2a7a4a;}',
+        '#zs-arm-tuner button.warn{background:#7a3a2a;}',
+        '#zs-arm-tuner textarea{width:100%;height:120px;background:#0a0e14;color:#9fe8b0;border:1px solid #354;',
+        'border-radius:4px;padding:6px;font:inherit;resize:vertical;}',
+        '#zs-arm-tuner .status{margin-top:8px;padding:6px 8px;background:rgba(40,80,50,0.5);border-radius:4px;min-height:32px;}',
+        '</style>',
+        '<h2>Calibrage FPS — bras &amp; items</h2>',
+        '<div class="sec">Item à calibrer</div>',
+        '<div class="preset-row"><select id="zs-arm-tuner-profile"></select></div>',
+        `<div class="hint" id="zs-arm-tuner-hint">${profile.hint}</div>`,
+        '<div class="btns">',
+        '  <button type="button" data-act="seed-derived">Générer dérivés manquants</button>',
+        '</div>',
+        '<div class="sec">Presets <span id="zs-arm-tuner-preset-count" style="opacity:0.7;font-weight:normal"></span></div>',
+        '<div class="preset-row">',
+        '  <select id="zs-arm-tuner-presets"></select>',
+        '  <input type="text" id="zs-arm-tuner-preset-name" class="preset-name" placeholder="Nom du preset (ex. bras relâché v2)" maxlength="48">',
+        '</div>',
+        '<div class="btns">',
+        '  <button type="button" data-act="preset-save">💾 Sauver preset</button>',
+        '  <button type="button" data-act="preset-load">📂 Charger</button>',
+        '  <button type="button" data-act="preset-load-arms">📋 Bras du preset</button>',
+        '  <button type="button" class="warn" data-act="preset-delete">🗑 Supprimer</button>',
+        '</div>',
+        '<div class="sec">Importer les bras</div>',
+        '<div class="preset-row">',
+        '  <select id="zs-arm-tuner-import-arms"></select>',
+        '</div>',
+        '<div class="btns">',
+        '  <button type="button" data-act="import-arms-validated">📋 Copier bras validés</button>',
+        '</div>',
+        '<div id="zs-arm-tuner-walk-host"></div>',
+        '<div class="btns">',
+        '  <button type="button" data-act="read">Lire pose actuelle</button>',
+        '  <button type="button" data-act="reset">Réinitialiser</button>',
+        '  <button type="button" class="warn" data-act="close">Retour calibrages</button>',
+        '</div>',
+        '<div id="zs-arm-tuner-fields"></div>',
+        '<div class="btns">',
+        '  <button type="button" class="primary" data-act="validate">Valider la pose</button>',
+        '</div>',
+        '<textarea id="zs-arm-tuner-export" placeholder="JSON validé…"></textarea>',
+        '<div class="status" id="zs-arm-tuner-status">Prêt.</div>',
+      ].join('');
 
       const tuner = this;
-      panel.querySelector('#zs-arm-tuner-walk-preview')?.addEventListener('change', (e) => {
-        tuner.walkPreviewOn = !!e.target.checked;
-        tuner._setStatus(tuner.walkPreviewOn ? 'Preview marche activée.' : 'Preview repos.');
+      panel.querySelector('#zs-arm-tuner-profile')?.addEventListener('change', (e) => {
+        const next = e.target?.value;
+        if (next && next !== tuner.profileId) tuner.switchProfile(next);
       });
       panel.querySelector('#zs-arm-tuner-presets')?.addEventListener('change', (e) => {
         const p = _loadPresets().find((x) => x.id === e.target.value);
@@ -759,17 +1068,23 @@
         const presetName = panel.querySelector('#zs-arm-tuner-preset-name');
         if (act === 'preset-save') tuner.savePreset(presetName?.value);
         if (act === 'preset-load') tuner.loadPreset(presetSel?.value);
+        if (act === 'preset-load-arms') tuner.loadPreset(presetSel?.value, { armsOnly: true });
         if (act === 'preset-delete') tuner.deletePreset(presetSel?.value);
+        if (act === 'import-arms-validated') {
+          const importSel = panel.querySelector('#zs-arm-tuner-import-arms');
+          tuner.importArmsFromProfile(importSel?.value);
+        }
+        if (act === 'seed-derived') tuner.rebuildDerivedDefaults();
         if (act === 'close') {
           tuner.hide();
           ZS.AdminHub?.open?.('calibration');
         }
         if (act === 'reset') {
           const p = tuner._profile();
-          tuner.pose = _clonePose(p?.defaultPose);
+          tuner.pose = _resolveProfileDefaultPose(p);
           tuner._syncInputs();
           tuner._apply();
-          tuner._setStatus('Pose réinitialisée.');
+          tuner._setStatus('Pose réinitialisée (dérivée des calibrages validés).');
         }
         if (act === 'read') {
           const live = _readPoseFromArms(tuner._arms, tuner._profile());
@@ -785,7 +1100,7 @@
 
       document.body.appendChild(panel);
       this._panel = panel;
-      this._refreshPresetSelect(null, panel);
+      this._updatePanelForProfile();
       this._exportEl = panel.querySelector('#zs-arm-tuner-export');
       this._statusEl = panel.querySelector('#zs-arm-tuner-status');
     },
@@ -845,65 +1160,22 @@
     listPresets() {
       return _loadPresets();
     },
+
+    listProfileIds() {
+      return Object.keys(PROFILES);
+    },
+
+    rebuildDerivedDefaults() {
+      _ensureDerivedCalibrationsSeeded();
+      this._setStatus('Calibrages dérivés générés pour les items sans pose sauvegardée.');
+    },
   };
 
   window.ZS = window.ZS || {};
   ZS.ArmTuner = ArmTuner;
 
-  ZS.Calibration?.register?.({
-    id: 'fps_arm_torch',
-    title: 'Bras FPS + torche',
-    icon: '🔥',
-    desc: 'Épaule, coude, poignet et orientation de la torche (vue first-person).',
-    tags: ['fps', 'viewmodel', 'tool_torche'],
-    open: () => ArmTuner.show('tool_torche'),
-    close: () => ArmTuner.hide(),
-    isOpen: () => ArmTuner.open && ArmTuner.profileId === 'tool_torche',
-  });
-
-  ZS.Calibration?.register?.({
-    id: 'fps_arm_empty',
-    title: 'Bras FPS — main vide',
-    icon: '🖐️',
-    desc: 'Pose au repos et balancement marche sans item.',
-    tags: ['fps', 'viewmodel', 'empty_hand'],
-    open: () => ArmTuner.show('empty_hand'),
-    close: () => ArmTuner.hide(),
-    isOpen: () => ArmTuner.open && ArmTuner.profileId === 'empty_hand',
-  });
-
-  ZS.Calibration?.register?.({
-    id: 'fps_arm_rock',
-    title: 'Bras FPS — caillou (2 mains)',
-    icon: '🪨',
-    desc: 'Prise deux mains, offsets MC gauche/droite, taille du caillou.',
-    tags: ['fps', 'tool_caillou'],
-    open: () => ArmTuner.show('tool_caillou'),
-    close: () => ArmTuner.hide(),
-    isOpen: () => ArmTuner.open && ArmTuner.profileId === 'tool_caillou',
-  });
-
-  ZS.Calibration?.register?.({
-    id: 'fps_arm_weapons',
-    title: 'Bras FPS — hachette / outils',
-    icon: '⚔️',
-    desc: 'Référence mêlée & outils (hachette) — presets réutilisables.',
-    tags: ['fps', 'tool_hachette'],
-    open: () => ArmTuner.show('tool_hachette'),
-    close: () => ArmTuner.hide(),
-    isOpen: () => ArmTuner.open && ArmTuner.profileId === 'tool_hachette',
-  });
-
-  ZS.Calibration?.register?.({
-    id: 'fps_remote_arms',
-    title: 'Bras joueur distant (3e personne)',
-    icon: '👥',
-    desc: 'Rotation bras et position main pour les autres joueurs.',
-    tags: ['fps', 'remote'],
-    open: () => ArmTuner.show('remote_view'),
-    close: () => ArmTuner.hide(),
-    isOpen: () => ArmTuner.open && ArmTuner.profileId === 'remote_view',
-  });
-
+  _registerCatalogProfiles();
+  _ensureDerivedCalibrationsSeeded();
+  _registerCalibrationTools();
   _ensurePresetsMigrated();
 }());

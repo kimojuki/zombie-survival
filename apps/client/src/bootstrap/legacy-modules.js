@@ -56,6 +56,7 @@ export const LEGACY_MODULES = [
   '/js/rcon.js',
   '/js/admin-panel.js',
   '/js/calibration-hub.js',
+  '/js/fps_grip_calibration.js',
   '/js/fps_arm_tuner.js',
   '/js/admin-live-decor.js',
   '/js/admin-auth.js',

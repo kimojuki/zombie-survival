@@ -94,8 +94,88 @@ function adminDecorSnapshot(item) {
   return snap;
 }
 
+/**
+ * Crée un item décor prefab posé par un admin (POST /api/admin/decor).
+ * @param {string} prefabId
+ * @param {object} body
+ * @param {string} id
+ * @param {string} [adminUser]
+ */
+function buildAdminDecorCreateItem(prefabId, body, id, adminUser = 'admin') {
+  const pid = String(prefabId || '').trim();
+  if (!pid) throw new Error('prefabId requis');
+  const x = Number(body.x);
+  const z = Number(body.z);
+  if (!Number.isFinite(x) || !Number.isFinite(z)) throw new Error('x et z requis');
+  let rotY = Number(body.rotY);
+  if (!Number.isFinite(rotY)) rotY = 0;
+  let scale = Number(body.scale);
+  if (!Number.isFinite(scale)) scale = 1;
+  scale = Math.max(0.05, Math.min(12, scale));
+
+  const item = {
+    id,
+    kind: 'prefab',
+    type: null,
+    prefabId: pid,
+    x,
+    y: 0,
+    z,
+    rotX: Number.isFinite(Number(body.rotX)) ? Number(body.rotX) : 0,
+    rotY,
+    rotZ: Number.isFinite(Number(body.rotZ)) ? Number(body.rotZ) : 0,
+    scale,
+    createdBy: adminUser,
+    createdAt: Date.now(),
+  };
+
+  if (Number.isFinite(Number(body.groundLift))) item.groundLift = Number(body.groundLift);
+  if (Number.isFinite(Number(body.buildLevel))) {
+    item.buildLevel = Math.max(0, Math.min(8, Math.floor(Number(body.buildLevel))));
+  }
+  if (Number.isFinite(Number(body.baseY))) item.baseY = Number(body.baseY);
+
+  if (pid.startsWith('wreck_')) {
+    const variant = body.wreckVariant != null ? String(body.wreckVariant).slice(0, 24) : '';
+    if (variant === 'burnt') {
+      item.wreckBurnt = true;
+      item.wreckVariant = 'burnt';
+    } else if (variant) {
+      item.wreckVariant = variant;
+    } else if (!item.wreckVariant) {
+      item.wreckVariant = 'rust';
+    }
+    const tilt = Number(body.wreckTilt);
+    const wheels = Number(body.wreckWheels);
+    const sink = Number(body.wreckSink);
+    if (Number.isFinite(tilt)) {
+      item.wreckTilt = tilt;
+      item.rotZ = tilt;
+    } else {
+      item.wreckTilt = 0.12;
+      item.rotZ = 0.12;
+    }
+    if (Number.isFinite(wheels)) item.wreckWheels = wheels;
+    else item.wreckWheels = 2;
+    if (Number.isFinite(sink)) item.wreckSink = sink;
+  }
+
+  if (pid.startsWith('tree_')) {
+    item.treeSeed = Number.isFinite(Number(body.treeSeed))
+      ? Math.floor(Number(body.treeSeed)) & 0xffffff
+      : Math.floor(Math.random() * 0xffffff);
+  }
+
+  if (pid.startsWith('road_barrier_rail') && Number.isFinite(Number(body.railLen))) {
+    item.railLen = Number(body.railLen);
+  }
+
+  return item;
+}
+
 module.exports = {
   applyAdminDecorPatch,
   adminDecorSnapshot,
+  buildAdminDecorCreateItem,
   NUM_FIELDS,
 };

@@ -22,7 +22,7 @@ const worldPersist = createWorldPersist(db, log);
 const qaChecklist = createQaChecklist(pool, DB_CLIENT);
 const SERVER_ROLE = getServerRole();
 const invOps = require('./src/inventory-ops');
-const { applyAdminDecorPatch, adminDecorSnapshot } = require('./src/admin-decor-ops');
+const { applyAdminDecorPatch, adminDecorSnapshot, buildAdminDecorCreateItem } = require('./src/admin-decor-ops');
 const prefabCatalogReviews = require('./src/prefab-catalog-reviews');
 const { invSnapshot: _invDebugSnapshot, logInv: _logInvDebug } = require('./src/inv-debug');
 const INV_DEBUG_SERVER_BUILD = '20260608-sleeper-survival-273';
@@ -622,6 +622,20 @@ function _adminDecorAuth(req, res, perm = 'decor.edit') {
   return _adminAuth(req, res, perm);
 }
 
+function _adminAuthAny(req, res, perms) {
+  const user = authFromHeader(req);
+  if (!user) {
+    res.status(401).json({ ok: false, error: 'Non authentifié' });
+    return null;
+  }
+  const list = Array.isArray(perms) ? perms : [perms];
+  if (!list.some((p) => hasPerm(user.username, p))) {
+    res.status(403).json({ ok: false, error: 'Permission requise' });
+    return null;
+  }
+  return user;
+}
+
 function _findOnlinePlayer(username) {
   const q = String(username || '').trim().toLowerCase();
   if (!q) return null;
@@ -829,6 +843,31 @@ app.delete('/api/admin/roles/:username', async (req, res) => {
   }
 });
 
+app.post('/api/admin/decor', async (req, res) => {
+  const user = _adminDecorAuth(req, res);
+  if (!user) return;
+  const prefabId = String(req.body?.prefabId || '').trim();
+  if (!prefabId) return res.status(400).json({ ok: false, error: 'prefabId requis' });
+  try {
+    if (!decorPrefabCatalogCache.length) await _reloadDecorPrefabCatalog();
+    if (!decorPrefabs.includes(prefabId)) {
+      return res.status(400).json({ ok: false, error: `Prefab inconnu: ${prefabId}` });
+    }
+    const id = `decor_${decorSeq++}`;
+    const item = buildAdminDecorCreateItem(prefabId, req.body || {}, id, user.username);
+    decorItems.set(id, item);
+    worldPersist?.scheduleUpsertDecor(item);
+    io.emit('decor-item-spawn', item);
+    log.info('admin', 'decor created', { id, prefabId, by: user.username });
+    res.json({ ok: true, item: adminDecorSnapshot(item) });
+  } catch (err) {
+    const msg = err.message || 'Erreur création';
+    if (msg.includes('requis')) return res.status(400).json({ ok: false, error: msg });
+    log.error('admin', 'decor create failed', { err: msg, prefabId });
+    res.status(500).json({ ok: false, error: 'Erreur serveur' });
+  }
+});
+
 app.get('/api/admin/decor/:id', (req, res) => {
   const user = _adminDecorAuth(req, res);
   if (!user) return;
@@ -876,7 +915,7 @@ app.delete('/api/admin/decor/:id', (req, res) => {
 });
 
 app.get('/api/admin/prefab-catalog', async (req, res) => {
-  const user = _adminAuth(req, res, 'prefab.catalog');
+  const user = _adminAuthAny(req, res, ['prefab.catalog', 'decor.edit']);
   if (!user) return;
   try {
     const mod = await import(DECOR_PREFAB_CATALOG_URL);

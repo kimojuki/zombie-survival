@@ -114,6 +114,7 @@ API client : `ZS.CampTextures.load(url, repeatX, repeatY)` et `ZS.CampTextures.m
 Pose in-game / admin :
 - **Prefabs** : `ZS.spawnDecorPrefab(scene, prefabId, x, y, z)` — liste via `ZS.listDecorPrefabs()`
 - **Items posés** : `ZS.spawnDecorItem(scene, type, x, y, z)` — réutilise `getItemModel()` (loot équipable ≠ prefab bois/toile)
+- **Éditeur décor live** : F8 → Calibrages → `admin-live-decor.js` — catalogue prefabs, preview raycast (`ZS.raycastViewToGround`), pose `POST /api/admin/decor`, calibrage `PATCH /api/admin/decor/:id`
 - **Sentiers (refonte)** : `proc_roads.js` génère le tracé (`buildTrailTowardRoad`) ; `ZS.Trails.buildMesh` + jonction `RoadNetwork` — voir [docs/ROAD_NETWORK.md](ROAD_NETWORK.md)
 - **RCON** : `decoradd prefab …` — voir [docs/RCON.md](RCON.md)
 

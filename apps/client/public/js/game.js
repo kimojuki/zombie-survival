@@ -244,6 +244,22 @@
   }
   ZS.pickAdminDecorRay = _pickAdminDecorRay;
 
+  /** Point de pose admin : visée réticule → sol, sinon devant le joueur. */
+  function _pickAdminDecorPlacement(maxDist = 80) {
+    raycaster.setFromCamera(screenCenter, camera);
+    const hit = ZS.raycastViewToGround?.(raycaster, maxDist);
+    const yaw = state.camera.yaw;
+    if (hit) return { x: hit.x, y: hit.y, z: hit.z, rotY: yaw, fromRay: true };
+    const dist = 3.2;
+    const x = state.player.x - Math.sin(yaw) * dist;
+    const z = state.player.z - Math.cos(yaw) * dist;
+    const y = (ZS.getDecorGroundHeight
+      ? ZS.getDecorGroundHeight(x, z)
+      : (ZS.getTerrainHeight ? ZS.getTerrainHeight(x, z) : 0));
+    return { x, y, z, rotY: yaw, fromRay: false };
+  }
+  ZS.pickAdminDecorPlacement = _pickAdminDecorPlacement;
+
   // Position camera at spawn before first render
   state.player.y = (ZS.getDecorGroundHeight
     ? ZS.getDecorGroundHeight(state.player.x, state.player.z)
@@ -883,6 +899,7 @@
 
   function attack() {
     if (state.player.dead) return;
+    if (ZS.AdminLiveDecor?.isPlacing?.()) return;
     if (ZS.SpawnIntro?.blocksInput?.()) return;
     if (ZS.Loading?.isActive?.() || !ZS.Network?.isSpawnReady?.()) return;
     const item = ZS.Inventory.getActiveItem();
@@ -1251,18 +1268,34 @@
     if (!pointerLocked) return;
     if (_blocksPointerLock(e.target)) return;
     if (e.button === 2) {
+      if (ZS.AdminLiveDecor?.tryCancelOnRightClick?.()) {
+        e.preventDefault();
+        return;
+      }
       if (_placeHeldStructure()) e.preventDefault();
       return;
     }
     if (e.button !== 0) return;
+    if (ZS.AdminLiveDecor?.tryPlaceOnClick?.()) {
+      e.preventDefault();
+      return;
+    }
     attack();
   });
   document.addEventListener('contextmenu', (e) => {
     if (!pointerLocked) return;
+    if (ZS.AdminLiveDecor?.isPlacing?.()) {
+      e.preventDefault();
+      return;
+    }
     const item = ZS.Inventory.getActiveItem();
     const def = item ? ZS.ITEMS[item.type] : null;
     if (def?.category === 'structure') e.preventDefault();
   });
+  document.addEventListener('wheel', (e) => {
+    if (!pointerLocked) return;
+    if (ZS.AdminLiveDecor?.onWheel?.(e)) e.preventDefault();
+  }, { passive: false });
   document.addEventListener('keydown', (e) => {
     if (ZS.shortcutsBlocked?.(e) || ZS.Chat?.isOpen?.()) return;
     if (e.code === 'KeyR' && state.onReload) state.onReload();
@@ -1370,6 +1403,7 @@
     }
     ZS.SpawnIntro?.tick?.(dt);
     ZS.Scenario?.tick?.(dt);
+    ZS.AdminLiveDecor?.tick?.();
     const _tunerWalk = ZS.ArmTuner?.allowsWalkPreview?.();
     if (!ZS._armTunerActive || _tunerWalk) {
       ZS.tickFPSArms(fpsArms, dt, {

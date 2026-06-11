@@ -26,6 +26,43 @@ Chaque feature ou refonte doit laisser une trace pour l'équipe :
 
 Index complet : [README.md](README.md#documentation-à-lire-avant-un-push--review)
 
+### Completed — éditeur décor : catalogue + pose in-game (2026-06-11)
+
+- **Catalogue** dans l’éditeur décor (F8 → Calibrages → Édition décor monde) : recherche, filtre catégorie, liste prefabs depuis `/api/admin/prefab-catalog`.
+- **Preview** fantôme sous le réticule (raycast terrain) ; molette = rotation ; clic gauche = pose ; clic droit = annuler.
+- **API** `POST /api/admin/decor` — création prefab live (sync `decor-item-spawn`).
+- **Suppression** depuis l’onglet Modifier (permission `decor.delete`).
+- Fichiers : `admin-live-decor.js`, `admin-decor-ops.js`, `world.js` (`raycastViewToGround`), `game.js`, `index.js`.
+- **Doc** : `docs/RCON.md` (POST + workflow in-game), `docs/ARCHITECTURE.md`.
+- Version client : `20260611-decor-editor-place-catalog`.
+
+### Completed — éditeur décor : curseurs fins (2026-06-11)
+
+- **Bug** : barres X/Z sur ±500 m → un pixel de curseur téléportait l'objet.
+- **Fix** : fenêtre fine centrée sur la valeur (±4 m X/Z, ±2 m Y, etc.) · champ numérique pour coord exacte.
+- **Client version** : `20260611-decor-editor-fine-sliders`.
+
+### Completed — calibrage FPS unifié (dropdown interne) (2026-06-11)
+
+- **UX admin** : une seule carte F8 « Calibrage FPS — bras & items » au lieu de 30+ menus.
+- **Tuner** : menu déroulant par catégorie (référence, outils, mêlée, nourriture…) dans le panneau · `switchProfile` sans fermer.
+- **Client version** : `20260611-fps-tuner-unified`.
+- **Doc** : `docs/RCON.md` (hub calibrages), `fps_grip_calibration.js` catalogue grips.
+
+### Completed — catalogue calibrages FPS tous items (2026-06-11)
+
+- **Catalogue** : `fps_grip_calibration.js` — 30+ grips (outils, mêlée, nourriture, médical, armes) dérivés des poses validées (hachette / main vide / caillou).
+- **Dérivation** : bras 1 main ← hachette > main vide > torche · bras 2 mains ← caillou · item sibling (`hache_pierre` ← hachette, etc.).
+- **Admin F8** : calibrages groupés par catégorie, filtre recherche, bouton « Générer dérivés manquants ».
+- **Live** : `loadFPSValidatedPoses` charge toutes les clés `zs_arm_tune_*` + legacy.
+- **Client version** : `20260611-fps-grip-catalog`.
+
+### Completed — tuner FPS : import bras entre presets (2026-06-11)
+
+- **Bug** : charger preset « main vide » sur profil hachette ne positionnait pas les bras (`_applyGripPose` procédural écrasait la pose directe).
+- **Fix** : `_FPS_GRIP_CHAIN_POSES` pour outils 1 main · `applyFPSGripTuneToArms` via pose directe · merge presets copie toujours les sections bras · boutons « Bras du preset » et « Copier bras validés ».
+- **Client version** : `20260611-tuner-preset-arms`.
+
 ### Completed — fix persistance arbres abattus (2026-06-11)
 
 - **Bug** : arbre coupé + disparu en session → au reload réapparaît debout ; un coup le fait tomber (serveur `woodRemaining=0`, client respawn debout).

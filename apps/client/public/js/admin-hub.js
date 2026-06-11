@@ -645,7 +645,7 @@
 
       if (params.get('armTuner') === '1' || params.get('adminCal')) {
 
-        const cal = params.get('adminCal') || 'fps_arm_torch';
+        const cal = params.get('adminCal') || 'fps_arm_tuner';
 
         setTimeout(() => {
 

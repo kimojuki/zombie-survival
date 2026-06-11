@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { applyAdminDecorPatch, adminDecorSnapshot } from '../apps/server/src/admin-decor-ops.js';
+import { applyAdminDecorPatch, adminDecorSnapshot, buildAdminDecorCreateItem } from '../apps/server/src/admin-decor-ops.js';
 
 test('applyAdminDecorPatch — position et rotY', () => {
   const item = { x: 0, z: 0, rotY: 0, scale: 1 };
@@ -20,4 +20,21 @@ test('adminDecorSnapshot — résumé coffre', () => {
   });
   assert.equal(snap.storageSummary.filled, 1);
   assert.equal(snap.storageSummary.capacity, 2);
+});
+
+test('buildAdminDecorCreateItem — prefab camp + arbre', () => {
+  const camp = buildAdminDecorCreateItem('spawn_campfire', { x: 12.5, z: -8.2, rotY: 1.1, scale: 1 }, 'decor_99', 'builder');
+  assert.equal(camp.prefabId, 'spawn_campfire');
+  assert.equal(camp.x, 12.5);
+  assert.equal(camp.rotY, 1.1);
+  assert.equal(camp.createdBy, 'builder');
+  const tree = buildAdminDecorCreateItem('tree_oak', { x: 0, z: 0, rotY: 0 }, 'decor_100', 'admin');
+  assert.ok(Number.isFinite(tree.treeSeed));
+  const wreck = buildAdminDecorCreateItem('wreck_sedan', { x: 1, z: 2, rotY: 0 }, 'decor_101', 'admin');
+  assert.equal(wreck.wreckVariant, 'rust');
+  assert.equal(wreck.wreckWheels, 2);
+});
+
+test('buildAdminDecorCreateItem — x/z requis', () => {
+  assert.throws(() => buildAdminDecorCreateItem('spawn_stone', { x: NaN, z: 0 }, 'd1'), /x et z requis/);
 });

@@ -25,8 +25,23 @@ function _arr(ctx, key) {
 function createRcon(ctx) {
   const commands = new Map();
 
-  function register(name, desc, fn) {
-    commands.set(name.toLowerCase(), { name, desc, fn });
+  function register(name, desc, fn, opts = {}) {
+    commands.set(name.toLowerCase(), {
+      name,
+      desc,
+      fn,
+      perm: opts.perm || 'rcon',
+      dangerous: !!opts.dangerous,
+    });
+  }
+
+  function _checkCommandPerm(entry, meta) {
+    if (meta.passwordAuth) return null;
+    const perms = meta.resolvePerms?.(meta.player?.username) || [];
+    if (perms.includes('*')) return null;
+    const need = entry.dangerous ? 'rcon.dangerous' : entry.perm;
+    if (!perms.includes(need)) return `Permission requise : ${need}`;
+    return null;
   }
 
   function parseArgs(line) {
@@ -320,7 +335,7 @@ function createRcon(ctx) {
     ctx.zombies.clear();
     for (const id of ids) ctx.io.emit('zombie-die', id);
     return ok(`${ids.length} zombie(s) supprimé(s)`);
-  });
+  }, { dangerous: true });
 
   register('spawnzombies', 'Fait apparaître N zombies aléatoires [count]', (args) => {
     const n = Math.max(1, Math.min(200, parseInt(args[1], 10) || 1));
@@ -559,7 +574,7 @@ function createRcon(ctx) {
     target.health = 0;
     ctx.handlePlayerDeath?.(target);
     return ok(`${target.username} tué`);
-  });
+  }, { dangerous: true });
 
   register('give', 'Donne un objet give <joueur> <type> [qty]', (args) => {
     const target = findPlayer(args[1]);
@@ -742,6 +757,12 @@ function createRcon(ctx) {
       if (!n && !reset) return ok('Panneaux plage déjà présents — rien à ajouter.');
       return ok(`${n} panneau(x) plage ${reset ? 'repositionné(s)' : 'ajouté(s)'} et synchronisé(s).`);
     }
+    if (kind === 'beach') {
+      if (!ctx.ensureBeachProps) return fail('ensureBeachProps indisponible');
+      const n = await ctx.ensureBeachProps({ broadcast: true, reset });
+      if (!n && !reset) return ok('Props plage déjà présents — rien à ajouter.');
+      return ok(`${n} prop(s) plage ${reset ? 'repositionné(s)' : 'ajouté(s)'} et synchronisé(s).`);
+    }
     if (kind === 'barriers') {
       if (!ctx.ensureRoadBarriers) return fail('ensureRoadBarriers indisponible');
       const n = await ctx.ensureRoadBarriers({ broadcast: true, reset });
@@ -763,7 +784,7 @@ function createRcon(ctx) {
       if (!n && !reset) return ok('POI S01 déjà présents — rien à ajouter.');
       return ok(`${n} décor(s) S01 ${reset ? 'repositionné(s)' : 'ajouté(s)'} et synchronisé(s).`);
     }
-    return fail('Usage: decorseed wrecks|trees|palms|signs|barriers|rocks|s01 [reset]');
+    return fail('Usage: decorseed wrecks|trees|palms|signs|beach|barriers|rocks|s01 [reset]');
   });
 
   register('decoritems', 'Liste les items posables comme décor [filtre]', (args) => {
@@ -790,7 +811,7 @@ function createRcon(ctx) {
     if (r.ground) parts.push(`${r.ground} objet(s) au sol`);
     if (!parts.length) return ok('Carte déjà propre — rien à retirer (seed immuable conservé).');
     return ok(`Map wipée: ${parts.join(', ')}. Seed monde (arbres, plage, panneaux…) conservé.`);
-  });
+  }, { dangerous: true });
 
   register('decorremove', 'Retire un décor decorremove <id|nearest>', (args, meta) => {
     const q = (args[1] || 'nearest').toLowerCase();
@@ -888,6 +909,8 @@ function createRcon(ctx) {
     const cmd = (args[0] || '').toLowerCase();
     const entry = commands.get(cmd);
     if (!entry) return fail(`Commande inconnue: ${cmd} — tapez "help"`);
+    const permErr = _checkCommandPerm(entry, meta);
+    if (permErr) return fail(permErr);
     try {
       const result = await entry.fn(args, meta);
       if (result && typeof result === 'object' && 'lines' in result) return result;

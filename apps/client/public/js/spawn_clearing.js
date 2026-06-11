@@ -1062,6 +1062,287 @@
     g.add(mirror);
   }
 
+  /**
+   * Horloge murale cabane — cadran face −Z, pendule, dos +Z au mur.
+   * Cadran dans un sous-groupe local (plan XY, normale −Z).
+   */
+  function _buildCabinWallClock(parent, x, y, z, ry) {
+    const M = _campMats();
+    const g = new THREE.Group();
+    g.position.set(x, y, z);
+    g.rotation.y = ry || 0;
+    parent.add(g);
+
+    const frameMat = M?.tableLeg?.() || new THREE.MeshLambertMaterial({ color: 0x4a3224 });
+    const faceMat = new THREE.MeshLambertMaterial({ color: 0xf0ece4, depthWrite: false });
+    const metal = M?.metal?.() || new THREE.MeshLambertMaterial({ color: 0x5a5e64 });
+    const handMat = new THREE.MeshLambertMaterial({ color: 0x1a1a1a });
+
+    const CY = 1.44;
+    const backZ = 0.028;
+    const DIAL_Y = CY + 0.06;
+    const DIAL_Z = -0.010;
+
+    const back = _add(g, new THREE.BoxGeometry(0.28, 0.46, 0.016), frameMat, 0, CY - 0.02, backZ);
+    back.castShadow = true;
+
+    const dial = new THREE.Group();
+    dial.position.set(0, DIAL_Y, DIAL_Z);
+    g.add(dial);
+
+    const face = new THREE.Mesh(new THREE.CircleGeometry(0.108, 24), faceMat);
+    face.rotation.y = Math.PI;
+    face.renderOrder = 0;
+    dial.add(face);
+
+    const bezel = new THREE.Mesh(new THREE.TorusGeometry(0.112, 0.013, 8, 24), frameMat);
+    bezel.position.z = 0.001;
+    bezel.castShadow = true;
+    dial.add(bezel);
+
+    const TICK_R = 0.090;
+    for (let i = 0; i < 12; i++) {
+      const a = (i / 12) * Math.PI * 2;
+      const len = i % 3 === 0 ? 0.018 : 0.010;
+      const tick = new THREE.Mesh(new THREE.BoxGeometry(0.005, len, 0.003), handMat);
+      tick.position.set(Math.sin(a) * TICK_R, Math.cos(a) * TICK_R, -0.002);
+      tick.rotation.z = -a;
+      tick.renderOrder = 4;
+      dial.add(tick);
+    }
+
+    const handsRoot = new THREE.Group();
+    handsRoot.rotation.y = Math.PI;
+    handsRoot.position.z = -0.004;
+    dial.add(handsRoot);
+
+    const hourPivot = new THREE.Group();
+    const hourMesh = new THREE.Mesh(new THREE.BoxGeometry(0.011, 0.038, 0.006), handMat);
+    hourMesh.position.y = 0.019;
+    hourMesh.renderOrder = 6;
+    hourPivot.add(hourMesh);
+    handsRoot.add(hourPivot);
+
+    const minutePivot = new THREE.Group();
+    minutePivot.position.z = -0.001;
+    const minuteMesh = new THREE.Mesh(new THREE.BoxGeometry(0.009, 0.054, 0.006), handMat);
+    minuteMesh.position.y = 0.027;
+    minuteMesh.renderOrder = 7;
+    minutePivot.add(minuteMesh);
+    handsRoot.add(minutePivot);
+
+    const pin = new THREE.Mesh(new THREE.CylinderGeometry(0.007, 0.007, 0.007, 8), metal);
+    pin.rotation.x = Math.PI / 2;
+    pin.position.z = -0.007;
+    pin.renderOrder = 8;
+    dial.add(pin);
+
+    const pendulumHousing = _add(g, new THREE.BoxGeometry(0.09, 0.12, 0.020), frameMat, 0, CY - 0.18, 0);
+    pendulumHousing.castShadow = true;
+
+    const pendulumPivot = new THREE.Group();
+    pendulumPivot.position.set(0, CY - 0.11, -0.002);
+    const pendulumRod = new THREE.Mesh(new THREE.BoxGeometry(0.010, 0.09, 0.005), metal);
+    pendulumRod.position.y = -0.045;
+    pendulumRod.castShadow = true;
+    pendulumPivot.add(pendulumRod);
+    const pendulumBob = new THREE.Mesh(new THREE.SphereGeometry(0.022, 8, 6), metal);
+    pendulumBob.position.y = -0.09;
+    pendulumBob.castShadow = true;
+    pendulumPivot.add(pendulumBob);
+    g.add(pendulumPivot);
+
+    const cleat = _add(g, new THREE.BoxGeometry(0.12, 0.024, 0.012), frameMat, 0, CY - 0.28, backZ);
+    cleat.castShadow = true;
+
+    const wt = ZS.getWorldTime?.() ?? 0.3;
+    const clockEntry = { hourHand: hourPivot, minuteHand: minutePivot, pendulum: pendulumPivot };
+    if (ZS.applyWallClockHands) ZS.applyWallClockHands([clockEntry], wt);
+    if (ZS.registerWallClock) ZS.registerWallClock(clockEntry);
+  }
+
+  /**
+   * Débris de naufrage (plage) — planches, corde, filet, coin de caisse.
+   * Pivot sol · face détail −Z · ~1,0 × 0,9 m.
+   */
+  function _buildBeachWreckDebris(parent, x, y, z, ry) {
+    const M = _campMats();
+    const g = new THREE.Group();
+    g.position.set(x, y, z);
+    g.rotation.y = ry || 0;
+    parent.add(g);
+
+    const woodBleach = M?.woodFine?.(0xc8b090) || new THREE.MeshLambertMaterial({ color: 0xc8b090 });
+    const woodWet = M?.woodFine?.(0x8a6848) || new THREE.MeshLambertMaterial({ color: 0x8a6848 });
+    const rope = M?.strap?.() || new THREE.MeshLambertMaterial({ color: 0x9a8860 });
+    const net = new THREE.MeshLambertMaterial({ color: 0x8a9aa8, side: THREE.DoubleSide });
+    const metal = M?.metal?.() || new THREE.MeshLambertMaterial({ color: 0x5a5e64 });
+
+    const plankA = _add(g, new THREE.BoxGeometry(0.92, 0.028, 0.14), woodBleach, 0.04, 0.05, 0.02, 0.08, 0.22, 0.04);
+    plankA.receiveShadow = true;
+
+    const plankB = _add(g, new THREE.BoxGeometry(0.58, 0.024, 0.12), woodWet, -0.12, 0.11, -0.06, -0.12, -0.35, 0.18);
+    const plankC = _add(g, new THREE.BoxGeometry(0.34, 0.020, 0.09), woodBleach, 0.28, 0.07, -0.14, 0.22, 0.55, -0.08);
+
+    const splinter = _add(g, new THREE.BoxGeometry(0.18, 0.014, 0.05), woodWet, -0.32, 0.04, 0.18, 0.05, 0.8, 0.12);
+
+    const crateCorner = _add(g, new THREE.BoxGeometry(0.22, 0.16, 0.20), woodWet, -0.28, 0.08, 0.12);
+    _add(g, new THREE.BoxGeometry(0.22, 0.04, 0.04), woodBleach, -0.28, 0.18, 0.22);
+    _add(g, new THREE.BoxGeometry(0.04, 0.16, 0.20), woodBleach, -0.39, 0.08, 0.12);
+
+    const ropeCoil = _add(g, new THREE.TorusGeometry(0.11, 0.022, 6, 14), rope, 0.22, 0.04, -0.08);
+    ropeCoil.rotation.x = Math.PI / 2;
+    ropeCoil.rotation.z = 0.4;
+    _add(g, new THREE.CylinderGeometry(0.034, 0.038, 0.06, 8), rope, 0.22, 0.04, -0.08);
+
+    const sail = new THREE.Mesh(new THREE.PlaneGeometry(0.42, 0.28), net);
+    sail.position.set(0.08, 0.14, -0.18);
+    sail.rotation.set(-0.55, 0.15, 0.22);
+    sail.castShadow = true;
+    sail.receiveShadow = true;
+    g.add(sail);
+    const sailFold = new THREE.Mesh(new THREE.PlaneGeometry(0.22, 0.16), net);
+    sailFold.position.set(-0.06, 0.09, -0.12);
+    sailFold.rotation.set(-0.35, -0.4, 0.1);
+    sailFold.castShadow = true;
+    g.add(sailFold);
+
+    _add(g, new THREE.CylinderGeometry(0.018, 0.018, 0.09, 6), metal, 0.38, 0.06, 0.06, Math.PI / 2, 0, 0);
+    _add(g, new THREE.SphereGeometry(0.028, 6, 5), metal, 0.41, 0.03, 0.08);
+
+    const sandBurial = _add(g, new THREE.BoxGeometry(0.78, 0.03, 0.52),
+      new THREE.MeshLambertMaterial({ color: 0xd8c898 }), 0.02, 0.015, 0.04);
+    sandBurial.receiveShadow = true;
+    sandBurial.castShadow = false;
+  }
+
+  /**
+   * Bois flotté (plage) — rondin échoué + branche, axe vers l'ouest (sentier).
+   * Pivot sol · ~1,4 m — repère naturel bouche du sentier.
+   */
+  function _buildBeachDriftwood(parent, x, y, z, ry) {
+    const M = _campMats();
+    const g = new THREE.Group();
+    g.position.set(x, y, z);
+    g.rotation.y = ry || 0;
+    parent.add(g);
+
+    const wood = M?.woodFine?.(0xc8b088) || new THREE.MeshLambertMaterial({ color: 0xc8b088 });
+    const woodDark = M?.woodFine?.(0x9a7858) || new THREE.MeshLambertMaterial({ color: 0x9a7858 });
+
+    const main = _add(g, new THREE.CylinderGeometry(0.055, 0.10, 1.38, 7), wood, 0.02, 0.075, 0.01, 0.06, 0, Math.PI / 2);
+    main.scale.set(1, 0.92, 1);
+    const knot = _add(g, new THREE.SphereGeometry(0.07, 6, 5), woodDark, -0.38, 0.08, -0.04);
+    knot.scale.set(1.1, 0.7, 0.9);
+    _add(g, new THREE.CylinderGeometry(0.022, 0.038, 0.48, 6), woodDark, 0.48, 0.085, 0.14, 0.25, 0.35, Math.PI / 2.4);
+    _add(g, new THREE.CylinderGeometry(0.018, 0.028, 0.22, 5), wood, 0.62, 0.07, -0.08, -0.15, 0.9, Math.PI / 3);
+
+    const sand = _add(g, new THREE.BoxGeometry(0.72, 0.02, 0.28),
+      new THREE.MeshLambertMaterial({ color: 0xd8c898 }), 0.04, 0.01, 0.02);
+    sand.receiveShadow = true;
+    sand.castShadow = false;
+  }
+
+  /**
+   * Affaires échouées (plage) — sac mouillé, gourde, sandale, casquette.
+   * Pivot sol · détail −Z · ~0,65 m — trace personnelle sur le rivage.
+   */
+  function _buildBeachWashedGear(parent, x, y, z, ry) {
+    const M = _campMats();
+    const g = new THREE.Group();
+    g.position.set(x, y, z);
+    g.rotation.y = ry || 0;
+    parent.add(g);
+
+    // Teintes claires : canvas × couleur sombre = sac illisible en aperçu catalogue.
+    const bagBody = M?.canvas?.(0x7a8c6e) || new THREE.MeshLambertMaterial({ color: 0x7a8c6e });
+    const bagFlap = M?.canvas?.(0x8a9c7a) || new THREE.MeshLambertMaterial({ color: 0x8a9c7a });
+    const strap = new THREE.MeshLambertMaterial({ color: 0x5a6458 });
+    const plastic = new THREE.MeshLambertMaterial({ color: 0x9ab8c8 });
+    const capMat = new THREE.MeshLambertMaterial({ color: 0x3a4a38 });
+    const rubber = new THREE.MeshLambertMaterial({ color: 0x4a5858 });
+
+    const bag = _add(g, new THREE.BoxGeometry(0.36, 0.10, 0.28), bagBody, -0.04, 0.05, 0.02, 0.12, 0.18, 0.05);
+    const bagOpen = _add(g, new THREE.BoxGeometry(0.30, 0.06, 0.22), bagFlap, -0.02, 0.11, -0.04, -0.45, 0.2, 0);
+    _add(g, new THREE.BoxGeometry(0.05, 0.02, 0.24), strap, -0.20, 0.06, 0.04, 0.1, 0.3, 0);
+    _add(g, new THREE.BoxGeometry(0.04, 0.03, 0.08), strap, 0.08, 0.08, 0.16, 0.2, -0.2, 0.15);
+
+    const bottle = _add(g, new THREE.CylinderGeometry(0.035, 0.042, 0.20, 10), plastic, 0.20, 0.10, -0.10, 0.08, 0.4, 0.12);
+    _add(g, new THREE.CylinderGeometry(0.022, 0.022, 0.04, 8),
+      new THREE.MeshLambertMaterial({ color: 0x4a90b8 }), 0.20, 0.21, -0.10, 0.08, 0.4, 0.12);
+    const water = _add(g, new THREE.CylinderGeometry(0.030, 0.036, 0.11, 10),
+      new THREE.MeshLambertMaterial({ color: 0x6a9ab0, transparent: true, opacity: 0.55 }),
+      0.20, 0.08, -0.10, 0.08, 0.4, 0.12);
+    water.castShadow = false;
+
+    const sandal = _add(g, new THREE.BoxGeometry(0.22, 0.03, 0.10), rubber, 0.06, 0.025, 0.18, 0.05, -0.25, 0);
+    _add(g, new THREE.BoxGeometry(0.04, 0.025, 0.06), rubber, 0.02, 0.04, 0.18, 0.1, -0.25, 0);
+    _add(g, new THREE.BoxGeometry(0.04, 0.025, 0.06), rubber, 0.14, 0.04, 0.18, 0.1, -0.25, 0);
+
+    const cap = _add(g, new THREE.CylinderGeometry(0.10, 0.11, 0.05, 10), capMat, -0.18, 0.03, -0.14, 0.15, 0.55, 0);
+    const brim = _add(g, new THREE.CylinderGeometry(0.13, 0.13, 0.012, 12), capMat, -0.18, 0.02, -0.15, 0.12, 0.55, 0);
+
+    const sand = _add(g, new THREE.BoxGeometry(0.52, 0.02, 0.40),
+      new THREE.MeshLambertMaterial({ color: 0xd8c898 }), 0.02, 0.008, 0.04);
+    sand.receiveShadow = true;
+    sand.castShadow = false;
+  }
+
+  /**
+   * Porte-manteau cabane — planche murale + 4 patères, veste et casquette.
+   * Dos +Z au mur ; patères vers −Z.
+   */
+  function _buildCabinCoatRack(parent, x, y, z, ry) {
+    const M = _campMats();
+    const g = new THREE.Group();
+    g.position.set(x, y, z);
+    g.rotation.y = ry || 0;
+    parent.add(g);
+
+    const frameMat = M?.tableLeg?.() || new THREE.MeshLambertMaterial({ color: 0x4a3224 });
+    const iron = new THREE.MeshLambertMaterial({ color: 0x5a5e64 });
+    const coatMat = M?.canvas?.(0x3d4a32) || new THREE.MeshLambertMaterial({ color: 0x3d4a32 });
+    const capMat = new THREE.MeshLambertMaterial({ color: 0x4a3828 });
+
+    const backZ = 0.025;
+    const plank = _add(g, new THREE.BoxGeometry(0.38, 1.08, 0.022), frameMat, 0, 0.92, backZ);
+    plank.castShadow = true;
+    const capRail = _add(g, new THREE.BoxGeometry(0.40, 0.024, 0.026), frameMat, 0, 1.48, backZ);
+    capRail.castShadow = true;
+
+    const hookXs = [-0.13, -0.04, 0.06, 0.15];
+    const hookYs = [1.32, 1.18, 1.02, 0.86];
+    for (let i = 0; i < hookXs.length; i++) {
+      const hx = hookXs[i];
+      const hy = hookYs[i];
+      const base = _add(g, new THREE.BoxGeometry(0.028, 0.018, 0.012), iron, hx, hy, backZ - 0.004);
+      const hook = _add(g, new THREE.TorusGeometry(0.022, 0.006, 5, 10), iron, hx, hy - 0.02, backZ - 0.03);
+      hook.rotation.x = Math.PI / 2;
+      hook.rotation.z = Math.PI;
+    }
+
+    const coat = _add(g, new THREE.BoxGeometry(0.34, 0.52, 0.04), coatMat, 0.02, 0.78, -0.05);
+    coat.rotation.x = 0.06;
+    coat.castShadow = true;
+    const coatL = _add(g, new THREE.BoxGeometry(0.08, 0.38, 0.03), coatMat, -0.14, 0.62, -0.06);
+    coatL.rotation.z = 0.22;
+    coatL.rotation.x = 0.08;
+    const coatR = _add(g, new THREE.BoxGeometry(0.08, 0.36, 0.03), coatMat, 0.16, 0.60, -0.055);
+    coatR.rotation.z = -0.18;
+    coatR.rotation.x = 0.07;
+
+    const cap = _add(g, new THREE.CylinderGeometry(0.09, 0.10, 0.05, 10), capMat, -0.12, 1.36, -0.04);
+    cap.rotation.x = 0.15;
+    cap.castShadow = true;
+    const capBrim = _add(g, new THREE.CylinderGeometry(0.11, 0.11, 0.012, 12), capMat, -0.12, 1.33, -0.05);
+    capBrim.castShadow = true;
+
+    const scarf = _add(g, new THREE.BoxGeometry(0.06, 0.42, 0.012),
+      new THREE.MeshLambertMaterial({ color: 0x6a3030 }), -0.14, 0.95, -0.045);
+    scarf.rotation.z = 0.05;
+    scarf.castShadow = true;
+  }
+
   /** Gourde + tasse près du feu */
   function _buildDrinkSet(parent, x, y, z) {
     const gourde = new THREE.MeshLambertMaterial({ color: 0x6a8070 });
@@ -1820,6 +2101,11 @@
     spawn_cabin_rug: { build(root) { _buildCabinRug(root, 0, 0, 0, 0); } },
     spawn_cabin_bench: { build(root) { _buildCabinBench(root, 0, 0, 0, 0); } },
     spawn_cabin_basin: { build(root) { _buildCabinBasin(root, 0, 0, 0, 0); } },
+    spawn_cabin_wall_clock: { build(root) { _buildCabinWallClock(root, 0, 0, 0, 0); } },
+    spawn_cabin_coat_rack: { build(root) { _buildCabinCoatRack(root, 0, 0, 0, 0); } },
+    spawn_beach_wreck_debris: { build(root) { _buildBeachWreckDebris(root, 0, 0, 0, 0); } },
+    spawn_beach_washed_gear: { build(root) { _buildBeachWashedGear(root, 0, 0, 0, 0); } },
+    spawn_beach_driftwood: { build(root) { _buildBeachDriftwood(root, 0, 0, 0, 0); } },
     spawn_backpack: { build(root) { _buildBackpack(root, 0, 0, 0, 0); } },
     spawn_lean_to: { build(root) { _buildLeanToShelter(root, 0, 0, 0, 0); } },
     spawn_stump_seat: { build(root) { _buildStumpSeat(root, 0, 0, 0, 0.20, 0); } },
@@ -2181,6 +2467,41 @@
     return best;
   }
 
+  const _adminPickHits = [];
+
+  /** Visée écran → tout décor synchronisé (mode admin édition live). */
+  function pickDecorAdminRay(raycaster, maxDist = 80) {
+    if (!raycaster || !ZS.Network?.forEachDecor) return null;
+    _adminPickHits.length = 0;
+    ZS.Network.forEachDecor((entry) => {
+      if (!entry.root?.parent) return;
+      entry.root.traverse((o) => {
+        if (o.isMesh) _adminPickHits.push(o);
+      });
+    });
+    if (!_adminPickHits.length) return null;
+    const prevFar = raycaster.far;
+    raycaster.far = maxDist;
+    const hits = raycaster.intersectObjects(_adminPickHits, false);
+    raycaster.far = prevFar;
+    if (!hits.length) return null;
+    let node = hits[0].object;
+    while (node) {
+      const id = node.userData?.decorId;
+      if (id) {
+        const data = ZS.Network.getDecorData?.(id);
+        return {
+          decorId: id,
+          dist: hits[0].distance,
+          prefabId: data?.prefabId,
+          point: hits[0].point,
+        };
+      }
+      node = node.parent;
+    }
+    return null;
+  }
+
   /** Visée écran → mesh construction (prioritaire sur la récolte cone XZ). */
   function hitDecorBuildRay(raycaster, maxDist = 3.5) {
     if (!raycaster) return null;
@@ -2210,6 +2531,7 @@
 
   const _doorRayHits = [];
   const _storageRayHits = [];
+  const _signRayHits = [];
 
   /**
    * True si un mur décor (cabane, etc.) bloque le rayon avant la cible.
@@ -2258,6 +2580,17 @@
     const entry = DECOR_STORAGES.get(decorId);
     if (!entry?.root?.parent) return null;
     return { decorId, dist: 0, prefabId: entry.root.userData.prefabId };
+  }
+
+  function getDecorSignForInteract(decorId) {
+    const entry = DECOR_SIGNS.get(decorId);
+    if (!entry?.root?.parent) return null;
+    return {
+      decorId,
+      dist: 0,
+      prefabId: entry.root.userData.prefabId,
+      signKind: entry.signKind,
+    };
   }
 
   /** Visée écran → coffre (mesh décor, prioritaire sur proximité). */
@@ -2333,18 +2666,56 @@
     return null;
   }
 
-  /** Coffre vs porte : le mesh le plus proche sur le rayon caméra (viseur). */
+  /** Visée écran → panneau / note / bouteille lisible. */
+  function hitDecorSignRay(raycaster, maxDist = 3.5) {
+    if (!raycaster) return null;
+    _signRayHits.length = 0;
+    for (const [decorId, entry] of DECOR_SIGNS) {
+      if (!entry.root?.parent) continue;
+      entry.root.traverse((o) => {
+        if (o.isMesh) {
+          o.userData.decorId = decorId;
+          _signRayHits.push(o);
+        }
+      });
+    }
+    if (!_signRayHits.length) return null;
+    const prevFar = raycaster.far;
+    raycaster.far = maxDist;
+    const hits = raycaster.intersectObjects(_signRayHits, false);
+    raycaster.far = prevFar;
+    if (!hits.length) return null;
+    let node = hits[0].object;
+    while (node) {
+      const id = node.userData?.decorId;
+      const entry = id ? DECOR_SIGNS.get(id) : null;
+      if (entry) {
+        const dist = hits[0].distance;
+        if (_interactRayOccluded(raycaster, dist, id)) return null;
+        return {
+          decorId: id,
+          dist,
+          prefabId: entry.root.userData.prefabId,
+          signKind: entry.signKind,
+        };
+      }
+      node = node.parent;
+    }
+    return null;
+  }
+
+  /** Coffre / porte / panneau : le mesh le plus proche sur le rayon caméra (viseur). */
   function pickDecorInteractRay(raycaster, maxDist = 3.5) {
+    const candidates = [];
     const storage = hitDecorStorageRay(raycaster, maxDist);
     const door = hitDecorDoorRay(raycaster, maxDist);
-    if (storage && door) {
-      return storage.dist <= door.dist
-        ? { kind: 'storage', ...storage }
-        : { kind: 'door', ...door };
-    }
-    if (storage) return { kind: 'storage', ...storage };
-    if (door) return { kind: 'door', ...door };
-    return null;
+    const sign = hitDecorSignRay(raycaster, maxDist);
+    if (storage) candidates.push({ kind: 'storage', ...storage });
+    if (door) candidates.push({ kind: 'door', ...door });
+    if (sign) candidates.push({ kind: 'sign', ...sign });
+    if (!candidates.length) return null;
+    candidates.sort((a, b) => a.dist - b.dist);
+    return candidates[0];
   }
 
   function getDecorDoorMeta(decorId) {
@@ -3113,12 +3484,15 @@
   ZS.findNearestDecorSign = findNearestDecorSign;
   ZS.hitDecorStorage        = hitDecorStorage;
   ZS.hitDecorStorageRay     = hitDecorStorageRay;
+  ZS.hitDecorSignRay        = hitDecorSignRay;
   ZS.hitDecorBuild          = hitDecorBuild;
   ZS.hitDecorBuildRay       = hitDecorBuildRay;
   ZS.hitDecorDoorRay        = hitDecorDoorRay;
   ZS.pickDecorInteractRay   = pickDecorInteractRay;
+  ZS.pickDecorAdminRay      = pickDecorAdminRay;
   ZS.getDecorDoorForInteract = getDecorDoorForInteract;
   ZS.getDecorStorageForInteract = getDecorStorageForInteract;
+  ZS.getDecorSignForInteract = getDecorSignForInteract;
   ZS.getDecorDoorMeta       = getDecorDoorMeta;
   ZS.setDecorStorageState    = setDecorStorageState;
   ZS.unregisterDecorStorage  = unregisterDecorStorage;

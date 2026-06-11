@@ -26,6 +26,123 @@ Chaque feature ou refonte doit laisser une trace pour l'équipe :
 
 Index complet : [README.md](README.md#documentation-à-lire-avant-un-push--review)
 
+### Completed — fix persistance arbres abattus (2026-06-11)
+
+- **Bug** : arbre coupé + disparu en session → au reload réapparaît debout ; un coup le fait tomber (serveur `woodRemaining=0`, client respawn debout).
+- **Cause** : suppression serveur différée 90 s (`TREE_FALL_LINGER_MS`) avec persistance `woodRemaining=0` / `falling` entre-temps.
+- **Fix** : delete DB + `removedSeedKeys` immédiat à l'abattage ; purge au boot ; filtre game-init / decor-trees / spawn client (`isFelledTreeDecor`).
+- **Client version** : `20260611-tree-fell-persist`.
+
+### Completed — fix anim caillou 2 mains (2026-06-11)
+
+- **Bug** : pose calibrée OK au repos, mais `rock_slam` (et idle/marche) repassaient sur l’ancienne pose procédurale (`inGameplayAnim` bloquait `_FPS_TWO_HAND_POSES`).
+- **Fix** : `_applyTwoHandGripVisual` — pose validée toujours en base ; offsets d’anim (`rArm`/`lArm`/`item`) appliqués par-dessus via `_applyChainAnimOffset`.
+- **Client version** : `20260611-caillou-anim-pose`.
+
+### Completed — calibrage caillou 2 mains (2026-06-10)
+
+- **Fix** : pose bras D/G appliquée directement (plus écrasée par `_applyGripPose`).
+- **Tuner** : sections bras gauche (`lShoulder`…), MC complets (PostY, RotZ, WristX, ElbowY…), centre + échelle caillou.
+- **Client version** : `20260610-caillou-2mains-tuner`.
+
+### Completed — dashboard joueurs UX rapide (2026-06-10)
+
+- **Joueurs F8** : cartes cliquables, recherche instantanée, barre HP, panneau d’actions (amener / aller / soigner / expulser / copier pos).
+- **API** : `POST /api/admin/players/:username/action` (`bring`, `goto`, `heal`, `kick`, `tp`).
+- **Onglets** : En ligne + Rôles dans la même vue joueurs (panel élargi).
+- **Hub** : pill « X en ligne », descriptions raccourcies, rôles déplacés dans Joueurs.
+- **Client version** : `20260610-admin-players-ux`.
+
+### Completed — système rôles CMS admin (2026-06-10)
+
+- **Shared** : `packages/shared/src/roles.mjs` — rôles (`owner`, `super_admin`, `admin`, `moderator`, `builder`, `tester`, `player`), permissions granulaires, règles d'attribution.
+- **Serveur** : table `player_roles`, module `player-roles.js`, APIs `GET/PUT/DELETE /api/admin/roles`, auth par permission sur routes admin + RCON (`rcon.dangerous` pour wipe/kill/clearzombies).
+- **Env** : `OWNER_USERS` (+ `ADMIN_USERS` rétrocompat) = propriétaires non rétrogradables.
+- **Client** : `admin-auth.js`, `admin-roles.js`, hub F8 filtré par permissions, badges rôle joueurs, sync socket `admin-role-update`.
+- **Tests** : `tests/roles.test.mjs`.
+- **Docs** : `docs/RCON.md`, `.env.example`.
+- **Client version** : `20260610-admin-roles`.
+
+### Completed — workflow IA questionnaire (2026-06-09)
+
+- **Doc** : `docs/AI_WORKFLOW.md` — mode question/réponse à choix multiples (+ « Autre ») quand l’IA a un doute de design.
+- **Règle Cursor** : `.cursor/rules/ai-questionnaire.mdc` (always apply).
+- **Renvois** : `CLAUDE.md`, `CONTRIBUTING.md`.
+- **Décision Bruno (Q1)** : pas de kit magique ; loot départ **propre à chaque joueur**.
+- **Q2 spawn** : offset aléatoire plage (`pickBeachSpawn`) + **écart min 8–12 m** entre joueurs connectés simultanément.
+- **Q2 items** : kit complet au sol près du spawn perso — caillou, torche, eau, sandwich.
+- **Q2 visibilité** : terme retenu **« loot personnel »** — **tout le monde voit** les props de chaque joueur ; **seul le propriétaire** peut ramasser (read-only pour les autres). Pas d’instancing invisible.
+- **Q3 décor** : **D1** — débris / affaires / bois flotté = **décor monde unique** ; seuls les **4 items kit** sont loot personnel par joueur.
+- **Q3 moment** : scénario **intuitif et forcé** pour ramasser les 4 objets + **tuto interfaces** (inventaire, menus…) en parallèle du ramassage.
+- **Q4 parcours** : **F3** — mini chemin 10–15 m, 1 objet + 1 leçon UI par stop.
+- **Q4 UI** : ramassage (E), hotbar, inventaire, équiper, consommer faim/soif.
+- **Q5 ordre** : **O1** caillou → torche → eau → sandwich.
+- **Q5 leçons** : **L1** (mapping stop ↔ UI ci-dessus).
+- **Spec** : `design/secteur/INTRO_BEACH_PLAYER.md`.
+- **Brique 1 implémentée** : inventaire vide si intro · `ownerPlayerId` pickup serveur + client · spawn plage espacé (`pickBeachSpawnAwayFrom`, 10 m) · `playerId` dans `game-init`.
+- **Client-version** : `20260609-intro-b1-loot-357`.
+- **Brique 2 (partiel)** : spawn loot personnel intro — 4 objets séquentiels (caillou→torche→eau→sandwich) près du spawn ; décor monde (rochers) toujours non ramassable.
+- **Client-version** : `20260609-intro-b2-starter-358`.
+
+### Proposition — intro plage v3 « Épaves et empreintes » (2026-06-09)
+
+- **Problème Bruno** : v2 trop directe (objets à la suite) — besoin d’**intrigue / mission**.
+- **Doc** : `design/secteur/INTRO_BEACH_SCENARIO_V3.md` — 4 séquences, déclencheurs par **zone + lecture**, pas par pickup ; piste ~40–55 m ; mystère « K. » ; 6 prefabs proposés.
+- **Validé Bruno** : ton **mystère** · rythme **court** (~8 m + 1 indice avant caillou) · indices **monde unique** · **K. = PNJ forêt** plus tard.
+- **Implémenté** : beats zones + lecture (`intro-beach-beats.mjs`) · seed monde `beach_intro_v3` (4 prefabs) · prefabs client `beach_intro_prefabs.js` · catalogue + orientation · sortie plage (`trail_exit` → `read_exit_sign` → panneau) · tests.
+- **Client-version** : `20260609-intro-v3-beats-360`.
+- **Fix spawn vide (Bruno)** : spawn intro limité au cluster près de `BEACH_SPAWN` (`pickBeachSpawnForIntro`) · snap si position sauvegardée loin · beat `footprints` + caillou au connect dans la zone · empreintes agrandies · seed intro au connect si manquant.
+- **Client-version** : `20260609-intro-v3-spawn-fix`.
+- **Fix respawn caillou** : `ensure(p, socket)` au respawn intro · restauration loot personnel selon beats après clear · caillou ~3 m devant le joueur si respawn loin de la piste fixe.
+- **Fix piste ponton/valise** : bouteille ne spoil plus la valise · toasts direction ouest · poteaux balise + ponton/feu agrandis · valise spawn toujours après beat veilleuse (zone feu).
+- **Client-version** : `20260609-intro-v3-trail-vis`.
+- **UX intro Bruno** : regard au réveil → caillou 2,6 m devant · bouteille reculée sur la piste · torche allumée intégrée au cercle de pierres (veilleuse visible) · ponton = planches basses · pickup torche au centre du cercle.
+- **Client-version** : `20260609-intro-v3-ux-rock-torch`.
+- **Fix torche intro** : zone veilleuse élargie (r 11) · torche ramassable décalée + halo orange · re-spawn si beat campfire sans item · portée ramassage intro 3,2 m.
+- **Client-version** : `20260609-intro-v3-torch-pickup`.
+- **Fix valise intro** : spawn à la prise de torche + zone ponton élargie · valise sous l'épave (halo doré) · re-spawn si beat pier sans décor.
+- **Client-version** : `20260609-intro-v3-suitcase-fix`.
+
+### Audit S02 / Georges (2026-06-09)
+
+- **`origin/dev`** : pas de push récent Georges — toujours 2 maisons (`smallcity_house_a/b`), pas de `house_c`.
+- **Pharmacie / police / supermarché** : déjà dans `sector_02_town.js` (code local), mais **non chargé** en jeu → corrigé : `sector_02_town.js` dans `legacy-modules.js` + `registerSector` accepte les secteurs non-spawn.
+- **Catalogue prefabs bâtiments** : `building_survivor_shack`, `smallcity_house_a`, `smallcity_house_b` — commerces S02 = meshes secteur (pas prefabs RCON).
+- **Checklist intégration `smallcity_house_c`** (quand Georges pousse) : prefab dans `spawn_clearing.js`, colliders `decor_colliders.js`, META `decor-prefab-catalog.mjs`, portes serveur `DOOR_PREFABS`, test catalogue, placement `_buildHouses` S02.
+- **Client-version** : `20260609-s02-town-wire`.
+
+### Completed — intro plage v2 narrative (2026-06-09)
+
+- **Parcours 3 étapes** : caillou au sol devant soi → torche allumée (prefab `spawn_beach_starter_torch` + ramassage) → valise échouée (`spawn_beach_starter_suitcase`, eau + sandwich dedans).
+- **Réveil** : caméra orientée vers le caillou en se relevant + bulle RP (`intro_starter.js`).
+- **Loot conteneur** : bouton **Tout prendre** dans `storage_ui` ; surplus tombe au sol si inventaire plein (`storage-take-all`).
+- **Prefabs** : `beach_starter_prefabs.js` — feu animé (nuit) + valise surbrillance légère.
+- **Serveur** : décor intro personnel (`introStarterDecor`, `ownerPlayerId`) ; valise vide = étape suivante / fin kit.
+- **Tests** : `intro-starter-loot.test.mjs` (3 steps + yaw caillou).
+- **Client-version** : `20260609-intro-v2-starter-359`.
+
+### Completed — retours playtest intro (Bruno, 2026-06-09)
+
+- **Écran mort PC** : curseur visible (`death-screen-open`, exit pointer lock) — plus besoin d'Échap pour cliquer Respawn.
+- **Acte 2/3 au réveil** : respawn intro admin → spawn fixe `BEACH_SPAWN` + ancre scénario (`anchorX/Z`) pour breathe/explore (plus de skip si spawn aléatoire loin du ref).
+- **HUD intro** : plus de guidage exploration (pas de « Va vers l'intérieur » / flèche) — HUD uniquement combat `fight` + loot ; repositionné en bas à droite (ne cache plus les PV).
+- **Client-version** : `20260609-intro-ux-fixes-356`.
+
+### Completed — simulation parcours joueur spawn → 1er gap (2026-06-09)
+
+- **Pause catalogue prefabs** (#15 trail post, etc.) — reprise en mode parcours joueur depuis `intro_wake`.
+- **Simulation** (coords + `checkPositionAdvance`) : spawn `(248,-8)` → réveil → breathe → explore → walk_west…
+- **Props seed** : débris 5,8 m est · affaires 4,4 m · driftwood 7,8 m · panneau/torche ~5,5 m · bouche sentier 6 m — **tous &lt; 15 m** du spawn.
+- **1er élément à améliorer** : étape **`explore`** (`EXPLORE_MIN_DIST=15`) — ne pilote pas vers les props ; fin explore à l’ouest (`x≤233`) saute quasi immédiatement en `silhouette` (`WALK_WEST_X=236`). Prochaine action = revoir la mécanique explore (jalons / distance / ordre), pas un nouveau prefab.
+
+### Completed — panneau outils admin in-game (2026-06-09)
+
+- **Menu hamburger admin** : « Outils admin » ouvre un panneau dédié (`admin-panel.js`) — extensible pour d'autres réglages de test.
+- **Section Scénario** : toggle « Reset intro à chaque respawn » + bouton « Réinitialiser l'intro maintenant » (warning → mort sur place → respawn plage naturel).
+- **Comportement** : toggle = préférence seule ; reset immédiat via `admin-intro-reset-now` (kill authoritaire + `adminIntroResetOnRespawn`).
+- **Persistance locale** : `localStorage` `zs_admin_intro_reset_on_respawn`.
+- **Client-version** : `20260609-admin-panel-354`.
+
 ### Completed — catalogue prefabs admin auto-sync (2026-06-09)
 
 - **URL** : `/prefab-catalog.html` — réservée aux comptes admin (même auth JWT que WebRCON).
@@ -49,6 +166,12 @@ Index complet : [README.md](README.md#documentation-à-lire-avant-un-push--revie
 - **Prefab #7 catalogue** : `spawn_cabin_rug` — tapis tissé laine (texture `cabinRug`, bordure, franges, bande −Z).
 - **Prefab #8 catalogue** : `spawn_cabin_bench` — banc mural v2 : cleat mur + boulons, assise 3 planches, cubby bottes, dossier incliné, couverture.
 - **Prefab #9 catalogue** : `spawn_cabin_basin` — lavabo cabane v2 : cuvette porcelaine encastrée, eau disque opaque (fix shimmer), robinet fer, sans barre métal traversante.
+- **Prefab #10 catalogue** : `spawn_cabin_wall_clock` — horloge pendule murale, aiguilles dynamiques (`world_clock.js` + `worldTime`). Validé sens horaire ; doc complète : `docs/WALL_CLOCK.md` (pièges double minute, wrap 59→0, trio π/angles+/delta−).
+- **Prefab #11 catalogue** : `spawn_cabin_coat_rack` — porte-manteau planche + patères, veste/casquette/écharpe.
+- **Prefab #12 catalogue** : `spawn_beach_wreck_debris` — débris naufrage plage (planches, corde, filet, caisse) · catégorie admin `plage` · parcours joueur spawn rivage.
+- **Prefab #13 catalogue** : `spawn_beach_washed_gear` — affaires échouées (sac, gourde, sandale, casquette) · étape « Explore le rivage ».
+- **Seed plage spawn** : `beach-prop-placements.mjs` — débris + affaires + bois flotté bouche sentier · `decorseed beach` · `BEACH_SPAWN_PROPS`.
+- **Prefab #14 catalogue** : `spawn_beach_driftwood` — rondin échoué repère vers sentier forêt.
 - **Hub admin** : menu hamburger / sidebar — sections **Catalogue** + **Carte monde** (`/admin.html` alias).
 - **Carte admin** : `GET /api/admin/world-map` + `admin-world-map.js` — zoom/pan, filtres couches, tooltip (pos exacte, seed, `decorremove`).
 - **POI précis** : `admin-map-pois.mjs` — positions live serveur > seed S01 ; marqueurs rétrécissent au zoom + réticule précision.
@@ -2790,6 +2913,193 @@ These are intentionally ignored by Git for local development.
 - Login/register → `isAdmin` + `localStorage.zombie_is_admin`.
 - Menu ☰ → « Console dev » câblé dans `game.js`, visible pour `ADMIN_USERS`.
 - **Cache bust** : `20260605t`
+
+### Completed — parcours intro plage étalé (2026-06-09)
+
+- **Spawn intro** : cluster est plage (`cx:278`, `rx:14`, `rz:24`) + tirage aléatoire biaisé océan — plus près du panneau sortie.
+- **Piste v3** : empreintes `266` → bouteille `254` → veilleuse `246` → ponton `243` (~8–12 m entre étapes, ~23 m total).
+- **Zones beats** : rayons réduits (`r:7–7.5`) pour éviter les chevauchements.
+- **Cache bust** : `20260609-intro-path-spread`
+
+### Completed — catalogue prefabs urbains v1 (2026-06-09)
+
+- **17 prefabs** `spawn_urban_*` + `spawn_prop_*` dans `urban_prefabs.js` — rue, logistique, intérieur commerce.
+- **Catégorie admin** `ville` · colliders · orientation · aperçu catalogue · auto-discovery RCON.
+- **Cache bust** : `20260609-urban-prefabs-v2`
+- **v2 refonte** : comptoir L (caisse, vitre, tiroir), canapé 3 places (coussins/tissu), palettes EUR + cartons.
+- **Prochaine passe** : mobilier bureau, signalisation ville, variantes dégradées, `smallcity_house_c` (Georges).
+
+### Completed — pose torche calibrée tuner (2026-06-09)
+
+- Pose validée in-game → `_FPS_ABSOLUTE_POSES.tool_torche` ; grip `absolutePose`.
+- Fix bouton Valider (JSON visible + copie). Cache `20260609-torch-pose-v1`.
+
+### Completed — menu admin F8 + hub calibrages (2026-06-09)
+
+- **F8** → `AdminHub` (calibrages, scénario, RCON). Registre `ZS.Calibration.register()`.
+- Bras/torche + placeholders (main vide, caillou, armes, distant). Cache `20260609-admin-hub`.
+
+### Completed — CMS admin + poses caillou/outil/distant (2026-06-10)
+
+- **Hub F8** restructuré (Monde, Joueurs, Calibrages, Scénario, RCON) — sections CMS.
+- **Joueurs** : `GET /api/admin/players` + panneau live (refresh 5s).
+- **Calibrages actifs** : caillou 2 mains, hachette/outils, bras joueur distant 3e personne.
+- `applyFPSGripTuneToArms`, `applyFPSRemoteTune`, validate live. Cache `20260610-admin-cms-poses`.
+
+### Completed — valider pose = effet immédiat en jeu (2026-06-10)
+
+- **Valider** appelle `applyFPSValidatedPose` : patch mémoire (`_FPS_ABSOLUTE_POSES`, grips, idle/marche) + refresh bras.
+- Au chargement : `loadFPSValidatedPoses` depuis `localStorage` (torche + main vide).
+- Main vide validée utilisateur intégrée en défaut. Cache `20260610-validate-live`.
+
+### Completed — fix presets cross-profil + bras dérivés torche (2026-06-10)
+
+- **Bug** : liste presets vide en main vide (`_refreshPresetSelect` avant assignation du panneau) — corrigé.
+- Migration auto : poses validées profil → presets globaux ; **Valider** enregistre aussi un preset.
+- Main vide / `_FPS_RIGHT_RELAXED` / `_FPS_CHAIN_RELAXED` : orientations bras dérivées de la torche calibrée.
+- Cache `20260610-preset-fix-torch-derived`.
+
+### Completed — presets calibrage bras FPS (2026-06-10)
+
+- Tuner : **Sauver / Charger / Supprimer** presets nommés (`localStorage` `zs_arm_tuner_presets`).
+- Presets partagés entre profils (torche ↔ main vide) : fusion des champs compatibles (bras, item, idle, marche).
+- Cache `20260610-arm-presets`.
+
+### Completed — fix fermeture dashboard admin + calibrages (2026-06-10)
+
+- **✕ / Fermer** et `AdminHub.close()` appellent `Calibration.closeActive()` — panneaux latéraux (tuner pose, édition décor) retirés du DOM.
+- `ArmTuner.hide()` : nettoyage orphelin `#zs-arm-tuner` + restauration pose inventaire (`updateHandItem`). Cache `20260610-admin-close-fix`.
+
+### Completed — calibrage main vide FPS (2026-06-10)
+
+- **F8** → Calibrages → **Bras FPS — main vide** : sliders repos + idle/marche, checkbox preview marche live.
+- `_FPS_ABSOLUTE_POSES.empty_hand` + `_FPS_EMPTY_ANIM` ; tuner multi-profils (`tool_torche` / `empty_hand`).
+- Cache `20260610-arm-empty-tuner`.
+
+### Completed — pose torche FPS validée (2026-06-10)
+
+- Calibrage tuner `tool_torche` intégré dans `_FPS_ABSOLUTE_POSES` + `DEFAULT_POSE` tuner.
+- Cache `20260610-torch-pose`.
+
+### Completed — édition décor monde live admin (2026-06-09)
+
+- **F8** → Calibrages → **Édition décor monde** : mode admin avec visée réticule + **E** pour cibler un prefab synchronisé.
+- Panneau latéral droit (`admin-live-decor.js`) : position / rotation / échelle (+ champs épave/build selon prefab).
+- Preview locale immédiate + `PATCH /api/admin/decor/:id` debouncé → `decor-item-spawn` pour tous les clients.
+- `pickDecorAdminRay` sur tous les décors réseau ; pointer lock conservé en mode édition. Cache `20260609-admin-live-decor`.
+
+### Completed — tuner in-game bras FPS (2026-06-09)
+
+- Grille supprimée. `fps_arm_tuner.js` : sliders épaule/coude/poignet/torche, **F8** ou `?armTuner=1`, **Valider** → JSON copié.
+- Cache `20260609-arm-tuner`.
+
+### Completed — fix orientation bras FPS vers l'avant (2026-06-09)
+
+- Base relâchée `rx≈0.16` (chaîne −Z = horizontal avant), plus `rx≈1.08` qui pointait vers le haut.
+- Overlays grip/hold recalculés ; torche verticale (`item.rx ≈ -1.22`, GLB `−π/2`).
+- Cache `20260609-fps-arm-forward`.
+
+### Completed — caillou en main plus petit + prise deux mains (2026-06-09)
+
+- Taille FPS ~÷2 (`_fit` 0.68, mesh `buildHandRock` compact).
+- Grip `tool_caillou` : mains convergentes, poignets tournés vers le caillou (shared pivot centré).
+- Cache `20260609-rock-hand-v2`.
+
+### Completed — pose relâchée bras FPS tous grips (2026-06-09)
+
+- Base unique `_FPS_*_RELAXED` + overlay `_FPS_ARM_AIM` (grip/hold) : même repos naturel pour tous les items, visée inchangée.
+- `_ANIM_BASE` idle/walk : balancement marche + sway idle sur main vide, armes, outils, nourriture, deux mains.
+- Cache `20260609-fps-arm-all-poses`.
+
+### Completed — pose relâchée bras FPS main vide (2026-06-09)
+
+- `_FPS_RIGHT_EMPTY` : bras le long du corps (épaule basse, coude plié ~0.78 rad), plus tendu vers le réticule.
+- `tickFPSArms` : balancement marche/course (épaule + coude + léger déplacement Z/Y) ; idle léger sway latéral.
+- Cache `20260609-fps-arm-relaxed`.
+
+### Completed — refonte visuelle bras FPS (2026-06-09)
+
+- Cubes Minecraft → cylindres (bras), sphère épaule, main (paume, pouce, doigts), poignets manche. Pose main vide inchangée. Cache `20260609-fps-arm-visual-v2`.
+
+### Completed — fix orientation bras FPS main vide (2026-06-09)
+
+- Pose dédiée `_FPS_RIGHT_EMPTY` + flag `GRIP_EMPTY.emptyHand` : bras le long de −Z (vers l'avant) au lieu d'une pile verticale. Grips items inchangés.
+- Cache `20260609-fps-arm-empty`.
+
+### Completed — batch prefabs loisirs v4 (+20) (2026-06-09)
+
+- **217 prefabs** — plage/camp/parc : kubb, disc golf, parasol plage, SUP, brasero, douche solaire, chariot enfant, etc.
+- Cache `20260609-leisure-prefabs-v4`.
+
+### Completed — batch prefabs loisirs v3 (+20) (2026-06-09)
+
+- **197 prefabs** — jeux (roulette, craps, skee-ball, plateau société), sport (mur escalade, tir à l'arc, skis, haltères, badminton, lacrosse), loisirs (micro, BBQ, télescope, bascule, manège, ukulélé…).
+- Cache `20260609-leisure-prefabs-v3`.
+
+### Completed — batch prefabs loisirs v2 (+20) (2026-06-09)
+
+- **177 prefabs** — jeux (shuffleboard, air hockey, croquet, fers), sport (volley, baseball, boxe, hockey, kayak, VTT), loisirs (camping, batterie, clavier, balançoire, bac à sable, trampoline, canoë).
+- Cache `20260609-leisure-prefabs-v2`.
+
+### Completed — batch prefabs loisirs v1 (+20) (2026-06-09)
+
+- **Nouveau module** `leisure_prefabs.js` — 3 catégories catalogue : **jeux** (baby-foot, ping-pong, poker, flipper, pétanque…), **sport** (basket, foot, tennis, golf, surf…), **loisirs** (tente, hamac, pêche, guitare, toboggan).
+- **157 prefabs** catalogue total (+20). Cache `20260609-leisure-prefabs-v1`.
+
+### Completed — revue catalogue : commentaire « à refaire » (2026-06-09)
+
+- Clic **À refaire** → dialogue obligatoire (min. 3 car.) ; persistance SQLite/MySQL dans `world_meta.prefabCatalogReviews` (objet `{ status, comment, updatedAt, by }`).
+- API `PUT /api/admin/prefab-catalog/review` accepte `comment` ; GET renvoie `reworkDetails`.
+- Liste bannière + colonne revue + modal 3D affichent la note.
+
+### Completed — batch prefabs ville v8 (+20) (2026-06-09)
+
+- **137 prefabs ville** — +20 : sport (vélo appart, banc muscu), commerce (caisse, frigo vitrine, îlot cuisine), santé (fauteuil dentiste, perfuseur), bureau (tableau blanc, liège, tour PC, TV murale), urbain (borne EV, benne tri, panneau LED, téléphone public).
+- Cache `20260609-urban-prefabs-v8`.
+
+### Completed — batch prefabs ville v7 (+20) (2026-06-09)
+
+- **117 prefabs ville** — +20 : commerce (auvent, boulangerie, portant), santé (lit hôpital, brancard, fauteuil roulant), loisirs (billard, arcade, machine à sous, treadmill), équipement (congélateur, meuble cuisine, RIA, dos d'âne), divers (lit bébé, lampe bureau, chauffage).
+- Cache `20260609-urban-prefabs-v7`.
+
+### Completed — batch prefabs ville v6 (+20) (2026-06-09)
+
+- **97 prefabs ville** — +20 : buanderie (sèche-linge, LV, planche), SDB (douche, urinoir, miroir), école (pupitre, casiers), commerce (snacks, panier), terrasse (transat, parasol), rue (Jersey, égout, étendoir), divers (piano, barbier, diable, radiateur, ventilateur).
+- Cache `20260609-urban-prefabs-v6`.
+
+### Completed — batch prefabs ville v5 (+20) (2026-06-09)
+
+- **77 prefabs ville** — +20 : SDB (WC, lavabo, pharmacie), salon (table basse, table manger), dortoir (lit superposé, matelas), bureau (classeur, imprimante, fontaine), sécurité (coffre, extincteur), rue (pompe essence, parcmètre, horloge, parabole), logistique (palette, carton).
+- Cache `20260609-urban-prefabs-v5`.
+
+### Completed — batch prefabs ville v4 (+20) (2026-06-09)
+
+- **57 prefabs ville** — +20 : chambre (lit, chevet, commode, tapis, lampadaire), cuisine (micro, cuisinière, évier), salle de bain (baignoire), rue (ATM, cabine, abri bus, pique-nique, déchets, caisse, générateur, jerricans, BBQ, armoire outils, clim).
+- Cache `20260609-urban-prefabs-v4`.
+
+### Completed — batch prefabs ville v3 (+20) (2026-06-09)
+
+- **37 prefabs ville** au total — +20 : rue (STOP, journaux, caddie, distributeur, barrière, panneau, propane, pneus, brouette, vélo) + intérieur (bureau, chaise, armoire, table/chaise cuisine, bibliothèque, TV, lave-linge, étagère métal, établi).
+- **Colliders + META + orientation** · cache `20260609-urban-prefabs-v3`.
+
+### Completed — revue qualité catalogue prefabs (2026-06-09)
+
+- **Boutons** Valider / À refaire par prefab (table + modal aperçu 3D).
+- **Persistance** SQLite/MySQL `world_meta.prefabCatalogReviews` — survit redémarrage serveur.
+- **API** : `PUT /api/admin/prefab-catalog/review` · bannière + filtre « À refaire » · `reworkList` dans GET catalogue.
+- **Cache bust** : `20260609-prefab-catalog-reviews`
+
+### Completed — persistance intro (caillou / déco-reco) (2026-06-09)
+
+- **Bug** : à la reconnexion, `ensure()` respawnait le caillou même s'il était en inventaire ; l'inventaire intro pouvait être vidé au connect.
+- **Fix** : flags `pickedRock` / `pickedTorch` dans `introBeats` + détection inventaire ; `shouldResetIntroInventoryOnConnect` ; sauvegarde DB immédiate à la déconnexion.
+- **Fix caillou réveil** : spawn dès `ensure()` (beat `wake`, ~2,6 m devant le joueur) — plus besoin d’atteindre la zone empreintes.
+
+### Completed — interaction viseur intro plage (2026-06-09)
+
+- **Bug** : en visant la valise, E ouvrait la note brûlée (proximité XZ avant raycast).
+- **Fix client** : `hitDecorSignRay` + `pickDecorInteractRay` compare coffre / porte / panneau par distance sur le rayon caméra ; `game.js` priorise le viseur pour E et le bouton mobile.
+- **Cache bust** : `20260609-interact-raycast`
 
 ### In Progress — World polish (Phase 2+)
 

@@ -37,6 +37,7 @@ Copy `.env.example` → `.env` for local development.
 | `docs/ARCHITECTURE.md` | Client/server flow, chat, sync |
 | `docs/RCON.md` | Admin commands, flags, API |
 | `docs/ROAD_NETWORK.md` | Roads, terrain corridors, spawn paths |
+| `docs/WALL_CLOCK.md` | Horloge cabane : mesh, angles, sens horaire, pièges Three.js |
 | `docs/BUILDING_COLLIDERS.md` | Prefabs bâtiment : pivot mesh/collider, debug, pièges |
 | `design/BUILDING_PREFABS.md` | Registre pièces cabane S01 (workflow progressif) |
 | `.env.example` | New environment variables |
@@ -55,6 +56,10 @@ Copy `.env.example` → `.env` for local development.
 | `apps/client/public/js/road_network.js` | **Road graph** — single source of truth |
 | `packages/shared/src/constants.mjs` | Shared route/event constants |
 | `DEV_TRACKER.md` | **Keep updated** with every local work session |
+
+## Workflow IA (Bruno, Georges)
+
+En cas de **doute de design** : questionnaire à choix multiples (+ option « Autre »), pas d’hypothèse longue. Voir **`docs/AI_WORKFLOW.md`** et la règle `.cursor/rules/ai-questionnaire.mdc`.
 
 ## Conventions
 

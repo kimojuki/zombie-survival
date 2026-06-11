@@ -11,7 +11,8 @@
   let bagGrid = null;
   let bagTitle = null;
   let dragBound = false;
-  let state = { id: null, items: [], capacity: 27 };
+  let state = { id: null, items: [], capacity: 27, title: 'Coffre', takeAllEnabled: true };
+  let takeAllBtn = null;
 
   function _chestFilled() {
     let n = 0;
@@ -81,6 +82,32 @@
 
     chestTitle = P().makeSectionTitle('');
     split.left.appendChild(chestTitle);
+    takeAllBtn = document.createElement('button');
+    takeAllBtn.type = 'button';
+    takeAllBtn.className = 'stor-take-all-btn';
+    takeAllBtn.textContent = 'Tout prendre';
+    takeAllBtn.style.cssText = [
+      'display:block',
+      'width:100%',
+      'margin:0 0 10px',
+      'min-height:40px',
+      'border:none',
+      'border-radius:8px',
+      'background:#5a7048',
+      'color:#f4f0e4',
+      'font:bold 14px system-ui,sans-serif',
+      'cursor:pointer',
+    ].join(';');
+    takeAllBtn.addEventListener('click', () => {
+      if (!state.id || !_chestFilled()) return;
+      ZS.Network?.requestStorageTakeAll?.(state.id, (res) => {
+        if (!res?.ok) ZS.UI?.showNotif?.('Impossible de tout prendre');
+        else if (res.overflow > 0) {
+          ZS.UI?.showNotif?.('Inventaire plein — le surplus est tombé au sol');
+        }
+      });
+    });
+    split.left.appendChild(takeAllBtn);
     chestGrid = P().makeChestGrid();
     split.left.appendChild(chestGrid);
 
@@ -104,7 +131,13 @@
 
   function render() {
     _ensurePanel();
-    if (chestTitle) chestTitle.textContent = `Coffre · ${_chestFilled()}/${state.capacity}`;
+    if (chestTitle) {
+      chestTitle.textContent = `${state.title || 'Coffre'} · ${_chestFilled()}/${state.capacity}`;
+    }
+    if (takeAllBtn) {
+      takeAllBtn.style.display = state.takeAllEnabled === false ? 'none' : 'block';
+      takeAllBtn.disabled = !_chestFilled();
+    }
 
     chestGrid.replaceChildren();
     for (let i = 0; i < state.capacity; i++) {
@@ -142,12 +175,19 @@
       id: data?.id || null,
       items: Array.isArray(data?.items) ? data.items : [],
       capacity: data?.capacity || 27,
+      title: data?.title || 'Coffre',
+      prefabId: data?.prefabId || null,
+      takeAllEnabled: data?.takeAllEnabled !== false,
     };
     while (state.items.length < state.capacity) state.items.push(null);
     if (state.id) ZS.setDecorStorageState?.(state.id, true);
     _ensurePanel();
+    if (shell.header?.titleEl) {
+      shell.header.titleEl.textContent = state.title === 'Valise échouée' ? '🧳 Valise' : '📦 Coffre';
+    }
     shell.setOpen(true);
     render();
+    ZS.IntroStarter?.onStorageOpen?.(data);
     P().onDesktopPanelOpen();
   }
 

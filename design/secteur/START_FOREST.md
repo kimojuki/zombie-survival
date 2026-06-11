@@ -35,6 +35,7 @@ La liste ci-dessous décrit **quoi** placer, pas **où** :
 |-----------------|-----------------|
 | Fin sentier | fin actuelle `BEACH_TRAIL_PTS` OK — ajuster plus tard si besoin |
 | Bouche sentier (plage) | panneau + torche *(déjà placés)* |
+| Spawn plage (réveil) | débris + affaires échouées — seed `beach-prop-placements.mjs` (`decorseed beach`) |
 | Hub / clairière équipée | feu, établi, coffre *(optionnel, plus tard)* |
 | Carrefour forêt | jonction routes terre, repère visuel |
 | Campement abandonné | abri, caisses, coffre loot *(optionnel)* |

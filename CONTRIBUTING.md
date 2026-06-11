@@ -37,6 +37,10 @@ After **server** changes (`apps/server/`), restart Node — a running process do
 
 Use `npm run test:smoke` for server boot checks and `npm run test:visual` for the FPS arm preview captures.
 
+## Workflow IA (équipe)
+
+Décisions gameplay / UX en doute → **questionnaire à choix multiples** (option « Autre »). Détail : **[docs/AI_WORKFLOW.md](docs/AI_WORKFLOW.md)**.
+
 ## Review Rules
 
 - No direct merge to `master`.

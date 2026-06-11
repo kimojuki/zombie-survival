@@ -188,8 +188,12 @@
     recoil: { kickZ: 0.04, pitchX: 0.10, rArmX: 0.05, lArmZ: 0.02, dur: 0.12 },
     melee:  { style: 'swing_side', swingX: 0.55, swingZ: 0.18, swingY: 0.0, dur: 0.28 },
     reload: { dropY: 0.12, tiltX: 0.32, magPull: 0.10, raiseY: 0.06 },
-    idle:   { breatheY: 0.002, swayZ: 0.0015, freq: 1.6 },
-    walk:   { bobY: 0.008, bobZ: 0.004, freq: 9.0 },
+    idle:   { breatheY: 0.0012, swayZ: 0.0008, freq: 1.4 },
+    walk:   {
+      bobY: 0.005, bobZ: 0.002, freq: 9.0,
+      shoulderRx: -0.10, shoulderRy: 0.11, elbowRx: 0.05,
+      swingZ: 0.022, swingY: 0.010,
+    },
     punch:  { style: 'punch', swingX: 0.65, swingZ: 0.10, dur: 0.24 },
     use:    { style: 'eat', liftY: 0.18, liftZ: 0.14, tiltX: 0.42, rArmLift: 0.26, dur: 0.5 },
   };
@@ -197,15 +201,74 @@
   // ── Transform FPS Minecraft (ItemInHandRenderer / ItemRenderer 1.20) ─────
   const _DEG = Math.PI / 180;
 
-  // Ancrage épaule : bas-droite écran, collé à la caméra (viewmodel). z était -1.22 → trop loin.
-  const _FPS_RIGHT = { x: 0.14, y: -0.47, z: -0.48, rx: 0.74, ry: 0.26, rz: -0.14 };
-  const _FPS_LEFT  = { x: -0.16, y: -0.42, z: -0.52, rx: 0.70, ry: -0.16, rz: 0.10 };
+  // Chaîne osseuse le long de −Z : rx≈0 = bras horizontal vers l'avant ; rx≈π/2 = vers le haut (à éviter).
+  // Bras repos — aligné sur main vide validée (sync aussi via loadFPSValidatedPoses).
+  const _FPS_RIGHT_RELAXED = { x: 0.47, y: -0.31, z: -0.44, rx: -0.18, ry: 0.08, rz: -0.04 };
+  const _FPS_LEFT_RELAXED  = { x: -0.47, y: -0.31, z: -0.44, rx: -0.18, ry: -0.08, rz: 0.04 };
+  const _FPS_CHAIN_RELAXED = { ex: 1.35, ey: -0.18, ez: -0.18, wx: -0.77, wy: 0.11, wz: 0.11 };
+
+  /** Overlay grip/hold : main devant soi, avant-bras plié, objet orienté depuis la paume. */
+  const _FPS_ARM_AIM = {
+    right: {
+      grip: {
+        dx: -0.20, dy: -0.01, dz: -0.18,
+        shoulderRx: 0.14, shoulderRy: 0.40, shoulderRz: 0.18,
+        elbowRx: 0.28, elbowEy: -0.02, elbowEz: -0.04,
+        wristRx: -0.32, wristWy: 0.08, wristWz: -0.05,
+      },
+      hold: {
+        dx: -0.20, dy: -0.01, dz: -0.14,
+        shoulderRx: 0.18, shoulderRy: 0.28, shoulderRz: 0.14,
+        elbowRx: 0.35, elbowEy: -0.06, elbowEz: 0.14,
+        wristRx: -0.46, wristWy: 0.08, wristWz: -0.05,
+      },
+    },
+    left: {
+      grip: {
+        dx: 0.18, dy: 0.04, dz: -0.22,
+        shoulderRx: 0.12, shoulderRy: -0.22, shoulderRz: -0.22,
+        elbowRx: 0.28, elbowEy: 0.02, elbowEz: 0.04,
+        wristRx: -0.32, wristWy: -0.08, wristWz: 0.05,
+      },
+      hold: {
+        dx: 0.18, dy: 0.04, dz: -0.18,
+        shoulderRx: 0.16, shoulderRy: -0.16, shoulderRz: -0.16,
+        elbowRx: 0.35, elbowEy: 0.06, elbowEz: -0.10,
+        wristRx: -0.46, wristWy: -0.08, wristWz: 0.05,
+      },
+    },
+  };
 
   // Rotation objet en main. Les overrides par type restent dans GRIP_TYPES.
   const _MC_ITEM_HOLD = { x: -18 * _DEG, y: 18 * _DEG, z: 6 * _DEG };
   const _ITEM_HAND  = { x: 0.01, y: 0.01, z: -0.04 };
 
   const _PALM = { grip: [0.01, -0.01, -0.06], hold: [0.015, -0.005, -0.07] };
+
+  /** Poses FPS calibrées in-game (tuner) — valeurs absolues épaule/coude/poignet/pivot. */
+  const _FPS_ABSOLUTE_POSES = {
+    tool_torche: {
+      shoulder: { x: 0.47, y: -0.31, z: -0.44, rx: -0.18, ry: 0.08, rz: -0.04 },
+      elbow: { rx: 1.35, ry: -0.18, rz: -0.18 },
+      wrist: { rx: -0.77, ry: 0.11, rz: 0.11 },
+      item: { x: -0.02, y: 0, z: 0.06, rx: 0.25, ry: 1.35, rz: -0.07 },
+    },
+    empty_hand: {
+      shoulder: { x: 0.47, y: -0.31, z: -0.44, rx: -0.18, ry: 0.08, rz: -0.04 },
+      elbow: { rx: 1.35, ry: -0.18, rz: -0.18 },
+      wrist: { rx: -0.77, ry: 0.11, rz: 0.11 },
+    },
+  };
+
+  /** Idle / marche main vide — calibrage tuner (fusionné dans tickFPSArms). */
+  const _FPS_EMPTY_ANIM = {
+    idle: { breatheY: 0.0012, swayZ: 0.0008, freq: 1.4 },
+    walk: {
+      bobY: 0.005, bobZ: 0.002, freq: 9.0,
+      shoulderRx: -0.10, shoulderRy: 0.11, elbowRx: 0.05,
+      swingZ: 0.022, swingY: 0.010,
+    },
+  };
 
   const _REMOTE_AIM = {
     rArmRot: [0.85, 0, -0.62],
@@ -229,9 +292,13 @@
 
   function _grip(partial) {
     return {
+      emptyHand: !!partial.emptyHand,
+      absolutePose: !!partial.absolutePose,
       twoHanded: !!partial.twoHanded,
       sharedItem: !!partial.sharedItem,
       item: partial.item || null,
+      center: partial.center || null,
+      itemScale: partial.itemScale ?? null,
       rArm: partial.rArm,
       lArm: partial.lArm ?? null,
       anim: _mergeAnim(_ANIM_BASE, partial.anim),
@@ -240,7 +307,12 @@
     };
   }
 
+  /** Poses deux mains validées (caillou…) — chaînes directes + MC. */
+  const _FPS_TWO_HAND_POSES = {};
+
   const GRIP_EMPTY = _grip({
+    emptyHand: true,
+    absolutePose: true,
     twoHanded: false,
     rArm: { style: 'grip' },
     lArm: null,
@@ -413,8 +485,9 @@
       anim: { use: { style: 'inject', thrustZ: 0.06, dur: 1.2 } },
     }),
     tool_torche: _grip({
-      item: { x: 0, y: 0, z: 0.03, rx: 0.22, ry: 0.04, rz: 0.02 },
-      rArm: { style: 'grip', mcRotX: -5 },
+      absolutePose: true,
+      item: { x: -0.02, y: 0, z: 0.06, rx: 0.25, ry: 1.35, rz: -0.07 },
+      rArm: { style: 'grip' },
     }),
     tool_marteau: _grip({
       item: { x: 0, y: -0.05, z: -0.21, rx: 0.24, ry: 0.05, rz: 0.01 },
@@ -423,16 +496,20 @@
     tool_caillou: _grip({
       twoHanded: true,
       sharedItem: true,
-      item: { x: 0, y: 0.01, z: -0.03, rx: 0.06, ry: 0, rz: 0.02 },
+      itemScale: 0.60,
+      center: { x: 0, y: 0, z: 0, rx: 0, ry: 0, rz: 0 },
+      item: { x: 0, y: -0.01, z: -0.02, rx: 0.04, ry: 0, rz: 0 },
       rArm: {
-        style: 'grip', mcRotX: -16, mcRotY: -18,
-        mcPostX: 0.06, mcPostZ: -0.04,
-        mcElbowZ: -12, mcWristY: -18,
+        style: 'grip', mcRotX: -10, mcRotY: -10, mcRotZ: 0,
+        mcPostX: -0.03, mcPostY: 0, mcPostZ: -0.02,
+        mcElbowX: 6, mcElbowY: 0, mcElbowZ: -10,
+        mcWristX: 0, mcWristY: -24, mcWristZ: 6,
       },
       lArm: {
-        style: 'grip', mcRotX: -16, mcRotY: 18,
-        mcPostX: -0.06, mcPostY: 0.01, mcPostZ: -0.06,
-        mcElbowZ: 12, mcWristY: 18,
+        style: 'grip', mcRotX: -10, mcRotY: 10, mcRotZ: 0,
+        mcPostX: 0.03, mcPostY: 0, mcPostZ: -0.02,
+        mcElbowX: 6, mcElbowY: 0, mcElbowZ: 10,
+        mcWristX: 0, mcWristY: 24, mcWristZ: -6,
       },
       remote: { rArmRot: [0.58, 0, -0.28], handHolder: [0, -0.66, -0.10], lArmMode: 'aimAtHand' },
       anim: {
@@ -511,13 +588,20 @@
     if (chain.hand) _setEuler(chain.hand, 0, 0, 0);
   }
 
+  function _fpsArmAim(style, side) {
+    const bank = _FPS_ARM_AIM[side === 'left' ? 'left' : 'right'];
+    return bank[style === 'hold' ? 'hold' : 'grip'];
+  }
+
   function _applyFPSArmChain(chain, side, grip, opts) {
     if (!chain) return;
     opts = opts || {};
     const i = side === 'left' ? -1 : 1;
-    const base = side === 'left' ? _FPS_LEFT : _FPS_RIGHT;
+    const empty = !!(grip?.emptyHand && side === 'right');
+    const relaxed = side === 'left' ? _FPS_LEFT_RELAXED : _FPS_RIGHT_RELAXED;
     const ra = grip?.rArm || {};
     const style = ra.style || 'grip';
+    const aim = empty ? null : _fpsArmAim(style, side);
     const swing = Math.max(0, Math.min(1, opts.swing || 0));
     const swingSin = Math.sin(swing * Math.PI);
     const swingEase = Math.sin(Math.sqrt(swing) * Math.PI);
@@ -525,20 +609,21 @@
     const useEase = 1 - Math.pow(1 - useT, 4);
 
     chain.shoulder.position.set(
-      base.x + (opts.dx || 0),
-      base.y + (opts.dy || 0),
-      base.z + (opts.dz || 0),
+      relaxed.x + (aim?.dx || 0) + (opts.dx || 0),
+      relaxed.y + (aim?.dy || 0) + (opts.dy || 0),
+      relaxed.z + (aim?.dz || 0) + (opts.dz || 0),
     );
 
-    let sx = base.rx + (ra.mcRotX || 0) * _DEG;
-    let sy = base.ry + i * (ra.mcRotY || 0) * _DEG;
-    let sz = base.rz + i * (ra.mcRotZ || 0) * _DEG;
-    let ex = style === 'hold' ? 1.22 : 1.08;
-    let ey = i * (style === 'hold' ? -0.10 : -0.04);
-    let ez = i * (style === 'hold' ? 0.12 : -0.08);
-    let wx = style === 'hold' ? -0.44 : -0.34;
-    let wy = i * 0.05;
-    let wz = i * -0.03;
+    let sx = relaxed.rx + (aim?.shoulderRx || 0) + (ra.mcRotX || 0) * _DEG;
+    let sy = relaxed.ry + (aim?.shoulderRy || 0) + i * (ra.mcRotY || 0) * _DEG;
+    let sz = relaxed.rz + (aim?.shoulderRz || 0) + i * (ra.mcRotZ || 0) * _DEG;
+    const ch = _FPS_CHAIN_RELAXED;
+    let ex = ch.ex + (aim?.elbowRx || 0);
+    let ey = ch.ey + (aim?.elbowEy || 0);
+    let ez = ch.ez + (aim?.elbowEz || 0);
+    let wx = ch.wx + (aim?.wristRx || 0);
+    let wy = ch.wy + (aim?.wristWy || 0);
+    let wz = ch.wz + (aim?.wristWz || 0);
     ex += (ra.mcElbowX || 0) * _DEG;
     ey += i * (ra.mcElbowY || 0) * _DEG;
     ez += i * (ra.mcElbowZ || 0) * _DEG;
@@ -546,6 +631,8 @@
     wy += i * (ra.mcWristY || 0) * _DEG;
     wz += i * (ra.mcWristZ || 0) * _DEG;
     sx += opts.shoulderRx || 0;
+    sy += opts.shoulderRy || 0;
+    sz += opts.shoulderRz || 0;
     ex += opts.elbowRx || 0;
     wx += opts.wristRx || 0;
 
@@ -608,18 +695,19 @@
     fpsGroup.updateWorldMatrix(true, false);
     fpsGroup.worldToLocal(_TMP_HAND_M);
     const center = _getCenterItemHolder(fpsGroup);
+    const cen = grip.center || {};
     center.position.set(
-      _TMP_HAND_M.x + (grip.item.x || 0) + (io.x || 0),
-      _TMP_HAND_M.y + (grip.item.y || 0) + (io.y || 0),
-      _TMP_HAND_M.z + (grip.item.z || 0) + (io.z || 0),
+      _TMP_HAND_M.x + (grip.item.x || 0) + (io.x || 0) + (cen.x || 0),
+      _TMP_HAND_M.y + (grip.item.y || 0) + (io.y || 0) + (cen.y || 0),
+      _TMP_HAND_M.z + (grip.item.z || 0) + (io.z || 0) + (cen.z || 0),
     );
     const pivot = _getItemPivot(center);
     pivot.position.set(_ITEM_HAND.x, _ITEM_HAND.y, _ITEM_HAND.z);
     pivot.rotation.order = 'YXZ';
     pivot.rotation.set(
-      _MC_ITEM_HOLD.x + (grip.item.rx || 0) + (io.rx || 0),
-      _MC_ITEM_HOLD.y + (grip.item.ry || 0) + (io.ry || 0),
-      _MC_ITEM_HOLD.z + (grip.item.rz || 0) + (io.rz || 0));
+      _MC_ITEM_HOLD.x + (grip.item.rx || 0) + (io.rx || 0) + (cen.rx || 0),
+      _MC_ITEM_HOLD.y + (grip.item.ry || 0) + (io.ry || 0) + (cen.ry || 0),
+      _MC_ITEM_HOLD.z + (grip.item.rz || 0) + (io.rz || 0) + (cen.rz || 0));
     center.visible = true;
     return center;
   }
@@ -631,6 +719,7 @@
     const over = GRIP_TYPES[type];
     if (!over) return base;
     const g = _grip({
+      absolutePose: over.absolutePose ?? base.absolutePose,
       twoHanded: over.twoHanded ?? base.twoHanded,
       sharedItem: over.sharedItem ?? base.sharedItem,
       item: over.item ? { ...(base.item || {}), ...over.item } : base.item,
@@ -638,6 +727,8 @@
       lArm: over.lArm !== undefined ? over.lArm : base.lArm,
       remote: over.remote || base.remote,
       glbOffset: over.glbOffset || base.glbOffset,
+      center: over.center ? { ...(base.center || {}), ...over.center } : base.center,
+      itemScale: over.itemScale ?? base.itemScale,
     });
     g.anim = _mergeAnim(base.anim, over.anim);
     return g;
@@ -645,8 +736,76 @@
 
   // ── Rig FPS articulé (épaules / coudes / poignets / mains) ────────────────
 
-  function _mcMat(color) {
-    return new THREE.MeshLambertMaterial({ color });
+  const _FPS_SHIRT_DARK = 0x2a5a9a;
+  const _FPS_SKIN_SHADOW = 0xe8b894;
+  const _fpsMatCache = new Map();
+
+  function _fpsMat(color) {
+    let mat = _fpsMatCache.get(color);
+    if (!mat) {
+      mat = new THREE.MeshLambertMaterial({ color });
+      _fpsMatCache.set(color, mat);
+    }
+    return mat;
+  }
+
+  /** Bras viewmodel stylisé (cylindres + main) — même squelette que l’ancien rig cubes. */
+  function _buildFPSArmVisuals(shoulder, elbow, hand, side, prefix) {
+    const shirt = _fpsMat(SHIRT);
+    const shirtDark = _fpsMat(_FPS_SHIRT_DARK);
+    const skin = _fpsMat(SKIN);
+    const skinHi = _fpsMat(SKIN);
+    const skinLo = _fpsMat(_FPS_SKIN_SHADOW);
+
+    const upper = new THREE.Mesh(new THREE.CylinderGeometry(0.050, 0.044, 0.22, 12), shirt);
+    upper.rotation.x = Math.PI / 2;
+    upper.position.set(0, 0, -0.11);
+    upper.userData.skinSlot = prefix + 'UpperArm';
+    shoulder.add(upper);
+
+    const delt = new THREE.Mesh(new THREE.SphereGeometry(0.054, 10, 8), shirt);
+    delt.position.set(side * 0.01, 0.01, 0.01);
+    shoulder.add(delt);
+
+    const fore = new THREE.Mesh(new THREE.CylinderGeometry(0.042, 0.036, 0.18, 12), shirt);
+    fore.rotation.x = Math.PI / 2;
+    fore.position.set(0, 0, -0.09);
+    fore.userData.skinSlot = prefix + 'Forearm';
+    elbow.add(fore);
+
+    const cuff = new THREE.Mesh(new THREE.TorusGeometry(0.043, 0.007, 6, 14), shirtDark);
+    cuff.rotation.y = Math.PI / 2;
+    cuff.position.set(0, 0, -0.015);
+    elbow.add(cuff);
+
+    const handMesh = new THREE.Group();
+    handMesh.name = prefix + 'HandMesh';
+    handMesh.userData.skinSlot = prefix + 'Hand';
+
+    const palm = new THREE.Mesh(new THREE.BoxGeometry(0.088, 0.052, 0.10), skin);
+    palm.position.set(0, -0.012, -0.048);
+    handMesh.add(palm);
+
+    const palmBack = new THREE.Mesh(new THREE.BoxGeometry(0.082, 0.028, 0.078), skinLo);
+    palmBack.position.set(0, 0.018, -0.042);
+    handMesh.add(palmBack);
+
+    const thumb = new THREE.Mesh(new THREE.BoxGeometry(0.026, 0.030, 0.038), skinHi);
+    thumb.position.set(side * 0.052, -0.008, -0.022);
+    thumb.rotation.z = side * -0.42;
+    thumb.rotation.x = 0.12;
+    handMesh.add(thumb);
+
+    const fingers = new THREE.Mesh(new THREE.BoxGeometry(0.076, 0.034, 0.032), skinHi);
+    fingers.position.set(0, -0.018, -0.098);
+    handMesh.add(fingers);
+
+    const wristCuff = new THREE.Mesh(new THREE.TorusGeometry(0.036, 0.006, 6, 12), shirtDark);
+    wristCuff.rotation.y = Math.PI / 2;
+    wristCuff.position.set(0, 0, 0.008);
+    handMesh.add(wristCuff);
+
+    hand.add(handMesh);
   }
 
   function _createFPSArmChain(parent, side) {
@@ -655,16 +814,14 @@
     shoulder.name = side > 0 ? 'rArm' : 'lArm';
     parent.add(shoulder);
 
-    addBox(shoulder, _mcMat(SHIRT), 0.10, 0.10, 0.18, 0, 0, -0.09);
     const elbow = _bone(prefix + 'Elbow', shoulder, 0, 0, -0.24);
-    addBox(elbow, _mcMat(SHIRT), 0.09, 0.09, 0.16, 0, 0, -0.08);
     const wrist = _bone(prefix + 'Wrist', elbow, 0, 0, -0.20);
     const hand = _bone(prefix + 'Hand', wrist, 0, 0, 0);
-    addBox(hand, _mcMat(SKIN), 0.11, 0.11, 0.11, 0, 0, -0.055);
+    _buildFPSArmVisuals(shoulder, elbow, hand, side, prefix);
 
     const holder = new THREE.Group();
     holder.name = side > 0 ? 'itemHolder' : 'offhandHolder';
-    holder.position.set(side * 0.01, -0.01, -0.13);
+    holder.position.set(side * 0.012, -0.012, -0.12);
     hand.add(holder);
     _getItemPivot(holder);
 
@@ -692,14 +849,95 @@
       leftShoulder: left.shoulder, leftElbow: left.elbow, leftWrist: left.wrist, leftHand: left.hand, leftItemHolder: left.holder,
     };
     g.userData.limbs = { rArm: right.shoulder, lArm: left.shoulder };
+    g.userData.skinSlots = _collectSkinSlots(g);
 
     _applyGripPose(g, GRIP_EMPTY);
     _saveBasePose(g, GRIP_EMPTY, null);
     return g;
   }
 
+  function _mergeAbsolutePose(base, offsets) {
+    const pose = JSON.parse(JSON.stringify(base));
+    const ro = offsets?.rArm || {};
+    const io = offsets?.item || {};
+    const sh = pose.shoulder;
+    sh.x += ro.x || 0;
+    sh.y += ro.y || 0;
+    sh.z += ro.z || 0;
+    sh.rx += ro.shoulderRx || 0;
+    sh.ry += ro.shoulderRy || 0;
+    sh.rz += ro.shoulderRz || 0;
+    pose.elbow.rx += ro.elbowRx || 0;
+    pose.wrist.rx += ro.wristRx || 0;
+    if (pose.item) {
+      pose.item.x += io.x || 0;
+      pose.item.y += io.y || 0;
+      pose.item.z += io.z || 0;
+      pose.item.rx += io.rx || 0;
+      pose.item.ry += io.ry || 0;
+      pose.item.rz += io.rz || 0;
+    }
+    return pose;
+  }
+
+  function _applyFPSDirectPose(fpsGroup, pose) {
+    if (!fpsGroup || !pose) return;
+    const parts = _getRigParts(fpsGroup);
+    const chain = parts.rArm?.userData?.chain;
+    if (!chain) return;
+    if (parts.lArm) parts.lArm.visible = false;
+
+    const sh = pose.shoulder || {};
+    chain.shoulder.position.set(sh.x ?? 0.14, sh.y ?? -0.47, sh.z ?? -0.48);
+    _setEuler(chain.shoulder, sh.rx ?? 0, sh.ry ?? 0, sh.rz ?? 0);
+
+    const el = pose.elbow || {};
+    _setEuler(chain.elbow, el.rx ?? 0.98, el.ry ?? 0, el.rz ?? 0);
+
+    const wr = pose.wrist || {};
+    _setEuler(chain.wrist, wr.rx ?? -0.30, wr.ry ?? 0.05, wr.rz ?? -0.03);
+
+    const holder = parts.rightHolder || parts.rArm?.userData?.itemHolder
+      || parts.rArm?.getObjectByName?.('itemHolder');
+    if (holder && pose.item) {
+      const it = pose.item;
+      holder.position.set(0.01, -0.01, -0.06);
+      holder.rotation.set(0, 0, 0);
+      const pivot = _getItemPivot(holder);
+      pivot.visible = true;
+      pivot.position.set(
+        _ITEM_HAND.x + (it.x || 0),
+        _ITEM_HAND.y + (it.y || 0),
+        _ITEM_HAND.z + (it.z || 0),
+      );
+      pivot.rotation.order = 'YXZ';
+      pivot.rotation.set(
+        _MC_ITEM_HOLD.x + (it.rx || 0),
+        _MC_ITEM_HOLD.y + (it.ry || 0),
+        _MC_ITEM_HOLD.z + (it.rz || 0),
+      );
+    }
+  }
+
   function _applyGripPose(fpsGroup, grip, offsets) {
     offsets = offsets || {};
+    const gripType = fpsGroup.userData.gripType;
+    let absKey = gripType;
+    if (!absKey && grip?.emptyHand && grip?.absolutePose) absKey = 'empty_hand';
+    const abs = (grip?.absolutePose && absKey && _FPS_ABSOLUTE_POSES[absKey])
+      ? _FPS_ABSOLUTE_POSES[absKey] : null;
+    if (abs) {
+      _applyFPSDirectPose(fpsGroup, _mergeAbsolutePose(abs, offsets));
+      return;
+    }
+
+    const twoHandStored = gripType && grip?.twoHanded
+      ? _FPS_TWO_HAND_POSES[gripType] : null;
+    if (twoHandStored) {
+      _applyTwoHandGripVisual(fpsGroup, grip, twoHandStored, offsets);
+      return;
+    }
+
     const parts  = _getRigParts(fpsGroup);
     const rArm   = parts.rArm;
     const lArm   = parts.lArm;
@@ -719,6 +957,8 @@
       dy: (ro.y || 0) + (ra.mcPostY || 0),
       dz: (ro.z || 0) + (ra.mcPostZ || 0),
       shoulderRx: ro.shoulderRx || 0,
+      shoulderRy: ro.shoulderRy || 0,
+      shoulderRz: ro.shoulderRz || 0,
       elbowRx: ro.elbowRx || 0,
       wristRx: ro.wristRx || 0,
     };
@@ -735,6 +975,8 @@
         dy: (lo.y || 0) + (la.mcPostY || 0),
         dz: (lo.z || 0) + (la.mcPostZ || 0),
         shoulderRx: lo.shoulderRx || 0,
+        shoulderRy: lo.shoulderRy || 0,
+        shoulderRz: lo.shoulderRz || 0,
         elbowRx: lo.elbowRx || 0,
         wristRx: lo.wristRx || 0,
       });
@@ -776,6 +1018,341 @@
     }
   }
 
+  /** Pose absolue (tuner dev) — épaule / coude / poignet / pivot item. */
+  function applyFPSDebugPose(fpsGroup, pose) {
+    _applyFPSDirectPose(fpsGroup, pose);
+    fpsGroup.userData.tunerFreeze = true;
+    fpsGroup.userData.anim = { kind: 'debug_freeze' };
+    fpsGroup.userData.debugPoseId = pose.id || null;
+  }
+
+  function _syncRelaxedChainFromArmPose(pose) {
+    if (!pose) return;
+    if (pose.shoulder) {
+      _FPS_RIGHT_RELAXED.x = pose.shoulder.x;
+      _FPS_RIGHT_RELAXED.y = pose.shoulder.y;
+      _FPS_RIGHT_RELAXED.z = pose.shoulder.z;
+      _FPS_RIGHT_RELAXED.rx = pose.shoulder.rx;
+      _FPS_RIGHT_RELAXED.ry = pose.shoulder.ry;
+      _FPS_RIGHT_RELAXED.rz = pose.shoulder.rz;
+      _FPS_LEFT_RELAXED.x = -pose.shoulder.x;
+      _FPS_LEFT_RELAXED.y = pose.shoulder.y;
+      _FPS_LEFT_RELAXED.z = pose.shoulder.z;
+      _FPS_LEFT_RELAXED.rx = pose.shoulder.rx;
+      _FPS_LEFT_RELAXED.ry = -pose.shoulder.ry;
+      _FPS_LEFT_RELAXED.rz = -pose.shoulder.rz;
+    }
+    if (pose.elbow) {
+      _FPS_CHAIN_RELAXED.ex = pose.elbow.rx;
+      _FPS_CHAIN_RELAXED.ey = pose.elbow.ry;
+      _FPS_CHAIN_RELAXED.ez = pose.elbow.rz;
+    }
+    if (pose.wrist) {
+      _FPS_CHAIN_RELAXED.wx = pose.wrist.rx;
+      _FPS_CHAIN_RELAXED.wy = pose.wrist.ry;
+      _FPS_CHAIN_RELAXED.wz = pose.wrist.rz;
+    }
+  }
+
+  function applyFPSTorchTune(pose) {
+    if (!pose) return;
+    const cur = _FPS_ABSOLUTE_POSES.tool_torche || {};
+    if (pose.shoulder) cur.shoulder = { ...pose.shoulder };
+    if (pose.elbow) cur.elbow = { ...pose.elbow };
+    if (pose.wrist) cur.wrist = { ...pose.wrist };
+    if (pose.item) cur.item = { ...pose.item };
+    _FPS_ABSOLUTE_POSES.tool_torche = cur;
+    const grip = GRIP_TYPES.tool_torche;
+    if (grip?.item && pose.item) Object.assign(grip.item, pose.item);
+  }
+
+  function applyFPSEmptyTune(pose) {
+    if (!pose) return;
+    const cur = _FPS_ABSOLUTE_POSES.empty_hand || {};
+    if (pose.shoulder) cur.shoulder = { ...pose.shoulder };
+    if (pose.elbow) cur.elbow = { ...pose.elbow };
+    if (pose.wrist) cur.wrist = { ...pose.wrist };
+    _FPS_ABSOLUTE_POSES.empty_hand = cur;
+    if (pose.idle) Object.assign(_FPS_EMPTY_ANIM.idle, pose.idle);
+    if (pose.walk) Object.assign(_FPS_EMPTY_ANIM.walk, pose.walk);
+    _syncRelaxedChainFromArmPose(pose);
+  }
+
+  /** Applique une pose validée en mémoire (+ bras FPS si fourni). */
+  function _applyArmChainPose(chain, pose) {
+    if (!chain || !pose?.shoulder) return;
+    const sh = pose.shoulder;
+    chain.shoulder.position.set(sh.x ?? 0, sh.y ?? 0, sh.z ?? 0);
+    _setEuler(chain.shoulder, sh.rx ?? 0, sh.ry ?? 0, sh.rz ?? 0);
+    const el = pose.elbow || {};
+    _setEuler(chain.elbow, el.rx ?? 0, el.ry ?? 0, el.rz ?? 0);
+    const wr = pose.wrist || {};
+    _setEuler(chain.wrist, wr.rx ?? 0, wr.ry ?? 0, wr.rz ?? 0);
+  }
+
+  function _storeTwoHandPose(gripType, pose) {
+    if (!pose) return;
+    const out = {};
+    for (const k of ['shoulder', 'elbow', 'wrist', 'lShoulder', 'lElbow', 'lWrist', 'item', 'center', 'rArm', 'lArm']) {
+      if (pose[k]) out[k] = JSON.parse(JSON.stringify(pose[k]));
+    }
+    if (Number.isFinite(pose.itemScale)) out.itemScale = pose.itemScale;
+    _FPS_TWO_HAND_POSES[gripType] = out;
+  }
+
+  function _applyMcDeltaOnChain(chain, side, mc) {
+    if (!chain || !mc) return;
+    const i = side === 'left' ? -1 : 1;
+    chain.shoulder.position.x += mc.mcPostX || 0;
+    chain.shoulder.position.y += mc.mcPostY || 0;
+    chain.shoulder.position.z += mc.mcPostZ || 0;
+    chain.shoulder.rotation.x += (mc.mcRotX || 0) * _DEG;
+    chain.shoulder.rotation.y += i * (mc.mcRotY || 0) * _DEG;
+    chain.shoulder.rotation.z += i * (mc.mcRotZ || 0) * _DEG;
+    chain.elbow.rotation.x += (mc.mcElbowX || 0) * _DEG;
+    chain.elbow.rotation.y += i * (mc.mcElbowY || 0) * _DEG;
+    chain.elbow.rotation.z += i * (mc.mcElbowZ || 0) * _DEG;
+    chain.wrist.rotation.x += (mc.mcWristX || 0) * _DEG;
+    chain.wrist.rotation.y += i * (mc.mcWristY || 0) * _DEG;
+    chain.wrist.rotation.z += i * (mc.mcWristZ || 0) * _DEG;
+  }
+
+  /** Offsets d'animation (frappe, marche…) par-dessus une pose calibrée. */
+  function _applyChainAnimOffset(chain, off) {
+    if (!chain || !off) return;
+    const sh = chain.shoulder;
+    const el = chain.elbow;
+    const wr = chain.wrist;
+    if (off.x) sh.position.x += off.x;
+    if (off.y) sh.position.y += off.y;
+    if (off.z) sh.position.z += off.z;
+    if (off.shoulderRx) sh.rotation.x += off.shoulderRx;
+    if (off.shoulderRy) sh.rotation.y += off.shoulderRy;
+    if (off.shoulderRz) sh.rotation.z += off.shoulderRz;
+    if (off.elbowRx) el.rotation.x += off.elbowRx;
+    if (off.elbowRy) el.rotation.y += off.elbowRy;
+    if (off.elbowRz) el.rotation.z += off.elbowRz;
+    if (off.wristRx) wr.rotation.x += off.wristRx;
+    if (off.wristRy) wr.rotation.y += off.wristRy;
+    if (off.wristRz) wr.rotation.z += off.wristRz;
+  }
+
+  function _applyTwoHandGripVisual(fpsGroup, grip, stored, offsets) {
+    offsets = offsets || {};
+    _applyTwoHandArmChains(fpsGroup, grip, stored);
+    const parts = _getRigParts(fpsGroup);
+    const rChain = parts.rArm?.userData?.chain;
+    const lChain = parts.lArm?.userData?.chain;
+    _applyChainAnimOffset(rChain, offsets.rArm);
+    _applyChainAnimOffset(lChain, offsets.lArm);
+    if (parts.lArm) parts.lArm.visible = true;
+
+    const swing = offsets.swing || 0;
+    if (swing > 0 && rChain) {
+      const swingSin = Math.sin(swing * Math.PI);
+      const swingEase = Math.sin(Math.sqrt(swing) * Math.PI);
+      rChain.shoulder.rotation.x += -0.68 * swingEase;
+      rChain.shoulder.rotation.z += -0.03 * swingEase;
+      rChain.elbow.rotation.x += -0.42 * swingSin;
+      rChain.wrist.rotation.x += 0.26 * swingSin;
+      if (lChain) {
+        lChain.shoulder.rotation.x += -0.68 * swingEase;
+        lChain.shoulder.rotation.z += -0.03 * swingEase;
+        lChain.elbow.rotation.x += -0.42 * swingSin;
+        lChain.wrist.rotation.x += 0.26 * swingSin;
+      }
+    }
+
+    const io = offsets.item || {};
+    if (grip.sharedItem && grip.item) {
+      parts.rArm?.userData?.chain?.hand?.updateWorldMatrix?.(true, false);
+      parts.lArm?.userData?.chain?.hand?.updateWorldMatrix?.(true, false);
+      _syncSharedItemHolder(fpsGroup, parts, grip, io);
+      const rh = parts.rightHolder || parts.rArm?.userData?.itemHolder;
+      if (rh) {
+        rh.visible = true;
+        _getItemPivot(rh).visible = false;
+      }
+    }
+    const gripType = fpsGroup.userData.gripType;
+    _applyHandItemScale(fpsGroup, gripType, stored.itemScale ?? grip.itemScale);
+  }
+
+  function _applyTwoHandArmChains(fpsGroup, grip, stored) {
+    const parts = _getRigParts(fpsGroup);
+    const rChain = parts.rArm?.userData?.chain;
+    const lChain = parts.lArm?.userData?.chain;
+    if (!rChain || !lChain) return;
+
+    const useDirectR = !!(stored?.shoulder || stored?.elbow || stored?.wrist);
+    const useDirectL = !!(stored?.lShoulder || stored?.lElbow || stored?.lWrist);
+
+    if (useDirectR) {
+      _applyArmChainPose(rChain, {
+        shoulder: stored.shoulder,
+        elbow: stored.elbow,
+        wrist: stored.wrist,
+      });
+      _applyMcDeltaOnChain(rChain, 'right', stored.rArm || grip.rArm);
+    } else {
+      _applyFPSArmChain(rChain, 'right', grip, {
+        dx: grip.rArm?.mcPostX || 0,
+        dy: grip.rArm?.mcPostY || 0,
+        dz: grip.rArm?.mcPostZ || 0,
+      });
+    }
+
+    parts.lArm.visible = true;
+    if (useDirectL) {
+      _applyArmChainPose(lChain, {
+        shoulder: stored.lShoulder,
+        elbow: stored.lElbow,
+        wrist: stored.lWrist,
+      });
+      _applyMcDeltaOnChain(lChain, 'left', stored.lArm || grip.lArm);
+    } else if (grip.lArm) {
+      _applyFPSArmChain(lChain, 'left', { rArm: grip.lArm }, {
+        dx: grip.lArm.mcPostX || 0,
+        dy: grip.lArm.mcPostY || 0,
+        dz: grip.lArm.mcPostZ || 0,
+      });
+    }
+  }
+
+  function _applyHandItemScale(fpsGroup, gripType, scale) {
+    const grip = getGrip(gripType);
+    const s = Number.isFinite(scale) ? scale : grip.itemScale;
+    if (!Number.isFinite(s)) return;
+    const holder = grip.sharedItem && grip.twoHanded
+      ? _getCenterItemHolder(fpsGroup)
+      : null;
+    if (!holder) return;
+    const pivot = _getItemPivot(holder);
+    const base = gripType === 'tool_caillou' ? 0.60 : 1;
+    const mul = s / base;
+    pivot.scale.set(mul, mul, mul);
+  }
+
+  function applyFPSGripTune(gripType, pose) {
+    const entry = GRIP_TYPES[gripType];
+    if (!entry || !pose) return;
+    if (pose.item && entry.item) Object.assign(entry.item, pose.item);
+    if (pose.rArm && entry.rArm) Object.assign(entry.rArm, pose.rArm);
+    if (pose.lArm && entry.lArm) Object.assign(entry.lArm, pose.lArm);
+    if (pose.center) entry.center = { ...(entry.center || {}), ...pose.center };
+    if (Number.isFinite(pose.itemScale)) entry.itemScale = pose.itemScale;
+    if (entry.twoHanded) _storeTwoHandPose(gripType, pose);
+  }
+
+  function applyFPSGripTuneToArms(fpsGroup, gripType, pose, opts) {
+    if (!fpsGroup || !pose) return;
+    applyFPSGripTune(gripType, pose);
+    const grip = getGrip(gripType);
+    if (opts?.freeze) {
+      fpsGroup.userData.tunerFreeze = true;
+      fpsGroup.userData.anim = { kind: 'debug_freeze' };
+    } else {
+      fpsGroup.userData.tunerFreeze = false;
+      fpsGroup.userData.anim = null;
+    }
+    fpsGroup.userData.gripType = gripType;
+    if (grip.twoHanded) {
+      _applyTwoHandGripVisual(fpsGroup, grip, _FPS_TWO_HAND_POSES[gripType] || pose, {});
+      fpsGroup.userData.basePose = {
+        grip,
+        item: grip.item ? { pos: [grip.item.x, grip.item.y, grip.item.z], rot: [grip.item.rx, grip.item.ry, grip.item.rz] } : null,
+        rArm: grip.rArm ? { ...grip.rArm } : null,
+        lArm: grip.lArm ? { ...grip.lArm, visible: true } : null,
+      };
+      return;
+    }
+    const parts = _getRigParts(fpsGroup);
+    if (pose.shoulder) _applyArmChainPose(parts.rArm?.userData?.chain, pose);
+    _saveBasePose(fpsGroup, grip, gripType);
+    _applyGripPose(fpsGroup, grip);
+  }
+
+  function applyFPSRemoteTune(pose) {
+    if (!pose?.remote) return;
+    const r = pose.remote;
+    if (Array.isArray(r.rArmRot)) _REMOTE_AIM.rArmRot = r.rArmRot.slice();
+    if (Array.isArray(r.handHolder)) _REMOTE_AIM.handHolder = r.handHolder.slice();
+    for (const key of Object.keys(GRIP_TYPES)) {
+      const g = GRIP_TYPES[key];
+      if (!g.remote) continue;
+      if (Array.isArray(r.rArmRot)) g.remote.rArmRot = r.rArmRot.slice();
+      if (Array.isArray(r.handHolder)) g.remote.handHolder = r.handHolder.slice();
+    }
+  }
+
+  function applyFPSValidatedPose(itemKey, pose, fpsArms) {
+    if (!pose) return;
+    if (itemKey === 'tool_torche') {
+      applyFPSTorchTune(pose);
+      if (fpsArms) {
+        const type = fpsArms.userData.gripType;
+        if (type === 'tool_torche') {
+          fpsArms.userData.tunerFreeze = false;
+          fpsArms.userData.anim = null;
+          _saveBasePose(fpsArms, getGrip('tool_torche'), 'tool_torche');
+        }
+      }
+      return;
+    }
+    if (itemKey === 'empty_hand') {
+      applyFPSEmptyTune(pose);
+      if (fpsArms) applyFPSEmptyTuneToArms(fpsArms, pose);
+      return;
+    }
+    if (itemKey === 'tool_caillou' || itemKey === 'tool_hachette') {
+      applyFPSGripTune(itemKey, pose);
+      if (fpsArms && fpsArms.userData.gripType === itemKey) {
+        applyFPSGripTuneToArms(fpsArms, itemKey, pose, { freeze: false });
+      }
+      return;
+    }
+    if (itemKey === 'remote_view') {
+      applyFPSRemoteTune(pose);
+    }
+  }
+
+  function loadFPSValidatedPoses(fpsArms) {
+    const entries = [
+      { storage: 'zs_arm_tuner_torch', legacy: 'zs_arm_tuner_validated', item: 'tool_torche' },
+      { storage: 'zs_arm_tuner_empty', item: 'empty_hand' },
+      { storage: 'zs_arm_tuner_rock', item: 'tool_caillou' },
+      { storage: 'zs_arm_tuner_weapon', item: 'tool_hachette' },
+      { storage: 'zs_arm_tuner_remote', item: 'remote_view' },
+    ];
+    for (const e of entries) {
+      try {
+        let raw = localStorage.getItem(e.storage);
+        if (!raw && e.legacy) raw = localStorage.getItem(e.legacy);
+        if (!raw) continue;
+        const pose = JSON.parse(raw);
+        if (!pose?.shoulder && !pose?.lShoulder && !pose?.remote && !pose?.item) continue;
+        applyFPSValidatedPose(e.item, pose, null);
+      } catch (_) { /* ignore */ }
+    }
+    if (fpsArms) {
+      const type = fpsArms.userData.gripType;
+      if (!type) applyFPSEmptyTuneToArms(fpsArms, _FPS_ABSOLUTE_POSES.empty_hand);
+      else if (type === 'tool_torche') _saveBasePose(fpsArms, getGrip(type), type);
+      else if (type === 'tool_caillou' || type === 'tool_hachette') _saveBasePose(fpsArms, getGrip(type), type);
+    }
+  }
+
+  /** Main vide : pose repos + idle/marche live (pas de freeze anim). */
+  function applyFPSEmptyTuneToArms(fpsGroup, pose) {
+    if (!fpsGroup || !pose) return;
+    applyFPSEmptyTune(pose);
+    fpsGroup.userData.tunerFreeze = false;
+    fpsGroup.userData.anim = null;
+    fpsGroup.userData.debugPoseId = 'empty_hand';
+    const grip = getGrip(null);
+    _saveBasePose(fpsGroup, grip, null);
+  }
+
   function _saveBasePose(fpsGroup, grip, type) {
     const rp = _resolveRArmPose(grip);
     fpsGroup.userData.gripType = type || null;
@@ -810,6 +1387,7 @@
     const anim = fpsGroup.userData.anim;
     const base = fpsGroup.userData.basePose;
     if (!anim || !base) return false;
+    if (anim.kind === 'debug_freeze' || fpsGroup.userData.tunerFreeze) return false;
     const now = performance.now() / 1000;
     const e = (now - anim.start) / anim.dur;
     if (e >= 1) {
@@ -894,25 +1472,46 @@
 
     fpsGroup.userData.idleTime += dt;
     const grip = base.grip;
-    const idle = grip.anim.idle;
-    const walk = grip.anim.walk;
+    const idle = (grip.emptyHand && _FPS_EMPTY_ANIM.idle)
+      ? { ...grip.anim.idle, ..._FPS_EMPTY_ANIM.idle } : grip.anim.idle;
+    const walk = (grip.emptyHand && _FPS_EMPTY_ANIM.walk)
+      ? { ...grip.anim.walk, ..._FPS_EMPTY_ANIM.walk } : grip.anim.walk;
     const t = fpsGroup.userData.idleTime;
 
     const breathe = Math.sin(t * (idle.freq || 1.6) * Math.PI * 2) * (idle.breatheY || 0.002);
     const sway    = Math.sin(t * (idle.freq || 1.6) * 0.7 * Math.PI * 2) * (idle.swayZ || 0.0015);
 
     let bobY = 0, bobZ = 0;
+    const ro = { y: breathe * 0.4 };
+    const lo = grip.twoHanded ? { y: breathe * 0.35 } : {};
     if (opts.moving && opts.speed > 0.5) {
       fpsGroup.userData.walkPhase += dt * (walk.freq || 9.0);
       const w = Math.sin(fpsGroup.userData.walkPhase);
-      bobY = w * (walk.bobY || 0.008) * Math.min(1, opts.speed / 5);
-      bobZ = Math.abs(w) * (walk.bobZ || 0.004) * Math.min(1, opts.speed / 5);
+      const pace = Math.min(1, opts.speed / 5);
+      bobY = w * (walk.bobY || 0.008) * pace;
+      bobZ = Math.abs(w) * (walk.bobZ || 0.004) * pace;
+      const swingY = Math.abs(w) * (walk.swingY || 0) * pace;
+      ro.y = breathe * 0.4 - bobY * 0.5 + swingY;
+      ro.shoulderRx = w * (walk.shoulderRx || 0) * pace;
+      ro.shoulderRy = w * (walk.shoulderRy || 0) * pace;
+      ro.elbowRx = w * (walk.elbowRx || 0) * pace;
+      ro.z = w * (walk.swingZ || 0) * pace;
+      if (grip.twoHanded) {
+        lo.y = breathe * 0.35 - bobY * 0.45 + swingY;
+        lo.shoulderRx = ro.shoulderRx;
+        lo.shoulderRy = ro.shoulderRy;
+        lo.elbowRx = ro.elbowRx;
+        lo.z = ro.z;
+      }
+    } else {
+      ro.shoulderRy = sway * 2.2;
+      if (grip.twoHanded) lo.shoulderRy = sway * -1.8;
     }
 
     _applyGripPose(fpsGroup, base.grip, {
       item: { y: breathe - bobY, z: sway + bobZ },
-      rArm: { y: breathe * 0.4 - bobY * 0.5 },
-      lArm: grip.twoHanded ? { y: breathe * 0.35 - bobY * 0.45 } : {},
+      rArm: ro,
+      lArm: lo,
     });
   }
 
@@ -992,7 +1591,7 @@
   }
 
   function _fit(type) {
-    if (type === 'tool_caillou') return 1.35;
+    if (type === 'tool_caillou') return 0.68;
     if (type === 'wpn_pistolet' || type === 'pistol') return 0.52;
     if (type === 'wpn_fusil_chasse')                  return 1.20;
     if (type === 'wpn_barre_fer' || type === 'wpn_lance_artisanale' || type === 'wpn_arc_artisanal') return 1.15;
@@ -1193,13 +1792,33 @@
 
   // ── Mise à jour de l'item en main ─────────────────────────────────────────
 
+  function _clearSharedCenterHolder(fpsGroup) {
+    const center = fpsGroup.getObjectByName('centerItemHolder');
+    if (!center) return;
+    center.visible = false;
+    center.userData.type = null;
+    const pivot = _getItemPivot(center);
+    while (pivot.children.length) pivot.remove(pivot.children[0]);
+    pivot.scale.set(1, 1, 1);
+    pivot.visible = true;
+  }
+
   function updateHandItem(fpsGroup, type) {
     // Re-render hotbar (ex. stack +1 bois) ne doit pas annuler une anim de frappe en cours.
     if (type === fpsGroup.userData.gripType) return;
 
     const parts = _getRigParts(fpsGroup);
     const rArm = parts.rArm;
+    const prevGrip = fpsGroup.userData.gripType ? getGrip(fpsGroup.userData.gripType) : null;
     const grip = getGrip(type);
+
+    if (prevGrip?.sharedItem && prevGrip?.twoHanded) {
+      _clearSharedCenterHolder(fpsGroup);
+      const rightPivot = parts.rightHolder && _getItemPivot(parts.rightHolder);
+      if (rightPivot) rightPivot.visible = true;
+      if (parts.lArm) parts.lArm.visible = false;
+    }
+
     const holder = (grip.sharedItem && grip.twoHanded)
       ? _getCenterItemHolder(fpsGroup)
       : (parts.rightHolder || rArm?.userData.itemHolder || rArm?.getObjectByName('itemHolder'));
@@ -1207,6 +1826,7 @@
     const pivot = _getItemPivot(holder);
     while (pivot.children.length) pivot.remove(pivot.children[0]);
     holder.userData.type = type || null;
+    if (grip.sharedItem && grip.twoHanded) holder.visible = true;
     const rightPivot = parts.rightHolder && _getItemPivot(parts.rightHolder);
     if (rightPivot && holder !== parts.rightHolder) rightPivot.visible = false;
     if (grip.glbOffset && grip.item) {
@@ -1228,14 +1848,16 @@
     const viewScale = fpsGroup.userData?.isFPS
       ? (cat === 'firearm' ? 0.70
         : (type === 'tool_hachette' ? 0.88
-          : (type === 'tool_caillou' ? 0.62
+          : (type === 'tool_caillou' ? 0.60
             : (cat === 'melee' || cat === 'tool' ? 0.58 : 0.82))))
       : 1;
     const procModel = _buildModel(type);
     const procGrip  = _getGripPoint(type, procModel);
-    const proc = _normalizeHeld(procModel, _fit(type) * viewScale, null, procGrip);
+    const scaleMul = (grip.itemScale && type === 'tool_caillou') ? (grip.itemScale / 0.60) : 1;
+    const proc = _normalizeHeld(procModel, _fit(type) * viewScale * scaleMul, null, procGrip);
     pivot.add(proc);
     if (type === 'tool_torche') _addTorchFx(pivot, proc, { local: true });
+    if (grip.twoHanded && grip.itemScale) _applyHandItemScale(fpsGroup, type, grip.itemScale);
 
     // 2) Si un .glb existe, on le charge et on remplace une fois prêt
     const spec = GLB[type];
@@ -2151,4 +2773,12 @@
   ZS.tickHumanoidRig   = tickHumanoidRig;
   ZS.isArmAnimActive   = isArmAnimActive;
   ZS.applyHumanoidPalette = applyHumanoidPalette;
+  ZS.applyFPSDebugPose = applyFPSDebugPose;
+  ZS.applyFPSTorchTune = applyFPSTorchTune;
+  ZS.applyFPSEmptyTune = applyFPSEmptyTune;
+  ZS.applyFPSEmptyTuneToArms = applyFPSEmptyTuneToArms;
+  ZS.applyFPSValidatedPose = applyFPSValidatedPose;
+  ZS.applyFPSGripTuneToArms = applyFPSGripTuneToArms;
+  ZS.applyFPSRemoteTune = applyFPSRemoteTune;
+  ZS.loadFPSValidatedPoses = loadFPSValidatedPoses;
 }());

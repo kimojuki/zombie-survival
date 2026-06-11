@@ -14,7 +14,9 @@ Deux accès :
 # Mot de passe requis pour les non-admins listés
 RCON_PASSWORD=change_me_strong_password
 
-# Comptes toujours admin (sans mot de passe), séparés par des virgules
+# Propriétaires (rôle owner — non rétrogradables via CMS)
+OWNER_USERS=alice,bob
+# Alias rétrocompat (= fusionné avec OWNER_USERS)
 ADMIN_USERS=alice,bob
 
 # Dev SQLite uniquement — true = tous les joueurs admin (déconseillé)
@@ -24,10 +26,35 @@ RCON_AUTO_ADMIN=false
 | Variable | Obligatoire | Description |
 |----------|-------------|-------------|
 | `RCON_PASSWORD` | Recommandé | Active RCON in-game + API. Sans elle, seuls `ADMIN_USERS` peuvent utiliser la console. En SQLite local, défaut `dev` si absent. |
-| `ADMIN_USERS` | Optionnel | Usernames (login jeu) avec accès admin automatique. |
-| `RCON_AUTO_ADMIN` | Optionnel | Uniquement actif si `RCON_AUTO_ADMIN=true` **et** `DB_CLIENT=sqlite`. Sinon, seuls `ADMIN_USERS` sont admin. |
+| `OWNER_USERS` | Optionnel | Propriétaires du serveur (rôle `owner`, toutes permissions). |
+| `ADMIN_USERS` | Optionnel | Alias rétrocompat — même effet que `OWNER_USERS`. |
+| `RCON_AUTO_ADMIN` | Optionnel | Uniquement actif si `RCON_AUTO_ADMIN=true` **et** `DB_CLIENT=sqlite`. Sinon, seuls les propriétaires / rôles DB comptent. |
 
-**Sécurité prod :** utiliser un mot de passe fort, ne pas committer `.env`, limiter `ADMIN_USERS` aux ops/dev.
+**Sécurité prod :** utiliser un mot de passe fort, ne pas committer `.env`, limiter `OWNER_USERS` aux ops/dev.
+
+---
+
+## Rôles & permissions (CMS F8)
+
+Rôles persistés en base (`player_roles`) + propriétaires `.env` :
+
+| Rôle | Usage typique |
+|------|----------------|
+| `owner` | Propriétaire — tout (via `.env` ou attribution) |
+| `super_admin` | Co-admin — tout sauf nommer un autre propriétaire |
+| `admin` | CMS standard (décor, joueurs, calibrages, RCON) |
+| `moderator` | Joueurs connectés + kick/tp via RCON |
+| `builder` | Édition décor live uniquement |
+| `tester` | Calibrages + scénario intro |
+| `player` | Défaut — pas d'accès hub |
+
+**API** (JWT Bearer) :
+- `GET /api/admin/roles` — catalogue + attributions (`players.roles`)
+- `PUT /api/admin/roles/:username` — `{ "role": "admin" }`
+- `DELETE /api/admin/roles/:username` — repasse en joueur standard
+- `GET /api/admin/roles/me` — rôle courant + permissions
+
+**In-game** : F8 → **Rôles & permissions** (si `players.roles`). Mise à jour live via socket `admin-role-update`.
 
 ---
 
@@ -174,7 +201,7 @@ Objets visibles par tous les joueurs, synchronisés via `decorItems` au `game-in
 |----------|-------------|
 | `decorprefabs` | Liste les prefabs (`spawn_campfire`, `storage_chest`, `building_survivor_shack`, `smallcity_house_a`, …) |
 | **Hub admin** | **`/prefab-catalog.html`** ou **`/admin.html`** — menu latéral (catalogue prefabs + **carte monde**). Auth JWT admin. |
-| **Catalogue prefabs** | `GET /api/admin/prefab-catalog` — auto-sync, aperçu 3D, **colonne Orientation** (devant/dos). Voir [DECOR_PREFAB_ORIENTATION.md](DECOR_PREFAB_ORIENTATION.md). |
+| **Catalogue prefabs** | `GET /api/admin/prefab-catalog` — auto-sync, aperçu 3D, **colonne Orientation** (devant/dos). **Revue qualité** : Valider / À refaire (commentaire obligatoire min. 3 car. pour « à refaire »), liste `reworkList` + détails `reworkDetails` (SQLite `world_meta`). `PUT /api/admin/prefab-catalog/review` body `{ prefabId, status: "validated"|"rework"|null, comment?: string }`. Voir [DECOR_PREFAB_ORIENTATION.md](DECOR_PREFAB_ORIENTATION.md). |
 | **Carte monde admin** | `GET /api/admin/world-map` — secteurs, routes, POI, tous les `decorItems`, joueurs en ligne. UI : `admin-world-map.js` (zoom, pan, filtres, clic = panneau édition). |
 | **Édition décor admin** | `GET/PATCH/DELETE /api/admin/decor/:id` — modifier position, orientation, scale, épave, ancre coffre ; sync clients via `decor-item-spawn`. |
 | `decoritems [filtre]` | Liste les items de jeu posables comme objet décor |
@@ -190,6 +217,8 @@ Objets visibles par tous les joueurs, synchronisés via `decorItems` au `game-in
 | `decorseed trees reset` | Supprime les arbres seed et les replace (hors palmiers) |
 | `decorseed palms` | Ajoute les palmiers plage (`tree_palm`) si absents (~20) |
 | `decorseed palms reset` | Supprime les palmiers seed et les replace sur le sable |
+| `decorseed beach` | Props narratifs spawn plage (débris naufrage + affaires échouées) |
+| `decorseed beach reset` | Supprime les props `beach_spawn_props` et les replace (`beach-prop-placements.mjs`) |
 | `decorseed s01` | Complète / repositionne les POI S01 seedés (`computeS01DecorPlacements`) |
 | `decorseed s01 reset` | Purge tout decor `s01:*` puis reseed + sync clients |
 | `decoradd prefab tree_palm [here\|x z] [rotY] [scale]` | Pose un palmier — récoltable (bois), croissance progressive |

@@ -129,7 +129,7 @@
 
     .toolbar {
       display: grid;
-      grid-template-columns: 1fr auto auto;
+      grid-template-columns: 1fr auto auto auto;
       gap: 12px;
       align-items: center;
       margin-bottom: 16px;
@@ -240,6 +240,178 @@
       pointer-events: none;
     }
     .preview-loading { color: var(--muted); font-size: 11px; margin-top: 6px; }
+
+    .rework-banner {
+      margin-bottom: 14px;
+      padding: 12px 14px;
+      border-radius: 14px;
+      border: 1px solid rgba(255,159,107,0.35);
+      background: rgba(255,159,107,0.08);
+      font-size: 12px;
+      line-height: 1.55;
+    }
+    .rework-banner.hidden { display: none; }
+    .rework-banner h3 {
+      margin: 0 0 8px;
+      font-size: 13px;
+      color: #ff9f6b;
+      letter-spacing: 0.04em;
+    }
+    .rework-banner ul {
+      margin: 0;
+      padding-left: 18px;
+      columns: 2;
+      column-gap: 24px;
+    }
+    .rework-banner li { break-inside: avoid; margin-bottom: 4px; }
+    .rework-banner .id { color: var(--accent-2); }
+    .rework-banner .rework-comment {
+      margin-top: 2px;
+      color: var(--text);
+      font-size: 11px;
+      opacity: 0.92;
+      white-space: pre-wrap;
+    }
+
+    .rework-comment-inline {
+      margin-top: 6px;
+      font-size: 11px;
+      line-height: 1.45;
+      color: #ff9f6b;
+      white-space: pre-wrap;
+      max-width: 220px;
+    }
+
+    .rework-comment-dialog {
+      position: fixed;
+      inset: 0;
+      z-index: 12000;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 16px;
+    }
+    .rework-comment-dialog.hidden { display: none; }
+    .rework-comment-dialog-backdrop {
+      position: absolute;
+      inset: 0;
+      background: rgba(8, 12, 10, 0.72);
+    }
+    .rework-comment-dialog-panel {
+      position: relative;
+      width: min(480px, 100%);
+      padding: 18px 20px 16px;
+      border-radius: 16px;
+      border: 1px solid rgba(255,159,107,0.35);
+      background: var(--panel);
+      box-shadow: 0 18px 48px rgba(0,0,0,0.45);
+    }
+    .rework-comment-dialog-panel h3 {
+      margin: 0 0 6px;
+      font-size: 15px;
+      color: #ff9f6b;
+    }
+    .rework-comment-dialog-panel .sub {
+      margin: 0 0 12px;
+      font-size: 12px;
+      color: var(--muted);
+      line-height: 1.45;
+    }
+    .rework-comment-dialog-panel .sub .id { color: var(--accent-2); }
+    .rework-comment-dialog-panel textarea {
+      width: 100%;
+      min-height: 96px;
+      resize: vertical;
+      box-sizing: border-box;
+      margin-bottom: 8px;
+      padding: 10px 12px;
+      border-radius: 10px;
+      border: 1px solid rgba(148,167,155,0.25);
+      background: rgba(0,0,0,0.2);
+      color: var(--text);
+      font: inherit;
+      line-height: 1.45;
+    }
+    .rework-comment-dialog-panel textarea:focus {
+      outline: none;
+      border-color: rgba(255,159,107,0.55);
+    }
+    .rework-comment-dialog-panel .hint {
+      margin: 0 0 12px;
+      font-size: 11px;
+      color: var(--muted);
+    }
+    .rework-comment-dialog-panel .err {
+      margin: 0 0 10px;
+      font-size: 11px;
+      color: #ff7a7a;
+      min-height: 1.2em;
+    }
+    .rework-comment-dialog-actions {
+      display: flex;
+      justify-content: flex-end;
+      gap: 8px;
+    }
+
+    .review-cell { min-width: 148px; }
+    .review-badge {
+      display: inline-block;
+      margin-bottom: 8px;
+      padding: 2px 8px;
+      border-radius: 999px;
+      font-size: 10px;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+    }
+    .review-badge.pending {
+      background: rgba(148,167,155,0.15);
+      color: var(--muted);
+    }
+    .review-badge.validated {
+      background: rgba(143,227,136,0.15);
+      color: var(--ok);
+    }
+    .review-badge.rework {
+      background: rgba(255,159,107,0.15);
+      color: #ff9f6b;
+    }
+    .review-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+    }
+    button.review-btn {
+      font-size: 11px;
+      padding: 5px 8px;
+      border-radius: 8px;
+    }
+    button.review-btn.validate.active {
+      background: rgba(143,227,136,0.18);
+      border-color: rgba(143,227,136,0.55);
+      color: var(--ok);
+    }
+    button.review-btn.rework.active {
+      background: rgba(255,159,107,0.18);
+      border-color: rgba(255,159,107,0.55);
+      color: #ff9f6b;
+    }
+    tr.row-rework td { background: rgba(255,159,107,0.04); }
+    tr.row-validated td { background: rgba(143,227,136,0.03); }
+
+    .preview-modal-action.validate.active,
+    .preview-modal-action.rework.active {
+      font-weight: 700;
+    }
+    .preview-modal-action.validate.active {
+      background: rgba(143,227,136,0.18);
+      border-color: rgba(143,227,136,0.55);
+      color: var(--ok);
+    }
+    .preview-modal-action.rework.active {
+      background: rgba(255,159,107,0.18);
+      border-color: rgba(255,159,107,0.55);
+      color: #ff9f6b;
+    }
 
     .map-toolbar {
       display: flex;
@@ -499,6 +671,15 @@
       border-top: 1px solid var(--border);
     }
     .preview-modal-desc { margin: 0; flex: 1 1 280px; color: var(--muted); font-size: 13px; line-height: 1.45; }
+    .preview-modal-rework-note {
+      margin: 0 0 10px;
+      flex: 1 1 100%;
+      font-size: 12px;
+      line-height: 1.45;
+      color: #ff9f6b;
+      white-space: pre-wrap;
+    }
+    .preview-modal-rework-note.hidden { display: none; }
     .preview-modal-actions { display: flex; gap: 8px; flex-shrink: 0; }
     .preview-modal-action {
       font-size: 12px;
@@ -519,7 +700,7 @@
 
     @media (max-width: 900px) {
       .toolbar { grid-template-columns: 1fr; }
-      th:nth-child(5), td:nth-child(5) { display: none; }
+      th:nth-child(6), td:nth-child(6) { display: none; }
     }
   </style>
   <script type="importmap">
@@ -556,7 +737,31 @@
         <div class="toolbar">
           <input id="search" type="search" placeholder="Rechercher prefab…" autocomplete="off" spellcheck="false">
           <select id="category" aria-label="Catégorie"><option value="">Toutes catégories</option></select>
+          <select id="review-filter" aria-label="Statut revue">
+            <option value="">Tous statuts</option>
+            <option value="pending">Non revus</option>
+            <option value="validated">Validés</option>
+            <option value="rework">À refaire</option>
+          </select>
           <button id="refresh-catalog" type="button">Actualiser</button>
+        </div>
+        <div class="rework-banner hidden" id="rework-banner">
+          <h3>Liste à refaire (<span id="rework-count">0</span>)</h3>
+          <ul id="rework-list"></ul>
+        </div>
+        <div class="rework-comment-dialog hidden" id="rework-comment-dialog" role="dialog" aria-modal="true" aria-labelledby="rework-comment-title">
+          <div class="rework-comment-dialog-backdrop" id="rework-comment-backdrop"></div>
+          <div class="rework-comment-dialog-panel">
+            <h3 id="rework-comment-title">Pourquoi à refaire ?</h3>
+            <p class="sub" id="rework-comment-sub"></p>
+            <textarea id="rework-comment-input" maxlength="500" placeholder="Ex. proportions incorrectes, textures fades, face client mal orientée…" spellcheck="true"></textarea>
+            <p class="hint">Minimum 3 caractères — visible dans la liste à refaire pour guider la refonte.</p>
+            <p class="err" id="rework-comment-err"></p>
+            <div class="rework-comment-dialog-actions">
+              <button type="button" id="rework-comment-cancel">Annuler</button>
+              <button type="button" class="primary" id="rework-comment-save">Enregistrer</button>
+            </div>
+          </div>
         </div>
         <div class="stats" id="stats"></div>
         <div class="table-wrap">
@@ -567,6 +772,7 @@
                 <th>Référence</th>
                 <th>Catégorie</th>
                 <th>Description</th>
+                <th>Revue</th>
                 <th>Orientation</th>
                 <th>Commande RCON</th>
               </tr>
@@ -646,6 +852,17 @@
       panelMap: document.getElementById('panel-map'),
       search: document.getElementById('search'),
       category: document.getElementById('category'),
+      reviewFilter: document.getElementById('review-filter'),
+      reworkBanner: document.getElementById('rework-banner'),
+      reworkCount: document.getElementById('rework-count'),
+      reworkList: document.getElementById('rework-list'),
+      reworkCommentDialog: document.getElementById('rework-comment-dialog'),
+      reworkCommentSub: document.getElementById('rework-comment-sub'),
+      reworkCommentInput: document.getElementById('rework-comment-input'),
+      reworkCommentErr: document.getElementById('rework-comment-err'),
+      reworkCommentCancel: document.getElementById('rework-comment-cancel'),
+      reworkCommentSave: document.getElementById('rework-comment-save'),
+      reworkCommentBackdrop: document.getElementById('rework-comment-backdrop'),
       refreshCatalog: document.getElementById('refresh-catalog'),
       stats: document.getElementById('stats'),
       rows: document.getElementById('rows'),
@@ -674,6 +891,12 @@
     let me = null;
     let prefabs = [];
     let categories = {};
+    let reviews = {};
+    let reworkList = [];
+    let reworkDetails = {};
+    let validatedList = [];
+    /** @type {((comment: string|null) => void)|null} */
+    let reworkCommentResolver = null;
     let previewReady = false;
     let mapReady = false;
     let activeSection = 'catalog';
@@ -749,7 +972,132 @@
       if (!res.ok) throw new Error(data.error || 'Impossible de charger le catalogue');
       prefabs = data.prefabs || [];
       categories = data.categories || {};
+      reviews = data.reviews || {};
+      reworkList = data.reworkList || [];
+      reworkDetails = data.reworkDetails || {};
+      validatedList = data.validatedList || [];
+      for (const p of prefabs) {
+        p.reviewStatus = reviewStatusOf(p.id);
+        p.reviewComment = reworkDetails[p.id]?.comment || null;
+      }
       return data;
+    }
+
+    function reviewEntry(id) {
+      const raw = reviews[id];
+      if (!raw) return null;
+      if (typeof raw === 'string') return { status: raw };
+      if (raw && typeof raw === 'object' && raw.status) return raw;
+      return null;
+    }
+
+    function reviewStatusOf(id) {
+      return reviewEntry(id)?.status || null;
+    }
+
+    function reviewCommentOf(id) {
+      return reviewEntry(id)?.comment || reworkDetails[id]?.comment || '';
+    }
+
+    function closeReworkCommentDialog(comment) {
+      els.reworkCommentDialog.classList.add('hidden');
+      els.reworkCommentErr.textContent = '';
+      const resolve = reworkCommentResolver;
+      reworkCommentResolver = null;
+      if (resolve) resolve(comment);
+    }
+
+    function askReworkComment(prefabId) {
+      const p = prefabs.find((x) => x.id === prefabId);
+      const label = p?.label || prefabId;
+      const existing = reviewCommentOf(prefabId);
+      els.reworkCommentSub.innerHTML = `<span class="id">${esc(prefabId)}</span> — ${esc(label)}`;
+      els.reworkCommentInput.value = existing;
+      els.reworkCommentErr.textContent = '';
+      els.reworkCommentDialog.classList.remove('hidden');
+      els.reworkCommentInput.focus();
+      els.reworkCommentInput.setSelectionRange(els.reworkCommentInput.value.length, els.reworkCommentInput.value.length);
+      return new Promise((resolve) => {
+        reworkCommentResolver = resolve;
+      });
+    }
+
+    async function requestReview(prefabId, status) {
+      if (status === 'rework') {
+        const comment = await askReworkComment(prefabId);
+        if (comment == null) return null;
+        return setReview(prefabId, status, String(comment).trim());
+      }
+      return setReview(prefabId, status);
+    }
+
+    async function setReview(prefabId, status, comment) {
+      const body = { prefabId, status };
+      if (status === 'rework' && comment) body.comment = comment;
+      const res = await fetch('/api/admin/prefab-catalog/review', {
+        method: 'PUT',
+        headers: {
+          Authorization: 'Bearer ' + token,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(body),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || 'Impossible d’enregistrer la revue');
+      reviews = data.reviews || {};
+      reworkList = data.reworkList || [];
+      reworkDetails = data.reworkDetails || {};
+      validatedList = data.validatedList || [];
+      for (const p of prefabs) {
+        p.reviewStatus = reviewStatusOf(p.id);
+        p.reviewComment = reworkDetails[p.id]?.comment || null;
+      }
+      renderReworkBanner();
+      renderRows();
+      window.dispatchEvent(new CustomEvent('prefab-review-changed', {
+        detail: {
+          prefabId,
+          status: data.status,
+          comment: data.comment || null,
+          reviews,
+        },
+      }));
+      return data;
+    }
+
+    function reviewBadge(status) {
+      if (status === 'validated') return '<span class="review-badge validated">Validé</span>';
+      if (status === 'rework') return '<span class="review-badge rework">À refaire</span>';
+      return '<span class="review-badge pending">Non revu</span>';
+    }
+
+    function reviewButtons(prefabId, status) {
+      const valActive = status === 'validated' ? ' active' : '';
+      const reworkActive = status === 'rework' ? ' active' : '';
+      return `<div class="review-actions">
+        <button type="button" class="review-btn validate${valActive}" data-prefab-id="${esc(prefabId)}" data-status="validated">Valider</button>
+        <button type="button" class="review-btn rework${reworkActive}" data-prefab-id="${esc(prefabId)}" data-status="rework">À refaire</button>
+      </div>`;
+    }
+
+    function renderReworkBanner() {
+      els.reworkCount.textContent = String(reworkList.length);
+      if (!reworkList.length) {
+        els.reworkBanner.classList.add('hidden');
+        els.reworkList.innerHTML = '';
+        return;
+      }
+      els.reworkBanner.classList.remove('hidden');
+      const byId = new Map(prefabs.map((p) => [p.id, p]));
+      els.reworkList.innerHTML = reworkList.map((id) => {
+        const p = byId.get(id);
+        const label = p?.label || id;
+        const comment = reviewCommentOf(id);
+        const commentHtml = comment
+          ? `<div class="rework-comment">${esc(comment)}</div>`
+          : '';
+        return `<li><span class="id">${esc(id)}</span> — ${esc(label)}${commentHtml}</li>`;
+      }).join('');
     }
 
     function esc(s) {
@@ -763,12 +1111,42 @@
     function filtered() {
       const q = els.search.value.trim().toLowerCase();
       const cat = els.category.value;
+      const rev = els.reviewFilter.value;
       return prefabs.filter((p) => {
         if (cat && p.category !== cat) return false;
+        const status = p.reviewStatus || reviewStatusOf(p.id);
+        if (rev === 'pending' && status) return false;
+        if (rev === 'validated' && status !== 'validated') return false;
+        if (rev === 'rework' && status !== 'rework') return false;
         if (!q) return true;
         const hay = [p.id, p.label, p.desc, p.rcon, p.notes, p.orientation, p.orientationDetail, categories[p.category] || p.category]
           .filter(Boolean).join(' ').toLowerCase();
         return hay.includes(q);
+      });
+    }
+
+    function bindReviewButtons(scope) {
+      scope.querySelectorAll('button.review-btn').forEach((btn) => {
+        btn.addEventListener('click', async () => {
+          const prefabId = btn.dataset.prefabId;
+          const status = btn.dataset.status;
+          const prevText = btn.textContent;
+          btn.disabled = true;
+          btn.textContent = '…';
+          try {
+            const result = await requestReview(prefabId, status);
+            if (result == null && status === 'rework') {
+              btn.textContent = prevText;
+            }
+          } catch (err) {
+            btn.textContent = 'Erreur';
+            setTimeout(() => { btn.textContent = prevText; }, 1200);
+            console.warn('[catalog] review', err);
+          } finally {
+            btn.disabled = false;
+            if (btn.textContent === '…') btn.textContent = prevText;
+          }
+        });
       });
     }
 
@@ -793,24 +1171,36 @@
             category: el.dataset.category,
             orientation: el.dataset.orientation,
             orientationDetail: el.dataset.orientationDetail,
+            reviewStatus: el.dataset.reviewStatus || null,
+            reviewComment: el.dataset.reviewComment || '',
           }))
           .catch((err) => console.warn('[catalog] preview', err));
       };
       els.rows.querySelectorAll('.preview-hit').forEach((btn) => {
         btn.addEventListener('click', () => openPreviewFromEl(btn));
       });
+      bindReviewButtons(els.rows);
     }
 
     function renderRows() {
       const list = filtered();
-      els.stats.textContent = `${list.length} / ${prefabs.length} prefab(s)`;
+      const reworkN = reworkList.length;
+      const validatedN = validatedList.length;
+      const pendingN = prefabs.length - reworkN - validatedN;
+      els.stats.textContent = `${list.length} / ${prefabs.length} prefab(s) — ${reworkN} à refaire · ${validatedN} validés · ${pendingN} non revus`;
       els.rows.innerHTML = list.map((p) => {
         const catLabel = categories[p.category] || p.category;
         const notes = p.notes ? `<div class="notes">${esc(p.notes)}</div>` : '';
         const auto = p.auto ? '<div class="auto">auto-détecté</div>' : '';
         const orientCls = p.orientationDocumented ? 'orient' : 'orient undoc';
         const orientCell = `<div class="${orientCls}">${esc(p.orientation || '−Z (défaut)')}</div>`;
-        return `<tr>
+        const status = p.reviewStatus || reviewStatusOf(p.id);
+        const reworkComment = status === 'rework' ? reviewCommentOf(p.id) : '';
+        const reworkCommentCell = reworkComment
+          ? `<div class="rework-comment-inline" title="Note de refonte">${esc(reworkComment)}</div>`
+          : '';
+        const rowCls = status === 'rework' ? ' class="row-rework"' : (status === 'validated' ? ' class="row-validated"' : '');
+        return `<tr${rowCls}>
           <td class="preview-cell">
             <button type="button" class="preview-hit"
               data-prefab-id="${esc(p.id)}"
@@ -820,6 +1210,8 @@
               data-category="${esc(catLabel)}"
               data-orientation="${esc(p.orientation || '')}"
               data-orientation-detail="${esc(p.orientationDetail || '')}"
+              data-review-status="${esc(status || '')}"
+              data-review-comment="${esc(reworkComment || '')}"
               aria-label="Aperçu 3D ${esc(p.label)}">
               <canvas class="preview-thumb" width="128" height="96" data-prefab-id="${esc(p.id)}"></canvas>
               <span class="preview-overlay">Aperçu 3D</span>
@@ -829,6 +1221,7 @@
           <td><div class="id">${esc(p.id)}</div><div>${esc(p.label)}</div>${auto}</td>
           <td><span class="cat">${esc(catLabel)}</span></td>
           <td>${esc(p.desc)}${notes}</td>
+          <td class="review-cell">${reviewBadge(status)}${reworkCommentCell}${reviewButtons(p.id, status)}</td>
           <td>${orientCell}</td>
           <td><div class="rcon">${esc(p.rcon)}</div><button class="copy" type="button" data-rcon="${esc(p.rcon)}">Copier</button></td>
         </tr>`;
@@ -922,6 +1315,7 @@
         els.meta.textContent = `Admin : ${me.username}`;
         await loadCatalog();
         fillCategories();
+        renderReworkBanner();
         renderRows();
         els.panelCatalog.classList.remove('hidden');
         els.panelMap.classList.remove('hidden');
@@ -940,8 +1334,9 @@
     els.sidebarBackdrop.addEventListener('click', closeSidebar);
     els.search.addEventListener('input', renderRows);
     els.category.addEventListener('change', renderRows);
+    els.reviewFilter.addEventListener('change', renderRows);
     els.refreshCatalog.addEventListener('click', () => {
-      loadCatalog().then(() => { fillCategories(); renderRows(); }).catch((err) => deny(err.message));
+      loadCatalog().then(() => { fillCategories(); renderReworkBanner(); renderRows(); }).catch((err) => deny(err.message));
     });
     els.mapRefresh.addEventListener('click', () => {
       window.AdminWorldMap.refresh().then(updateMapStats).catch((err) => {
@@ -949,6 +1344,37 @@
       });
     });
     els.mapFit.addEventListener('click', () => window.AdminWorldMap.fitView());
+
+    document.addEventListener('prefab-review-request', async (e) => {
+      const { prefabId, status } = e.detail || {};
+      if (!prefabId || !status) return;
+      try {
+        await requestReview(prefabId, status);
+      } catch (err) {
+        console.warn('[catalog] modal review', err);
+      }
+    });
+
+    els.reworkCommentCancel.addEventListener('click', () => closeReworkCommentDialog(null));
+    els.reworkCommentBackdrop.addEventListener('click', () => closeReworkCommentDialog(null));
+    els.reworkCommentSave.addEventListener('click', () => {
+      const trimmed = els.reworkCommentInput.value.trim();
+      if (trimmed.length < 3) {
+        els.reworkCommentErr.textContent = 'Le commentaire doit contenir au moins 3 caractères.';
+        return;
+      }
+      closeReworkCommentDialog(trimmed);
+    });
+    els.reworkCommentInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        closeReworkCommentDialog(null);
+      }
+      if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
+        e.preventDefault();
+        els.reworkCommentSave.click();
+      }
+    });
 
     init();
   </script>

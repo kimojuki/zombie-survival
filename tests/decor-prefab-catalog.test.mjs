@@ -17,7 +17,7 @@ import {
 
 test('discoverDecorPrefabIds — trouve tous les prefabs client connus', () => {
   const ids = discoverDecorPrefabIds();
-  assert.ok(ids.length >= 43, `attendu ≥43 ids, reçu ${ids.length}`);
+  assert.ok(ids.length >= 58, `attendu ≥58 ids, reçu ${ids.length}`);
   assert.equal(new Set(ids).size, ids.length);
   for (const id of [
     'spawn_campfire',
@@ -29,6 +29,8 @@ test('discoverDecorPrefabIds — trouve tous les prefabs client connus', () => {
     'road_barrier_post',
     'sign_beach_exit',
     's01_gas_station',
+    'spawn_urban_bench',
+    'spawn_prop_grocery_shelf',
   ]) {
     assert.ok(ids.includes(id), `id manquant: ${id}`);
   }
@@ -72,7 +74,7 @@ test('loadDecorPrefabCatalog — cohérent avec le dossier client', () => {
   assert.equal(catalog.length, ids.length);
   for (const entry of catalog) {
     assert.match(entry.id, /^[a-z0-9_]+$/);
-    assert.ok(entry.rcon.startsWith('decoradd prefab '));
+    if (entry.rcon !== '—') assert.ok(entry.rcon.startsWith('decoradd prefab '));
     assert.ok(DECOR_PREFAB_CATEGORIES[entry.category], entry.category);
   }
 });
@@ -80,6 +82,11 @@ test('loadDecorPrefabCatalog — cohérent avec le dossier client', () => {
 test('inférence catégorie et rcon bâtiment', () => {
   assert.equal(inferDecorPrefabCategory('building_survivor_shack'), 'batiment');
   assert.equal(inferDecorPrefabCategory('spawn_lantern'), 'camp');
+  assert.equal(inferDecorPrefabCategory('spawn_urban_bench'), 'ville');
+  assert.equal(inferDecorPrefabCategory('spawn_prop_sofa'), 'ville');
+  assert.equal(inferDecorPrefabCategory('spawn_game_foosball'), 'jeux');
+  assert.equal(inferDecorPrefabCategory('spawn_sport_soccer_goal'), 'sport');
+  assert.equal(inferDecorPrefabCategory('spawn_loisir_hammock'), 'loisirs');
   assert.match(defaultDecorPrefabRcon('building_survivor_shack'), /here 0 1/);
   assert.match(defaultDecorPrefabRcon('wreck_sedan'), /rust/);
 });

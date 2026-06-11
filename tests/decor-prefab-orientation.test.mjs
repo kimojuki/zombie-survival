@@ -28,7 +28,7 @@ describe('decor-prefab-orientation', () => {
     for (const id of [
       'spawn_cabin_table', 'spawn_cabin_chair', 'spawn_cabin_shelf', 'spawn_cabin_stove',
       'spawn_cabin_lantern', 'spawn_cabin_wood_box', 'spawn_cabin_rug', 'spawn_cabin_bench',
-      'spawn_cabin_basin',
+      'spawn_cabin_basin', 'spawn_cabin_wall_clock', 'spawn_cabin_coat_rack',
     ]) {
       const o = getDecorPrefabOrientation(id);
       assert.equal(o.documented, true);

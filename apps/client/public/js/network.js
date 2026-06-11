@@ -139,10 +139,17 @@
     }
   }
 
+  function _isFelledTreeDecor(d) {
+    if (!d?.prefabId?.startsWith('tree_')) return false;
+    if (d.falling) return true;
+    return Number.isFinite(d.woodRemaining) && d.woodRemaining <= 0;
+  }
+
   function _spawnDecorItem(d, spawnOpts = {}) {
     if (!d?.id || !_scene) return Promise.resolve(null);
     // Glissières posées localement au build RN (road_network + barrier_prefabs).
     if (d.prefabId?.startsWith('road_barrier_')) return Promise.resolve(null);
+    if (_isFelledTreeDecor(d)) return Promise.resolve(null);
     const pk = String(d.placementKey || '');
     if (pk.startsWith('s01:hub:') || pk.startsWith('s01:camp:')) return Promise.resolve(null);
     _removeDecorItem(d.id);
@@ -223,6 +230,9 @@
       const root = ZS.spawnDecorPrefab(_scene, d.prefabId, d.x, d.y, d.z, commonOpts);
       if (!root && placementKey.startsWith('s01:')) {
         console.warn('[decor] prefab S01 non spawné', d.prefabId, placementKey);
+      }
+      if (!root && (d.zoneId === 'beach_intro_v3' || String(d.placementKey || '').startsWith('beach:intro'))) {
+        console.warn('[decor] prefab intro plage non spawné', d.prefabId, d.placementKey);
       }
       onRoot(root);
       return Promise.resolve(root);
@@ -550,11 +560,8 @@
     const t0 = performance.now();
     L?.setPhase?.('sync', 0.05, 'Synchronisation…', 'Préparation de la partie');
 
-    if (data.isAdmin || data.rconEnabled) {
-      localStorage.setItem('zombie_is_admin', '1');
-    } else {
-      localStorage.setItem('zombie_is_admin', '0');
-    }
+    ZS.AdminAuth?.loadFromAuth?.(data);
+    if (ZS.AdminHub?.rebuildMenu) ZS.AdminHub.rebuildMenu();
     if (data.username) {
       localStorage.setItem('zombie_username', data.username);
       _localUsername = data.username;
@@ -570,6 +577,7 @@
     ZS.Groups?.init?.();
     if (data.serverRole) localStorage.setItem('zombie_server_role', data.serverRole);
     _state.selfId = data.selfId;
+    if (data.playerId != null) ZS.Inventory?.setSelfPlayerId?.(data.playerId);
     const spawn = data.spawn || ZS.SpawnZone?.spawn || null;
     if (spawn) {
       _state.player.x   = spawn.x;
@@ -590,6 +598,7 @@
     }
     if (typeof data.worldTime === 'number') ZS.setWorldTime(data.worldTime);
     if (ZS.Rcon) ZS.Rcon.init(_socket, data);
+    if (ZS.AdminPanel) ZS.AdminPanel.init(_socket, data);
     _clearSyncedWorldState();
     for (const p of data.players) {
       if (p.id === _state.selfId) continue;
@@ -692,6 +701,7 @@
     }
     if (data.survival) ZS.Survival.loadFromSave(data.survival);
     const scenario = data.scenario || data.inventory?.scenario;
+    ZS.IntroStarter?.setRockLookTarget?.(data.introRockLook);
     ZS.Scenario?.init?.(scenario, _state, _socket);
     if (typeof data.onlineCount === 'number') _setOnlineCount(data.onlineCount);
     else _setOnlineCount(remotePlayers.size + 1);
@@ -925,6 +935,14 @@
 
     socket.on('world-time', (d) => {
       if (typeof d?.time === 'number') ZS.setWorldTime(d.time);
+    });
+
+    socket.on('admin-role-update', (d) => {
+      ZS.AdminAuth?.loadFromAuth?.(d);
+      if (ZS.AdminHub?.rebuildMenu) ZS.AdminHub.rebuildMenu();
+      if (ZS.Rcon?.refreshMenu) ZS.Rcon.refreshMenu();
+      if (ZS.AdminPanel?.refreshMenu) ZS.AdminPanel.refreshMenu();
+      ZS.UI?.showNotif?.(`Rôle mis à jour : ${d.roleLabel || d.role || '?'}`);
     });
 
     socket.on('server-flags', (d) => {
@@ -1219,7 +1237,10 @@
       if (d.survival) ZS.Survival.loadFromSave(d.survival);
       else ZS.Survival?.reset?.();
       if (d.inventory?.scenario) {
-        ZS.Scenario?.onUpdate?.({ scenario: d.inventory.scenario });
+        ZS.Scenario?.init?.(d.inventory.scenario, state, _socket);
+        if (d.inventory.scenario.step === 'intro_wake') {
+          ZS.SpawnIntro?.tryStart?.(state);
+        }
       }
       ZS.UI.setHealth(100);
       ZS.UI.hideDeath();
@@ -1829,6 +1850,19 @@
     }, cb);
   }
 
+  function notifyIntroReadable(signKind) {
+    if (!_socket || !signKind) return;
+    _socket.emit('intro-readable-read', { signKind });
+  }
+
+  function requestStorageTakeAll(decorId, cb) {
+    if (!_socket || !decorId) {
+      if (typeof cb === 'function') cb({ ok: false, err: 'invalid' });
+      return;
+    }
+    _socket.emit('storage-take-all', { id: decorId }, cb);
+  }
+
   function requestStorageHit(decorId) {
     if (!_socket || !decorId) return;
     _socket.emit('storage-hit', { id: decorId });
@@ -1898,6 +1932,14 @@
     return decorItems.get(id)?.root || null;
   }
 
+  function _getDecorData(id) {
+    return decorItems.get(id)?.data || null;
+  }
+
+  function _getDecorEntry(id) {
+    return decorItems.get(id) || null;
+  }
+
   function _forEachDecor(fn) {
     decorItems.forEach((entry, id) => { fn(entry, id); });
   }
@@ -1912,12 +1954,16 @@
     getSocket: () => _socket,
     isSpawnReady: () => _spawnReady,
     requestStorageOpen, requestStorageClose, requestStorageDeposit, requestStorageWithdraw, requestStorageMove,
+    requestStorageTakeAll,
+    notifyIntroReadable,
     requestStorageHit, requestStoragePickup,
     requestUseItem, requestInvDebugSnapshot, requestCraftQueue, requestCraftCancel,
     requestBuildHit,
     requestCampfireCook,
     requestCampRest,
     getDecorRoot: _getDecorRoot,
+    getDecorData: _getDecorData,
+    getDecorEntry: _getDecorEntry,
     forEachDecor: _forEachDecor,
     patchDecorFloorHeight: _patchDecorFloorHeight,
     syncDecorFloorHeight,

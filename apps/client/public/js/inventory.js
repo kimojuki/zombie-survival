@@ -4,7 +4,9 @@
 
   const HOTBAR_SIZE = 6;
   const GRAB_RANGE  = 2.2;   // distance max pour ramasser un objet au sol
+  const GRAB_RANGE_INTRO = 3.2;
   let _grabTargetId = null;  // objet actuellement visé (à portée)
+  let _selfPlayerId = null;  // id persistant (loot personnel)
 
   let _hotbar = Array(HOTBAR_SIZE).fill(null);
   let _bag    = [];     // taille = slots_inventaire_bonus du sac équipé (0 sans sac)
@@ -182,8 +184,10 @@
     });
     // Repère l'objet le plus proche dans la portée — PAS de ramassage automatique :
     // le joueur doit appuyer sur E / le bouton « Ramasser » (voir grabNearest).
-    let nearId = null, nearItem = null, nearDist = GRAB_RANGE;
+    const grabR = ZS.Scenario?.isActive?.() ? GRAB_RANGE_INTRO : GRAB_RANGE;
+    let nearId = null, nearItem = null, nearDist = grabR;
     for (const [id, item] of _worldItems) {
+      if (!_isPersonalLootOwner(item)) continue;
       const d = Math.hypot(item.x - px, item.z - pz);
       if (d < nearDist) { nearDist = d; nearId = id; nearItem = item; }
     }
@@ -225,8 +229,19 @@
     return hasEmpty;
   }
 
+  function _isPersonalLootOwner(item) {
+    if (!item || item.ownerPlayerId == null) return true;
+    if (_selfPlayerId == null) return true;
+    return Number(item.ownerPlayerId) === Number(_selfPlayerId);
+  }
+
+  function setSelfPlayerId(id) {
+    _selfPlayerId = id != null ? Number(id) : null;
+  }
+
   function _canPickupWorldItem(item) {
     if (!item) return false;
+    if (!_isPersonalLootOwner(item)) return false;
     if (item.bag) return true;
     if (item.type === DOOR_KEY_TYPE) return _canAddDoorKey(item.lockId);
     return _canAddItem(item.type);
@@ -291,6 +306,9 @@
       if (res?.ok) {
         _scene.remove(item.mesh);
         _worldItems.delete(pickedId);
+        ZS.IntroStarter?.onPickup?.(item.type);
+      } else if (res?.err === 'not_ready') {
+        ZS.UI?.showNotif?.('Un autre objet vous attend d\'abord…');
       } else {
         ZS.UI?.showNotif?.('Ramassage impossible');
       }
@@ -926,6 +944,7 @@
     _worldItems.set(d.id, {
       mesh, type: d.type, x: d.x, z: d.z,
       lockId: d.lockId || null,
+      ownerPlayerId: d.ownerPlayerId != null ? Number(d.ownerPlayerId) : null,
     });
   }
 
@@ -2205,6 +2224,24 @@
     );
     g.add(placeholder);
 
+    if (type === 'tool_torche') {
+      g.remove(placeholder);
+      const pole = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.05, 0.065, 0.5, 6),
+        new THREE.MeshLambertMaterial({ color: 0x6b4a20 }),
+      );
+      pole.position.y = 0.08;
+      g.add(pole);
+      const flame = new THREE.Mesh(
+        new THREE.SphereGeometry(0.12, 7, 6),
+        new THREE.MeshBasicMaterial({ color: 0xff5a18 }),
+      );
+      flame.position.y = 0.38;
+      g.add(flame);
+      ring.material.color.setHex(0xff8800);
+      ring.scale.set(1.35, 1, 1.35);
+      return g;
+    }
     // Modèle 3D réel (GLB ou procédural) — caillou posé au sol
     if (type === 'tool_caillou' && ZS.RockPrefab?.buildGroundRock) {
       g.remove(placeholder);
@@ -2242,5 +2279,6 @@
     placeActiveStructure, getActiveItem, hasDoorKey, removeDoorKey, installDoorLockOnNearestDoor, installDoorLockOnAimedDoor, getWeaponAmmo, decrementAmmo, reloadWeapon, wearActiveWeapon,
     getArmorValue, getMaxHealth, togglePanel, loadFromSave, loadRespawnKit,
     ensureStarterCaillou, ensureStarterTorche, ensureStarterRations, clear,
+    setSelfPlayerId,
   };
 }());

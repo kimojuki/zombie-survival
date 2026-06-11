@@ -23,6 +23,7 @@ const qaChecklist = createQaChecklist(pool, DB_CLIENT);
 const SERVER_ROLE = getServerRole();
 const invOps = require('./src/inventory-ops');
 const { applyAdminDecorPatch, adminDecorSnapshot } = require('./src/admin-decor-ops');
+const prefabCatalogReviews = require('./src/prefab-catalog-reviews');
 const { invSnapshot: _invDebugSnapshot, logInv: _logInvDebug } = require('./src/inv-debug');
 const INV_DEBUG_SERVER_BUILD = '20260608-sleeper-survival-273';
 const {
@@ -71,15 +72,26 @@ const { pickZombiesToTrim } = require('./src/zombie-population');
 // Dev SQLite : mot de passe par défaut "dev" si RCON_PASSWORD absent (prod MySQL = désactivé)
 const RCON_PASSWORD = process.env.RCON_PASSWORD
   || (process.env.DB_CLIENT === 'sqlite' ? 'dev' : '');
-const ADMIN_USERS = new Set(
-  (process.env.ADMIN_USERS || '')
+function _parseUserSet(envKey) {
+  return (process.env[envKey] || '')
     .split(',')
     .map((s) => s.trim().toLowerCase())
-    .filter(Boolean)
-);
+    .filter(Boolean);
+}
+/** Propriétaires — OWNER_USERS + ADMIN_USERS (rétrocompat). Non rétrogradables via CMS. */
+const OWNER_USERS = new Set([
+  ..._parseUserSet('OWNER_USERS'),
+  ..._parseUserSet('ADMIN_USERS'),
+]);
+/** @deprecated alias — même ensemble que OWNER_USERS */
+const ADMIN_USERS = OWNER_USERS;
 // Dev local : admin auto pour tous (uniquement si RCON_AUTO_ADMIN=true dans .env)
 const RCON_AUTO_ADMIN = process.env.RCON_AUTO_ADMIN === 'true'
   && process.env.DB_CLIENT === 'sqlite';
+
+const { initRolesBridge } = require('./src/roles-bridge');
+const { createPlayerRolesService } = require('./src/player-roles');
+let playerRoles = null;
 
 function _gitCommit() {
   if (process.env.GIT_COMMIT) return process.env.GIT_COMMIT;
@@ -95,8 +107,19 @@ function _gitCommit() {
 }
 const GIT_COMMIT = _gitCommit();
 
-if (ADMIN_USERS.size) {
-  log.info('boot', 'RCON admins', { users: [...ADMIN_USERS], autoAll: RCON_AUTO_ADMIN });
+if (OWNER_USERS.size) {
+  log.info('boot', 'owners', { users: [...OWNER_USERS], autoAll: RCON_AUTO_ADMIN });
+}
+
+async function _initPlayerRoles() {
+  await initRolesBridge();
+  playerRoles = createPlayerRolesService(pool, {
+    ownerUsers: OWNER_USERS,
+    rconAutoAdmin: RCON_AUTO_ADMIN,
+    log,
+  });
+  await playerRoles.load();
+  return playerRoles;
 }
 
 function authFromHeader(req) {
@@ -322,11 +345,18 @@ function _gameInitTreeRadius(clientKind) {
 }
 
 /** Arbres proches du spawn dans game-init ; le reste via GET /api/world/decor-trees. */
+function _isFelledTreeDecor(item) {
+  if (!item?.prefabId?.startsWith('tree_')) return false;
+  if (item.falling) return true;
+  return Number(item.woodRemaining) <= 0;
+}
+
 function decorItemsForGameInit(px, pz, clientKind) {
   const r2 = _gameInitTreeRadius(clientKind) ** 2;
   const out = [];
   for (const d of decorItems.values()) {
     if (d.prefabId?.startsWith('road_barrier_')) continue;
+    if (_isFelledTreeDecor(d)) continue;
     if (!d.prefabId?.startsWith('tree_')) {
       out.push(d);
       continue;
@@ -344,6 +374,7 @@ function _gameInitPayload(socket, p, scenMod, wokeFromSleep) {
   const initDecor = decorItemsForGameInit(p.x, p.z, clientKind);
   return {
     selfId: socket.id,
+    playerId: _normPlayerId(p.id),
     spawn: { x: p.x, y: p.y, z: p.z, rotY: p.rotY },
     players: [...players.entries()]
       .filter(([sid]) => sid !== socket.id)
@@ -355,9 +386,7 @@ function _gameInitPayload(socket, p, scenMod, wokeFromSleep) {
     worldTime: _worldTime,
     serverFlags: { ...serverFlags },
     username: p.username,
-    rconEnabled: isAdminUser(p.username) || RCON_AUTO_ADMIN,
-    isAdmin: isAdminUser(p.username) || RCON_AUTO_ADMIN,
-    rconPreAuth: isAdminUser(p.username) || RCON_AUTO_ADMIN,
+    ..._authPayload(p.username),
     features: { chat: true, qa: isQaServer() },
     serverRole: SERVER_ROLE,
     qaEnabled: isQaServer(),
@@ -394,6 +423,7 @@ function _decorTreesBeyond(sx, sz, minR) {
   const rows = [];
   for (const d of decorItems.values()) {
     if (!d.prefabId?.startsWith('tree_')) continue;
+    if (_isFelledTreeDecor(d)) continue;
     const dx = d.x - (Number.isFinite(sx) ? sx : d.x);
     const dz = d.z - (Number.isFinite(sz) ? sz : d.z);
     const d2 = dx * dx + dz * dz;
@@ -457,6 +487,9 @@ app.post('/api/rcon', async (req, res) => {
 const DECOR_PREFAB_CATALOG_URL = pathToFileURL(
   path.join(__dirname, '../../packages/shared/src/decor-prefab-catalog.mjs'),
 ).href;
+const PREFAB_CATALOG_REVIEWS_URL = pathToFileURL(
+  path.join(__dirname, '../../packages/shared/src/prefab-catalog-reviews.mjs'),
+).href;
 const ADMIN_MAP_STATIC_URL = pathToFileURL(
   path.join(__dirname, '../../packages/shared/src/admin-map-static.mjs'),
 ).href;
@@ -499,11 +532,8 @@ function _adminDecorMarker(d) {
 }
 
 app.get('/api/admin/world-map', async (req, res) => {
-  const user = authFromHeader(req);
-  if (!user) return res.status(401).json({ ok: false, error: 'Non authentifié' });
-  if (!isAdminUser(user.username) && !RCON_AUTO_ADMIN) {
-    return res.status(403).json({ ok: false, error: 'Accès admin requis' });
-  }
+  const user = _adminAuth(req, res, 'world.map');
+  if (!user) return;
   try {
     const [staticMod, poisMod] = await Promise.all([
       import(ADMIN_MAP_STATIC_URL),
@@ -555,18 +585,249 @@ app.get('/api/admin/world-map', async (req, res) => {
   }
 });
 
-function _adminDecorAuth(req, res) {
+function _authPayload(username) {
+  if (playerRoles) return playerRoles.getAuthForUser(username);
+  const isOwner = OWNER_USERS.has((username || '').toLowerCase()) || RCON_AUTO_ADMIN;
+  return {
+    role: isOwner ? 'owner' : 'player',
+    roleLabel: isOwner ? 'Propriétaire' : 'Joueur',
+    roleColor: isOwner ? '#f0c040' : '#8a94a4',
+    permissions: isOwner ? ['*'] : [],
+    isAdmin: isOwner,
+    rconEnabled: isOwner,
+    rconPreAuth: isOwner,
+    envOwner: OWNER_USERS.has((username || '').toLowerCase()),
+  };
+}
+
+function hasPerm(username, perm) {
+  if (playerRoles) return playerRoles.hasPermission(username, perm);
+  return OWNER_USERS.has((username || '').toLowerCase()) || RCON_AUTO_ADMIN;
+}
+
+function _adminAuth(req, res, perm) {
   const user = authFromHeader(req);
   if (!user) {
     res.status(401).json({ ok: false, error: 'Non authentifié' });
     return null;
   }
-  if (!isAdminUser(user.username) && !RCON_AUTO_ADMIN) {
-    res.status(403).json({ ok: false, error: 'Accès admin requis' });
+  if (!hasPerm(user.username, perm)) {
+    res.status(403).json({ ok: false, error: 'Permission requise', perm });
     return null;
   }
   return user;
 }
+
+function _adminDecorAuth(req, res, perm = 'decor.edit') {
+  return _adminAuth(req, res, perm);
+}
+
+function _findOnlinePlayer(username) {
+  const q = String(username || '').trim().toLowerCase();
+  if (!q) return null;
+  for (const p of players.values()) {
+    if (p.username.toLowerCase() === q) return p;
+  }
+  for (const p of players.values()) {
+    if (p.username.toLowerCase().startsWith(q)) return p;
+  }
+  return null;
+}
+
+function _adminSyncPlayerPos(p) {
+  if (!p?.socketId) return;
+  const sock = io.sockets.sockets.get(p.socketId);
+  if (!sock) return;
+  sock.emit('admin-tp', { x: p.x, y: p.y, z: p.z, rotY: p.rotY });
+  sock.broadcast.emit('player-move', {
+    id: p.socketId,
+    x: p.x,
+    y: p.y,
+    z: p.z,
+    rotY: p.rotY,
+  });
+}
+
+app.get('/api/admin/players', (req, res) => {
+  const user = _adminAuth(req, res, 'players.view');
+  if (!user) return;
+  const online = [];
+  for (const [socketId, p] of players.entries()) {
+    online.push({
+      socketId,
+      id: p.id,
+      username: p.username,
+      x: +p.x.toFixed(1),
+      y: +p.y.toFixed(1),
+      z: +p.z.toFixed(1),
+      health: p.health,
+      kills: p.kills ?? 0,
+      rotY: p.rotY,
+      equipped: p.equipped || null,
+      isSelf: p.username.toLowerCase() === user.username.toLowerCase(),
+      ..._authPayload(p.username),
+    });
+  }
+  online.sort((a, b) => a.username.localeCompare(b.username));
+  const perms = _authPayload(user.username).permissions || [];
+  res.json({
+    ok: true,
+    players: online,
+    count: online.length,
+    viewer: user.username,
+    canManage: hasPerm(user.username, 'players.manage'),
+    canRoles: hasPerm(user.username, 'players.roles'),
+    updatedAt: Date.now(),
+  });
+});
+
+app.post('/api/admin/players/:username/action', (req, res) => {
+  const user = _adminAuth(req, res, 'players.manage');
+  if (!user) return;
+  const target = _findOnlinePlayer(req.params.username);
+  if (!target) return res.status(404).json({ ok: false, error: 'Joueur introuvable ou hors ligne' });
+  const actor = _findOnlinePlayer(user.username);
+  const action = String(req.body?.action || '').trim().toLowerCase();
+  let message = '';
+
+  switch (action) {
+    case 'bring': {
+      if (!actor) return res.status(400).json({ ok: false, error: 'Vous devez être connecté en jeu' });
+      target.x = actor.x;
+      target.y = actor.y;
+      target.z = actor.z + 2;
+      target.dirty = true;
+      _adminSyncPlayerPos(target);
+      message = `${target.username} amené à votre position`;
+      break;
+    }
+    case 'goto': {
+      if (!actor) return res.status(400).json({ ok: false, error: 'Vous devez être connecté en jeu' });
+      actor.x = target.x;
+      actor.y = target.y;
+      actor.z = target.z + 2;
+      actor.dirty = true;
+      _adminSyncPlayerPos(actor);
+      message = `Téléporté vers ${target.username}`;
+      break;
+    }
+    case 'heal': {
+      target.health = 100;
+      if (target._deathHandled) {
+        target._deathHandled = false;
+        delete target._deathInv;
+        delete target._deathPos;
+        delete target._deathEquipped;
+      }
+      if (!target.survival) target.survival = {};
+      target.survival.saignement = false;
+      target.dirty = true;
+      const sock = io.sockets.sockets.get(target.socketId);
+      if (sock) _emitSurvivalUpdate(sock, target);
+      message = `${target.username} soigné (100 HP)`;
+      break;
+    }
+    case 'kick': {
+      const sock = io.sockets.sockets.get(target.socketId);
+      if (sock) sock.disconnect(true);
+      message = `${target.username} expulsé`;
+      break;
+    }
+    case 'tp': {
+      const x = Number(req.body?.x);
+      const z = Number(req.body?.z);
+      if (!Number.isFinite(x) || !Number.isFinite(z)) {
+        return res.status(400).json({ ok: false, error: 'Coordonnées x/z requises' });
+      }
+      target.x = x;
+      target.z = z;
+      target.dirty = true;
+      _adminSyncPlayerPos(target);
+      message = `${target.username} → ${x.toFixed(1)}, ${z.toFixed(1)}`;
+      break;
+    }
+    default:
+      return res.status(400).json({ ok: false, error: 'Action invalide (bring, goto, heal, kick, tp)' });
+  }
+
+  log.info('admin', 'player action', { by: user.username, target: target.username, action });
+  res.json({
+    ok: true,
+    action,
+    target: target.username,
+    message,
+    player: action === 'kick' ? null : {
+      username: target.username,
+      x: +target.x.toFixed(1),
+      y: +target.y.toFixed(1),
+      z: +target.z.toFixed(1),
+      health: target.health,
+    },
+  });
+});
+
+app.get('/api/admin/roles', (req, res) => {
+  const user = _adminAuth(req, res, 'players.roles');
+  if (!user) return;
+  res.json({
+    ok: true,
+    catalog: playerRoles.getCatalog(),
+    assignments: playerRoles.listAssignments(),
+    owners: [...OWNER_USERS],
+    me: _authPayload(user.username),
+    updatedAt: Date.now(),
+  });
+});
+
+app.get('/api/admin/roles/me', (req, res) => {
+  const user = authFromHeader(req);
+  if (!user) return res.status(401).json({ ok: false, error: 'Non authentifié' });
+  res.json({ ok: true, ..._authPayload(user.username), username: user.username });
+});
+
+app.put('/api/admin/roles/:username', async (req, res) => {
+  const user = _adminAuth(req, res, 'players.roles');
+  if (!user) return;
+  const target = String(req.params.username || '').trim();
+  const roleId = String(req.body?.role || '').trim().toLowerCase();
+  if (!target) return res.status(400).json({ ok: false, error: 'username requis' });
+  const check = playerRoles.canManageRole(user.username, roleId, target);
+  if (!check.ok) return res.status(403).json({ ok: false, error: check.error });
+  try {
+    const auth = await playerRoles.setRole(target, roleId, user.username);
+    for (const [sid, p] of players.entries()) {
+      if (p.username.toLowerCase() === target.toLowerCase()) {
+        io.to(sid).emit('admin-role-update', { ...auth, username: p.username });
+      }
+    }
+    log.info('roles', 'api assign', { target, role: roleId, by: user.username });
+    res.json({ ok: true, username: target.toLowerCase(), ...auth });
+  } catch (err) {
+    const code = err.code === 'ENV_OWNER' ? 403 : 400;
+    res.status(code).json({ ok: false, error: err.message });
+  }
+});
+
+app.delete('/api/admin/roles/:username', async (req, res) => {
+  const user = _adminAuth(req, res, 'players.roles');
+  if (!user) return;
+  const target = String(req.params.username || '').trim();
+  if (!target) return res.status(400).json({ ok: false, error: 'username requis' });
+  const check = playerRoles.canRevoke(user.username, target);
+  if (!check.ok) return res.status(403).json({ ok: false, error: check.error });
+  try {
+    await playerRoles.clearRole(target);
+    const auth = _authPayload(target);
+    for (const [sid, p] of players.entries()) {
+      if (p.username.toLowerCase() === target.toLowerCase()) {
+        io.to(sid).emit('admin-role-update', { ...auth, username: p.username });
+      }
+    }
+    res.json({ ok: true, username: target.toLowerCase(), ...auth });
+  } catch (err) {
+    res.status(403).json({ ok: false, error: err.message });
+  }
+});
 
 app.get('/api/admin/decor/:id', (req, res) => {
   const user = _adminDecorAuth(req, res);
@@ -604,7 +865,7 @@ app.patch('/api/admin/decor/:id', (req, res) => {
 });
 
 app.delete('/api/admin/decor/:id', (req, res) => {
-  const user = _adminDecorAuth(req, res);
+  const user = _adminDecorAuth(req, res, 'decor.delete');
   if (!user) return;
   const id = String(req.params.id || '').trim();
   const force = req.query.force === '1' || req.body?.force === true;
@@ -615,20 +876,28 @@ app.delete('/api/admin/decor/:id', (req, res) => {
 });
 
 app.get('/api/admin/prefab-catalog', async (req, res) => {
-  const user = authFromHeader(req);
-  if (!user) return res.status(401).json({ ok: false, error: 'Non authentifié' });
-  if (!isAdminUser(user.username) && !RCON_AUTO_ADMIN) {
-    return res.status(403).json({ ok: false, error: 'Accès admin requis' });
-  }
+  const user = _adminAuth(req, res, 'prefab.catalog');
+  if (!user) return;
   try {
     const mod = await import(DECOR_PREFAB_CATALOG_URL);
     if (!decorPrefabCatalogCache.length) await _reloadDecorPrefabCatalog();
+    const reviewSnap = await prefabCatalogReviews.getPrefabCatalogReviewSnapshot();
+    const { getPrefabReviewStatus } = await import(PREFAB_CATALOG_REVIEWS_URL);
+    const prefabs = decorPrefabCatalogCache.map((p) => ({
+      ...p,
+      reviewStatus: getPrefabReviewStatus(reviewSnap.reviews, p.id),
+      reviewComment: reviewSnap.reworkDetails?.[p.id]?.comment || null,
+    }));
     res.json({
       ok: true,
-      prefabs: decorPrefabCatalogCache,
+      prefabs,
       categories: mod.DECOR_PREFAB_CATEGORIES,
-      count: decorPrefabCatalogCache.length,
+      count: prefabs.length,
       autoDiscovered: true,
+      reviews: reviewSnap.reviews,
+      reworkList: reviewSnap.reworkList,
+      reworkDetails: reviewSnap.reworkDetails,
+      validatedList: reviewSnap.validatedList,
     });
   } catch (err) {
     log.error('admin', 'prefab catalog failed', { err: err.message });
@@ -636,11 +905,36 @@ app.get('/api/admin/prefab-catalog', async (req, res) => {
   }
 });
 
+app.put('/api/admin/prefab-catalog/review', async (req, res) => {
+  const user = _adminAuth(req, res, 'prefab.catalog');
+  if (!user) return;
+  const prefabId = String(req.body?.prefabId || req.body?.id || '').trim();
+  if (!prefabId) return res.status(400).json({ ok: false, error: 'prefabId requis' });
+  let status = req.body?.status;
+  if (status === '' || status === 'none' || status === 'pending') status = null;
+  if (status != null && status !== 'validated' && status !== 'rework') {
+    return res.status(400).json({ ok: false, error: 'status invalide (validated | rework | null)' });
+  }
+  const comment = req.body?.comment != null ? String(req.body.comment) : undefined;
+  try {
+    if (!decorPrefabCatalogCache.length) await _reloadDecorPrefabCatalog();
+    const known = decorPrefabCatalogCache.some((p) => p.id === prefabId);
+    if (!known) return res.status(404).json({ ok: false, error: 'Prefab inconnu du catalogue' });
+    const result = await prefabCatalogReviews.setPrefabCatalogReview(prefabId, status, user.username, comment);
+    log.info('admin', 'prefab review', { prefabId, status: result.status, by: user.username });
+    res.json(result);
+  } catch (err) {
+    if (err.code === 'REVIEW_INVALID') {
+      return res.status(400).json({ ok: false, error: err.message });
+    }
+    log.error('admin', 'prefab review failed', { err: err.message, prefabId });
+    res.status(500).json({ ok: false, error: 'Erreur serveur' });
+  }
+});
+
 app.post('/api/rcon/session', async (req, res) => {
-  const user = authFromHeader(req);
-  if (!user) return res.status(401).json({ ok: false, error: 'Non authentifié' });
-  const isAdmin = isAdminUser(user.username) || RCON_AUTO_ADMIN;
-  if (!isAdmin) return res.status(403).json({ ok: false, error: 'Accès admin requis' });
+  const user = _adminAuth(req, res, 'rcon');
+  if (!user) return;
   const cmd = (req.body?.cmd || req.body?.command || '').trim();
   if (!cmd) return res.status(400).json({ ok: false, error: 'cmd requis' });
   if (!rcon) return res.status(503).json({ ok: false, error: 'Serveur en démarrage' });
@@ -665,11 +959,11 @@ app.post('/api/auth/register', async (req, res) => {
     if (isDevServer()) return res.status(403).json(_devAccessPayload());
     if (await getPlayer(username)) return res.status(409).json({ error: 'Nom déjà utilisé' });
     const hash = await bcrypt.hash(password, 12);
-    const id = await createPlayer(username, hash, STARTING_SAVE, _randomBeachSpawn());
+    const id = await createPlayer(username, hash, STARTING_SAVE, _introBeachSpawn());
     const token = jwt.sign({ id, username }, JWT_SECRET, { expiresIn: '7d' });
-    const isAdmin = isAdminUser(username) || RCON_AUTO_ADMIN;
-    log.info('auth', 'register ok', { username });
-    res.json({ token, username, isAdmin, rconEnabled: isAdmin, serverRole: SERVER_ROLE });
+    const auth = _authPayload(username);
+    log.info('auth', 'register ok', { username, role: auth.role });
+    res.json({ token, username, ...auth, serverRole: SERVER_ROLE });
   } catch (err) {
     log.error('auth', 'register failed', { username, err: err.message });
     res.status(500).json({ error: 'Erreur serveur: ' + err.message });
@@ -679,11 +973,9 @@ app.post('/api/auth/register', async (req, res) => {
 app.get('/api/auth/me', (req, res) => {
   const user = authFromHeader(req);
   if (!user) return res.status(401).json({ error: 'Non authentifié' });
-  const isAdmin = isAdminUser(user.username) || RCON_AUTO_ADMIN;
   res.json({
     username: user.username,
-    isAdmin,
-    rconEnabled: isAdmin,
+    ..._authPayload(user.username),
     serverRole: SERVER_ROLE,
     qaEnabled: isQaServer(),
   });
@@ -739,11 +1031,10 @@ app.post('/api/auth/login', async (req, res) => {
       health: player.health ?? 100,
       kills: player.kills ?? 0,
     });
-    const isAdmin = isAdminUser(player.username) || RCON_AUTO_ADMIN;
+    const auth = _authPayload(player.username);
     res.json({
       token, username: player.username,
-      isAdmin,
-      rconEnabled: isAdmin,
+      ...auth,
       serverRole: SERVER_ROLE,
       qaEnabled: isQaServer(),
       spawn: { x: player.pos_x ?? 0, y: player.pos_y ?? 0, z: player.pos_z ?? 0, rotY: player.rot_y ?? 0 },
@@ -787,6 +1078,8 @@ const DOOR_PREFABS = new Set([
   'smallcity_house_b',
 ]);
 const STORAGE_CHEST_CAPACITY = 27;
+const INTRO_SUITCASE_CAPACITY = 4;
+const STORAGE_PREFABS = new Set(['storage_chest', 'spawn_beach_starter_suitcase']);
 const STORAGE_CHEST_BREAK_HITS = 3;
 let zombieIdCounter    = 0;
 let itemIdCounter      = 0;
@@ -797,9 +1090,46 @@ let worldWaterZones    = [];
 // ── Spawn / kit / survie ──────────────────────────────────────────────────────
 const BEACH_SPAWN      = { x: 248, y: 1, z: -8, rotY: Math.PI / 2 }; // sync beach-spawn.mjs
 
-function _randomBeachSpawn() {
+function _beachOccupiedSpawns(excludeSocketId = null) {
+  const pts = [];
+  for (const [sid, pl] of players) {
+    if (excludeSocketId && sid === excludeSocketId) continue;
+    if (_isOnBeachSafeSand(pl.x, pl.z)) pts.push({ x: pl.x, z: pl.z });
+  }
+  return pts;
+}
+
+function _randomBeachSpawn(excludeSocketId = null) {
+  if (_beachSpawnMod?.pickBeachSpawnAwayFrom) {
+    return _beachSpawnMod.pickBeachSpawnAwayFrom(_beachOccupiedSpawns(excludeSocketId));
+  }
   if (_beachSpawnMod?.pickBeachSpawn) return _beachSpawnMod.pickBeachSpawn();
   return { ...BEACH_SPAWN };
+}
+
+function _introBeachSpawn(excludeSocketId = null) {
+  const occ = _beachOccupiedSpawns(excludeSocketId);
+  if (_beachSpawnMod?.pickBeachSpawnForIntro) {
+    return _beachSpawnMod.pickBeachSpawnForIntro(occ);
+  }
+  return _randomBeachSpawn(excludeSocketId);
+}
+
+/** Replace spawn lointain si intro incomplète (piste près de BEACH_SPAWN). */
+function _snapIntroPlayerToCluster(p) {
+  if (!_beachSpawnMod?.isInIntroSpawnCluster) return false;
+  if (_beachSpawnMod.isInIntroSpawnCluster(p.x, p.z)) return false;
+  const spawn = _introBeachSpawn(p.socketId);
+  p.x = spawn.x;
+  p.y = spawn.y;
+  p.z = spawn.z;
+  p.rotY = spawn.rotY;
+  p.anchorX = p.x;
+  p.anchorY = p.y;
+  p.anchorZ = p.z;
+  p.posSynced = true;
+  p.dirty = true;
+  return true;
 }
 
 function _isOnBeachSafeSand(x, z) {
@@ -851,6 +1181,13 @@ const STARTING_ITEMS   = {
     { type: 'food_sandwich', qty: 1 },
     null, null,
   ],
+  bag: [],
+  equip: { 'Tête': null, 'Torso': null, 'Mains': null, 'Dos': null },
+};
+
+/** Intro plage — pas de kit magique ; loot personnel au sol (brique 2). */
+const EMPTY_PLAYER_INV = {
+  hotbar: Array(6).fill(null),
   bag: [],
   equip: { 'Tête': null, 'Torso': null, 'Mains': null, 'Dos': null },
 };
@@ -1322,8 +1659,12 @@ function _dropWorldItem(type, qty, x, z, extra = {}) {
 function _addGroundItem(drop) {
   if (!drop?.id) return null;
   const item = { ...drop };
+  if (item.ownerPlayerId != null) {
+    item.personalLoot = true;
+    item.expiresAt = null;
+  }
   // Loot de bâtiment (loot:true) : reste jusqu'au ramassage. Tout le reste : 30 min.
-  if (!item.loot && item.expiresAt == null) {
+  if (!item.loot && !item.personalLoot && item.expiresAt == null) {
     item.expiresAt = Date.now() + GROUND_ITEM_TTL_MS;
   }
   items.set(item.id, item);
@@ -1374,14 +1715,25 @@ function _persistPlayer(p) {
     });
 }
 
+function _storageCapacity(item) {
+  if (!item) return 0;
+  if (item.prefabId === 'spawn_beach_starter_suitcase') return INTRO_SUITCASE_CAPACITY;
+  if (item.prefabId === 'storage_chest') return STORAGE_CHEST_CAPACITY;
+  return 0;
+}
+
 function _storagePayload(item) {
-  if (!item || item.prefabId !== 'storage_chest') return null;
-  const grid = _ensureChestGrid(item.storage, STORAGE_CHEST_CAPACITY);
+  const capacity = _storageCapacity(item);
+  if (!item || !capacity) return null;
+  const grid = _ensureChestGrid(item.storage, capacity);
   item.storage = grid;
   return {
     id: item.id,
+    prefabId: item.prefabId,
     items: grid.map((s) => (s?.type ? { type: s.type, qty: s.qty || 1 } : null)),
-    capacity: STORAGE_CHEST_CAPACITY,
+    capacity,
+    title: item.prefabId === 'spawn_beach_starter_suitcase' ? 'Valise échouée' : 'Coffre',
+    takeAllEnabled: true,
   };
 }
 
@@ -1408,6 +1760,7 @@ const ROAD_BARRIERS_URL = pathToFileURL(path.join(__dirname, '../../packages/sha
 const TREE_PLACEMENTS_URL = pathToFileURL(path.join(__dirname, '../../packages/shared/src/tree-placements.mjs')).href;
 const PALM_PLACEMENTS_URL = pathToFileURL(path.join(__dirname, '../../packages/shared/src/palm-placements.mjs')).href;
 const BEACH_SIGN_PLACEMENTS_URL = pathToFileURL(path.join(__dirname, '../../packages/shared/src/beach-sign-placements.mjs')).href;
+const BEACH_PROP_PLACEMENTS_URL = pathToFileURL(path.join(__dirname, '../../packages/shared/src/beach-prop-placements.mjs')).href;
 const S01_WORLD_PLACEMENTS_URL = pathToFileURL(path.join(__dirname, '../../packages/shared/src/s01-world-placements.mjs')).href;
 const S01_BUILD_EXCLUSIONS_URL = pathToFileURL(path.join(__dirname, '../../packages/shared/src/s01-build-exclusions.mjs')).href;
 const S01_SAFE_ZONES_URL = pathToFileURL(path.join(__dirname, '../../packages/shared/src/s01-safe-zones.mjs')).href;
@@ -1443,6 +1796,9 @@ const _craftOps = {
 };
 const RESOURCE_REGEN_URL = pathToFileURL(path.join(__dirname, 'src/resource-regen.mjs')).href;
 const SCENARIO_BEACH_URL = pathToFileURL(path.join(__dirname, 'src/scenario-beach.mjs')).href;
+const INTRO_BEACH_BEATS_URL = pathToFileURL(path.join(__dirname, 'src/intro-beach-beats.mjs')).href;
+const INTRO_BEATS_SHARED_URL = pathToFileURL(path.join(__dirname, '../../packages/shared/src/intro-beach-beats.mjs')).href;
+const BEACH_INTRO_PLACEMENTS_URL = pathToFileURL(path.join(__dirname, '../../packages/shared/src/beach-intro-placements.mjs')).href;
 const GROUPS_URL = pathToFileURL(path.join(__dirname, 'src/groups.mjs')).href;
 const COMBAT_URL = pathToFileURL(path.join(__dirname, '../../packages/shared/src/combat.mjs')).href;
 const SURVIVAL_URL = pathToFileURL(path.join(__dirname, '../../packages/shared/src/survival.mjs')).href;
@@ -1461,7 +1817,9 @@ const s01SafeModPromise = import(S01_SAFE_ZONES_URL).then((m) => { _s01SafeMod =
 let _sectorBoundsMod = null;
 const sectorBoundsModPromise = import(SECTOR_BOUNDS_URL).then((m) => { _sectorBoundsMod = m; return m; });
 let scenarioBeach = null;
+let introBeachBeats = null;
 const scenarioBeachModPromise = import(SCENARIO_BEACH_URL);
+const introBeachBeatsModPromise = import(INTRO_BEACH_BEATS_URL);
 let groupsManager = null;
 const groupsModPromise = import(GROUPS_URL);
 
@@ -1477,8 +1835,32 @@ async function _getGroupsManager() {
   return groupsManager;
 }
 
+async function _getIntroBeachBeats() {
+  if (introBeachBeats) return introBeachBeats;
+  const { createIntroBeachBeats } = await introBeachBeatsModPromise;
+  introBeachBeats = createIntroBeachBeats({
+    items,
+    decorItems,
+    addGroundItem: _addGroundItem,
+    removeGroundItem: _removeGroundItem,
+    addDecorItem: (d) => {
+      const item = _makeDecorItem({ ...d, createdBy: 'intro' });
+      io.emit('decor-item-spawn', item);
+      return item;
+    },
+    removeDecorItem: (id) => _removeDecorItem(id, { emit: true, force: true }),
+    introDecorId: (playerId, kind) => `intro_${_normPlayerId(playerId)}_${kind}`,
+    normPlayerId: _normPlayerId,
+    nextItemId: () => ++itemIdCounter,
+    notifyPlayer: (socket, payload) => { if (payload) socket.emit('scenario-update', payload); },
+    log,
+  });
+  return introBeachBeats;
+}
+
 async function _getScenarioBeach() {
   if (scenarioBeach) return scenarioBeach;
+  const beatsMod = await _getIntroBeachBeats();
   const { createScenarioBeach } = await scenarioBeachModPromise;
   scenarioBeach = createScenarioBeach({
     zombies,
@@ -1490,6 +1872,9 @@ async function _getScenarioBeach() {
     worldPersist,
     log,
     normPlayerId: _normPlayerId,
+    ensureIntroBeats: (p, socket) => beatsMod.ensure(p, socket),
+    snapIntroPlayerToCluster: _snapIntroPlayerToCluster,
+    introBeatsTick: (p, socket) => beatsMod.tick(p, socket),
   });
   return scenarioBeach;
 }
@@ -1531,14 +1916,26 @@ function _touchDecorItem(item) {
   if (item) worldPersist?.scheduleUpsertDecor(item);
 }
 
-function _removeDecorItem(id, { emit = true, force = false, markRemoved = true } = {}) {
+function _removeDecorItem(id, { emit = true, force = false, markRemoved = true, keepInMemory = false } = {}) {
   const item = decorItems.get(id);
   if (!item) return false;
   if (!force && _isDecorImmutable(item)) return false;
-  decorItems.delete(id);
   worldPersist?.scheduleDeleteDecor(id, item, { markRemoved });
+  if (!keepInMemory) decorItems.delete(id);
   if (emit) io.emit('decor-item-remove', id);
   return true;
+}
+
+/** Purge arbres abattus persistés (reload avant fin du linger 90 s). */
+function _purgeFelledTreesFromWorld() {
+  let n = 0;
+  for (const [id, d] of [...decorItems.entries()]) {
+    if (!_isFelledTreeDecor(d)) continue;
+    _removeDecorItem(id, { emit: false, force: true });
+    n++;
+  }
+  if (n) log.info('world', 'felled trees purged on load', { count: n });
+  return n;
 }
 
 function _seedDecorId(placementKey) {
@@ -1594,7 +1991,7 @@ function _makeDecorItem(d) {
     if (item.prefabId) item.kind = 'prefab';
     else if (item.type) item.kind = 'item';
   }
-  if (item.prefabId === 'storage_chest' && !Array.isArray(item.storage)) {
+  if (STORAGE_PREFABS.has(item.prefabId) && !Array.isArray(item.storage)) {
     item.storage = [];
     item.storageOpen = !!item.storageOpen;
   }
@@ -1704,6 +2101,66 @@ function ensureBeachSigns({ broadcast = false, reset = false } = {}) {
     }
     if (added.length) {
       log.info('seed', 'beach signs added', { count: added.length });
+      if (broadcast && rcon?.broadcastDecorSpawn) {
+        for (const item of added) rcon.broadcastDecorSpawn(item);
+      }
+    }
+    return added.length;
+  });
+}
+
+/** Piste intro v3 (empreintes, bouteille, feu, ponton) — seed initial. */
+function ensureBeachIntroProps({ broadcast = false, reset = false } = {}) {
+  if (reset) {
+    for (const [id, d] of decorItems) {
+      if (d.zoneId !== 'beach_intro_v3') continue;
+      _removeDecorItem(id, { emit: broadcast });
+    }
+  }
+  return import(BEACH_INTRO_PLACEMENTS_URL).then(({ computeBeachIntroPlacements, isBeachIntroPlacementValid }) => {
+    const added = [];
+    for (const p of computeBeachIntroPlacements()) {
+      if (!isBeachIntroPlacementValid(p)) {
+        log.warn('seed', 'beach intro prop skipped', { placementKey: p.placementKey, x: p.x, z: p.z });
+        continue;
+      }
+      const item = _trySeedDecor(p);
+      if (item) added.push(item);
+    }
+    if (added.length) {
+      log.info('seed', 'beach intro props added', { count: added.length });
+      if (broadcast && rcon?.broadcastDecorSpawn) {
+        for (const item of added) rcon.broadcastDecorSpawn(item);
+      }
+    }
+    return added.length;
+  });
+}
+
+/** Props narratifs plage (naufrage, affaires…) — seed initial + RCON decorseed beach. */
+function ensureBeachProps({ broadcast = false, reset = false } = {}) {
+  if (reset) {
+    for (const [id, d] of decorItems) {
+      if (d.zoneId !== 'beach_spawn_props') continue;
+      _removeDecorItem(id, { emit: broadcast });
+    }
+  }
+  return import(BEACH_PROP_PLACEMENTS_URL).then(({ computeBeachPropPlacements, isBeachPropPlacementValid }) => {
+    const added = [];
+    for (const p of computeBeachPropPlacements()) {
+      if (!isBeachPropPlacementValid(p)) {
+        log.warn('seed', 'beach prop skipped (invalid placement)', {
+          placementKey: p.placementKey,
+          x: p.x,
+          z: p.z,
+        });
+        continue;
+      }
+      const item = _trySeedDecor(p);
+      if (item) added.push(item);
+    }
+    if (added.length) {
+      log.info('seed', 'beach props added', { count: added.length });
       if (broadcast && rcon?.broadcastDecorSpawn) {
         for (const item of added) rcon.broadcastDecorSpawn(item);
       }
@@ -2060,11 +2517,11 @@ const serverFlags = {
 const adminSockets = new Set();
 
 function isAdminUser(username) {
-  return ADMIN_USERS.has((username || '').toLowerCase());
+  return hasPerm(username, 'hub.access');
 }
 
 function _canAccessDevServer(username) {
-  return isAdminUser(username) || RCON_AUTO_ADMIN;
+  return hasPerm(username, 'dev.access');
 }
 
 function _devAccessPayload() {
@@ -2573,6 +3030,8 @@ function _initRcon() {
     ensureWorldTrees,
     ensureBeachPalms,
     ensureBeachSigns,
+    ensureBeachProps,
+    ensureBeachIntroProps,
     ensureS01World,
     wipePlayerWorld,
     isDecorImmutable: _isDecorImmutable,
@@ -3058,8 +3517,8 @@ io.on('connection', async (socket) => {
   const respawnKit = forceBeachRespawn ? JSON.parse(JSON.stringify(STARTING_ITEMS)) : null;
   const freshBeachSpawn = (!restore && !forceBeachRespawn
     && (saved?.pos_x == null || saved?.pos_y == null || saved?.pos_z == null))
-    ? _randomBeachSpawn() : null;
-  const beachRespawnSpawn = forceBeachRespawn ? _randomBeachSpawn() : null;
+    ? _introBeachSpawn(socket.id) : null;
+  const beachRespawnSpawn = forceBeachRespawn ? _randomBeachSpawn(socket.id) : null;
   const p = {
     socketId: socket.id,
     id: dbId,
@@ -3096,7 +3555,23 @@ io.on('connection', async (socket) => {
   }
   const scenMod = await _getScenarioBeach();
   scenMod.initPlayerScenario(p, _save);
+  const { shouldResetIntroInventoryOnConnect } = await import(INTRO_BEATS_SHARED_URL);
+  if (!scenMod.isAct1Done(p.inv.scenario) && !wokeFromSleep && !forceBeachRespawn) {
+    if (shouldResetIntroInventoryOnConnect(p.inv.scenario, p.inv)) {
+      const _sc = p.inv.scenario;
+      p.inv = _cloneInv(EMPTY_PLAYER_INV);
+      p.inv.scenario = _sc;
+      p.dirty = true;
+    }
+  }
   scenMod.ensureTutorialZombie(p, socket);
+  if (!scenMod.isAct1Done(p.inv.scenario)) {
+    _snapIntroPlayerToCluster(p);
+    ensureBeachIntroProps({ broadcast: players.size > 0 }).catch((err) => {
+      log.error('ensureBeachIntroProps on connect failed', err);
+    });
+    (await _getIntroBeachBeats()).ensure(p, socket);
+  }
   const _invBeforeMigrate = _invDebugSnapshot(p.inv, _normalizeInv);
   _ensureSlotGrid(p.inv);
   const _invAfterMigrate = _invDebugSnapshot(p.inv, _normalizeInv);
@@ -3115,7 +3590,7 @@ io.on('connection', async (socket) => {
     setTimeout(() => { if (players.has(socket.id)) p.invincible = false; }, 5000);
   }
   // Pas de kit de départ si réveil après déco/fouille — inventaire vide = légitime.
-  if (!wokeFromSleep && !forceBeachRespawn) {
+  if (!wokeFromSleep && !forceBeachRespawn && scenMod.isAct1Done(p.inv.scenario)) {
     const rockCh = ensureStarterRock(p);
     const torchCh = ensureStarterTorch(p);
     const rationCh = ensureStarterRations(p);
@@ -3158,6 +3633,10 @@ io.on('connection', async (socket) => {
   });
 
   const _initPayload = _gameInitPayload(socket, p, scenMod, wokeFromSleep);
+  if (!scenMod.isAct1Done(p.inv.scenario)) {
+    const beatsMod = await _getIntroBeachBeats();
+    _initPayload.introRockLook = beatsMod.introRockLookTarget(p.x, p.z);
+  }
   _logInvDebug(log, 'game-init-send', {
     user: p.username,
     wokeFromSleep,
@@ -3353,6 +3832,22 @@ io.on('connection', async (socket) => {
     _getScenarioBeach().then((sc) => sc.handleClientAdvance(p, socket, step)).catch(() => {});
   });
 
+  socket.on('intro-readable-read', async (d, cb) => {
+    const reply = (payload) => { if (typeof cb === 'function') cb(payload); };
+    const kind = typeof d?.signKind === 'string' ? d.signKind.slice(0, 48) : null;
+    if (!kind) {
+      reply({ ok: false });
+      return;
+    }
+    const beatsMod = await _getIntroBeachBeats();
+    beatsMod.onReadable(p, socket, kind);
+    const scen = await _getScenarioBeach();
+    if (kind === 'beach_safe_zone' && p.inv?.scenario?.step === 'read_exit_sign') {
+      scen.handleClientAdvance(p, socket, 'act1_done');
+    }
+    reply({ ok: true });
+  });
+
   socket.on('shoot', async (d) => {
     if (p._deathHandled) return;
     const combatMod = _combatMod || await combatModPromise;
@@ -3533,11 +4028,21 @@ io.on('connection', async (socket) => {
     if (invDirty || wearRes.worn) _scheduleInvAuth(socket, p);
   });
 
-  socket.on('item-pickup', (d, cb) => {
+  socket.on('item-pickup', async (d, cb) => {
     const reply = (payload) => { if (typeof cb === 'function') cb(payload); };
     const item = items.get(d?.id);
     if (!item) {
       reply({ ok: false, err: 'gone' });
+      return;
+    }
+    if (item.ownerPlayerId != null
+      && _normPlayerId(item.ownerPlayerId) !== _normPlayerId(p.id)) {
+      reply({ ok: false, err: 'not_owner' });
+      return;
+    }
+    const lootMod = await _getIntroBeachBeats();
+    if (!lootMod.canPickup(p, item)) {
+      reply({ ok: false, err: 'not_ready' });
       return;
     }
     if (Math.hypot(item.x - p.x, item.z - p.z) > 3.0) {
@@ -3572,6 +4077,7 @@ io.on('connection', async (socket) => {
     }
     p.dirty = true;
     _emitInvAuth(socket, p);
+    if (item.introPersonal) lootMod.onPickup(p, socket, item);
     if (scenarioBeach) scenarioBeach.onPickup(p, socket, item.bag ? null : item.type);
     log.debug('items', 'pickup', { player: p.username, type: item.type, bag: !!item.bag });
     reply({ ok: true });
@@ -3663,14 +4169,16 @@ io.on('connection', async (socket) => {
       if (item.woodRemaining <= 0) {
         item.falling = true;
         item.fellAt = Date.now();
-        _touchDecorItem(item);
+        item.woodRemaining = 0;
+        // Persistance immédiate : évite la résurrection au reload pendant le linger 90 s.
+        worldPersist?.scheduleDeleteDecor(id, item, { markRemoved: true });
         io.emit('decor-tree-fell', {
           ...base,
           fallDirX: Number(d.dirX) || 0,
           fallDirZ: Number(d.dirZ) || 1,
         });
         setTimeout(() => {
-          _removeDecorItem(id);
+          _removeDecorItem(id, { emit: true, force: true, markRemoved: false, keepInMemory: false });
         }, TREE_FALL_LINGER_MS);
       } else {
         _touchDecorItem(item);
@@ -3842,34 +4350,47 @@ io.on('connection', async (socket) => {
     if (typeof cb === 'function') cb({ ok: true, lockId: oldLockId, inventory: _cloneInv(p.inv) });
   });
 
-  function _getNearbyStorage(id) {
+  async function _checkIntroSuitcaseEmptied(item) {
+    if (!item?.introPersonal || item.prefabId !== 'spawn_beach_starter_suitcase') return;
+    const capacity = _storageCapacity(item);
+    const grid = _ensureChestGrid(item.storage, capacity);
+    if (_chestFilledCount(grid) > 0) return;
+    const lootMod = await _getIntroBeachBeats();
+    lootMod.onSuitcaseEmptied(p, socket, item);
+  }
+
+  async function _getNearbyStorage(id) {
     const sid = id != null ? String(id) : '';
     if (!sid) return null;
     const item = decorItems.get(sid);
-    if (!item || item.prefabId !== 'storage_chest') return null;
+    if (!item || !STORAGE_PREFABS.has(item.prefabId)) return null;
     if (Math.hypot((item.x || 0) - p.x, (item.z || 0) - p.z) > 5) return null;
+    if (item.introPersonal) {
+      const lootMod = await _getIntroBeachBeats();
+      if (!lootMod.canOpenStorage(p, item)) return null;
+    }
     if (!Array.isArray(item.storage)) item.storage = [];
     return item;
   }
 
-  socket.on('storage-open', (d) => {
-    const item = _getNearbyStorage(d?.id);
+  socket.on('storage-open', async (d) => {
+    const item = await _getNearbyStorage(d?.id);
     if (!item) return;
     item.storageOpen = true;
     io.emit('storage-state', { id: item.id, open: true });
     socket.emit('storage-open', _storagePayload(item));
   });
 
-  socket.on('storage-close', (d) => {
-    const item = _getNearbyStorage(d?.id);
+  socket.on('storage-close', async (d) => {
+    const item = await _getNearbyStorage(d?.id);
     if (!item) return;
     item.storageOpen = false;
     io.emit('storage-state', { id: item.id, open: false });
   });
 
-  socket.on('storage-deposit', (d, cb) => {
+  socket.on('storage-deposit', async (d, cb) => {
     const reply = (payload) => { if (typeof cb === 'function') cb(payload); };
-    const item = _getNearbyStorage(d?.id);
+    const item = await _getNearbyStorage(d?.id);
     const zone = d?.zone === 'bag' || d?.zone === 'hotbar' ? d.zone : null;
     const idx = Number(d?.index);
     const qty = Math.max(1, Math.min(999, Number(d?.qty) || 1));
@@ -3882,8 +4403,9 @@ io.on('connection', async (socket) => {
       reply({ ok: false, err: 'no_item' });
       return;
     }
-    const grid = _ensureChestGrid(item.storage, STORAGE_CHEST_CAPACITY);
-    if (_chestFilledCount(grid) >= STORAGE_CHEST_CAPACITY) {
+    const capacity = _storageCapacity(item);
+    const grid = _ensureChestGrid(item.storage, capacity);
+    if (_chestFilledCount(grid) >= capacity) {
       _addStackToInv(p.inv, stack);
       _emitInvAuth(socket, p);
       socket.emit('storage-error', { message: 'Coffre plein' });
@@ -3893,7 +4415,7 @@ io.on('connection', async (socket) => {
     const toIdx = Number.isFinite(Number(d?.toIndex))
       ? Number(d.toIndex)
       : grid.findIndex((s) => !s?.type);
-    if (toIdx < 0 || toIdx >= STORAGE_CHEST_CAPACITY || grid[toIdx]?.type) {
+    if (toIdx < 0 || toIdx >= capacity || grid[toIdx]?.type) {
       _addStackToInv(p.inv, stack);
       _emitInvAuth(socket, p);
       reply({ ok: false, err: 'full' });
@@ -3909,15 +4431,16 @@ io.on('connection', async (socket) => {
     reply({ ok: true });
   });
 
-  socket.on('storage-withdraw', (d, cb) => {
+  socket.on('storage-withdraw', async (d, cb) => {
     const reply = (payload) => { if (typeof cb === 'function') cb(payload); };
-    const item = _getNearbyStorage(d?.id);
+    const item = await _getNearbyStorage(d?.id);
     if (!item) {
       reply({ ok: false, err: 'not_found' });
       return;
     }
+    const capacity = _storageCapacity(item);
     const slot = Math.max(0, Math.floor(Number(d?.slot) || 0));
-    const grid = _ensureChestGrid(item.storage, STORAGE_CHEST_CAPACITY);
+    const grid = _ensureChestGrid(item.storage, capacity);
     const stack = grid[slot];
     if (!stack?.type) {
       reply({ ok: false, err: 'empty' });
@@ -3939,13 +4462,46 @@ io.on('connection', async (socket) => {
     }
     _emitStorageUpdate(item);
     _touchDecorItem(item);
+    await _checkIntroSuitcaseEmptied(item);
     log.debug('storage', 'withdraw', { player: p.username, decorId: item.id, type: stack.type });
     reply({ ok: true, leftover: res.leftover });
   });
 
-  socket.on('storage-move', (d, cb) => {
+  socket.on('storage-take-all', async (d, cb) => {
     const reply = (payload) => { if (typeof cb === 'function') cb(payload); };
-    const item = _getNearbyStorage(d?.id);
+    const item = await _getNearbyStorage(d?.id);
+    if (!item) {
+      reply({ ok: false, err: 'not_found' });
+      return;
+    }
+    const capacity = _storageCapacity(item);
+    const grid = _ensureChestGrid(item.storage, capacity);
+    const overflow = [];
+    for (let i = 0; i < capacity; i++) {
+      const stack = grid[i];
+      if (!stack?.type) continue;
+      grid[i] = null;
+      const res = _addStackToInv(p.inv, { type: stack.type, qty: stack.qty || 1 });
+      if (res.leftover > 0) overflow.push({ type: stack.type, qty: res.leftover });
+    }
+    item.storage = grid;
+    p.dirty = true;
+    _emitInvAuth(socket, p);
+    _emitStorageUpdate(item);
+    _touchDecorItem(item);
+    for (let j = 0; j < overflow.length; j++) {
+      const o = overflow[j];
+      const ang = (j / Math.max(1, overflow.length)) * Math.PI * 2 + Math.random() * 0.4;
+      _dropWorldItem(o.type, o.qty, p.x + Math.cos(ang) * 0.9, p.z + Math.sin(ang) * 0.9);
+    }
+    await _checkIntroSuitcaseEmptied(item);
+    log.debug('storage', 'take-all', { player: p.username, decorId: item.id, overflow: overflow.length });
+    reply({ ok: true, overflow: overflow.length });
+  });
+
+  socket.on('storage-move', async (d, cb) => {
+    const reply = (payload) => { if (typeof cb === 'function') cb(payload); };
+    const item = await _getNearbyStorage(d?.id);
     if (!item) {
       reply({ ok: false, err: 'not_found' });
       return;
@@ -3956,10 +4512,11 @@ io.on('connection', async (socket) => {
       reply({ ok: false, err: 'invalid' });
       return;
     }
+    const capacity = _storageCapacity(item);
     const result = _moveStorageTransfer(
       p.inv,
       item.storage,
-      STORAGE_CHEST_CAPACITY,
+      capacity,
       { zone: from.zone, index: from.index },
       { zone: to.zone, index: to.index },
     );
@@ -3972,12 +4529,17 @@ io.on('connection', async (socket) => {
     _emitInvAuth(socket, p);
     _emitStorageUpdate(item);
     _touchDecorItem(item);
+    await _checkIntroSuitcaseEmptied(item);
     reply({ ok: true });
   });
 
-  socket.on('storage-hit', (d) => {
-    const item = _getNearbyStorage(d?.id);
+  socket.on('storage-hit', async (d) => {
+    const item = await _getNearbyStorage(d?.id);
     if (!item) return;
+    if (item.introPersonal) {
+      socket.emit('storage-error', { message: 'Impossible de casser cet objet' });
+      return;
+    }
     if (_isDecorImmutable(item)) {
       socket.emit('storage-error', { message: 'Coffre fixe — ne peut pas être cassé' });
       return;
@@ -4008,11 +4570,15 @@ io.on('connection', async (socket) => {
     });
   });
 
-  socket.on('storage-pickup', (d, cb) => {
+  socket.on('storage-pickup', async (d, cb) => {
     const reply = (payload) => { if (typeof cb === 'function') cb(payload); };
-    const item = _getNearbyStorage(d?.id);
+    const item = await _getNearbyStorage(d?.id);
     if (!item) {
       reply({ ok: false, error: 'Coffre introuvable' });
+      return;
+    }
+    if (item.introPersonal) {
+      reply({ ok: false, error: 'Objet fixe' });
       return;
     }
     if (_isDecorImmutable(item)) {
@@ -4402,7 +4968,7 @@ io.on('connection', async (socket) => {
     log.debug('death', 'ignored client player-died', { player: p.username });
   });
 
-  socket.on('respawn', () => {
+  socket.on('respawn', async () => {
     if (p.health > 0 && !p._deathHandled) return;
     _spawnDeathBagFromPlayer(p);
     delete p._deathInv;
@@ -4412,19 +4978,38 @@ io.on('connection', async (socket) => {
     p.health = 100;
     _resetLifeStats(p);
     p.invincible = true;
-    const kit = JSON.parse(JSON.stringify(STARTING_ITEMS));
-    const keepScenario = p._scenarioKeep || p.inv?.scenario;
-    p.inv = kit;
-    if (keepScenario) {
-      p.inv.scenario = keepScenario;
+    const adminIntroReset = hasPerm(p.username, 'scenario') && p.adminIntroResetOnRespawn;
+    const scKeep = p._scenarioKeep || p.inv?.scenario;
+    const introRespawn = adminIntroReset
+      || (scenarioBeach && scKeep && !scenarioBeach.isAct1Done(scKeep));
+    const kit = JSON.parse(JSON.stringify(introRespawn ? EMPTY_PLAYER_INV : STARTING_ITEMS));
+    if (!adminIntroReset) {
+      const keepScenario = p._scenarioKeep || p.inv?.scenario;
+      p.inv = kit;
+      if (keepScenario) {
+        p.inv.scenario = keepScenario;
+        delete p._scenarioKeep;
+      }
+    } else {
+      p.inv = kit;
       delete p._scenarioKeep;
     }
     p.survival = { ...DEFAULT_SURVIVAL };
-    const spawn = _randomBeachSpawn();
+    const spawn = introRespawn ? _introBeachSpawn(socket.id) : _randomBeachSpawn(socket.id);
     p.x = spawn.x;
     p.y = spawn.y;
     p.z = spawn.z;
     p.rotY = spawn.rotY;
+    if (introRespawn) {
+      p.anchorX = spawn.x;
+      p.anchorY = spawn.y;
+      p.anchorZ = spawn.z;
+      const scAnchor = p.inv?.scenario;
+      if (scAnchor) {
+        scAnchor.anchorX = spawn.x;
+        scAnchor.anchorZ = spawn.z;
+      }
+    }
     p.lastX = p.x;
     p.lastZ = p.z;
     p.lastMoveAt = Date.now();
@@ -4449,8 +5034,21 @@ io.on('connection', async (socket) => {
       rotY: p.rotY,
       equipped: p.equipped || null,
     });
-    if (scenarioBeach) scenarioBeach.onRespawnDuringIntro(p, socket);
-    log.info('death', 'respawn', { player: p.username, spawn, kit: 'caillou+torche' });
+    if (scenarioBeach) {
+      if (adminIntroReset) scenarioBeach.resetScenario(p, socket);
+      else {
+        scenarioBeach.onRespawnDuringIntro(p, socket);
+        if (!scenarioBeach.isAct1Done(p.inv.scenario)) {
+          (await _getIntroBeachBeats()).ensure(p, socket);
+        }
+      }
+    }
+    log.info('death', 'respawn', {
+      player: p.username,
+      spawn,
+      kit: 'caillou+torche',
+      adminIntroReset: !!adminIntroReset,
+    });
   });
 
   // Fouille joueur endormi (déco) ou mort au sol
@@ -4629,18 +5227,48 @@ io.on('connection', async (socket) => {
     if (typeof cb === 'function') cb({ ok: true });
   });
 
+  socket.on('admin-intro-reset-toggle', (data, cb) => {
+    if (typeof cb !== 'function') return;
+    if (!hasPerm(p.username, 'scenario')) {
+      return cb({ ok: false, error: 'Permission scenario requise' });
+    }
+    const enabled = !!data?.enabled;
+    p.adminIntroResetOnRespawn = enabled;
+    log.info('scenario', 'admin intro test toggle', {
+      user: p.username,
+      enabled,
+    });
+    cb({ ok: true, enabled });
+  });
+
+  socket.on('admin-intro-reset-now', (data, cb) => {
+    if (typeof cb !== 'function') return;
+    if (!hasPerm(p.username, 'scenario')) {
+      return cb({ ok: false, error: 'Permission scenario requise' });
+    }
+    if (p._deathHandled || p.health <= 0) {
+      return cb({ ok: false, error: 'Déjà mort — cliquez sur Respawn' });
+    }
+    p.adminIntroResetOnRespawn = true;
+    p.invincible = false;
+    p.health = 0;
+    _handlePlayerDeath(p);
+    log.info('scenario', 'admin intro reset via death', { user: p.username });
+    cb({ ok: true, enabled: true });
+  });
+
   // ── Console RCON in-game ────────────────────────────────────────────────────
-  if (isAdminUser(p.username) || RCON_AUTO_ADMIN) adminSockets.add(socket.id);
-  if (isAdminUser(p.username) || RCON_AUTO_ADMIN) {
-    log.info('rcon', 'admin session', { username: p.username });
+  if (hasPerm(p.username, 'rcon')) adminSockets.add(socket.id);
+  if (hasPerm(p.username, 'rcon')) {
+    log.info('rcon', 'admin session', { username: p.username, role: playerRoles?.resolveRoleId(p.username) });
   }
 
   socket.on('rcon-auth', (password, cb) => {
     if (typeof cb !== 'function') return;
-    if (!RCON_PASSWORD && !isAdminUser(p.username)) {
+    if (!RCON_PASSWORD && !hasPerm(p.username, 'rcon')) {
       return cb({ ok: false, error: 'RCON non configuré — définissez RCON_PASSWORD dans .env' });
     }
-    if (isAdminUser(p.username) || RCON_AUTO_ADMIN || password === RCON_PASSWORD) {
+    if (hasPerm(p.username, 'rcon') || password === RCON_PASSWORD) {
       adminSockets.add(socket.id);
       log.info('rcon', 'admin auth ok', { username: p.username });
       return cb({ ok: true });
@@ -4651,7 +5279,9 @@ io.on('connection', async (socket) => {
   socket.on('rcon', (cmd, cb) => {
     if (typeof cb !== 'function') return;
     const run = async () => {
-      const authorized = adminSockets.has(socket.id) || isAdminUser(p.username) || RCON_AUTO_ADMIN;
+      const roleRcon = hasPerm(p.username, 'rcon');
+      const passwordAuth = adminSockets.has(socket.id) && !roleRcon;
+      const authorized = adminSockets.has(socket.id) || roleRcon;
       if (!authorized) {
         return cb({
           ok: false,
@@ -4659,7 +5289,12 @@ io.on('connection', async (socket) => {
         });
       }
       if (!rcon) return cb({ ok: false, lines: ['RCON pas encore initialisé — réessayez dans 1s'] });
-      const result = await rcon.execute(String(cmd || ''), { socket, player: p });
+      const result = await rcon.execute(String(cmd || ''), {
+        socket,
+        player: p,
+        passwordAuth,
+        resolvePerms: (u) => _authPayload(u).permissions,
+      });
       log.info('rcon', 'cmd', { user: p.username, cmd: String(cmd).slice(0, 80), ok: result.ok });
       cb(result);
     };
@@ -4698,6 +5333,7 @@ io.on('connection', async (socket) => {
     _getGroupsManager().then((gm) => gm.onRosterChange()).catch(() => {});
 
     if (leaving.id && leaving.health > 0) {
+      _persistPlayer(leaving).catch(() => {});
       const sleep = {
         playerId: _sleeperKey(leaving.id),
         username: leaving.username,
@@ -4757,6 +5393,7 @@ async function loadPersistedWorld() {
   await ensureWorldSchema();
   await qaChecklist.ensureSchema();
   const loaded = await worldPersist.loadInto(decorItems, structures, items, zombies, sleepingPlayers);
+  _purgeFelledTreesFromWorld();
   for (const sleep of sleepingPlayers.values()) {
     catchUpSleeperSurvival(sleep);
     _saveSleepingToDb(sleep).catch(() => {});
@@ -4800,6 +5437,8 @@ async function loadPersistedWorld() {
 
 loadPersistedWorld()
   .catch((err) => log.error('loadPersistedWorld failed', err))
+  .then(() => _initPlayerRoles())
+  .catch((err) => log.error('player roles init failed', err))
   .then(() => _runWorldCleanSlateOnce())
   .catch((err) => log.error('world clean slate failed', err))
   .then(() => { _setBoot('world_persist', 1); return seedSpawnDecorItems(); })
@@ -4818,6 +5457,10 @@ loadPersistedWorld()
   .catch((err) => log.error('ensureBeachPalms failed', err))
   .then(() => ensureBeachSigns())
   .catch((err) => log.error('ensureBeachSigns failed', err))
+  .then(() => ensureBeachProps())
+  .catch((err) => log.error('ensureBeachProps failed', err))
+  .then(() => ensureBeachIntroProps())
+  .catch((err) => log.error('ensureBeachIntroProps failed', err))
   .then(() => { _setBoot('beach_palms', 13); return ensureZombiePopulation(); })
   .catch((err) => log.error('ensureZombiePopulation failed', err))
   .then(() => { _setBoot('zombies', 14); })
@@ -4837,8 +5480,9 @@ loadPersistedWorld()
         serverStatsMs: log.SERVER_STATS_MS,
         zombies: zombies.size,
         zombieTarget: ZOMBIE_COUNT,
-        rcon: !!(RCON_PASSWORD || ADMIN_USERS.size),
-        admins: ADMIN_USERS.size,
+        rcon: !!(RCON_PASSWORD || OWNER_USERS.size),
+        owners: OWNER_USERS.size,
+        roles: playerRoles?.listAssignments?.()?.length ?? 0,
         decor: _decorStats(),
         persistedDecor: [...decorItems.values()].filter((d) => worldPersist.shouldPersistDecor(d)).length,
         groundItems: items.size,

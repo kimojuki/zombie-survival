@@ -159,6 +159,7 @@
     if (fps && _saved) fps.visible = _saved.fpsVisible !== false;
     ZS.shortcutsBlocked = null;
     if (ZS.onUiPanelClose) ZS.onUiPanelClose();
+    ZS.IntroStarter?.onWake?.();
     ZS.Scenario?.advance?.('breathe');
   }
 
@@ -188,8 +189,18 @@
     const eyeHi = _standEyeY(p.x, p.z);
     p.y = eyeLo + (eyeHi - eyeLo) * ease;
     _state.camera.pitch = 0.58 + (0 - 0.58) * ease;
+    if (_saved && ZS.IntroStarter?.lookYawFromPlayer) {
+      const lookT = Math.max(0, (t - 0.25) / 0.75);
+      const lookEase = lookT * lookT * (3 - 2 * lookT);
+      const targetYaw = ZS.IntroStarter.lookYawFromPlayer(p.x, p.z);
+      let delta = targetYaw - _saved.yaw;
+      while (delta > Math.PI) delta -= Math.PI * 2;
+      while (delta < -Math.PI) delta += Math.PI * 2;
+      _state.camera.yaw = _saved.yaw + delta * lookEase;
+    }
     cam.position.set(p.x, p.y, p.z);
     cam.rotation.x = _state.camera.pitch;
+    cam.rotation.y = _state.camera.yaw;
     if (t >= 1) _finish();
   }
 

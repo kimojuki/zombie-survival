@@ -14,6 +14,11 @@ import {
   isBuildBlockedOnBeach,
   isForestTerrainAllowed,
   pickBeachSpawn,
+  pickBeachSpawnAwayFrom,
+  pickBeachSpawnForIntro,
+  isInIntroSpawnCluster,
+  INTRO_SPAWN_CLUSTER,
+  BEACH_SPAWN_MIN_PLAYER_GAP,
 } from '../packages/shared/src/beach-spawn.mjs';
 
 test('beach spawn faces inland from east coast', () => {
@@ -71,10 +76,30 @@ test('forest terrain rejects beach sand and allows inland forest', () => {
   assert.ok(isForestTerrainAllowed(-50, 40));
 });
 
+test('pickBeachSpawnAwayFrom respects min gap from occupied points', () => {
+  const anchor = { x: BEACH_SPAWN.x, z: BEACH_SPAWN.z };
+  const p = pickBeachSpawnAwayFrom([anchor], BEACH_SPAWN_MIN_PLAYER_GAP, () => 0.42);
+  assert.ok(Math.hypot(p.x - anchor.x, p.z - anchor.z) >= BEACH_SPAWN_MIN_PLAYER_GAP - 0.01);
+  assert.ok(isOnBeachSafeSand(p.x, p.z));
+});
+
 test('pickBeachSpawn spreads along the beach', () => {
   const pts = Array.from({ length: 30 }, (_, i) => pickBeachSpawn(() => (i * 0.17) % 1));
   const xs = new Set(pts.map((p) => Math.round(p.x)));
   const zs = new Set(pts.map((p) => Math.round(p.z)));
   assert.ok(xs.size >= 4, 'x spread on sand');
   assert.ok(zs.size >= 6, 'z spread on sand');
+});
+
+test('pickBeachSpawnForIntro stays in east beach wake cluster', () => {
+  for (let i = 0; i < 24; i++) {
+    const p = pickBeachSpawnForIntro([], BEACH_SPAWN_MIN_PLAYER_GAP, () => i / 24);
+    assert.ok(isInIntroSpawnCluster(p.x, p.z), `${p.x},${p.z}`);
+    assert.ok(isOnBeachSafeSand(p.x, p.z));
+    assert.ok(p.x >= INTRO_SPAWN_CLUSTER.cx - INTRO_SPAWN_CLUSTER.rx - 0.5, 'not west of cluster');
+    assert.equal(p.rotY, BEACH_SPAWN.rotY);
+  }
+  assert.ok(isInIntroSpawnCluster(INTRO_SPAWN_CLUSTER.cx, INTRO_SPAWN_CLUSTER.cz));
+  assert.ok(!isInIntroSpawnCluster(BEACH_SPAWN.x, BEACH_SPAWN.z));
+  assert.ok(!isInIntroSpawnCluster(BEACH_SPAWN.x, BEACH_SPAWN.z + 40));
 });

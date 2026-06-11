@@ -1,8 +1,14 @@
 /** Intro plage — étapes, constantes et validateurs partagés client/serveur. */
 
 import { BEACH_SPAWN } from './beach-spawn.mjs';
+import { inBeachExitApproachZone } from './beach-intro-placements.mjs';
+import {
+  defaultIntroBeats,
+  isIntroKitDone,
+  migrateIntroBeats,
+} from './intro-beach-beats.mjs';
 
-export const BEACH_SCENARIO_VERSION = 2;
+export const BEACH_SCENARIO_VERSION = 3;
 
 export const STEPS = Object.freeze([
   'intro_wake',
@@ -16,11 +22,13 @@ export const STEPS = Object.freeze([
   'fight',
   'loot',
   'epilogue',
+  'trail_exit',
+  'read_exit_sign',
   'act1_done',
 ]);
 
 export const ACTS = Object.freeze([
-  { id: 1, title: 'Le rivage', steps: ['intro_wake', 'intro_stand', 'breathe', 'explore'] },
+  { id: 1, title: 'Le rivage', steps: ['intro_wake', 'intro_stand', 'breathe', 'explore', 'trail_exit', 'read_exit_sign'] },
   { id: 2, title: 'La forme', steps: ['walk_west', 'silhouette', 'approach'] },
   { id: 3, title: 'La vérité', steps: ['reveal', 'fight', 'loot', 'epilogue', 'act1_done'] },
 ]);
@@ -46,6 +54,8 @@ export const STEP_HUD = Object.freeze({
   approach: 'Approche-toi',
   fight: 'Défends-toi !',
   loot: 'Récupère le bandage',
+  trail_exit: 'Vers le panneau',
+  read_exit_sign: 'Lis le panneau',
 });
 
 export const STEP_HINT = Object.freeze({
@@ -56,6 +66,8 @@ export const STEP_HINT = Object.freeze({
   approach: 'Prudemment…',
   fight: 'Utilise ton caillou.',
   loot: 'Ramasse le bandage au sol.',
+  trail_exit: 'Le sentier commence près du panneau.',
+  read_exit_sign: 'Approche et lis les messages des naufragés.',
 });
 
 export const STEP_DIALOGUE = Object.freeze({
@@ -72,8 +84,10 @@ export const REVEAL_SCRIPT = Object.freeze([
 
 export const EPILOGUE_LINES = Object.freeze([
   '…Ils étaient humains. Autrefois.',
-  'Tu as un bandage. La forêt t\'attend.',
+  'Tu as un bandage. Mais d\'abord : le panneau au bout du sable.',
 ]);
+
+export const TRAIL_EXIT_LINE = 'Des survivants ont laissé des messages. Le sentier est là-bas.';
 
 export const INTRO_WAKE_LINES = Object.freeze([
   'Du sable. Des vagues. Aucun souvenir.',
@@ -135,15 +149,32 @@ export function tutorialPosForPlayer(playerId) {
   };
 }
 
-export function defaultScenario(step = 'intro_wake') {
-  return {
+export function scenarioSpawnRef(scenario) {
+  if (scenario
+    && Number.isFinite(scenario.anchorX)
+    && Number.isFinite(scenario.anchorZ)) {
+    return { x: scenario.anchorX, z: scenario.anchorZ };
+  }
+  return BEACH_SPAWN_REF;
+}
+
+export function defaultScenario(step = 'intro_wake', anchor = null) {
+  const sc = {
     act: 'beach',
     step,
     completed: step === 'act1_done',
     version: BEACH_SCENARIO_VERSION,
     tutorialZombieId: null,
     tutorialKilled: false,
+    introBeats: step === 'act1_done'
+      ? { footprints: true, campfire: true, pier: true, kitDone: true }
+      : defaultIntroBeats(),
   };
+  if (anchor && Number.isFinite(anchor.x) && Number.isFinite(anchor.z)) {
+    sc.anchorX = anchor.x;
+    sc.anchorZ = anchor.z;
+  }
+  return sc;
 }
 
 export function migrateScenario(savedInv) {
@@ -151,28 +182,38 @@ export function migrateScenario(savedInv) {
     const s = savedInv.scenario;
     if (!s.version) s.version = BEACH_SCENARIO_VERSION;
     if (s.step === 'act1_done') s.completed = true;
+    s.introBeats = migrateIntroBeats(s);
+    if (s.version < 3) s.version = BEACH_SCENARIO_VERSION;
     return s;
   }
   return defaultScenario('act1_done');
 }
 
 export function canClientAdvance(fromStep, toStep) {
+  if (toStep === 'act1_done' && fromStep === 'read_exit_sign') return true;
   const from = stepIndex(fromStep);
   const to = stepIndex(toStep);
   if (to !== from + 1) return false;
-  const clientSteps = new Set(['intro_stand', 'breathe', 'act1_done']);
+  const clientSteps = new Set(['intro_stand', 'breathe', 'trail_exit', 'act1_done']);
   return clientSteps.has(toStep);
 }
 
+export { isIntroKitDone, defaultIntroBeats, migrateIntroBeats };
+
 export function checkPositionAdvance(step, px, pz, extra = {}) {
+  const ref = extra.spawnRef || BEACH_SPAWN_REF;
   switch (step) {
     case 'breathe': {
       if (extra.yawDelta >= BREATHE_MIN_YAW) return 'explore';
-      if (distXZ(px, pz, BEACH_SPAWN_REF.x, BEACH_SPAWN_REF.z) >= BREATHE_MIN_DIST) return 'explore';
+      if (distXZ(px, pz, ref.x, ref.z) >= BREATHE_MIN_DIST) return 'explore';
       return null;
     }
     case 'explore':
-      if (distXZ(px, pz, BEACH_SPAWN_REF.x, BEACH_SPAWN_REF.z) >= EXPLORE_MIN_DIST) return 'walk_west';
+      if (!extra.kitDone) return null;
+      if (distXZ(px, pz, ref.x, ref.z) >= EXPLORE_MIN_DIST) return 'walk_west';
+      return null;
+    case 'trail_exit':
+      if (inBeachExitApproachZone(px, pz)) return 'read_exit_sign';
       return null;
     case 'walk_west':
       if (px < WALK_WEST_X) return 'silhouette';

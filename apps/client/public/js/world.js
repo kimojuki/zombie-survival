@@ -4,6 +4,7 @@
 
   let _scene, _ambientLight, _sunLight, _moonLight, _hemiLight, _sunSprite, _moonSprite, _skyRoot, _starField;
   const _fireLights = [];
+  const _wallClocks = [];
   const _billboards = [];
   const _billboardVec = new THREE.Vector3();
   const _waterSurfaces = [];
@@ -304,6 +305,7 @@
   }
 
   function setWorldTime(t) { _timeOfDay = t; }
+  function getWorldTime() { return _timeOfDay; }
 
   function getFoliageDayBlend() {
     const angle = _timeOfDay * Math.PI * 2;
@@ -508,6 +510,10 @@
         if (fl.mesh) fl.mesh.scale.y = 0.85 + f * 0.22;
         if (fl.onTick) fl.onTick(t, f, night);
       }
+    }
+
+    if (_wallClocks.length > 0) {
+      ZS.applyWallClockHands?.(_wallClocks, _timeOfDay, Date.now());
     }
   }
 
@@ -1689,6 +1695,10 @@
       onTick: opts?.onTick || null,
     });
   }
+
+  function registerWallClock(clock) {
+    if (clock?.hourHand) _wallClocks.push(clock);
+  }
   function registerWaterMaterial(mat)     { _waterMats.push(mat); }
   function registerWaterSurface(mesh, amp, speed) {
     const arr = mesh.geometry.attributes.position.array;
@@ -1730,6 +1740,8 @@
   ZS.raycastGroundHeight     = raycastGroundHeight;
   ZS.tickDayNight         = tickDayNight;
   ZS.setWorldTime         = setWorldTime;
+  ZS.getWorldTime         = getWorldTime;
+  ZS.registerWallClock    = registerWallClock;
   ZS.getFoliageDayBlend   = getFoliageDayBlend;
   ZS.setShadowCenter   = setShadowCenter;
   function registerDecorColliders(id, colliders) {

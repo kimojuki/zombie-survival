@@ -9,7 +9,10 @@ import {
   defaultScenario,
   isAct1Done,
   isInvincibleDuringIntro,
+  isIntroKitDone,
   migrateScenario,
+  scenarioSpawnRef,
+  TRAIL_EXIT_LINE,
   shouldDelayZombieSync,
   shouldShowOnlyTutorialZombie,
   stepIndex,
@@ -56,9 +59,15 @@ export function createScenarioBeach(ctx) {
 
   function initPlayerScenario(p, savedInv) {
     if (!p.inv || typeof p.inv !== 'object') p.inv = {};
-    p.inv.scenario = migrateScenario(savedInv);
-    if (isInvincibleDuringIntro(p.inv.scenario)) p.invincible = true;
-    return p.inv.scenario;
+    const sc = migrateScenario(savedInv);
+    if (!isAct1Done(sc) && sc.step === 'intro_wake'
+      && !Number.isFinite(sc.anchorX)) {
+      sc.anchorX = p.x;
+      sc.anchorZ = p.z;
+    }
+    p.inv.scenario = sc;
+    if (isInvincibleDuringIntro(sc)) p.invincible = true;
+    return sc;
   }
 
   function filterZombiesForPlayer(p, list) {
@@ -154,6 +163,8 @@ export function createScenarioBeach(ctx) {
     const next = checkPositionAdvance(sc.step, p.x, p.z, {
       yawDelta: extra.yawDelta,
       tutorialPos: tutorialPosForPlayer(p.id),
+      spawnRef: scenarioSpawnRef(sc),
+      kitDone: isIntroKitDone(sc.introBeats),
     });
     if (!next) return;
 
@@ -167,13 +178,20 @@ export function createScenarioBeach(ctx) {
     if (next === 'silhouette' || next === 'approach') {
       _emitUpdate(socket, sc, { dialogue: next });
     }
+    if (next === 'read_exit_sign') {
+      _emitUpdate(socket, sc, { toast: 'Lis le panneau des naufragés.' });
+    }
   }
 
   function handleClientAdvance(p, socket, step) {
     const sc = _getScenario(p);
     if (isAct1Done(sc)) return false;
     if (!canClientAdvance(sc.step, step)) return false;
-    if (step === 'act1_done' && sc.step === 'epilogue') {
+    if (step === 'trail_exit' && sc.step === 'epilogue') {
+      _setStep(p, socket, 'trail_exit', { toast: TRAIL_EXIT_LINE });
+      return true;
+    }
+    if (step === 'act1_done' && sc.step === 'read_exit_sign') {
       _setStep(p, socket, 'act1_done', { introComplete: true });
       removeTutorialZombie(sc);
       socket.emit('zombies-snapshot', compactZombiesForSync(filterZombiesForPlayer(p, Array.from(zombies.values()))));
@@ -197,6 +215,7 @@ export function createScenarioBeach(ctx) {
       }
       p._lastYaw = rotY;
     }
+    introBeatsTick?.(p, socket);
     advanceFromPosition(p, socket, { yawDelta });
     if (isInvincibleDuringIntro(sc)) p.invincible = true;
   }
@@ -274,9 +293,11 @@ export function createScenarioBeach(ctx) {
 
   function resetScenario(p, socket) {
     removeTutorialZombie(_getScenario(p));
-    p.inv.scenario = defaultScenario('intro_wake');
+    ctx.snapIntroPlayerToCluster?.(p);
+    p.inv.scenario = defaultScenario('intro_wake', { x: p.x, z: p.z });
     p.invincible = true;
-    _emitUpdate(socket, p.inv.scenario);
+    ctx.ensureIntroBeats?.(p, socket);
+    _emitUpdate(socket, p.inv.scenario, { resetIntro: true });
     p.dirty = true;
   }
 

@@ -231,6 +231,7 @@
   }
 
   function _clientIsAdmin() {
+    if (ZS.AdminAuth?.hasPerm?.('rcon')) return true;
     if (_isAdmin && _configured) return true;
     return localStorage.getItem('zombie_is_admin') === '1';
   }

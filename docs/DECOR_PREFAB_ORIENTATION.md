@@ -66,6 +66,11 @@ Seed cabane #1 : `(165.1, 7.1)`, `rotY ≈ 0.55`.
 | `spawn_cabin_rug` | **−Z** (bande décor) | +Z | Sol centre pièce ; bande vers table/porte |
 | `spawn_cabin_bench` | **−Z** (assise) | +Z (dossier) | Mur ouest/nord — dos contre mur |
 | `spawn_cabin_basin` | **−Z** (cuvette) | +Z (miroir) | Coin eau — dos contre mur |
+| `spawn_cabin_wall_clock` | **−Z** (cadran) | +Z | Mur intérieur ~1,45 m — voir [`WALL_CLOCK.md`](./WALL_CLOCK.md) (aiguilles dynamiques) |
+| `spawn_cabin_coat_rack` | **−Z** (patères) | +Z | Près porte — dos au mur |
+| `spawn_beach_wreck_debris` | **−Z** (détail) | +Z | Sol plage — scène naufrage près spawn |
+| `spawn_beach_washed_gear` | **−Z** (sac, gourde) | +Z | Sol plage — affaires personnelles échouées |
+| `spawn_beach_driftwood` | **−Z** (branche) | +Z | Bouche sentier — rondin vers forêt |
 | `spawn_single_bed` | **+Z** (tête / oreiller) | −Z (pieds) | ⚠️ **Exception** : tête = +Z, pas −Z |
 | `storage_chest` | **−Z** (serrure / couvercle) | +Z | rotY via `cabin01ChestFaceDoorRotY()` |
 

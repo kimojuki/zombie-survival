@@ -89,6 +89,9 @@
       localStorage.setItem('zombie_token', data.token);
       localStorage.setItem('zombie_username', data.username);
       localStorage.setItem('zombie_is_admin', data.isAdmin ? '1' : '0');
+      if (data.role) localStorage.setItem('zs_role', data.role);
+      if (data.roleLabel) localStorage.setItem('zs_role_label', data.roleLabel);
+      if (data.permissions) localStorage.setItem('zs_permissions', JSON.stringify(data.permissions));
       if (data.serverRole) localStorage.setItem('zombie_server_role', data.serverRole);
       if (data.spawn) localStorage.setItem('zombie_spawn', JSON.stringify(data.spawn));
       if (data.health) localStorage.setItem('zombie_health', data.health);

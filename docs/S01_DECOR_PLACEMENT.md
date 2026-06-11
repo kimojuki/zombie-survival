@@ -228,6 +228,8 @@ Dans la cabane, porte et coffre peuvent être proches : l’UI et la touche **E*
 | Tapis `spawn_cabin_rug` | Bande **−Z** · quasi symétrique | Centre pièce ou sous table — bande vers porte |
 | Banc `spawn_cabin_bench` | Assise **−Z** · dossier **+Z** | Mur ouest — dos collé, face vers pièce |
 | Lavabo `spawn_cabin_basin` | Face **−Z** · dos **+Z** | Mur est/ouest — coin eau intérieur |
+| Horloge `spawn_cabin_wall_clock` | Cadran **−Z** · dos **+Z** | Mur pièce — hauteur ~1,45 m — aiguilles : [WALL_CLOCK.md](WALL_CLOCK.md) |
+| Porte-manteau `spawn_cabin_coat_rack` | Patères **−Z** · dos **+Z** | Mur près porte entrée |
 | Lit `spawn_single_bed` | Tête **+Z** · pieds −Z | Coin NO — déjà seed `s01:cabin01:bed` |
 | Coffre `storage_chest` | Serrure **−Z** | `cabin01ChestFaceDoorRotY()` |
 | Second coffre | −Z forward | Nouveau `placementKey`, réutiliser `shackAnchor` / `floorY` |

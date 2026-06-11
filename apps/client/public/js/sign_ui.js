@@ -36,6 +36,32 @@
       ],
       footer: '… et d\'autres noms qu\'on a effacés ou qu\'on n\'a plus revus.',
     },
+    intro_bottle_k: {
+      stamp: 'RIVAGE — MESSAGE ÉCHOUÉ',
+      title: 'Bouteille dans le sable',
+      lead: 'Un parchemin froissé, à peine lisible. Les initiales en bas : K.',
+      notes: [
+        {
+          who: 'K.',
+          when: '',
+          text: 'Si tu lis ça — suis les traces vers l\'ouest (côté forêt). Une veilleuse fume encore. Prends ce que tu peux. Désolé.',
+        },
+      ],
+      footer: 'Le verre est fissuré. La marée n\'a pas encore emporté le message.',
+    },
+    intro_burnt_note_k: {
+      stamp: 'VEILLEUSE — BORD DE PLAGE',
+      title: 'Mot brûlé',
+      lead: 'Coin de papier carbonisé, posé sur une pierre tiède.',
+      notes: [
+        {
+          who: 'K.',
+          when: '',
+          text: 'J\'ai laissé la torche allumée. Tu la verras. La valise est plus loin — sous les planches. Ne reste pas sur le sable ce soir.',
+        },
+      ],
+      footer: 'L\'encre a bavé sur un côté.',
+    },
     sector_coming_soon: {
       stamp: 'PÉRIMÈTRE — SECTEUR FERMÉ',
       title: 'Ça arrive bientôt',
@@ -161,6 +187,9 @@
     _ensureDom();
     currentKind = kind;
     _render(kind);
+    if (kind.startsWith('intro_') || kind === 'beach_safe_zone') {
+      ZS.Network?.notifyIntroReadable?.(kind);
+    }
     open = true;
     backdrop.hidden = false;
     backdrop.classList.add('is-open');

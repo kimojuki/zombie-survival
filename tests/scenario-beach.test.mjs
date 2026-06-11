@@ -9,6 +9,7 @@ import {
   shouldDelayZombieSync,
   shouldShowOnlyTutorialZombie,
   stepIndex,
+  scenarioSpawnRef,
   tutorialPosForPlayer,
 } from '../packages/shared/src/scenario-beach.mjs';
 
@@ -28,12 +29,37 @@ test('new scenario starts at intro_wake', () => {
   const s = defaultScenario();
   assert.equal(s.step, 'intro_wake');
   assert.equal(s.completed, false);
+  assert.deepEqual(s.introBeats, { footprints: false, campfire: false, pier: false, kitDone: false });
+});
+
+test('walk_west requires intro kit done', () => {
+  const ref = { x: 248, z: -8 };
+  assert.equal(checkPositionAdvance('explore', 230, -8, { spawnRef: ref, kitDone: false }), null);
+  assert.equal(checkPositionAdvance('explore', 230, -8, { spawnRef: ref, kitDone: true }), 'walk_west');
+});
+
+test('trail_exit advances to read_exit_sign near panneau', () => {
+  assert.equal(checkPositionAdvance('trail_exit', 243.8, -10.8, {}), 'read_exit_sign');
 });
 
 test('position advances explore and walk_west', () => {
-  assert.equal(checkPositionAdvance('explore', 230, -8), 'walk_west');
+  assert.equal(checkPositionAdvance('explore', 230, -8, { kitDone: true }), 'walk_west');
   assert.equal(checkPositionAdvance('walk_west', 230, -8), 'silhouette');
   assert.equal(checkPositionAdvance('walk_west', 240, -8), null);
+});
+
+test('explore uses scenario anchor not global ref when spawn is offset', () => {
+  const anchor = { x: 270, z: -8 };
+  const ref = scenarioSpawnRef({ anchorX: anchor.x, anchorZ: anchor.z });
+  assert.deepEqual(ref, anchor);
+  assert.equal(
+    checkPositionAdvance('explore', 270, -8, { spawnRef: ref }),
+    null,
+  );
+  assert.equal(
+    checkPositionAdvance('explore', 255, -8, { spawnRef: ref, kitDone: true }),
+    'walk_west',
+  );
 });
 
 test('tutorial pos varies by player id', () => {

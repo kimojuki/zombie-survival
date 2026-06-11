@@ -34,7 +34,7 @@
     '#shoot-btn', '#jump-btn', '#reload-btn', '#use-btn', '#grab-btn', '#sprint-btn',
     '#door-interact-btn', '#hotbar', '.hb-slot',
     '#inv-panel', '#inv-backdrop', '#craft-panel', '#craft-backdrop',
-    '#qa-backdrop', '#group-backdrop', '#spawn-intro-overlay', '#map-overlay', '#death-screen',
+    '#qa-backdrop', '#admin-backdrop', '#group-backdrop', '#spawn-intro-overlay', '#map-overlay', '#death-screen',
     '#rcon-panel', '#storage-panel', '#storage-backdrop', '#sleep-loot-panel', '#sleep-loot-backdrop',
     '#sign-backdrop', '#sign-panel', '#options-backdrop', '#options-panel',
     '.inv-slot', '#chat-input-row',
@@ -561,11 +561,16 @@
     if (zk) zk.textContent = String(r.zombieKills ?? 0);
     if (pk) pk.textContent = String(r.playerKills ?? 0);
     if (sv) sv.textContent = _formatSurvived(r.survivedMs);
+    if (document.pointerLockElement) document.exitPointerLock();
+    document.body.classList.add('death-screen-open');
     document.getElementById('death-screen').classList.add('show');
+    ZS.onUiPanelOpen?.();
   }
 
   function hideDeath() {
     document.getElementById('death-screen').classList.remove('show');
+    document.body.classList.remove('death-screen-open');
+    ZS.onUiPanelClose?.();
   }
 
   function logout() {

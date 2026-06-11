@@ -5,6 +5,7 @@
   const SCRIPTS = [
     '/js/camp_textures.js',
     '/js/campfire.js',
+    '/js/world_clock.js',
     '/js/buildings.js',
     '/js/vehicle_textures.js',
     '/js/rock_textures.js',
@@ -13,6 +14,10 @@
     '/js/spawn_clearing.js',
     '/js/s01_prefabs.js',
     '/js/sign_prefabs.js',
+    '/js/beach_intro_prefabs.js',
+    '/js/beach_starter_prefabs.js',
+    '/js/urban_prefabs.js',
+    '/js/leisure_prefabs.js',
     '/js/vehicle_prefabs.js',
     '/js/tree_prefabs.js',
     '/js/barrier_prefabs.js',
@@ -36,11 +41,15 @@
   let modalResizeObs = null;
   let modalFitState = null;
   let modalCurrentRcon = '';
+  let modalCurrentPrefabId = '';
+  let modalReviewStatus = null;
+  let modalReviewComment = '';
 
   const thumbCache = new Map();
   const pendingThumbs = new Set();
   const _liveThumbs = new Map();
-  const _previewAnim = { fireLights: [], billboards: [] };
+  const _previewAnim = { fireLights: [], billboards: [], wallClocks: [] };
+  let _previewWorldTime = 0.38;
   let _spawnAnimTarget = _previewAnim;
   const _billboardVec = new THREE.Vector3();
   let _modalAmbient = null;
@@ -50,6 +59,7 @@
   function _clearPreviewAnim() {
     _previewAnim.fireLights.length = 0;
     _previewAnim.billboards.length = 0;
+    _previewAnim.wallClocks.length = 0;
   }
 
   function _stopThumbAnim(canvas) {
@@ -78,7 +88,11 @@
   function _tickPreviewAnim(camera, night = 0.88, anim = _previewAnim) {
     if (!camera) return;
     _updatePreviewBillboards(camera.position.x, camera.position.z, anim);
-    if (!anim.fireLights.length) return;
+    if (anim.wallClocks.length) {
+      _previewWorldTime += 1 / 1800 / 30;
+      ZS.applyWallClockHands?.(anim.wallClocks, _previewWorldTime, Date.now());
+    }
+    if (!anim.fireLights.length && !anim.wallClocks.length) return;
     const t = Date.now();
     const f = 0.82 + Math.sin(t * 0.011) * 0.09 + Math.sin(t * 0.019) * 0.06 + Math.sin(t * 0.034) * 0.04;
     const nightBoost = 0.4 + night * 1.1;
@@ -93,7 +107,26 @@
   }
 
   function _hasPreviewAnim(anim = _previewAnim) {
-    return anim.fireLights.length > 0 || anim.billboards.length > 0;
+    return anim.fireLights.length > 0 || anim.billboards.length > 0 || anim.wallClocks.length > 0;
+  }
+
+  function _primeWallClockPreview(anim = _previewAnim) {
+    if (!anim.wallClocks.length || !ZS.applyWallClockHands) return;
+    ZS.applyWallClockHands(anim.wallClocks, _previewWorldTime, Date.now());
+    for (const c of anim.wallClocks) {
+      for (const pivot of [c.hourHand, c.minuteHand]) {
+        if (!pivot) continue;
+        pivot.traverse((o) => {
+          if (o.isMesh) {
+            o.renderOrder = Math.max(o.renderOrder || 0, 8);
+            if (o.material) {
+              o.material.depthTest = true;
+              o.material.depthWrite = true;
+            }
+          }
+        });
+      }
+    }
   }
 
   function _installPreviewAnimHooks() {
@@ -111,6 +144,10 @@
       });
     };
     ZS.updateBillboards = (camX, camZ) => _updatePreviewBillboards(camX, camZ, _spawnAnimTarget);
+    ZS.getWorldTime = () => _previewWorldTime;
+    ZS.registerWallClock = (clock) => {
+      if (clock?.hourHand) _spawnAnimTarget.wallClocks.push(clock);
+    };
   }
 
   function _applyModalPreviewLighting(animated) {
@@ -220,6 +257,7 @@
     _spawnAnimTarget = animTarget;
     animTarget.fireLights.length = 0;
     animTarget.billboards.length = 0;
+    animTarget.wallClocks.length = 0;
     const scene = new THREE.Scene();
     let root = ZS.spawnDecorPrefab(scene, prefabId, 0, 0, 0, _previewOpts(prefabId));
     if (root) return root;
@@ -343,7 +381,7 @@
       _ensureThumbRenderer();
       _clearThumbScene();
 
-      const thumbAnim = { fireLights: [], billboards: [] };
+      const thumbAnim = { fireLights: [], billboards: [], wallClocks: [] };
       const root = await _spawnRoot(prefabId, thumbAnim);
       if (!root) {
         _drawPlaceholder(canvas, 'introuvable');
@@ -356,6 +394,7 @@
       if (_hasPreviewAnim(thumbAnim)) {
         const scene = _makeThumbScene(true);
         scene.add(root);
+        _primeWallClockPreview(thumbAnim);
         const tick = () => {
           if (!canvas.isConnected) {
             _stopThumbAnim(canvas);
@@ -446,6 +485,27 @@
     _applyModalPreviewLighting(false);
   }
 
+  function _updateModalReviewButtons() {
+    if (!modal) return;
+    const valBtn = modal.querySelector('#prefab-preview-validate');
+    const reworkBtn = modal.querySelector('#prefab-preview-rework');
+    if (!valBtn || !reworkBtn) return;
+    valBtn.classList.toggle('active', modalReviewStatus === 'validated');
+    reworkBtn.classList.toggle('active', modalReviewStatus === 'rework');
+    const noteEl = modal.querySelector('#prefab-preview-rework-note');
+    if (noteEl) {
+      const show = modalReviewStatus === 'rework' && modalReviewComment;
+      noteEl.textContent = show ? `Note : ${modalReviewComment}` : '';
+      noteEl.classList.toggle('hidden', !show);
+    }
+  }
+
+  function _setModalReviewStatus(status, comment) {
+    modalReviewStatus = status || null;
+    if (comment !== undefined) modalReviewComment = String(comment || '');
+    _updateModalReviewButtons();
+  }
+
   function _setModalLoading(on, msg) {
     const el = modal?.querySelector('#prefab-preview-loading');
     if (!el) return;
@@ -496,7 +556,10 @@
         </div>
         <div class="preview-modal-foot">
           <p class="preview-modal-desc" id="prefab-preview-desc"></p>
+          <p class="preview-modal-rework-note hidden" id="prefab-preview-rework-note"></p>
           <div class="preview-modal-actions">
+            <button type="button" class="preview-modal-action validate" id="prefab-preview-validate">Valider</button>
+            <button type="button" class="preview-modal-action rework" id="prefab-preview-rework">À refaire</button>
             <button type="button" class="preview-modal-action" id="prefab-preview-reset">Recentrer</button>
             <button type="button" class="preview-modal-action primary" id="prefab-preview-copy">Copier RCON</button>
           </div>
@@ -509,6 +572,19 @@
     modal.querySelector('.preview-modal-close').addEventListener('click', close);
     modal.querySelector('.preview-modal-backdrop').addEventListener('click', close);
     modal.querySelector('#prefab-preview-reset').addEventListener('click', _resetModalView);
+    const _emitReview = (status) => {
+      if (!modalCurrentPrefabId) return;
+      document.dispatchEvent(new CustomEvent('prefab-review-request', {
+        detail: { prefabId: modalCurrentPrefabId, status },
+      }));
+    };
+    modal.querySelector('#prefab-preview-validate').addEventListener('click', () => _emitReview('validated'));
+    modal.querySelector('#prefab-preview-rework').addEventListener('click', () => _emitReview('rework'));
+    window.addEventListener('prefab-review-changed', (e) => {
+      if (!modal || modal.classList.contains('hidden')) return;
+      if (e.detail?.prefabId !== modalCurrentPrefabId) return;
+      _setModalReviewStatus(e.detail?.status || null, e.detail?.comment || '');
+    });
     modal.querySelector('#prefab-preview-copy').addEventListener('click', async (e) => {
       const btn = e.currentTarget;
       if (!modalCurrentRcon) return;
@@ -544,6 +620,8 @@
     }
     modal.querySelector('#prefab-preview-desc').textContent = meta.desc || '';
     modalCurrentRcon = meta.rcon || '';
+    modalCurrentPrefabId = prefabId;
+    _setModalReviewStatus(meta.reviewStatus || null, meta.reviewComment || '');
     modal.classList.remove('hidden');
     document.body.style.overflow = 'hidden';
     _setModalLoading(true);
@@ -593,12 +671,16 @@
     modalScene.add(modalRoot);
     _modalResize();
     modalFitState = _fitCamera(modalCamera, modalRoot, modalCamera.aspect, 1.55);
+    _primeWallClockPreview(_previewAnim);
     _applyModalPreviewLighting(_hasPreviewAnim());
 
     const hintEl = modal.querySelector('#prefab-preview-hint');
     if (hintEl) {
+      const animNote = _previewAnim.wallClocks.length
+        ? 'heure du jeu'
+        : (_previewAnim.fireLights.length ? 'feu / flammes' : '');
       hintEl.textContent = _hasPreviewAnim()
-        ? 'Aperçu animé (feu / flammes) · glisser pour tourner · molette pour zoomer · Échap pour fermer'
+        ? `Aperçu animé (${animNote}) · glisser pour tourner · molette pour zoomer · Échap pour fermer`
         : 'Glisser pour tourner · molette pour zoomer · clic droit pour déplacer · Échap pour fermer';
     }
 
@@ -624,6 +706,8 @@
     if (!modal) return;
     modal.classList.add('hidden');
     document.body.style.overflow = '';
+    modalCurrentPrefabId = '';
+    _setModalReviewStatus(null);
     _stopModalAnim();
     _disposeModalRoot();
     if (modalControls) {

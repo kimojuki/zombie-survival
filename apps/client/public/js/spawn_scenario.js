@@ -42,13 +42,16 @@
 
   const EPILOGUE_LINES = [
     '…Ils étaient humains. Autrefois.',
-    'Tu as un bandage. La forêt t\'attend.',
+    'Tu as un bandage. Mais d\'abord : le panneau au bout du sable.',
   ];
 
   const TUTORIAL_POS = { x: 208, z: -8 };
+  /** Seules étapes avec HUD — tutoriel combat/loot, pas de guidage exploration. */
+  const HUD_STEPS = new Set(['fight', 'loot']);
   const STEPS = [
     'intro_wake', 'intro_stand', 'breathe', 'explore', 'walk_west',
-    'silhouette', 'approach', 'reveal', 'fight', 'loot', 'epilogue', 'act1_done',
+    'silhouette', 'approach', 'reveal', 'fight', 'loot', 'epilogue',
+    'trail_exit', 'read_exit_sign', 'act1_done',
   ];
 
   let _scenario = null;
@@ -108,10 +111,10 @@
     _hud.style.cssText = [
       'display:none',
       'position:fixed',
-      'top:max(12px,env(safe-area-inset-top))',
-      'left:12px',
+      'bottom:max(108px,calc(env(safe-area-inset-bottom) + 96px))',
       'right:12px',
-      'max-width:320px',
+      'left:auto',
+      'max-width:min(280px,calc(100vw - 24px))',
       'z-index:240',
       'pointer-events:none',
       'padding:12px 14px',
@@ -126,7 +129,6 @@
       '<div id="scenario-act" style="font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:#b8955a;margin-bottom:4px"></div>',
       '<div id="scenario-objective" style="font-weight:700;font-size:15px;margin-bottom:4px"></div>',
       '<div id="scenario-hint" style="opacity:.85;font-size:12px"></div>',
-      '<div id="scenario-arrow" style="margin-top:8px;font-size:18px;opacity:.9"></div>',
     ].join('');
     document.body.appendChild(_hud);
 
@@ -190,6 +192,10 @@
       _hud.style.display = 'none';
       return;
     }
+    if (!HUD_STEPS.has(step)) {
+      _hud.style.display = 'none';
+      return;
+    }
     const act = _actForStep(step);
     const title = STEP_HUD[step];
     if (!title) {
@@ -200,19 +206,6 @@
     document.getElementById('scenario-act').textContent = `Acte ${act.id}/3 — ${act.title}`;
     document.getElementById('scenario-objective').textContent = title;
     document.getElementById('scenario-hint').textContent = STEP_HINT[step] || '';
-    const arrowEl = document.getElementById('scenario-arrow');
-    if (step === 'walk_west' || step === 'silhouette' || step === 'approach') {
-      const p = _state?.player;
-      if (p) {
-        const ang = Math.atan2(TUTORIAL_POS.z - p.z, TUTORIAL_POS.x - p.x) - (_state.camera?.yaw || 0);
-        const deg = Math.round((ang * 180 / Math.PI + 360) % 360);
-        const glyphs = ['↑', '↗', '→', '↘', '↓', '↙', '←', '↖'];
-        const idx = Math.round(((deg + 22.5) % 360) / 45) % 8;
-        arrowEl.textContent = `${glyphs[idx]} vers l'intérieur`;
-      }
-    } else {
-      arrowEl.textContent = '';
-    }
   }
 
   function _showCombatHint() {
@@ -264,7 +257,7 @@
       _dialogue.style.pointerEvents = 'none';
       _dialogue.innerHTML = '';
       _dialogue.style.display = 'none';
-      if (_socket) _socket.emit('scenario-advance', { step: 'act1_done' });
+      if (_socket) _socket.emit('scenario-advance', { step: 'trail_exit' });
     };
     _dialogue.appendChild(btn);
   }
@@ -305,11 +298,16 @@
     if (data.combatTutorial) _showCombatHint();
     if (data.epilogue) _showEpilogue();
     if (data.toast) ZS.UI?.showNotif?.(data.toast);
+    if (data.introBeat) ZS.IntroStarter?.onBeat?.(data.introBeat);
+    if (data.starterLootComplete) ZS.IntroStarter?.onBeat?.('kit_done');
     if (data.introComplete) {
       _revealActive = false;
       _epilogueActive = false;
       if (_hud) _hud.style.display = 'none';
       if (_socket) _socket.emit('request-zombie-sync');
+    }
+    if (data.resetIntro && _state) {
+      ZS.SpawnIntro?.tryStart?.(_state);
     }
     _updateHud();
   }
@@ -326,6 +324,10 @@
     _updateHud();
   }
 
+  function getScenario() {
+    return _scenario;
+  }
+
   window.ZS = window.ZS || {};
   ZS.Scenario = {
     init,
@@ -338,5 +340,6 @@
     shouldDelayZombieSync,
     filterZombies,
     getStep: () => _scenario?.step,
+    getScenario,
   };
 }());

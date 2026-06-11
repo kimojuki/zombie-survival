@@ -447,9 +447,9 @@
   // ── Sector registry ───────────────────────────────────────────────────────────
 
   function registerSector(sectorObj) {
-    if (!sectorObj || sectorObj.spawnOnly !== true) return;
+    if (!sectorObj) return;
     _sectors.push(sectorObj);
-    _spawnSectors.push(sectorObj);
+    if (sectorObj.spawnOnly === true) _spawnSectors.push(sectorObj);
   }
 
   function applyRoadFlattening() {
@@ -469,7 +469,13 @@
   }
 
   function buildAll(scene, opts) {
-    for (const s of _spawnSectors) s.build(scene, opts);
+    for (const s of _spawnSectors) {
+      if (s.build) s.build(scene, opts);
+    }
+    for (const s of _sectors) {
+      if (s.spawnOnly === true) continue;
+      if (s.build) s.build(scene, opts);
+    }
     return _colliders;
   }
 

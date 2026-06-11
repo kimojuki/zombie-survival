@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import {
   getChopWoodYield,
   getTreeWoodMax,
+  isFelledTreeDecor,
   TREE_WOOD_STOCK,
   TREE_FALL_LINGER_MS,
 } from '../packages/shared/src/tree-wood.mjs';
@@ -23,5 +24,13 @@ test('chop yield scales by tool', () => {
 
 test('fall linger is long enough to loot trunk', () => {
   assert.ok(TREE_FALL_LINGER_MS >= 60_000);
+});
+
+test('isFelledTreeDecor detects gone trees', () => {
+  assert.equal(isFelledTreeDecor({ prefabId: 'tree_oak', woodRemaining: 8 }), false);
+  assert.equal(isFelledTreeDecor({ prefabId: 'tree_oak', woodRemaining: 2 }), false);
+  assert.equal(isFelledTreeDecor({ prefabId: 'tree_oak', woodRemaining: 0 }), true);
+  assert.equal(isFelledTreeDecor({ prefabId: 'tree_oak', falling: true, woodRemaining: 3 }), true);
+  assert.equal(isFelledTreeDecor({ prefabId: 'rock_boulder', woodRemaining: 0 }), false);
 });
 

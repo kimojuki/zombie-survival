@@ -49,6 +49,678 @@
     spawn_cabin_basin: [
       { type: 'box', lx: 0, lz: 0, hw: 0.25, hd: 0.16, maxY: 1.02 },
     ],
+    spawn_cabin_wall_clock: [
+      { type: 'box', lx: 0, lz: 0, hw: 0.17, hd: 0.08, minY: 1.0, maxY: 1.72 },
+    ],
+    spawn_cabin_coat_rack: [
+      { type: 'box', lx: 0, lz: -0.02, hw: 0.21, hd: 0.12, minY: 0.45, maxY: 1.55 },
+    ],
+    spawn_beach_wreck_debris: [
+      { type: 'box', lx: 0, lz: 0, hw: 0.52, hd: 0.46, maxY: 0.30 },
+    ],
+    spawn_beach_washed_gear: [
+      { type: 'box', lx: 0, lz: 0.02, hw: 0.34, hd: 0.30, maxY: 0.24 },
+    ],
+    spawn_beach_driftwood: [
+      { type: 'box', lx: 0.02, lz: 0, hw: 0.58, hd: 0.14, maxY: 0.18 },
+    ],
+    spawn_urban_trash_bin: [
+      { type: 'cyl', lx: 0, lz: 0, r: 0.28, topY: 0.78 },
+    ],
+    spawn_urban_bench: [
+      { type: 'box', lx: 0, lz: -0.19, hw: 0.56, hd: 0.24, maxY: 0.58 },
+    ],
+    spawn_urban_street_lamp: [
+      { type: 'cyl', lx: 0, lz: 0, r: 0.08, topY: 3.15 },
+    ],
+    spawn_urban_fire_hydrant: [
+      { type: 'cyl', lx: 0, lz: 0, r: 0.18, topY: 0.78 },
+    ],
+    spawn_urban_mailbox: [
+      { type: 'box', lx: 0, lz: 0, hw: 0.18, hd: 0.14, maxY: 1.22 },
+    ],
+    spawn_urban_bicycle_rack: [
+      { type: 'box', lx: 0, lz: 0, hw: 0.70, hd: 0.12, maxY: 0.32 },
+    ],
+    spawn_urban_traffic_cone: [
+      { type: 'cyl', lx: 0, lz: 0, r: 0.16, topY: 0.42 },
+    ],
+    spawn_urban_dumpster: [
+      { type: 'box', lx: 0, lz: 0, hw: 0.84, hd: 0.50, maxY: 1.22 },
+    ],
+    spawn_urban_pallet_stack: [
+      { type: 'box', lx: 0.02, lz: 0.02, hw: 0.56, hd: 0.44, maxY: 0.78 },
+    ],
+    spawn_urban_barrel: [
+      { type: 'cyl', lx: 0, lz: 0, r: 0.32, topY: 0.84 },
+    ],
+    spawn_urban_fence_panel: [
+      { type: 'box', lx: 0, lz: 0, hw: 0.94, hd: 0.06, maxY: 1.08 },
+    ],
+    spawn_urban_bollard: [
+      { type: 'cyl', lx: 0, lz: 0, r: 0.16, topY: 0.86 },
+    ],
+    spawn_prop_fridge: [
+      { type: 'box', lx: 0, lz: 0, hw: 0.30, hd: 0.30, maxY: 1.65 },
+    ],
+    spawn_prop_grocery_shelf: [
+      { type: 'box', lx: 0, lz: 0, hw: 0.54, hd: 0.20, maxY: 1.75 },
+    ],
+    spawn_prop_shop_counter: [
+      { type: 'box', lx: 0.12, lz: 0.18, hw: 0.92, hd: 0.58, maxY: 0.98 },
+    ],
+    spawn_prop_sofa: [
+      { type: 'box', lx: 0, lz: 0.02, hw: 0.92, hd: 0.40, maxY: 0.88 },
+    ],
+    spawn_urban_planter: [
+      { type: 'box', lx: 0, lz: 0, hw: 0.32, hd: 0.22, maxY: 0.88 },
+    ],
+    spawn_urban_stop_sign: [
+      { type: 'cyl', lx: 0, lz: 0, r: 0.06, topY: 2.15 },
+    ],
+    spawn_urban_newspaper_box: [
+      { type: 'box', lx: 0, lz: 0, hw: 0.28, hd: 0.20, maxY: 0.78 },
+    ],
+    spawn_urban_shopping_cart: [
+      { type: 'box', lx: 0, lz: 0, hw: 0.28, hd: 0.22, maxY: 1.15 },
+    ],
+    spawn_urban_vending_machine: [
+      { type: 'box', lx: 0, lz: 0, hw: 0.38, hd: 0.30, maxY: 1.75 },
+    ],
+    spawn_urban_police_barrier: [
+      { type: 'box', lx: 0, lz: 0, hw: 0.54, hd: 0.06, maxY: 0.52 },
+    ],
+    spawn_urban_road_sign: [
+      { type: 'cyl', lx: 0, lz: 0, r: 0.06, topY: 2.45 },
+    ],
+    spawn_urban_propane_tank: [
+      { type: 'cyl', lx: 0, lz: 0, r: 0.28, topY: 1.05 },
+    ],
+    spawn_urban_tire_stack: [
+      { type: 'cyl', lx: 0, lz: 0, r: 0.34, topY: 0.68 },
+    ],
+    spawn_urban_wheelbarrow: [
+      { type: 'box', lx: 0, lz: -0.04, hw: 0.34, hd: 0.28, maxY: 0.78 },
+    ],
+    spawn_urban_abandoned_bike: [
+      { type: 'box', lx: 0, lz: 0, hw: 0.48, hd: 0.22, maxY: 0.62 },
+    ],
+    spawn_prop_office_desk: [
+      { type: 'box', lx: 0, lz: 0, hw: 0.62, hd: 0.32, maxY: 0.92 },
+    ],
+    spawn_prop_office_chair: [
+      { type: 'box', lx: 0, lz: 0.02, hw: 0.22, hd: 0.22, maxY: 0.92 },
+    ],
+    spawn_prop_wardrobe: [
+      { type: 'box', lx: 0, lz: 0, hw: 0.54, hd: 0.28, maxY: 1.98 },
+    ],
+    spawn_prop_kitchen_table: [
+      { type: 'box', lx: 0, lz: 0, hw: 0.48, hd: 0.48, maxY: 0.78 },
+    ],
+    spawn_prop_kitchen_chair: [
+      { type: 'box', lx: 0, lz: 0, hw: 0.20, hd: 0.20, maxY: 0.92 },
+    ],
+    spawn_prop_bookshelf: [
+      { type: 'box', lx: 0, lz: 0, hw: 0.42, hd: 0.16, maxY: 1.55 },
+    ],
+    spawn_prop_tv_old: [
+      { type: 'box', lx: 0, lz: 0, hw: 0.26, hd: 0.22, maxY: 0.78 },
+    ],
+    spawn_prop_washing_machine: [
+      { type: 'box', lx: 0, lz: 0, hw: 0.30, hd: 0.30, maxY: 0.84 },
+    ],
+    spawn_prop_metal_shelf: [
+      { type: 'box', lx: 0, lz: 0, hw: 0.70, hd: 0.22, maxY: 1.85 },
+    ],
+    spawn_prop_workbench: [
+      { type: 'box', lx: 0, lz: 0, hw: 0.76, hd: 0.36, maxY: 0.95 },
+    ],
+    spawn_prop_double_bed: [
+      { type: 'box', lx: 0, lz: 0, hw: 0.72, hd: 0.98, maxY: 0.48 },
+    ],
+    spawn_prop_nightstand: [
+      { type: 'box', lx: 0, lz: 0, hw: 0.22, hd: 0.20, maxY: 0.78 },
+    ],
+    spawn_prop_dresser: [
+      { type: 'box', lx: 0, lz: 0, hw: 0.48, hd: 0.22, maxY: 0.88 },
+    ],
+    spawn_prop_microwave: [
+      { type: 'box', lx: 0, lz: 0, hw: 0.26, hd: 0.20, maxY: 0.30 },
+    ],
+    spawn_prop_stove: [
+      { type: 'box', lx: 0, lz: 0, hw: 0.30, hd: 0.30, maxY: 0.90 },
+    ],
+    spawn_prop_kitchen_sink: [
+      { type: 'box', lx: 0, lz: 0, hw: 0.44, hd: 0.28, maxY: 1.05 },
+    ],
+    spawn_prop_floor_lamp: [
+      { type: 'cyl', lx: 0, lz: 0, r: 0.12, topY: 1.65 },
+    ],
+    spawn_prop_rug_urban: [
+      { type: 'box', lx: 0, lz: 0, hw: 0.82, hd: 0.55, maxY: 0.03 },
+    ],
+    spawn_urban_atm: [
+      { type: 'box', lx: 0, lz: 0, hw: 0.38, hd: 0.26, maxY: 1.55 },
+    ],
+    spawn_urban_phone_booth: [
+      { type: 'box', lx: 0, lz: 0, hw: 0.48, hd: 0.48, maxY: 2.12 },
+    ],
+    spawn_urban_picnic_table: [
+      { type: 'box', lx: 0, lz: 0.06, hw: 0.78, hd: 0.38, maxY: 0.78 },
+    ],
+    spawn_urban_trash_pile: [
+      { type: 'box', lx: 0, lz: 0, hw: 0.32, hd: 0.28, maxY: 0.42 },
+    ],
+    spawn_urban_wood_crate: [
+      { type: 'box', lx: 0, lz: 0, hw: 0.32, hd: 0.32, maxY: 0.50 },
+    ],
+    spawn_urban_generator: [
+      { type: 'box', lx: 0, lz: 0, hw: 0.38, hd: 0.26, maxY: 0.68 },
+    ],
+    spawn_urban_fuel_cans: [
+      { type: 'box', lx: 0, lz: 0, hw: 0.28, hd: 0.22, maxY: 0.38 },
+    ],
+    spawn_urban_bbq_grill: [
+      { type: 'box', lx: 0, lz: 0, hw: 0.42, hd: 0.26, maxY: 0.92 },
+    ],
+    spawn_urban_tool_cabinet: [
+      { type: 'box', lx: 0, lz: 0, hw: 0.28, hd: 0.20, maxY: 0.95 },
+    ],
+    spawn_prop_bathtub: [
+      { type: 'box', lx: 0, lz: 0, hw: 0.78, hd: 0.36, maxY: 0.55 },
+    ],
+    spawn_urban_bus_shelter: [
+      { type: 'box', lx: 0, lz: 0.02, hw: 1.16, hd: 0.42, maxY: 2.22 },
+    ],
+    spawn_urban_window_ac: [
+      { type: 'box', lx: 0, lz: 0, hw: 0.30, hd: 0.28, maxY: 0.40 },
+    ],
+    spawn_prop_toilet: [
+      { type: 'box', lx: 0, lz: 0.02, hw: 0.22, hd: 0.28, maxY: 0.78 },
+    ],
+    spawn_prop_bathroom_sink: [
+      { type: 'box', lx: 0, lz: 0, hw: 0.26, hd: 0.20, maxY: 1.08 },
+    ],
+    spawn_prop_coffee_table: [
+      { type: 'box', lx: 0, lz: 0, hw: 0.48, hd: 0.28, maxY: 0.45 },
+    ],
+    spawn_prop_dining_table: [
+      { type: 'box', lx: 0, lz: 0, hw: 0.78, hd: 0.42, maxY: 0.78 },
+    ],
+    spawn_prop_bunk_bed: [
+      { type: 'box', lx: 0, lz: 0, hw: 0.48, hd: 0.92, maxY: 1.48 },
+    ],
+    spawn_prop_filing_cabinet: [
+      { type: 'box', lx: 0, lz: 0, hw: 0.22, hd: 0.30, maxY: 1.25 },
+    ],
+    spawn_prop_safe: [
+      { type: 'box', lx: 0, lz: 0, hw: 0.26, hd: 0.26, maxY: 0.60 },
+    ],
+    spawn_urban_gas_pump: [
+      { type: 'box', lx: 0, lz: 0, hw: 0.32, hd: 0.24, maxY: 1.70 },
+    ],
+    spawn_urban_parking_meter: [
+      { type: 'cyl', lx: 0, lz: 0, r: 0.08, topY: 1.35 },
+    ],
+    spawn_urban_street_clock: [
+      { type: 'cyl', lx: 0, lz: 0, r: 0.10, topY: 2.75 },
+    ],
+    spawn_urban_fire_extinguisher: [
+      { type: 'box', lx: 0, lz: 0, hw: 0.10, hd: 0.08, maxY: 0.82 },
+    ],
+    spawn_prop_water_cooler: [
+      { type: 'box', lx: 0, lz: 0, hw: 0.18, hd: 0.18, maxY: 1.30 },
+    ],
+    spawn_prop_office_printer: [
+      { type: 'box', lx: 0, lz: 0, hw: 0.22, hd: 0.20, maxY: 0.38 },
+    ],
+    spawn_urban_satellite_dish: [
+      { type: 'cyl', lx: 0.08, lz: 0.18, r: 0.46, topY: 2.05 },
+      { type: 'cyl', lx: 0, lz: 0, r: 0.06, topY: 1.90 },
+    ],
+    spawn_prop_mattress_floor: [
+      { type: 'box', lx: 0, lz: 0, hw: 0.48, hd: 0.88, maxY: 0.18 },
+    ],
+    spawn_urban_beer_crate: [
+      { type: 'box', lx: 0, lz: 0, hw: 0.22, hd: 0.16, maxY: 0.35 },
+    ],
+    spawn_prop_coat_rack_urban: [
+      { type: 'cyl', lx: 0, lz: 0, r: 0.12, topY: 1.68 },
+    ],
+    spawn_urban_pallet_single: [
+      { type: 'box', lx: 0, lz: 0, hw: 0.52, hd: 0.38, maxY: 0.16 },
+    ],
+    spawn_prop_medicine_cabinet: [
+      { type: 'box', lx: 0, lz: 0, hw: 0.28, hd: 0.08, minY: 0.5, maxY: 1.15 },
+    ],
+    spawn_urban_cardboard_box: [
+      { type: 'box', lx: 0, lz: 0, hw: 0.28, hd: 0.22, maxY: 0.40 },
+    ],
+    spawn_prop_dryer: [
+      { type: 'box', lx: 0, lz: 0, hw: 0.30, hd: 0.30, maxY: 0.84 },
+    ],
+    spawn_prop_radiator: [
+      { type: 'box', lx: 0, lz: 0, hw: 0.42, hd: 0.08, maxY: 0.55 },
+    ],
+    spawn_prop_floor_fan: [
+      { type: 'cyl', lx: 0, lz: 0, r: 0.14, topY: 0.98 },
+    ],
+    spawn_prop_dishwasher: [
+      { type: 'box', lx: 0, lz: 0, hw: 0.30, hd: 0.30, maxY: 0.84 },
+    ],
+    spawn_prop_ironing_board: [
+      { type: 'box', lx: 0, lz: 0, hw: 0.18, hd: 0.58, maxY: 0.85 },
+    ],
+    spawn_prop_wall_mirror: [
+      { type: 'box', lx: 0, lz: 0, hw: 0.32, hd: 0.04, minY: 0.2, maxY: 1.0 },
+    ],
+    spawn_prop_shower_stall: [
+      { type: 'box', lx: 0, lz: 0, hw: 0.46, hd: 0.46, maxY: 1.95 },
+    ],
+    spawn_urban_urinal: [
+      { type: 'box', lx: 0, lz: 0, hw: 0.18, hd: 0.16, maxY: 1.08 },
+    ],
+    spawn_urban_locker: [
+      { type: 'box', lx: 0, lz: 0, hw: 0.44, hd: 0.20, maxY: 1.55 },
+    ],
+    spawn_prop_school_desk: [
+      { type: 'box', lx: 0, lz: 0.04, hw: 0.32, hd: 0.28, maxY: 0.75 },
+    ],
+    spawn_urban_jersey_barrier: [
+      { type: 'box', lx: 0, lz: 0, hw: 0.72, hd: 0.26, maxY: 0.58 },
+    ],
+    spawn_urban_hand_truck: [
+      { type: 'box', lx: 0, lz: -0.08, hw: 0.22, hd: 0.18, maxY: 1.12 },
+    ],
+    spawn_urban_shopping_basket: [
+      { type: 'box', lx: 0, lz: 0, hw: 0.20, hd: 0.16, maxY: 0.42 },
+    ],
+    spawn_urban_snack_machine: [
+      { type: 'box', lx: 0, lz: 0, hw: 0.36, hd: 0.28, maxY: 1.55 },
+    ],
+    spawn_prop_barber_chair: [
+      { type: 'box', lx: 0, lz: 0.02, hw: 0.26, hd: 0.24, maxY: 0.92 },
+    ],
+    spawn_urban_clothesline: [
+      { type: 'box', lx: 0, lz: 0, hw: 1.12, hd: 0.08, maxY: 1.48 },
+    ],
+    spawn_prop_sun_lounger: [
+      { type: 'box', lx: 0, lz: -0.08, hw: 0.30, hd: 0.82, maxY: 0.55 },
+    ],
+    spawn_urban_patio_umbrella: [
+      { type: 'cyl', lx: 0, lz: 0, r: 1.15, topY: 2.12 },
+    ],
+    spawn_prop_upright_piano: [
+      { type: 'box', lx: 0, lz: 0, hw: 0.66, hd: 0.30, maxY: 1.25 },
+    ],
+    spawn_urban_manhole: [
+      { type: 'cyl', lx: 0, lz: 0, r: 0.40, topY: 0.08 },
+    ],
+    spawn_prop_chest_freezer: [
+      { type: 'box', lx: 0, lz: 0, hw: 0.48, hd: 0.32, maxY: 0.80 },
+    ],
+    spawn_prop_kitchen_cabinet: [
+      { type: 'box', lx: 0, lz: 0, hw: 0.32, hd: 0.18, maxY: 0.75 },
+    ],
+    spawn_prop_indoor_trash: [
+      { type: 'cyl', lx: 0, lz: 0, r: 0.20, topY: 0.48 },
+    ],
+    spawn_urban_speed_bump: [
+      { type: 'box', lx: 0, lz: 0, hw: 1.42, hd: 0.22, maxY: 0.10 },
+    ],
+    spawn_urban_fence_post: [
+      { type: 'box', lx: 0, lz: 0, hw: 0.42, hd: 0.06, maxY: 1.48 },
+    ],
+    spawn_urban_store_awning: [
+      { type: 'box', lx: 0, lz: 0.18, hw: 1.12, hd: 0.38, minY: 2.0, maxY: 2.42 },
+    ],
+    spawn_prop_baby_crib: [
+      { type: 'box', lx: 0, lz: 0, hw: 0.38, hd: 0.58, maxY: 0.68 },
+    ],
+    spawn_prop_wheelchair: [
+      { type: 'box', lx: 0, lz: 0.02, hw: 0.28, hd: 0.28, maxY: 0.72 },
+    ],
+    spawn_prop_hospital_bed: [
+      { type: 'box', lx: 0, lz: 0, hw: 0.48, hd: 0.98, maxY: 0.72 },
+    ],
+    spawn_prop_gurney: [
+      { type: 'box', lx: 0, lz: 0, hw: 0.32, hd: 0.88, maxY: 0.82 },
+    ],
+    spawn_prop_slot_machine: [
+      { type: 'box', lx: 0, lz: 0, hw: 0.28, hd: 0.26, maxY: 1.45 },
+    ],
+    spawn_prop_arcade_cabinet: [
+      { type: 'box', lx: 0, lz: 0, hw: 0.32, hd: 0.30, maxY: 1.55 },
+    ],
+    spawn_prop_desk_lamp: [
+      { type: 'box', lx: 0.10, lz: 0, hw: 0.18, hd: 0.12, maxY: 0.38 },
+    ],
+    spawn_prop_space_heater: [
+      { type: 'box', lx: 0, lz: 0, hw: 0.18, hd: 0.12, maxY: 0.44 },
+    ],
+    spawn_urban_mail_drop_box: [
+      { type: 'box', lx: 0, lz: 0, hw: 0.22, hd: 0.16, maxY: 0.55 },
+    ],
+    spawn_urban_fire_hose_cabinet: [
+      { type: 'box', lx: 0, lz: 0, hw: 0.32, hd: 0.10, maxY: 0.75 },
+    ],
+    spawn_prop_pool_table: [
+      { type: 'box', lx: 0, lz: 0, hw: 0.76, hd: 0.40, maxY: 0.85 },
+    ],
+    spawn_prop_treadmill: [
+      { type: 'box', lx: 0, lz: 0, hw: 0.28, hd: 0.68, maxY: 0.92 },
+    ],
+    spawn_urban_bakery_rack: [
+      { type: 'box', lx: 0, lz: 0, hw: 0.44, hd: 0.20, maxY: 1.35 },
+    ],
+    spawn_prop_clothes_rack: [
+      { type: 'box', lx: 0, lz: 0, hw: 0.58, hd: 0.22, maxY: 1.45 },
+    ],
+    spawn_prop_hair_dryer: [
+      { type: 'box', lx: 0, lz: -0.04, hw: 0.08, hd: 0.06, minY: 0.8, maxY: 1.48 },
+    ],
+    spawn_urban_ev_charger: [
+      { type: 'box', lx: 0, lz: 0, hw: 0.18, hd: 0.12, maxY: 0.62 },
+    ],
+    spawn_prop_exercise_bike: [
+      { type: 'box', lx: 0, lz: 0, hw: 0.28, hd: 0.42, maxY: 0.92 },
+    ],
+    spawn_prop_weight_bench: [
+      { type: 'box', lx: 0, lz: 0, hw: 0.28, hd: 0.68, maxY: 0.95 },
+    ],
+    spawn_prop_cash_register: [
+      { type: 'box', lx: 0, lz: 0, hw: 0.22, hd: 0.18, maxY: 0.32 },
+    ],
+    spawn_prop_display_fridge: [
+      { type: 'box', lx: 0, lz: 0, hw: 0.38, hd: 0.34, maxY: 1.85 },
+    ],
+    spawn_urban_recycling_dumpster: [
+      { type: 'box', lx: 0, lz: 0, hw: 0.82, hd: 0.50, maxY: 1.12 },
+    ],
+    spawn_prop_dentist_chair: [
+      { type: 'box', lx: 0, lz: 0, hw: 0.32, hd: 0.38, maxY: 0.95 },
+    ],
+    spawn_prop_iv_stand: [
+      { type: 'cyl', lx: 0, lz: 0, r: 0.22, topY: 1.65 },
+    ],
+    spawn_prop_computer_tower: [
+      { type: 'box', lx: 0, lz: 0, hw: 0.12, hd: 0.20, maxY: 0.44 },
+    ],
+    spawn_prop_whiteboard: [
+      { type: 'box', lx: 0, lz: 0, hw: 0.64, hd: 0.44, minY: 0.35, maxY: 0.68 },
+    ],
+    spawn_prop_cork_board: [
+      { type: 'box', lx: 0, lz: 0, hw: 0.44, hd: 0.34, minY: 0.0, maxY: 0.65 },
+    ],
+    spawn_urban_pay_phone: [
+      { type: 'box', lx: 0, lz: 0, hw: 0.16, hd: 0.08, minY: 0.0, maxY: 0.52 },
+    ],
+    spawn_urban_recycle_bin_dual: [
+      { type: 'box', lx: 0, lz: 0, hw: 0.42, hd: 0.18, maxY: 0.55 },
+    ],
+    spawn_prop_book_stack: [
+      { type: 'box', lx: 0, lz: 0, hw: 0.18, hd: 0.14, maxY: 0.32 },
+    ],
+    spawn_prop_wall_tv: [
+      { type: 'box', lx: 0, lz: 0, hw: 0.58, hd: 0.36, minY: 0.38, maxY: 0.78 },
+    ],
+    spawn_urban_led_sign: [
+      { type: 'cyl', lx: 0, lz: 0, r: 0.08, topY: 2.62 },
+      { type: 'box', lx: 0, lz: 0, hw: 0.44, hd: 0.06, minY: 2.15, maxY: 2.62 },
+    ],
+    spawn_prop_grandfather_clock: [
+      { type: 'box', lx: 0, lz: 0, hw: 0.24, hd: 0.16, maxY: 1.95 },
+    ],
+    spawn_prop_kitchen_island: [
+      { type: 'box', lx: 0, lz: 0, hw: 0.66, hd: 0.36, maxY: 0.95 },
+    ],
+    spawn_game_dartboard: [
+      { type: 'box', lx: 0, lz: 0, hw: 0.26, hd: 0.06, minY: 1.2, maxY: 1.48 },
+    ],
+    spawn_game_foosball: [
+      { type: 'box', lx: 0, lz: 0, hw: 0.64, hd: 0.34, maxY: 0.88 },
+    ],
+    spawn_game_ping_pong: [
+      { type: 'box', lx: 0, lz: 0, hw: 0.80, hd: 0.44, maxY: 0.88 },
+    ],
+    spawn_game_chess_table: [
+      { type: 'box', lx: 0, lz: 0, hw: 0.34, hd: 0.34, maxY: 0.82 },
+    ],
+    spawn_game_poker_table: [
+      { type: 'cyl', lx: 0, lz: 0, r: 0.58, topY: 0.82 },
+    ],
+    spawn_game_jenga: [
+      { type: 'box', lx: 0, lz: 0, hw: 0.12, hd: 0.12, maxY: 0.26 },
+    ],
+    spawn_game_pinball: [
+      { type: 'box', lx: 0, lz: 0, hw: 0.28, hd: 0.54, maxY: 0.95 },
+    ],
+    spawn_game_bowling_pins: [
+      { type: 'box', lx: 0, lz: 0, hw: 0.38, hd: 0.38, maxY: 0.28 },
+    ],
+    spawn_game_petanque: [
+      { type: 'cyl', lx: 0, lz: 0, r: 0.22, topY: 0.08 },
+    ],
+    spawn_sport_basketball_hoop: [
+      { type: 'cyl', lx: 0, lz: 0, r: 0.08, topY: 2.85 },
+      { type: 'box', lx: 0, lz: -0.12, hw: 0.40, hd: 0.06, minY: 2.4, maxY: 2.85 },
+    ],
+    spawn_sport_soccer_goal: [
+      { type: 'box', lx: 0, lz: 0, hw: 1.15, hd: 0.08, maxY: 1.28 },
+    ],
+    spawn_sport_punching_bag: [
+      { type: 'cyl', lx: 0, lz: 0, r: 0.24, topY: 1.02 },
+    ],
+    spawn_sport_tennis_net: [
+      { type: 'box', lx: 0, lz: 0, hw: 5.25, hd: 0.06, maxY: 0.98 },
+    ],
+    spawn_sport_golf_bag: [
+      { type: 'cyl', lx: 0, lz: 0, r: 0.20, topY: 0.88 },
+    ],
+    spawn_sport_skateboard: [
+      { type: 'box', lx: 0, lz: 0, hw: 0.38, hd: 0.12, maxY: 0.12 },
+    ],
+    spawn_sport_surfboard: [
+      { type: 'box', lx: 0, lz: 0, hw: 0.28, hd: 0.88, maxY: 0.18 },
+    ],
+    spawn_loisir_fishing_rod: [
+      { type: 'box', lx: 0, lz: 0.04, hw: 0.12, hd: 0.22, maxY: 0.82 },
+    ],
+    spawn_loisir_camping_tent: [
+      { type: 'box', lx: 0, lz: 0, hw: 0.72, hd: 0.72, maxY: 1.15 },
+    ],
+    spawn_loisir_hammock: [
+      { type: 'box', lx: 0, lz: 0, hw: 1.48, hd: 0.42, minY: 0.85, maxY: 1.05 },
+      { type: 'cyl', lx: -1.42, lz: 0, r: 0.08, topY: 1.70 },
+      { type: 'cyl', lx: 1.42, lz: 0, r: 0.08, topY: 1.70 },
+    ],
+    spawn_loisir_acoustic_guitar: [
+      { type: 'box', lx: 0, lz: 0, hw: 0.16, hd: 0.12, maxY: 0.62 },
+    ],
+    spawn_loisir_playground_slide: [
+      { type: 'box', lx: 0, lz: 0, hw: 0.48, hd: 0.38, maxY: 1.88 },
+    ],
+    spawn_game_shuffleboard: [
+      { type: 'box', lx: 0, lz: 0, hw: 1.45, hd: 0.28, maxY: 0.90 },
+    ],
+    spawn_game_air_hockey: [
+      { type: 'box', lx: 0, lz: 0, hw: 0.74, hd: 0.44, maxY: 0.85 },
+    ],
+    spawn_game_croquet: [
+      { type: 'box', lx: 0, lz: 0, hw: 0.38, hd: 0.28, maxY: 0.35 },
+    ],
+    spawn_game_horseshoes: [
+      { type: 'box', lx: 0, lz: 0, hw: 0.44, hd: 0.34, maxY: 0.18 },
+    ],
+    spawn_sport_volleyball_net: [
+      { type: 'box', lx: 0, lz: 0, hw: 4.85, hd: 0.06, maxY: 1.52 },
+    ],
+    spawn_sport_baseball_set: [
+      { type: 'box', lx: 0, lz: 0, hw: 0.22, hd: 0.22, maxY: 0.82 },
+    ],
+    spawn_sport_boxing_corner: [
+      { type: 'box', lx: 0, lz: 0, hw: 0.58, hd: 0.58, maxY: 1.28 },
+    ],
+    spawn_sport_hockey_sticks: [
+      { type: 'box', lx: 0, lz: 0, hw: 0.22, hd: 0.22, maxY: 0.45 },
+    ],
+    spawn_sport_kayak: [
+      { type: 'box', lx: 0, lz: 0, hw: 0.24, hd: 1.45, maxY: 0.32 },
+    ],
+    spawn_sport_mountain_bike: [
+      { type: 'box', lx: 0, lz: 0, hw: 0.32, hd: 0.48, maxY: 0.92 },
+    ],
+    spawn_loisir_camp_stove: [
+      { type: 'box', lx: 0, lz: 0, hw: 0.18, hd: 0.14, maxY: 0.12 },
+    ],
+    spawn_loisir_cooler: [
+      { type: 'box', lx: 0, lz: 0, hw: 0.28, hd: 0.18, maxY: 0.48 },
+    ],
+    spawn_loisir_folding_chair: [
+      { type: 'box', lx: 0, lz: 0, hw: 0.24, hd: 0.22, maxY: 0.85 },
+    ],
+    spawn_loisir_camp_lantern: [
+      { type: 'cyl', lx: 0, lz: 0, r: 0.14, topY: 0.50 },
+    ],
+    spawn_loisir_drum_kit: [
+      { type: 'box', lx: 0, lz: 0, hw: 0.42, hd: 0.32, maxY: 0.88 },
+    ],
+    spawn_loisir_keyboard: [
+      { type: 'box', lx: 0, lz: 0, hw: 0.48, hd: 0.18, maxY: 0.80 },
+    ],
+    spawn_loisir_playground_swing: [
+      { type: 'box', lx: 0, lz: 0, hw: 0.68, hd: 0.12, maxY: 2.25 },
+    ],
+    spawn_loisir_sandbox: [
+      { type: 'box', lx: 0, lz: 0, hw: 0.64, hd: 0.64, maxY: 0.22 },
+    ],
+    spawn_loisir_trampoline: [
+      { type: 'cyl', lx: 0, lz: 0, r: 0.96, topY: 0.58 },
+    ],
+    spawn_loisir_canoe: [
+      { type: 'box', lx: 0, lz: 0, hw: 0.48, hd: 1.28, minY: 0.0, maxY: 0.62 },
+    ],
+    spawn_game_roulette_table: [
+      { type: 'box', lx: 0, lz: 0, hw: 0.76, hd: 0.46, maxY: 0.88 },
+    ],
+    spawn_game_craps_table: [
+      { type: 'box', lx: 0, lz: 0, hw: 0.96, hd: 0.52, maxY: 0.85 },
+    ],
+    spawn_game_skee_ball: [
+      { type: 'box', lx: 0, lz: 0, hw: 0.34, hd: 0.74, maxY: 0.95 },
+    ],
+    spawn_game_board_game: [
+      { type: 'box', lx: 0, lz: 0, hw: 0.38, hd: 0.28, maxY: 0.48 },
+    ],
+    spawn_sport_climbing_wall: [
+      { type: 'box', lx: 0, lz: 0, hw: 0.94, hd: 0.08, maxY: 2.48 },
+    ],
+    spawn_sport_archery_target: [
+      { type: 'cyl', lx: 0, lz: 0, r: 0.36, topY: 1.28 },
+    ],
+    spawn_sport_ski_set: [
+      { type: 'box', lx: 0, lz: 0, hw: 0.28, hd: 0.88, maxY: 0.12 },
+    ],
+    spawn_sport_dumbbell_rack: [
+      { type: 'box', lx: 0, lz: 0, hw: 0.44, hd: 0.18, maxY: 0.48 },
+    ],
+    spawn_sport_badminton_net: [
+      { type: 'box', lx: 0, lz: 0, hw: 2.68, hd: 0.06, maxY: 1.28 },
+    ],
+    spawn_sport_lacrosse_sticks: [
+      { type: 'box', lx: 0, lz: 0, hw: 0.22, hd: 0.22, maxY: 0.52 },
+    ],
+    spawn_loisir_microphone_stand: [
+      { type: 'cyl', lx: 0, lz: 0, r: 0.18, topY: 1.62 },
+    ],
+    spawn_loisir_portable_bbq: [
+      { type: 'box', lx: 0, lz: 0, hw: 0.24, hd: 0.16, maxY: 0.66 },
+    ],
+    spawn_loisir_picnic_basket: [
+      { type: 'box', lx: 0, lz: 0, hw: 0.22, hd: 0.16, maxY: 0.32 },
+    ],
+    spawn_loisir_telescope: [
+      { type: 'box', lx: 0, lz: 0, hw: 0.28, hd: 0.28, maxY: 1.12 },
+    ],
+    spawn_loisir_seesaw: [
+      { type: 'box', lx: 0, lz: 0, hw: 1.25, hd: 0.14, maxY: 0.62 },
+    ],
+    spawn_loisir_spinning_playground: [
+      { type: 'cyl', lx: 0, lz: 0, r: 0.78, topY: 0.48 },
+    ],
+    spawn_loisir_camp_table: [
+      { type: 'box', lx: 0, lz: 0, hw: 0.48, hd: 0.28, maxY: 0.56 },
+    ],
+    spawn_loisir_sleeping_pad: [
+      { type: 'box', lx: 0, lz: 0, hw: 0.18, hd: 0.34, maxY: 0.18 },
+    ],
+    spawn_loisir_binoculars_tripod: [
+      { type: 'box', lx: 0, lz: 0, hw: 0.22, hd: 0.22, maxY: 0.85 },
+    ],
+    spawn_loisir_ukulele_stand: [
+      { type: 'box', lx: 0, lz: 0, hw: 0.12, hd: 0.10, maxY: 0.52 },
+    ],
+    spawn_game_ring_toss: [
+      { type: 'cyl', lx: 0, lz: 0, r: 0.08, topY: 0.62 },
+    ],
+    spawn_game_lawn_darts: [
+      { type: 'cyl', lx: 0, lz: 0, r: 0.26, topY: 0.12 },
+    ],
+    spawn_game_kubb: [
+      { type: 'box', lx: 0, lz: 0, hw: 0.32, hd: 0.32, maxY: 0.35 },
+    ],
+    spawn_game_marbles: [
+      { type: 'cyl', lx: 0, lz: 0, r: 0.30, topY: 0.06 },
+    ],
+    spawn_sport_disc_golf_basket: [
+      { type: 'cyl', lx: 0, lz: 0, r: 0.26, topY: 1.28 },
+    ],
+    spawn_sport_yoga_mat: [
+      { type: 'box', lx: 0, lz: 0, hw: 0.32, hd: 0.14, maxY: 0.14 },
+    ],
+    spawn_sport_pull_up_bar: [
+      { type: 'box', lx: 0, lz: 0, hw: 0.68, hd: 0.08, minY: 0.0, maxY: 2.08 },
+    ],
+    spawn_sport_boxing_gloves: [
+      { type: 'box', lx: 0, lz: 0, hw: 0.18, hd: 0.08, minY: 1.0, maxY: 1.48 },
+    ],
+    spawn_sport_curling_stones: [
+      { type: 'box', lx: 0, lz: 0, hw: 0.28, hd: 0.22, maxY: 0.16 },
+    ],
+    spawn_sport_football_pad: [
+      { type: 'box', lx: 0, lz: 0, hw: 0.28, hd: 0.44, maxY: 0.58 },
+    ],
+    spawn_loisir_beach_chair: [
+      { type: 'box', lx: 0, lz: 0, hw: 0.26, hd: 0.24, maxY: 0.72 },
+    ],
+    spawn_loisir_beach_umbrella: [
+      { type: 'cyl', lx: 0, lz: 0, r: 0.96, topY: 2.02 },
+    ],
+    spawn_loisir_life_ring: [
+      { type: 'cyl', lx: 0, lz: 0, r: 0.08, topY: 1.08 },
+      { type: 'box', lx: 0, lz: 0, hw: 0.26, hd: 0.06, minY: 0.7, maxY: 0.95 },
+    ],
+    spawn_loisir_paddle_board: [
+      { type: 'box', lx: 0, lz: 0, hw: 0.28, hd: 0.95, maxY: 0.18 },
+    ],
+    spawn_loisir_snorkel_set: [
+      { type: 'box', lx: 0, lz: 0, hw: 0.22, hd: 0.14, maxY: 0.22 },
+    ],
+    spawn_loisir_camp_cot: [
+      { type: 'box', lx: 0, lz: 0, hw: 0.34, hd: 0.95, maxY: 0.52 },
+    ],
+    spawn_loisir_fire_pit: [
+      { type: 'cyl', lx: 0, lz: 0, r: 0.38, topY: 0.18 },
+    ],
+    spawn_loisir_solar_shower: [
+      { type: 'box', lx: 0, lz: 0, hw: 0.18, hd: 0.08, maxY: 1.45 },
+    ],
+    spawn_loisir_bird_bath: [
+      { type: 'cyl', lx: 0, lz: 0, r: 0.24, topY: 0.80 },
+    ],
+    spawn_loisir_red_wagon: [
+      { type: 'box', lx: 0, lz: 0, hw: 0.28, hd: 0.42, maxY: 0.32 },
+    ],
     spawn_backpack: [
       { type: 'box', lx: 0, lz: 0, hw: 0.20, hd: 0.16, maxY: 0.32 },
     ],
@@ -133,6 +805,25 @@
     ],
     beach_exit_torch: [
       { type: 'cyl', lx: 0, lz: 0, r: 0.08, topY: 2.1 },
+    ],
+    spawn_beach_footprint_trail: [],
+    spawn_beach_message_bottle: [
+      { type: 'cyl', lx: 0, lz: 0, r: 0.08, topY: 0.28 },
+    ],
+    spawn_beach_campfire_ring: [
+      { type: 'cyl', lx: 0, lz: 0, r: 0.42, topY: 0.12 },
+    ],
+    spawn_beach_pier_wreck: [
+      { type: 'box', lx: 0, lz: 0, hw: 0.62, hd: 0.38, maxY: 0.55 },
+    ],
+    spawn_beach_burnt_note: [
+      { type: 'cyl', lx: 0, lz: 0, r: 0.16, topY: 0.22 },
+    ],
+    spawn_beach_starter_torch: [
+      { type: 'cyl', lx: 0, lz: 0, r: 0.07, topY: 0.95 },
+    ],
+    spawn_beach_starter_suitcase: [
+      { type: 'box', lx: 0, lz: 0, hw: 0.30, hd: 0.22, maxY: 0.32 },
     ],
     spawn_flat_stone: [],
     spawn_drink_set: [],

@@ -1,0 +1,23 @@
+---
+description: Workflow questionnaire à choix multiples quand l'IA a un doute de design (Bruno, Georges)
+alwaysApply: true
+---
+
+# Workflow questionnaire IA
+
+Lire **`docs/AI_WORKFLOW.md`** avant toute décision de design non triviale.
+
+## Obligation
+
+Si tu as un **doute** sur quoi faire ensuite (gameplay, UX, priorité, multijoueur, ton RP, scope) :
+
+1. **Ne pas** enchaîner une grosse implémentation sur une hypothèse.
+2. Poser un **questionnaire à choix multiples** (outil formulaire ou liste numérotée claire).
+3. Inclure **« Autre — je précise »** sur chaque question.
+4. Après réponse : résumer la décision → `DEV_TRACKER.md` → coder seulement si le spec est complet ; sinon **nouveau questionnaire**.
+
+## Implémentation directe OK quand
+
+- Le user a déjà tranché dans le fil ou le tracker.
+- Bug évident, fix demandé explicitement.
+- Suite immédiate d’une réponse de questionnaire déjà donnée.

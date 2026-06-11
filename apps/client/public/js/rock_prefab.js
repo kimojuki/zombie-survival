@@ -48,7 +48,7 @@
 
 
 
-  /** Caillou tenu à deux mains (normalisé autour de l'origine = centre de prise). */
+  /** Caillou tenu à deux mains — compact, axe large sur X (prise latérale). */
 
   function buildHandRock(root, opts = {}) {
 
@@ -60,13 +60,13 @@
 
       || new THREE.MeshLambertMaterial({ color: 0x9a9588 });
 
-    const r = 0.058 + rng() * 0.024;
+    const r = 0.038 + rng() * 0.014;
 
     const mesh = new THREE.Mesh(new THREE.DodecahedronGeometry(r, 0), mat);
 
-    mesh.scale.set(1.32 + rng() * 0.18, 0.76 + rng() * 0.14, 1.22 + rng() * 0.16);
+    mesh.scale.set(1.18 + rng() * 0.12, 0.82 + rng() * 0.10, 1.02 + rng() * 0.10);
 
-    mesh.rotation.set(rng() * 0.28, rng() * Math.PI * 2, rng() * 0.22);
+    mesh.rotation.set(rng() * 0.18, rng() * Math.PI * 2, rng() * 0.14);
 
     mesh.castShadow = true;
 

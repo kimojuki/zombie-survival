@@ -211,6 +211,9 @@
   camera.add(fpsArms);
   fpsArms.position.set(-0.05, -0.03, -0.04);
   ZS._fpsArms = fpsArms;
+  ZS.ArmTuner?.init?.(fpsArms);
+  ZS.loadFPSValidatedPoses?.(fpsArms);
+  ZS.AdminHub?.init?.();
   // Expose globally pour que l'inventaire puisse changer l'item en main.
   // On diffuse aussi l'item équipé pour que les autres joueurs le voient.
   ZS.setHandItem = (type) => {
@@ -233,6 +236,13 @@
     return ZS.pickDecorInteractRay(raycaster, maxDist);
   }
   ZS.pickWorldInteract = _pickInteractRay;
+
+  function _pickAdminDecorRay(maxDist = 80) {
+    if (!ZS.pickDecorAdminRay) return null;
+    raycaster.setFromCamera(screenCenter, camera);
+    return ZS.pickDecorAdminRay(raycaster, maxDist);
+  }
+  ZS.pickAdminDecorRay = _pickAdminDecorRay;
 
   // Position camera at spawn before first render
   state.player.y = (ZS.getDecorGroundHeight
@@ -275,17 +285,20 @@
   // ── Menu (☰) : audio on/off + déconnexion ───────────────────────────────────
   async function _syncAdminMenu() {
     if (ZS.Rcon?.refreshMenu) ZS.Rcon.refreshMenu();
+    if (ZS.AdminPanel?.refreshMenu) ZS.AdminPanel.refreshMenu();
     try {
       const res = await fetch('/api/auth/me', {
         headers: { Authorization: 'Bearer ' + token },
       });
       if (res.ok) {
         const data = await res.json();
-        localStorage.setItem('zombie_is_admin', data.isAdmin ? '1' : '0');
+        ZS.AdminAuth?.loadFromAuth?.(data);
         if (data.username) localStorage.setItem('zombie_username', data.username);
+        if (ZS.AdminHub?.rebuildMenu) ZS.AdminHub.rebuildMenu();
       }
     } catch { /* hors ligne */ }
     if (ZS.Rcon?.refreshMenu) ZS.Rcon.refreshMenu();
+    if (ZS.AdminPanel?.refreshMenu) ZS.AdminPanel.refreshMenu();
   }
 
   function _initMenu() {
@@ -505,6 +518,10 @@
         if (_interactHold) e.preventDefault();
         return;
       }
+      if (ZS.AdminLiveDecor?.isActive?.() && ZS.AdminLiveDecor.tryPickOnE?.()) {
+        e.preventDefault();
+        return;
+      }
       if (_interactWorldKeyDown()) e.preventDefault();
       return;
     }
@@ -531,9 +548,9 @@
   function _blocksPointerLock(el) {
     if (!el || el === canvas) return false;
     return !!el.closest?.(
-      '#menu-panel, #menu-btn, #inv-panel, #craft-panel, #storage-panel, #storage-backdrop, #sleep-loot-panel, #sleep-loot-backdrop, #sign-backdrop, #sign-panel, #options-backdrop, #options-panel, #map-overlay, #group-backdrop, #death-screen, '
+      '#menu-panel, #menu-btn, #inv-panel, #craft-panel, #storage-panel, #storage-backdrop, #sleep-loot-panel, #sleep-loot-backdrop, #sign-backdrop, #sign-panel, #options-backdrop, #options-panel, #admin-backdrop, #admin-panel, #map-overlay, #group-backdrop, #death-screen, '
       + '#connecting-screen, #rcon-panel, #chat-wrap, #hotbar, #craft-btn, #inv-btn, #map-btn, #chat-btn, '
-      + '#build-ctl, button, a, input, textarea, select, [contenteditable]'
+      + '#build-ctl, #zs-admin-live-decor, #zs-arm-tuner, button, a, input, textarea, select, [contenteditable]'
     );
   }
 
@@ -556,8 +573,15 @@
     if (ZS.SleepLoot?.isOpen?.()) return true;
     if (ZS.SignUI?.isOpen?.()) return true;
     if (ZS.OptionsUI?.isOpen?.()) return true;
+    if (ZS.AdminHub?.isOpen?.()) return true;
+    if (ZS.Calibration?.anyOpen?.() && !ZS.AdminLiveDecor?.isActive?.() && !ZS.ArmTuner?.allowsWalkPreview?.()) return true;
+    if (ZS.AdminPanel?.isOpen?.()) return true;
+    const death = document.getElementById('death-screen');
+    if (death && death.classList.contains('show')) return true;
     const optBd = document.getElementById('options-backdrop');
     if (optBd && optBd.style.display === 'flex') return true;
+    const adminBd = document.getElementById('admin-backdrop');
+    if (adminBd && adminBd.style.display === 'flex') return true;
     return false;
   }
 
@@ -1018,17 +1042,35 @@
     return ZS.getDecorStorageForInteract?.(pick.decorId) || null;
   }
 
-  function _interactDoorTap() {
-    const pick = _pickInteractRay(3.2);
-    const storage = _storageFromPick(pick);
-    if (storage) return _openStorageById(storage.decorId);
-    const door = _doorFromPick(pick);
+  function _signFromPick(pick) {
+    if (!pick || pick.kind !== 'sign') return null;
+    return ZS.getDecorSignForInteract?.(pick.decorId) || null;
+  }
+
+  function _interactRayTarget(maxDist = 3.5) {
+    const pick = _pickInteractRay(maxDist);
+    return {
+      pick,
+      storage: _storageFromPick(pick),
+      door: _doorFromPick(pick),
+      sign: _signFromPick(pick),
+    };
+  }
+
+  function _interactDoorFromTarget(door) {
     if (!door) return false;
     const active = ZS.Inventory?.getActiveItem?.();
     if (active?.type === 'tool_verrou' && !door.locked) {
       return ZS.Inventory?.installDoorLockOnAimedDoor?.() || false;
     }
     return _toggleNearbyDoor(door);
+  }
+
+  function _interactDoorTap() {
+    const { storage, door } = _interactRayTarget(3.2);
+    if (storage) return _openStorageById(storage.decorId);
+    if (door) return _interactDoorFromTarget(door);
+    return false;
   }
 
   function _interactHoldStart() {
@@ -1110,9 +1152,11 @@
   }
 
   function _interactWorld() {
-    if (_interactDoor()) return true;
+    const { storage, door, sign } = _interactRayTarget(3.2);
+    if (storage) return _openStorageById(storage.decorId);
+    if (door) return _interactDoorFromTarget(door);
     if (_interactCampProp(state.player.x, state.player.z)) return true;
-    if (ZS.SignUI?.tryInteract?.(ZS.SignUI.getNearestForUi?.(state.player.x, state.player.z))) return true;
+    if (sign && ZS.SignUI?.tryInteract?.(sign)) return true;
     return ZS.SleepLoot?.tryInteract?.() || false;
   }
 
@@ -1121,7 +1165,12 @@
     if (ZS.SignUI?.isOpen?.()) return true;
     if (ZS.SleepLoot?.isPending?.()) return true;
     if (!state.player.dead) {
-      const sign = ZS.SignUI?.getNearestForUi?.(state.player.x, state.player.z);
+      const { storage, door, sign } = _interactRayTarget(3.5);
+      if (storage || door) {
+        if (_interactHoldStart()) return true;
+      }
+      if (storage) return _openStorageById(storage.decorId);
+      if (door) return _interactDoorFromTarget(door);
       if (sign && ZS.SignUI?.tryInteract?.(sign)) return true;
       if (_interactCampProp(state.player.x, state.player.z)) return true;
       const sleeper = ZS.SleepLoot?.getNearestForUi?.(state.player.x, state.player.z);
@@ -1152,11 +1201,10 @@
     const pick = _pickInteractRay(3.5);
     const storage = _storageFromPick(pick);
     const door = _doorFromPick(pick);
-    const campProp = (!storage && !door)
+    const sign = _signFromPick(pick);
+    const campProp = (!storage && !door && !sign)
       ? ZS.findNearestDecorInteract?.(px, pz, 3.2) : null;
-    const sign = (!storage && !door && !campProp)
-      ? ZS.SignUI?.getNearestForUi?.(px, pz) : null;
-    const sleeper = (!storage && !door && !campProp && !sign && !state.player.dead)
+    const sleeper = (!storage && !door && !sign && !campProp && !state.player.dead)
       ? ZS.SleepLoot?.getNearestForUi?.(px, pz) : null;
     _nearStorage = storage;
     _nearDoor = door;
@@ -1184,7 +1232,7 @@
     else if (campProp?.role === 'campfire') label = 'Cuire au feu';
     else if (campProp?.role === 'bed') label = 'Repos';
     else if (campProp?.role === 'bedroll') label = 'Repos (sac)';
-    else if (sign) label = 'Lire le panneau';
+    else if (sign) label = sign.signKind?.startsWith('intro_') ? 'Lire' : 'Lire le panneau';
     else label = 'Fouiller';
     btn.textContent = mobile ? label : `E — ${label}`;
     btn.style.display = 'block';
@@ -1322,16 +1370,21 @@
     }
     ZS.SpawnIntro?.tick?.(dt);
     ZS.Scenario?.tick?.(dt);
-    ZS.tickFPSArms(fpsArms, dt, {
-      moving: !!state.player.isMoving,
-      speed: state.player.moveSpeed || 0,
-    });
+    const _tunerWalk = ZS.ArmTuner?.allowsWalkPreview?.();
+    if (!ZS._armTunerActive || _tunerWalk) {
+      ZS.tickFPSArms(fpsArms, dt, {
+        moving: _tunerWalk ? !!ZS.ArmTuner.walkPreviewOn : !!state.player.isMoving,
+        speed: _tunerWalk ? (ZS.ArmTuner.walkPreviewOn ? 4.5 : 0) : (state.player.moveSpeed || 0),
+      });
+    }
+    if (!ZS._armTunerActive) {
+      ZS.tickArmAnim(fpsArms, dt);
+    }
     ZS.tickTorchFx?.(dt, {
       moving: !!state.player.isMoving,
       speed: state.player.moveSpeed || 0,
       extinguished: _inWater && _waterDepth > 0.25,
     });
-    ZS.tickArmAnim(fpsArms, dt);
     ZS.setShadowCenter(state.player.x, state.player.z);
     ZS.tickDayNight(dt);
     if (ZS.hasActiveTreeAnims?.()) ZS.tickTreeFalls?.(dt);

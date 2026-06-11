@@ -162,6 +162,83 @@ export const BEACH_SPAWN_SAND_RECT = Object.freeze({
  * Point de spawn aléatoire sur le sable de la plage (respawn / nouveaux comptes).
  * Rejette l'eau et l'herbe via beachCoastWeight + isInBeachFootprint.
  */
+/** Écart minimal entre naufragés sur la plage (multijoueur). */
+export const BEACH_SPAWN_MIN_PLAYER_GAP = 10;
+
+/**
+ * Spawn plage en évitant les positions déjà occupées (joueurs connectés).
+ * @param {{ x: number, z: number }[]} occupied
+ * @param {number} [minDist]
+ */
+export function pickBeachSpawnAwayFrom(occupied = [], minDist = BEACH_SPAWN_MIN_PLAYER_GAP, rng = Math.random) {
+  const occ = occupied.filter((o) => Number.isFinite(o?.x) && Number.isFinite(o?.z));
+  for (let t = 0; t < 96; t++) {
+    const p = pickBeachSpawn(rng);
+    if (occ.every((o) => Math.hypot(p.x - o.x, p.z - o.z) >= minDist)) return p;
+  }
+  let best = pickBeachSpawn(rng);
+  let bestGap = -1;
+  for (let t = 0; t < 48; t++) {
+    const p = pickBeachSpawn(rng);
+    const gap = occ.length
+      ? Math.min(...occ.map((o) => Math.hypot(p.x - o.x, p.z - o.z)))
+      : Infinity;
+    if (gap > bestGap) {
+      bestGap = gap;
+      best = p;
+    }
+  }
+  return best;
+}
+
+/** Zone de réveil intro — côté est de la plage (loin du panneau sortie / sentier ouest). */
+export const INTRO_SPAWN_CLUSTER = Object.freeze({
+  cx: 282,
+  cz: -8,
+  rx: 14,
+  rz: 24,
+});
+
+/** Écart minimal entre le cluster de réveil et le premier indice (empreintes). */
+export const INTRO_MIN_SPAWN_TO_TRAIL_M = 10;
+
+/** @returns {boolean} joueur dans le cluster intro (réveil + indices visibles). */
+export function isInIntroSpawnCluster(x, z) {
+  if (!Number.isFinite(x) || !Number.isFinite(z)) return false;
+  if (Math.abs(x - INTRO_SPAWN_CLUSTER.cx) > INTRO_SPAWN_CLUSTER.rx) return false;
+  if (Math.abs(z - INTRO_SPAWN_CLUSTER.cz) > INTRO_SPAWN_CLUSTER.rz) return false;
+  return isOnBeachSafeSand(x, z);
+}
+
+/**
+ * Spawn intro — sable est de la plage (multijoueur : écart minimal conservé).
+ * Légère bias vers l'océan pour éviter d'apparaître près du sentier ouest.
+ * @param {{ x: number, z: number }[]} occupied
+ * @param {number} [minDist]
+ */
+export function pickBeachSpawnForIntro(occupied = [], minDist = BEACH_SPAWN_MIN_PLAYER_GAP, rng = Math.random) {
+  const { cx, cz, rx, rz } = INTRO_SPAWN_CLUSTER;
+  const occ = occupied.filter((o) => Number.isFinite(o?.x) && Number.isFinite(o?.z));
+  for (let t = 0; t < 96; t++) {
+    const x = cx + (rng() * 1.15 - 0.35) * rx;
+    const z = cz + (rng() - 0.5) * 2 * rz;
+    if (!isOnBeachSafeSand(x, z)) continue;
+    const p = {
+      x: Math.round(x * 10) / 10,
+      z: Math.round(z * 10) / 10,
+      y: BEACH_SPAWN.y,
+      rotY: BEACH_SPAWN.rotY,
+    };
+    if (occ.every((o) => Math.hypot(p.x - o.x, p.z - o.z) >= minDist)) return p;
+  }
+  return {
+    x: cx,
+    y: BEACH_SPAWN.y,
+    z: cz,
+    rotY: BEACH_SPAWN.rotY,
+  };
+}
+
 export function pickBeachSpawn(rng = Math.random) {
   const { xMin, xMax, zMin, zMax } = BEACH_SPAWN_SAND_RECT;
   for (let t = 0; t < 64; t++) {

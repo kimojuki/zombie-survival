@@ -30,3 +30,10 @@ export function listTreePrefabIds() {
   return Object.keys(TREE_WOOD_STOCK);
 }
 
+/** Arbre abattu ou en chute — ne doit plus être spawné ni renvoyé au client. */
+export function isFelledTreeDecor(item) {
+  if (!item?.prefabId?.startsWith('tree_')) return false;
+  if (item.falling) return true;
+  return Number(item.woodRemaining) <= 0;
+}
+

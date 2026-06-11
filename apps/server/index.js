@@ -22,7 +22,12 @@ const worldPersist = createWorldPersist(db, log);
 const qaChecklist = createQaChecklist(pool, DB_CLIENT);
 const SERVER_ROLE = getServerRole();
 const invOps = require('./src/inventory-ops');
-const { applyAdminDecorPatch, adminDecorSnapshot, buildAdminDecorCreateItem } = require('./src/admin-decor-ops');
+const {
+  applyAdminDecorPatch,
+  applyAdminDecorStoragePatch,
+  adminDecorSnapshot,
+  buildAdminDecorCreateItem,
+} = require('./src/admin-decor-ops');
 const prefabCatalogReviews = require('./src/prefab-catalog-reviews');
 const { invSnapshot: _invDebugSnapshot, logInv: _logInvDebug } = require('./src/inv-debug');
 const INV_DEBUG_SERVER_BUILD = '20260608-sleeper-survival-273';
@@ -532,7 +537,7 @@ function _adminDecorMarker(d) {
 }
 
 app.get('/api/admin/world-map', async (req, res) => {
-  const user = _adminAuth(req, res, 'world.map');
+  const user = _adminAuthAny(req, res, ['world.map', 'decor.edit']);
   if (!user) return;
   try {
     const [staticMod, poisMod] = await Promise.all([
@@ -868,6 +873,154 @@ app.post('/api/admin/decor', async (req, res) => {
   }
 });
 
+app.post('/api/admin/teleport-here', (req, res) => {
+  const user = _adminAuthAny(req, res, ['decor.edit', 'players.manage']);
+  if (!user) return;
+  const actor = _findOnlinePlayer(user.username);
+  if (!actor) {
+    return res.status(400).json({ ok: false, error: 'Vous devez être connecté en jeu' });
+  }
+  const x = Number(req.body?.x);
+  const z = Number(req.body?.z);
+  if (!Number.isFinite(x) || !Number.isFinite(z)) {
+    return res.status(400).json({ ok: false, error: 'Coordonnées x/z requises' });
+  }
+  let y = Number(req.body?.y);
+  if (!Number.isFinite(y)) y = actor.y;
+  y = Math.max(-20, Math.min(100, y));
+  let cx = Math.max(-WORLD_RADIUS, Math.min(WORLD_RADIUS, x));
+  let cz = Math.max(-WORLD_RADIUS, Math.min(WORLD_RADIUS, z));
+  if (_sectorBoundsMod?.clampToSector01) {
+    const c = _sectorBoundsMod.clampToSector01(cx, cz);
+    cx = c.x;
+    cz = c.z;
+  }
+  actor.x = cx;
+  actor.z = cz;
+  actor.y = y;
+  if (Number.isFinite(Number(req.body?.rotY))) actor.rotY = Number(req.body.rotY);
+  actor.lastX = cx;
+  actor.lastZ = cz;
+  actor.lastMoveAt = Date.now();
+  actor.posSynced = true;
+  actor._tpGraceUntil = Date.now() + 2500;
+  actor.dirty = true;
+  _adminSyncPlayerPos(actor);
+  log.info('admin', 'teleport-here', { by: user.username, x: cx, z: cz });
+  res.json({
+    ok: true,
+    x: +cx.toFixed(2),
+    y: +y.toFixed(2),
+    z: +cz.toFixed(2),
+    rotY: actor.rotY,
+  });
+});
+
+app.get('/api/admin/decor/search', (req, res) => {
+  const user = _adminDecorAuth(req, res);
+  if (!user) return;
+  const q = String(req.query.q || '').trim().toLowerCase();
+  const layer = String(req.query.layer || '').trim();
+  const limit = Math.min(80, Math.max(1, parseInt(req.query.limit, 10) || 30));
+  const results = [];
+  for (const d of decorItems.values()) {
+    if (layer && _adminDecorLayer(d) !== layer) continue;
+    if (q) {
+      const hay = `${d.id} ${d.prefabId || ''} ${d.type || ''} ${d.placementKey || ''}`.toLowerCase();
+      if (!hay.includes(q)) continue;
+    }
+    results.push(_adminDecorMarker(d));
+    if (results.length >= limit) break;
+  }
+  res.json({ ok: true, results, count: results.length, truncated: results.length >= limit });
+});
+
+app.get('/api/admin/world-state', (req, res) => {
+  const user = _adminAuthAny(req, res, ['decor.edit', 'rcon']);
+  if (!user) return;
+  res.json({
+    ok: true,
+    worldTime: _worldTime,
+    autoDay: serverFlags.autoDay,
+    dayDurationSec: _DAY_DURATION,
+    serverFlags: { ...serverFlags },
+  });
+});
+
+app.post('/api/admin/announce', (req, res) => {
+  const user = _adminAuthAny(req, res, ['decor.edit', 'rcon']);
+  if (!user) return;
+  const msg = String(req.body?.message || '').trim();
+  if (!msg) return res.status(400).json({ ok: false, error: 'message requis' });
+  const text = msg.slice(0, 280);
+  io.emit('server-announce', { message: text, from: user.username });
+  log.info('admin', 'announce', { by: user.username, message: text.slice(0, 80) });
+  res.json({ ok: true, message: text });
+});
+
+app.post('/api/admin/server-flags', (req, res) => {
+  const user = _adminAuthAny(req, res, ['decor.edit', 'rcon']);
+  if (!user) return;
+  const allowed = ['autoDay', 'zombieAI', 'zombieSpawn', 'lootEnabled', 'pvp'];
+  const body = req.body || {};
+  const changed = [];
+  for (const key of allowed) {
+    if (body[key] === undefined) continue;
+    const next = !!body[key];
+    if (serverFlags[key] !== next) {
+      serverFlags[key] = next;
+      changed.push(key);
+    }
+  }
+  if (changed.length) {
+    io.emit('server-flags', { ...serverFlags });
+    log.info('admin', 'server-flags', { by: user.username, changed, flags: { ...serverFlags } });
+  }
+  res.json({ ok: true, serverFlags: { ...serverFlags }, changed });
+});
+
+app.post('/api/admin/world-time', (req, res) => {
+  const user = _adminAuthAny(req, res, ['decor.edit', 'rcon']);
+  if (!user) return;
+  const presets = { day: 0.5, night: 0, dawn: 0.25, dusk: 0.75 };
+  const preset = String(req.body?.preset || '').trim().toLowerCase();
+  if (preset && presets[preset] != null) {
+    setWorldTime(presets[preset]);
+  } else if (req.body?.time != null && req.body?.time !== '') {
+    const v = Number(req.body.time);
+    if (!Number.isFinite(v)) {
+      return res.status(400).json({ ok: false, error: 'time invalide (0–1)' });
+    }
+    setWorldTime(v);
+  }
+  if (req.body?.autoDay !== undefined) {
+    serverFlags.autoDay = !!req.body.autoDay;
+  }
+  io.emit('world-time', { time: _worldTime });
+  log.info('admin', 'world-time', { by: user.username, time: _worldTime, autoDay: serverFlags.autoDay });
+  res.json({ ok: true, worldTime: _worldTime, autoDay: serverFlags.autoDay });
+});
+
+app.post('/api/admin/decor/restore', async (req, res) => {
+  const user = _adminDecorAuth(req, res);
+  if (!user) return;
+  const snap = req.body?.item;
+  if (!snap?.id) return res.status(400).json({ ok: false, error: 'item.id requis' });
+  const id = String(snap.id).trim();
+  if (decorItems.has(id)) {
+    return res.status(409).json({ ok: false, error: 'ID déjà présent' });
+  }
+  const item = { ...snap };
+  delete item.storageSummary;
+  item.updatedAt = Date.now();
+  item.updatedBy = user.username;
+  decorItems.set(id, item);
+  worldPersist?.scheduleUpsertDecor(item);
+  io.emit('decor-item-spawn', item);
+  log.info('admin', 'decor restored', { id, by: user.username });
+  res.json({ ok: true, item: adminDecorSnapshot(item) });
+});
+
 app.get('/api/admin/decor/:id', (req, res) => {
   const user = _adminDecorAuth(req, res);
   if (!user) return;
@@ -890,6 +1043,10 @@ app.patch('/api/admin/decor/:id', (req, res) => {
   if (!item) return res.status(404).json({ ok: false, error: 'Décor introuvable' });
   const patch = req.body?.patch || req.body || {};
   const changed = applyAdminDecorPatch(item, patch, user.username);
+  const storageChanged = applyAdminDecorStoragePatch(item, patch);
+  for (const k of storageChanged) {
+    if (!changed.includes(k)) changed.push(k);
+  }
   if (!changed.length) {
     return res.json({ ok: true, changed: [], item: adminDecorSnapshot(item), message: 'Aucun changement' });
   }
@@ -899,6 +1056,7 @@ app.patch('/api/admin/decor/:id', (req, res) => {
   decorItems.set(id, item);
   worldPersist?.scheduleUpsertDecor(item);
   io.emit('decor-item-spawn', item);
+  if (storageChanged.length) _emitStorageUpdate(item);
   log.info('admin', 'decor patched', { id, changed, by: user.username });
   res.json({ ok: true, changed, item: adminDecorSnapshot(item) });
 });
@@ -1230,6 +1388,43 @@ const EMPTY_PLAYER_INV = {
   bag: [],
   equip: { 'Tête': null, 'Torso': null, 'Mains': null, 'Dos': null },
 };
+
+const INTRO_RESET_STRIP_TYPES = new Set([
+  'tool_caillou', 'tool_torche', 'food_eau_bouteille', 'food_sandwich',
+]);
+
+/** Retire le loot intro (scenario-reset) sans toucher survie / autres objets. */
+function _clearIntroInventory(p) {
+  const inv = p.inv;
+  if (!inv || typeof inv !== 'object') return;
+  let changed = false;
+  if (Array.isArray(inv.hotbar)) {
+    for (let i = 0; i < inv.hotbar.length; i++) {
+      const s = inv.hotbar[i];
+      if (s?.type && INTRO_RESET_STRIP_TYPES.has(s.type)) {
+        inv.hotbar[i] = null;
+        changed = true;
+      }
+    }
+  }
+  if (Array.isArray(inv.bag) && inv.bag.length) {
+    const next = inv.bag.filter((s) => !s?.type || !INTRO_RESET_STRIP_TYPES.has(s.type));
+    if (next.length !== inv.bag.length) {
+      inv.bag = next;
+      changed = true;
+    }
+  }
+  if (inv.equip && typeof inv.equip === 'object') {
+    for (const slot of Object.keys(inv.equip)) {
+      const s = inv.equip[slot];
+      if (s?.type && INTRO_RESET_STRIP_TYPES.has(s.type)) {
+        inv.equip[slot] = null;
+        changed = true;
+      }
+    }
+  }
+  if (changed) p.dirty = true;
+}
 
 function _invHasType(inv, type) {
   const hotbar = Array.isArray(inv.hotbar) ? inv.hotbar : [];
@@ -1800,6 +1995,7 @@ const TREE_PLACEMENTS_URL = pathToFileURL(path.join(__dirname, '../../packages/s
 const PALM_PLACEMENTS_URL = pathToFileURL(path.join(__dirname, '../../packages/shared/src/palm-placements.mjs')).href;
 const BEACH_SIGN_PLACEMENTS_URL = pathToFileURL(path.join(__dirname, '../../packages/shared/src/beach-sign-placements.mjs')).href;
 const BEACH_PROP_PLACEMENTS_URL = pathToFileURL(path.join(__dirname, '../../packages/shared/src/beach-prop-placements.mjs')).href;
+const BEACH_IMMERSION_PLACEMENTS_URL = pathToFileURL(path.join(__dirname, '../../packages/shared/src/beach-immersion-placements.mjs')).href;
 const S01_WORLD_PLACEMENTS_URL = pathToFileURL(path.join(__dirname, '../../packages/shared/src/s01-world-placements.mjs')).href;
 const S01_BUILD_EXCLUSIONS_URL = pathToFileURL(path.join(__dirname, '../../packages/shared/src/s01-build-exclusions.mjs')).href;
 const S01_SAFE_ZONES_URL = pathToFileURL(path.join(__dirname, '../../packages/shared/src/s01-safe-zones.mjs')).href;
@@ -1893,6 +2089,8 @@ async function _getIntroBeachBeats() {
     nextItemId: () => ++itemIdCounter,
     notifyPlayer: (socket, payload) => { if (payload) socket.emit('scenario-update', payload); },
     log,
+    addStackToInv: _addStackToInv,
+    emitInvAuth: _emitInvAuth,
   });
   return introBeachBeats;
 }
@@ -1914,6 +2112,8 @@ async function _getScenarioBeach() {
     ensureIntroBeats: (p, socket) => beatsMod.ensure(p, socket),
     snapIntroPlayerToCluster: _snapIntroPlayerToCluster,
     introBeatsTick: (p, socket) => beatsMod.tick(p, socket),
+    clearIntroInventory: _clearIntroInventory,
+    emitInvAuth: _emitInvAuth,
   });
   return scenarioBeach;
 }
@@ -2168,6 +2368,38 @@ function ensureBeachIntroProps({ broadcast = false, reset = false } = {}) {
     }
     if (added.length) {
       log.info('seed', 'beach intro props added', { count: added.length });
+      if (broadcast && rcon?.broadcastDecorSpawn) {
+        for (const item of added) rcon.broadcastDecorSpawn(item);
+      }
+    }
+    return added.length;
+  });
+}
+
+/** Décor plage immersion (4 scènes loisirs / rivage) — seed initial + RCON decorseed beach. */
+function ensureBeachImmersion({ broadcast = false, reset = false } = {}) {
+  if (reset) {
+    for (const [id, d] of decorItems) {
+      if (d.zoneId !== 'beach_immersion_v1') continue;
+      _removeDecorItem(id, { emit: broadcast });
+    }
+  }
+  return import(BEACH_IMMERSION_PLACEMENTS_URL).then(({ computeBeachImmersionPlacements, isBeachImmersionPlacementValid }) => {
+    const added = [];
+    for (const p of computeBeachImmersionPlacements()) {
+      if (!isBeachImmersionPlacementValid(p)) {
+        log.warn('seed', 'beach immersion prop skipped', {
+          placementKey: p.placementKey,
+          x: p.x,
+          z: p.z,
+        });
+        continue;
+      }
+      const item = _trySeedDecor(p);
+      if (item) added.push(item);
+    }
+    if (added.length) {
+      log.info('seed', 'beach immersion props added', { count: added.length });
       if (broadcast && rcon?.broadcastDecorSpawn) {
         for (const item of added) rcon.broadcastDecorSpawn(item);
       }
@@ -3070,6 +3302,7 @@ function _initRcon() {
     ensureBeachPalms,
     ensureBeachSigns,
     ensureBeachProps,
+    ensureBeachImmersion,
     ensureBeachIntroProps,
     ensureS01World,
     wipePlayerWorld,
@@ -3783,8 +4016,9 @@ io.on('connection', async (socket) => {
     p.lastX = x;
     p.lastZ = z;
     p.x = x; p.y = y; p.z = z; p.rotY = rotY; p.dirty = true;
+    p.crouching = !!(d && d.crouch);
     p.posSynced = true;
-    const movePkt = { id: socket.id, x, y, z, rotY };
+    const movePkt = { id: socket.id, x, y, z, rotY, crouch: p.crouching };
     const moveR2 = 150 * 150;
     for (const [sid, other] of players) {
       if (sid === socket.id) continue;
@@ -4065,6 +4299,47 @@ io.on('connection', async (socket) => {
     }
     const wearRes = _wearPlayerToolInv(p, weaponType, wmod);
     if (invDirty || wearRes.worn) _scheduleInvAuth(socket, p);
+  });
+
+  socket.on('intro-torch-pickup', async (d, cb) => {
+    const reply = (payload) => { if (typeof cb === 'function') cb(payload); };
+    const lootMod = await _getIntroBeachBeats();
+    const px = Number(d?.x);
+    const pz = Number(d?.z);
+    const decorId = d?.id ? String(d.id).trim() : null;
+    let decor = decorId ? decorItems.get(decorId) : null;
+    if (!decor) {
+      const pid = _normPlayerId(p.id);
+      for (const item of decorItems.values()) {
+        if (item.prefabId !== 'spawn_beach_starter_torch') continue;
+        if (_normPlayerId(item.ownerPlayerId) !== pid) continue;
+        decor = item;
+        break;
+      }
+    }
+    const campfireDecorId = decor?.prefabId === 'spawn_beach_campfire_ring' ? decor.id : decorId;
+    lootMod.tryCampfireBeatNear(p, socket, px, pz, campfireDecorId);
+    let ok = false;
+    if (decor?.prefabId === 'spawn_beach_starter_torch') {
+      ok = lootMod.onTorchDecorPickup(p, socket, decor);
+    } else {
+      ok = lootMod.onTorchCampfirePickup(p, socket, px, pz, campfireDecorId);
+    }
+    if (!ok) {
+      const beats = p.inv?.scenario?.introBeats;
+      let err = 'pickup_failed';
+      if (!beats?.pickedRock && !_invHasType(p.inv, 'tool_caillou')) err = 'need_rock';
+      else if (!beats?.campfire) err = 'need_campfire_beat';
+      else if (beats?.pickedTorch || _invHasType(p.inv, 'tool_torche')) err = 'already_has_torch';
+      else if (beats?.campfire) {
+        const hasSlot = (p.inv?.hotbar || []).some((s) => !s || !s.type)
+          || (p.inv?.bag || []).some((s) => !s || !s.type);
+        if (!hasSlot) err = 'inventory_full';
+      }
+      reply({ ok: false, err });
+      return;
+    }
+    reply({ ok: true });
   });
 
   socket.on('item-pickup', async (d, cb) => {
@@ -5498,6 +5773,8 @@ loadPersistedWorld()
   .catch((err) => log.error('ensureBeachSigns failed', err))
   .then(() => ensureBeachProps())
   .catch((err) => log.error('ensureBeachProps failed', err))
+  .then(() => ensureBeachImmersion())
+  .catch((err) => log.error('ensureBeachImmersion failed', err))
   .then(() => ensureBeachIntroProps())
   .catch((err) => log.error('ensureBeachIntroProps failed', err))
   .then(() => { _setBoot('beach_palms', 13); return ensureZombiePopulation(); })

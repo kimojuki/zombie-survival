@@ -294,10 +294,12 @@ export function createScenarioBeach(ctx) {
   function resetScenario(p, socket) {
     removeTutorialZombie(_getScenario(p));
     ctx.snapIntroPlayerToCluster?.(p);
+    ctx.clearIntroInventory?.(p);
     p.inv.scenario = defaultScenario('intro_wake', { x: p.x, z: p.z });
     p.invincible = true;
     ctx.ensureIntroBeats?.(p, socket);
     _emitUpdate(socket, p.inv.scenario, { resetIntro: true });
+    if (socket) ctx.emitInvAuth?.(socket, p);
     p.dirty = true;
   }
 

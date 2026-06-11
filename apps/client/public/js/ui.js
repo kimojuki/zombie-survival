@@ -8,6 +8,7 @@
   let _joyThumb = null;
   let _sprintBtn = null;
   let _sprintPtr = null;
+  let _crouchBtn = null;
   let _movePtr = null;
   let _lookPtr = null;
   let _moveOriginX = 0;
@@ -31,7 +32,7 @@
   const _UI_ROOT_SEL = [
     'button', 'input', 'textarea', 'select', 'a', 'label',
     '#menu-btn', '#menu-panel', '#craft-btn', '#inv-btn', '#map-btn', '#chat-btn',
-    '#shoot-btn', '#jump-btn', '#reload-btn', '#use-btn', '#grab-btn', '#sprint-btn',
+    '#shoot-btn', '#jump-btn', '#reload-btn', '#use-btn', '#grab-btn', '#sprint-btn', '#crouch-btn',
     '#door-interact-btn', '#hotbar', '.hb-slot',
     '#inv-panel', '#inv-backdrop', '#craft-panel', '#craft-backdrop',
     '#qa-backdrop', '#admin-backdrop', '#group-backdrop', '#spawn-intro-overlay', '#map-overlay', '#death-screen',
@@ -70,7 +71,7 @@
   function _inUiChromeRect(x, y) {
     const w = window.innerWidth;
     const h = window.innerHeight;
-    if (x > w - 130 && y > h - 220) return true;
+    if (x > w - 290 && y > h - 220) return true;
     if (y > h - 95 && x > w * 0.22 && x < w * 0.78) return true;
     if (x < 76 && y > h - 330) return true;
     if (x > w - 56 && y < 58) return true;
@@ -112,6 +113,37 @@
     _sprintPtr = null;
     if (_state?.input) _state.input.sprintHeld = false;
     if (_sprintBtn) _sprintBtn.classList.remove('active');
+  }
+
+  function _syncCrouchButton() {
+    if (!_crouchBtn || !_state?.input) return;
+    _crouchBtn.classList.toggle('active', !!_state.input.crouchToggle);
+    _crouchBtn.setAttribute('aria-pressed', _state.input.crouchToggle ? 'true' : 'false');
+  }
+
+  function _ensureCrouchButton() {
+    if (_crouchBtn) return;
+    _crouchBtn = document.createElement('button');
+    _crouchBtn.id = 'crouch-btn';
+    _crouchBtn.type = 'button';
+    _crouchBtn.title = 'S\'accroupir';
+    _crouchBtn.setAttribute('aria-label', 'S\'accroupir');
+    _crouchBtn.setAttribute('aria-pressed', 'false');
+    _crouchBtn.textContent = '⬇';
+    _crouchBtn.addEventListener('pointerdown', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      if (!_state?.input) return;
+      _state.input.crouchToggle = !_state.input.crouchToggle;
+      _syncCrouchButton();
+    }, { passive: false });
+    document.body.appendChild(_crouchBtn);
+  }
+
+  function _updateCrouchButton() {
+    if (!_wantsTouchControls()) return;
+    _ensureCrouchButton();
+    _syncCrouchButton();
   }
 
   function _ensureSprintButton() {
@@ -170,10 +202,12 @@
         _sprintBtn.classList.remove('visible', 'active', 'exhausted');
         if (_state?.input) _state.input.sprintHeld = false;
       }
+      _updateCrouchButton();
       return;
     }
     _sprintBtn.classList.add('visible');
     _sprintBtn.classList.toggle('exhausted', !ZS.Survival?.canSprint?.());
+    _updateCrouchButton();
   }
 
   function _resetMove() {
@@ -279,6 +313,7 @@
     _state = state;
     ZS.applyDeviceBodyClasses?.();
     _initTouchControls();
+    _ensureCrouchButton();
     _setupShootButton();
     _setupReloadButton();
     _setupJumpButton();

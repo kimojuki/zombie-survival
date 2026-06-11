@@ -104,11 +104,7 @@
   function _resumeGameInput() {
     if (_isMobile()) return;
     if (ZS.Rcon?.isOpen?.()) return;
-    const resume = () => {
-      if (typeof ZS.requestPointerLock === 'function') ZS.requestPointerLock();
-    };
-    if (document.pointerLockElement) requestAnimationFrame(resume);
-    else resume();
+    // Reprise du lock au prochain clic canvas (geste utilisateur requis).
   }
 
   function open() {

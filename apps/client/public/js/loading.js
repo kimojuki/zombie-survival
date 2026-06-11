@@ -125,6 +125,7 @@
 
   /** Charge un script legacy hors chemin critique (cache + dédup in-flight). */
   function loadScript(src) {
+    if (/^\/js\/(network|game|loading)\.js$/i.test(src)) return Promise.resolve();
     if (document.querySelector(`script[data-zs-src="${src}"]`)) return Promise.resolve();
     if (_scriptLoads.has(src)) return _scriptLoads.get(src);
     const ver = window.__ZS_CLIENT_VERSION || '';

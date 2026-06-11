@@ -10,6 +10,17 @@
   <script>
   (function () {
     'use strict';
+    // Chrome réserve Ctrl+W — impossible à bloquer en JS ; confirmation si jeu actif (souris capturée).
+    window.addEventListener('beforeunload', function (e) {
+      if (!document.pointerLockElement && !document.fullscreenElement) return;
+      e.preventDefault();
+      e.returnValue = '';
+    });
+  })();
+  </script>
+  <script>
+  (function () {
+    'use strict';
     var GUARD = 'zs_version_reloading';
     var KEY = 'zs_client_version';
 

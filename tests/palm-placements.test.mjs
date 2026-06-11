@@ -37,12 +37,12 @@ test('palm placements stay on beach sand', () => {
   assert.ok(palms.length <= 28, `expected <= 28 palms, got ${palms.length}`);
   for (const p of palms) {
     assert.equal(p.prefabId, 'tree_palm');
-    assert.equal(p.zoneId, 'beach_palms');
+    assert.ok(p.zoneId.startsWith('beach_palms_'));
     assert.ok(beachCoastWeight(p.x, p.z) >= 0.35);
     assert.ok(isInBeachFootprint(p.x, p.z, 0));
     assert.ok(!_nearTrail(p.x, p.z));
     assert.ok(Math.hypot(p.x - BEACH_SPAWN.x, p.z - BEACH_SPAWN.z) >= 8);
-    assert.ok(p.placementKey.startsWith('palm:beach_palms:'));
+    assert.ok(p.placementKey.startsWith('palm:beach_palms_'));
   }
 });
 
@@ -53,8 +53,8 @@ test('palm placement keys are stable', () => {
   assert.equal(palmPlacementKey(p), p.placementKey);
 });
 
-test('palm zone config targets medium density', () => {
-  const zone = PALM_ZONES.find((z) => z.id === 'beach_palms');
-  assert.ok(zone);
-  assert.ok(zone.count >= 16 && zone.count <= 28);
+test('palm zone config — 3 bosquets côtier', () => {
+  assert.equal(PALM_ZONES.length, 3);
+  const total = PALM_ZONES.reduce((s, z) => s + z.count, 0);
+  assert.ok(total >= 16 && total <= 28);
 });

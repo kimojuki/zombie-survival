@@ -2,13 +2,14 @@
 (function () {
   'use strict';
 
-  // Sync packages/shared/src/beach-intro-placements.mjs → introRockLookTarget()
-  const ROCK_AHEAD = Object.freeze({ dx: -2.6, dz: 0.12 });
-  let _rockLook = null;
+  // Sync packages/shared/src/beach-spawn.mjs → BEACH_OFFSHORE_WRECK
+  const OFFSHORE_WRECK = Object.freeze({ x: 354, z: -6.8 });
+  const ROCK_AHEAD = Object.freeze({ dx: -1.75, dz: 0.15 });
 
-  const WAKE_LINE = 'Un caillou devant moi… et des traces vers l\'ouest.';
+  const WAKE_LINE = 'Un caillou dans le sable, juste devant moi. Comme s\'il m\'attendait.';
+  const ROCK_HINT_LINE = 'Je m\'approche et je le ramasse — E.';
   const BEAT_LINES = Object.freeze({
-    footprints: 'Le caillou est là — comme si on voulait qu\'on le trouve en premier.',
+    footprints: 'Des empreintes dans le sable — elles mènent vers l\'ouest.',
     campfire: 'Une torche allumée au milieu des pierres. K. l\'a laissée pour moi.',
     pier: 'Sous les planches… une valise. À fouiller.',
     kit_done: 'De quoi tenir. Et ces initiales : K. — qui c\'est ?',
@@ -21,6 +22,7 @@
 
   let _bubble = null;
   let _hideT = null;
+  let _rockLook = null;
 
   function _rockTarget(px, pz) {
     if (_rockLook && Number.isFinite(_rockLook.x) && Number.isFinite(_rockLook.z)) return _rockLook;
@@ -35,6 +37,13 @@
   }
 
   function lookYawFromPlayer(px, pz) {
+    if (ZS.Scenario?.isActive?.() && !ZS.Inventory?.hasItemType?.('tool_caillou')) {
+      const t = _rockTarget(px, pz);
+      return Math.atan2(t.x - px, t.z - pz);
+    }
+    if (ZS.Scenario?.shouldDelayZombieSync?.()) {
+      return Math.atan2(OFFSHORE_WRECK.x - px, OFFSHORE_WRECK.z - pz);
+    }
     const t = _rockTarget(px, pz);
     return Math.atan2(t.x - px, t.z - pz);
   }
@@ -79,7 +88,12 @@
   }
 
   function onWake() {
-    _showLine(WAKE_LINE, 6200);
+    _showLine(WAKE_LINE, 5600);
+    clearTimeout(onWake._hintT);
+    onWake._hintT = setTimeout(() => {
+      if (!ZS.Scenario?.isActive?.() || ZS.Inventory?.hasItemType?.('tool_caillou')) return;
+      _showLine(ROCK_HINT_LINE, 6800);
+    }, 4200);
   }
 
   function onBeat(beat) {

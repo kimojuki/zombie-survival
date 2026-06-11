@@ -5,9 +5,9 @@
   const STAND_MS = 1400;
 
   const LINES = [
-    'Du sable. Des vagues. Aucun souvenir.',
+    'Du sable. Des vagues. Le bateau est encore là-bas.',
     'L\'océan à l\'est. La forêt… là-bas, à l\'ouest.',
-    'Personne en vue.',
+    'Un caillou brille dans le sable, à portée de main.',
   ];
 
   let _active = false;
@@ -130,6 +130,9 @@
       fpsVisible: fps ? fps.visible : true,
     };
     _state.camera.pitch = 0.58;
+    if (ZS.IntroStarter?.lookYawFromPlayer) {
+      _state.camera.yaw = ZS.IntroStarter.lookYawFromPlayer(p.x, p.z);
+    }
     p.y = _groundEyeY(p.x, p.z);
     cam.position.set(p.x, p.y, p.z);
     cam.rotation.x = _state.camera.pitch;
@@ -159,6 +162,11 @@
     if (fps && _saved) fps.visible = _saved.fpsVisible !== false;
     ZS.shortcutsBlocked = null;
     if (ZS.onUiPanelClose) ZS.onUiPanelClose();
+    if (_state && ZS.IntroStarter?.lookYawFromPlayer && !ZS.Inventory?.hasItemType?.('tool_caillou')) {
+      _state.camera.yaw = ZS.IntroStarter.lookYawFromPlayer(_state.player.x, _state.player.z);
+      const cam = ZS._camera;
+      if (cam) cam.rotation.y = _state.camera.yaw;
+    }
     ZS.IntroStarter?.onWake?.();
     ZS.Scenario?.advance?.('breathe');
   }
@@ -174,6 +182,7 @@
     _overlay.style.display = 'block';
     document.body.classList.add('spawn-intro-active');
     ZS.shortcutsBlocked = () => true;
+    ZS.setBeachIntroGoldenHour?.(true);
     return true;
   }
 

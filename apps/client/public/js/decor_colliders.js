@@ -816,6 +816,9 @@
     spawn_beach_pier_wreck: [
       { type: 'box', lx: 0, lz: 0, hw: 0.62, hd: 0.38, maxY: 0.55 },
     ],
+    spawn_beach_boat_hull: [
+      { type: 'box', lx: 0.05, lz: 0, hw: 1.05, hd: 0.42, maxY: 0.52 },
+    ],
     spawn_beach_burnt_note: [
       { type: 'cyl', lx: 0, lz: 0, r: 0.16, topY: 0.22 },
     ],

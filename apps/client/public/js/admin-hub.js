@@ -14,7 +14,7 @@
 
     players: { title: '👥 Joueurs', sub: 'En ligne · actions rapides · rôles' },
 
-    calibration: { title: '🎯 Calibrages', sub: 'Poses FPS, viewmodels, animations' },
+    calibration: { title: '🎯 Calibrages UI', sub: 'Bras FPS, torche, viewmodels, animations' },
 
     scenario: { title: '🎬 Scénario & tests', sub: 'Intro plage, reset respawn' },
 
@@ -206,6 +206,8 @@
 
   function close() {
 
+    ZS.AdminLiveDecor?.exit?.();
+
     ZS.Calibration?.closeActive?.();
 
     _leaveView();
@@ -225,6 +227,14 @@
 
 
   function toggle() {
+
+    if (ZS.AdminLiveDecor?.isActive?.()) {
+
+      ZS.AdminLiveDecor.exit();
+
+      return;
+
+    }
 
     if (ZS.Calibration?.anyOpen?.()) {
 
@@ -312,24 +322,6 @@
 
       }
 
-      if (v === 'world_live') {
-
-        if (!_hasPerm('decor.edit')) {
-
-          ZS.UI?.showNotif?.('Permission decor.edit requise');
-
-          return;
-
-        }
-
-        close();
-
-        ZS.Calibration?.openTool?.('world_decor_live');
-
-        return;
-
-      }
-
       _showView(v);
 
     });
@@ -346,7 +338,43 @@
 
         close();
 
-        ZS.Calibration?.openTool?.('world_decor_live');
+        ZS.AdminLiveDecor?.enter?.();
+
+      }
+
+      if (btn.dataset.worldAct === 'go-here') {
+
+        close();
+
+        ZS.requestPointerLock?.();
+
+        ZS.AdminGoHere?.teleportToReticle?.();
+
+      }
+
+      if (btn.dataset.worldAct === 'world-map') {
+
+        close();
+
+        ZS.AdminWorldMapOverlay?.open?.();
+
+      }
+
+      if (btn.dataset.worldAct === 'zone-overlay') {
+
+        close();
+
+        ZS.AdminZoneOverlay?.toggle?.();
+
+        ZS.requestPointerLock?.();
+
+      }
+
+      if (btn.dataset.worldAct === 'fly-mode') {
+
+        close();
+
+        ZS.AdminFly?.toggle?.();
 
       }
 
@@ -479,9 +507,9 @@
 
         '    <span class="admin-hub-card-icon">🎯</span>',
 
-        '    <span class="admin-hub-card-title">Calibrages</span>',
+        '    <span class="admin-hub-card-title">Calibrages UI</span>',
 
-        '    <span class="admin-hub-card-desc">Bras FPS, torche, caillou, outils, bras distant…</span>',
+        '    <span class="admin-hub-card-desc">Bras FPS, torche, caillou, viewmodels, bras distant…</span>',
 
         '  </button>',
 
@@ -500,24 +528,6 @@
         '    <span class="admin-hub-card-title">Scénario & tests</span>',
 
         '    <span class="admin-hub-card-desc">Intro plage, reset respawn, parcours tutoriel.</span>',
-
-        '  </button>',
-
-      );
-
-    }
-
-    if (_hasPerm('decor.edit')) {
-
-      contentCards.push(
-
-        '  <button type="button" class="admin-hub-card admin-hub-card-accent" data-hub-nav="world_live">',
-
-        '    <span class="admin-hub-card-icon">✏️</span>',
-
-        '    <span class="admin-hub-card-title">Édition monde (E)</span>',
-
-        '    <span class="admin-hub-card-desc">Raccourci direct — visez un décor et éditez.</span>',
 
         '  </button>',
 
@@ -583,23 +593,61 @@
 
       '    <span class="admin-hub-card-title">Édition décor live</span>',
 
-      '    <span class="admin-hub-card-desc">E pour cibler · panneau latéral · sync serveur.</span>',
+      '    <span class="admin-hub-card-desc">Catalogue prefabs · pose/déplacement · E pour cibler · sync serveur.</span>',
 
       '  </button>',
 
-      '  <a class="admin-hub-card is-disabled" href="/prefab-catalog.html" target="_blank" rel="noopener">',
+      '  <button type="button" class="admin-hub-card" data-world-act="go-here">',
 
-      '    <span class="admin-hub-card-icon">📦</span>',
+      '    <span class="admin-hub-card-icon">📍</span>',
 
-      '    <span class="admin-hub-card-title">Catalogue prefabs</span>',
+      '    <span class="admin-hub-card-title">Aller ici</span>',
 
-      '    <span class="admin-hub-card-desc">Carte admin navigateur (nouvel onglet).</span>',
+      '    <span class="admin-hub-card-desc">Visez le sol · touche T · téléportation rapide.</span>',
 
-      '  </a>',
+      '  </button>',
+
+      '  <button type="button" class="admin-hub-card admin-hub-card-accent" data-world-act="world-map">',
+
+      '    <span class="admin-hub-card-icon">🗺️</span>',
+
+      '    <span class="admin-hub-card-title">Carte monde</span>',
+
+      '    <span class="admin-hub-card-desc">POI & bâtiments · filtres stricts · TP · édition décor.</span>',
+
+      '  </button>',
+
+      '  <button type="button" class="admin-hub-card" data-world-act="zone-overlay">',
+
+      '    <span class="admin-hub-card-icon">🗺️</span>',
+
+      '    <span class="admin-hub-card-title">Zones monde</span>',
+
+      '    <span class="admin-hub-card-desc">Secteurs · plage safe · exclusions build (couches).</span>',
+
+      '  </button>',
+
+      '  <button type="button" class="admin-hub-card" data-world-act="fly-mode">',
+
+      '    <span class="admin-hub-card-icon">🕊️</span>',
+
+      '    <span class="admin-hub-card-title">Mode vol</span>',
+
+      '    <span class="admin-hub-card-desc">Noclip rapide · touche V · Espace/Ctrl haut/bas.</span>',
+
+      '  </button>',
 
       '</div>',
 
-      '<p class="admin-pl-foot">Bientôt : POI, spawns, zones safe, loot tables…</p>',
+      '<div id="admin-hub-world-time"></div>',
+
+      '<div id="admin-hub-bookmarks"></div>',
+
+      '<div id="admin-hub-server-flags"></div>',
+
+      '<div id="admin-hub-announce"></div>',
+
+      '<p class="admin-pl-foot">Lot décor · redo Ctrl+Y · annonces · clustering carte.</p>',
 
     ].join('');
 
@@ -632,6 +680,14 @@
     _buildRootMenu();
 
     _buildWorldView();
+
+    ZS.AdminWorldTime?.openIn?.(_q('admin-hub-world-time'));
+
+    ZS.AdminTpBookmarks?.mountHubSection?.(_q('admin-hub-bookmarks'));
+
+    ZS.AdminServerFlags?.openIn?.(_q('admin-hub-server-flags'));
+
+    ZS.AdminServerAnnounce?.mountHubSection?.(_q('admin-hub-announce'));
 
     _bindChrome();
 

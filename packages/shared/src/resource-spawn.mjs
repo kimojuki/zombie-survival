@@ -6,6 +6,7 @@ import { ROCK_ZONES, ROCK_EXCLUSIONS, isInCampFootprint, getForestRockZones } fr
 import { isInsideSector01 } from './sector-bounds.mjs';
 import {
   BEACH_SPAWN,
+  BEACH_TRAIL_PTS,
   beachCoastWeight,
   isInBeachFootprint,
   isForestTerrainAllowed,
@@ -246,12 +247,33 @@ function _nearSpawn(x, z, margin = 8) {
   return Math.hypot(x - BEACH_SPAWN.x, z - BEACH_SPAWN.z) < margin;
 }
 
+function _nearBeachTrail(x, z, margin = 2.5) {
+  for (let i = 1; i < BEACH_TRAIL_PTS.length; i++) {
+    const [x0, z0] = BEACH_TRAIL_PTS[i - 1];
+    const [x1, z1] = BEACH_TRAIL_PTS[i];
+    if (_distToSegment(x, z, x0, z0, x1, z1) < margin) return true;
+  }
+  return false;
+}
+
+/** Palmiers plage — clearance décor seule (pas TREE_EXCLUSIONS forêt). */
+function _palmRegenClear(x, z, decors) {
+  if (Math.hypot(x, z) < 3.5) return false;
+  for (const d of decors) {
+    if (d.falling) continue;
+    const r = decorSpawnRadius(d) + REGEN_CONFIG.minPalmGap;
+    if (Math.hypot(x - (d.x || 0), z - (d.z || 0)) < r) return false;
+  }
+  return true;
+}
+
 /** @returns {object|null} placement palmier regen plage ou null */
 export function findRandomPalmSpawn(decors, seed = Date.now()) {
   const rng = _mulberry32((seed + 4421) >>> 0);
   const zones = PALM_ZONES;
   if (!zones.length) return null;
-  for (let attempt = 0; attempt < REGEN_CONFIG.spawnAttempts; attempt++) {
+  const maxAttempts = REGEN_CONFIG.spawnAttempts * Math.max(1, zones.length) * 3;
+  for (let attempt = 0; attempt < maxAttempts; attempt++) {
     const zone = zones[Math.floor(rng() * zones.length)];
     const ang = rng() * Math.PI * 2;
     const dist = Math.sqrt(rng());
@@ -259,9 +281,9 @@ export function findRandomPalmSpawn(decors, seed = Date.now()) {
     const z = zone.cz + Math.sin(ang) * dist * zone.radiusZ;
     if (beachCoastWeight(x, z) < (zone.minCoastWeight ?? REGEN_CONFIG.palmMinCoastWeight)) continue;
     if (!isInBeachFootprint(x, z, 0)) continue;
-    if (_nearTrail(x, z, 2.5)) continue;
+    if (_nearBeachTrail(x, z)) continue;
     if (_nearSpawn(x, z)) continue;
-    if (!isSpawnPointClear(x, z, decors, { minGap: REGEN_CONFIG.minPalmGap })) continue;
+    if (!_palmRegenClear(x, z, decors)) continue;
     return {
       kind: 'prefab',
       prefabId: 'tree_palm',

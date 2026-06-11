@@ -62,6 +62,28 @@ export const BEACH_SEA = Object.freeze({
 /** Ligne côte sable → eau. */
 export const BEACH_SHORE_X = MAP_EAST_X - 1;
 
+/** Épave du bateau accidenté — visible au large depuis le réveil intro. */
+export const BEACH_OFFSHORE_WRECK = Object.freeze({
+  x: 354,
+  z: -6.8,
+  y: BEACH_SEA.surfaceY + 0.32,
+  rotY: Math.PI * 0.5,
+  rotZ: 0.22,
+});
+
+/** Point de visée caméra réveil (bateau au large). */
+export function introOffshoreWreckLookTarget() {
+  return { x: BEACH_OFFSHORE_WRECK.x, z: BEACH_OFFSHORE_WRECK.z };
+}
+
+/** Position valide pour l'épave intro (eau côté est, pas sur le sable). */
+export function isOnBeachOffshoreWater(x, z) {
+  if (!Number.isFinite(x) || !Number.isFinite(z)) return false;
+  if (x < MAP_EAST_X + 2) return false;
+  if (x > BEACH_SEA.cx + BEACH_SEA.halfW - 8) return false;
+  return Math.abs(z - BEACH_CENTER.cz) <= BEACH_COAST_RECT.zNorth + 4;
+}
+
 function _smoothstep(edge0, edge1, x) {
   const t = Math.max(0, Math.min(1, (x - edge0) / (edge1 - edge0)));
   return t * t * (3 - 2 * t);

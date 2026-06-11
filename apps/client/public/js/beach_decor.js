@@ -180,6 +180,7 @@
       blade.rotation.x = -0.28 - rng() * 0.25;
       blade.castShadow = false;
       parent.add(blade);
+      ZS.BeachAmbientLife?.registerSway?.(blade);
     }
   }
 
@@ -386,7 +387,7 @@
     body.castShadow = true;
     parent.add(body);
     const bow = new THREE.Mesh(new THREE.ConeGeometry(0.28, 0.5, 4), hull);
-    bow.rotation.z = Math.PI / 2;
+    bow.rotation.z = -Math.PI / 2;
     bow.rotation.y = body.rotation.y;
     bow.position.set(
       x + Math.cos(body.rotation.y) * 0.85, y + 0.15,
@@ -444,6 +445,49 @@
     return _BUILDERS[0];
   }
 
+  function _scatterTideLine(parent, placed, rng, scale) {
+    const count = Math.max(18, Math.round((scale < 0.85 ? 28 : 52) * (scale || 1)));
+    let n = 0;
+    let tries = 0;
+    while (n < count && tries < count * 12) {
+      tries++;
+      const x = MAP_EAST_X - 6 - rng() * 24;
+      const z = -8 + (rng() * 2 - 1) * 58;
+      if (_coast(x, z) < 0.52) continue;
+      if (!_canPlace(x, z, placed, 0.55, true)) continue;
+      const y = _groundY(x, z);
+      const roll = rng();
+      if (roll < 0.42) _seaweed(parent, x, y, z, rng);
+      else if (roll < 0.72) _shells(parent, x, y, z, rng);
+      else if (roll < 0.88) _ropeBit(parent, x, y, z, rng);
+      else _tinyShell(parent, x, y, z, rng);
+      placed.push({ x, z, tiny: true });
+      n++;
+    }
+  }
+
+  function _scatterWakeMicro(parent, placed, rng, scale) {
+    const cx = 282;
+    const cz = -8;
+    const rx = 13;
+    const rz = 16;
+    const target = Math.max(10, Math.round((scale < 0.85 ? 18 : 32) * (scale || 1)));
+    let n = 0;
+    let tries = 0;
+    while (n < target && tries < target * 20) {
+      tries++;
+      const x = cx + (rng() * 2 - 1) * rx;
+      const z = cz + (rng() * 2 - 1) * rz;
+      if (_coast(x, z) < 0.25) continue;
+      if (Math.hypot(x - SPAWN_X, z - SPAWN_Z) < 5) continue;
+      const pick = _pickBuilder(rng, x);
+      if (!_canPlace(x, z, placed, pick.gap * 0.82, pick.tiny)) continue;
+      pick.fn(parent, x, _groundY(x, z), z, rng);
+      placed.push({ x, z, tiny: pick.tiny });
+      n++;
+    }
+  }
+
   function _scatterInstanced(parent, opts) {
     const { geo, mat, count, rng, placed, cx, cz, rx, rz, scaleFn } = opts;
     if (!geo || !mat || count < 1) return;
@@ -494,7 +538,7 @@
     if (!scene) return;
     const scale = ZS.Options?.getDecorScale?.() ?? 1;
     const mobile = scale < 0.85 || !!(window.__ZS_TOUCH_MODE || window.ZS?._touchInput || window.ZS?._isMobile);
-    const target = Math.max(12, Math.round((mobile ? 75 : 145) * scale));
+    const target = Math.max(14, Math.round((mobile ? 88 : 178) * scale));
     const rng = _rng(44291);
     const placed = [];
     const cx = 268;
@@ -533,7 +577,7 @@
       _scatterInstanced(root, {
         geo: _GEO.tinyShell,
         mat: shellMat,
-        count: Math.max(8, Math.round((mobile ? 95 : 200) * scale)),
+        count: Math.max(10, Math.round((mobile ? 110 : 230) * scale)),
         rng: _rng(99102),
         placed, cx, cz, rx, rz,
         scaleFn: (r) => 0.55 + r() * 0.7,
@@ -544,7 +588,7 @@
       _scatterInstanced(root, {
         geo: _GEO.pebble,
         mat: pebbleMat,
-        count: Math.max(8, Math.round((mobile ? 80 : 165) * scale)),
+        count: Math.max(10, Math.round((mobile ? 95 : 195) * scale)),
         rng: _rng(88103),
         placed, cx, cz, rx, rz,
         scaleFn: (r) => 0.45 + r() * 0.75,
@@ -562,7 +606,13 @@
       });
     }
 
+    _scatterTideLine(root, placed, _rng(55102), scale);
+    await _yieldFrame();
+    _scatterWakeMicro(root, placed, _rng(66103), scale);
+    await _yieldFrame();
+
     const anchors = [
+      [281, -5.2, _buoy], [283, 9.5, _driftwood], [279, -14.2, _shells], [285, 6.1, _ropeBit],
       [254, -12, _umbrella], [258, 8, _beachChair], [262, -28, _surfboard],
       [270, 18, _crate], [276, -38, _buoy], [284, 22, _driftwood],
       [252, 32, _towel], [288, -8, _seaweed], [256, -48, _pebbleCluster],
@@ -578,6 +628,27 @@
       fn(root, ax, _groundY(ax, az), az, _rng(Math.floor(ax * 17 + az)));
       placed.push({ x: ax, z: az, tiny: false });
     }
+    ZS.BeachAmbientLife?.mount?.(scene);
+    _ensureOffshoreWreck(scene);
+  }
+
+  function _ensureOffshoreWreck(scene) {
+    if (!scene || !ZS.spawnDecorPrefab) return;
+    let found = false;
+    scene.traverse((o) => {
+      if (o.userData?.prefabId === 'spawn_beach_offshore_wreck') found = true;
+    });
+    if (found) return;
+    const root = ZS.spawnDecorPrefab(scene, 'spawn_beach_offshore_wreck', 354, 0.6, -6.8, {
+      decorId: 'beach_intro_offshore_fallback',
+      rotY: Math.PI * 0.5,
+      rotZ: 0.22,
+      scale: 2.56,
+      grounded: false,
+      baseY: 0.6,
+      collide: false,
+    });
+    if (root) root.name = 'beachOffshoreWreckFallback';
   }
 
   function buildBeachDecor(scene) {

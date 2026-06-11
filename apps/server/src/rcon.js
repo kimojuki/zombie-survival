@@ -759,9 +759,16 @@ function createRcon(ctx) {
     }
     if (kind === 'beach') {
       if (!ctx.ensureBeachProps) return fail('ensureBeachProps indisponible');
-      const n = await ctx.ensureBeachProps({ broadcast: true, reset });
+      const nProps = await ctx.ensureBeachProps({ broadcast: true, reset });
+      const nImm = ctx.ensureBeachImmersion
+        ? await ctx.ensureBeachImmersion({ broadcast: true, reset })
+        : 0;
+      const nIntro = ctx.ensureBeachIntroProps
+        ? await ctx.ensureBeachIntroProps({ broadcast: true, reset })
+        : 0;
+      const n = nProps + nImm + nIntro;
       if (!n && !reset) return ok('Props plage déjà présents — rien à ajouter.');
-      return ok(`${n} prop(s) plage ${reset ? 'repositionné(s)' : 'ajouté(s)'} et synchronisé(s).`);
+      return ok(`${n} prop(s) plage ${reset ? 'repositionné(s)' : 'ajouté(s)'} (base: ${nProps}, immersion: ${nImm}, intro: ${nIntro}).`);
     }
     if (kind === 'barriers') {
       if (!ctx.ensureRoadBarriers) return fail('ensureRoadBarriers indisponible');

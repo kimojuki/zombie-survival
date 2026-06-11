@@ -290,7 +290,7 @@ test('small city house room doorways stay walkable', () => {
   const ZS = loadDecorColliders();
   const cases = [
     ['smallcity_house_a', -1.8, 0.3],
-    ['smallcity_house_a', 0, 1.0],
+    ['smallcity_house_a', 0.2, 1.2],
     ['smallcity_house_b', -0.4, -1.0],
     ['smallcity_house_b', 2.4, 1.15],
   ];

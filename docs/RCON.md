@@ -205,7 +205,22 @@ Objets visibles par tous les joueurs, synchronisés via `decorItems` au `game-in
 | **Carte monde admin** | `GET /api/admin/world-map` — secteurs, routes, POI, tous les `decorItems`, joueurs en ligne. UI : `admin-world-map.js` (zoom, pan, filtres, clic = panneau édition). |
 | **Édition décor admin (API)** | `GET/PATCH/DELETE /api/admin/decor/:id` — modifier position, orientation, scale, épave, ancre coffre ; sync clients via `decor-item-spawn`. |
 | **Pose décor admin (API)** | `POST /api/admin/decor` — body JSON `{ prefabId, x, z, rotY?, scale?, … }` — crée un prefab posé (équivalent `decoradd prefab …`). Permission `decor.edit`. Réponse `{ ok, item }` + broadcast live. |
-| **Édition décor in-game** | F8 → Calibrages → **Édition décor monde** (`admin-live-decor.js`) — onglet **Poser** : catalogue prefabs, preview fantôme sous le réticule (raycast terrain), **clic gauche** pose, **molette** rotation, **clic droit** annuler ; onglet **Modifier** : **E** cible un décor, curseurs fins ± quelques m, **Supprimer** si `decor.delete`. |
+| **Édition décor in-game** | F8 → Monde & décor → **Édition décor live** (`admin-live-decor.js`) — catalogue prefabs intégré, onglet **Poser** : preview fantôme, **clic gauche** pose, **Q/E** ou **molette** rotation ; **Modifier** : **E** cible, **Déplacer visuellement** (bleu), **Dupliquer** (violet), curseurs fins, **Supprimer** ; **Chercher** : `GET /api/admin/decor/search?q=&layer=` ; **undo** Ctrl+Z (`admin-decor-undo.js`, restore via `POST /api/admin/decor/restore`). Catalogue web séparé : `/prefab-catalog.html`. |
+| **Recherche décor (API)** | `GET /api/admin/decor/search?q=&layer=&limit=` — résultats légers (id, prefab, coords, layer). Auth `decor.edit`. |
+| **Restauration décor (API)** | `POST /api/admin/decor/restore` body `{ item: {…snapshot…} }` — annule une suppression admin. Auth `decor.edit`. |
+| **Heure monde (API)** | `GET /api/admin/world-state` · `POST /api/admin/world-time` body `{ time?: 0–1, preset?: dawn\|day\|dusk\|night, autoDay?: bool }` — broadcast `world-time`. F8 → Monde : panneau curseur + presets (`admin-world-time.js`). |
+| **Téléportation admin** | `POST /api/admin/teleport-here` body `{ x, z, y?, rotY? }` — auth `decor.edit` ou `players.manage`. In-game : **T** ou F8 → Monde → **Aller ici** (`admin-go-here.js`) — visez le sol sous le réticule. |
+| **Carte monde in-game** | F8 → Monde & décor → **Carte monde** (`admin-world-map-overlay.js`) — overlay zoomable, **filtres stricts** (arbres/rochers/barrières/camp masqués par défaut), compteur par couche, dbl-clic vide = TP, clic POI = éditer décor. Auth `world.map` ou `decor.edit`. |
+| **Zones monde in-game** | F8 → Monde → **Zones monde** (`admin-zone-overlay.js`) — secteurs · plage safe (cyan) · exclusions build (rouge) · panneau couches. |
+| **Signets TP** | F8 → Monde — signets nommés (position joueur ou réticule) · `admin-tp-bookmarks.js` · localStorage. |
+| **Coffre admin (API)** | `PATCH /api/admin/decor/:id` patch `{ clearStorage: true }` ou `{ storage: […grille…] }` — prefabs coffre uniquement. |
+| **Mode vol admin** | F8 → Monde → **Mode vol** ou touche **V** (`admin-fly.js`) — noclip, Espace/Ctrl vertical, Shift sprint. |
+| **Flags serveur (API)** | `GET /api/admin/world-state` inclut `serverFlags` · `POST /api/admin/server-flags` body `{ zombieAI?, zombieSpawn?, lootEnabled?, pvp?, autoDay? }` — broadcast `server-flags`. F8 → Monde : toggles live. |
+| **Éditeur copier/coller** | **Ctrl+C** copie le décor ciblé · **Ctrl+V** colle (preview + clic gauche) · **Shift+E** multi-sélection · suppression lot · **Déplacer lot** / nudge ±0,5 m. |
+| **Undo / redo** | **Ctrl+Z** / **Ctrl+Y** — piles 10 (patch, storage, delete, lot). |
+| **Annonce serveur (API)** | `POST /api/admin/announce` body `{ message }` — broadcast `server-announce` (équivalent `say`). F8 → Monde. |
+| **Carte — clustering** | Zoom faible : regroupement arbres/rochers/barrières par tuile (compteur ×N). |
+| **Carte — profils filtres** | Presets intégrés + sauvegarde localStorage dans l'overlay carte. |
 | `decoritems [filtre]` | Liste les items de jeu posables comme objet décor |
 | `decoradd prefab spawn_border_log [x z] [rotY] [scale]` | Pose un rondin de lisière (scale ≈ longueur / 0.42 m) |
 | `decoradd prefab storage_chest [here\|x z] [rotY] [scale]` | Pose un coffre prefab interactif : `E` / bouton tactile pour déposer ou reprendre des items |
@@ -219,8 +234,9 @@ Objets visibles par tous les joueurs, synchronisés via `decorItems` au `game-in
 | `decorseed trees reset` | Supprime les arbres seed et les replace (hors palmiers) |
 | `decorseed palms` | Ajoute les palmiers plage (`tree_palm`) si absents (~20) |
 | `decorseed palms reset` | Supprime les palmiers seed et les replace sur le sable |
-| `decorseed beach` | Props narratifs spawn plage (débris naufrage + affaires échouées) |
-| `decorseed beach reset` | Supprime les props `beach_spawn_props` et les replace (`beach-prop-placements.mjs`) |
+| `decorseed beach` | Props narratifs spawn plage + **décor immersion** (4 scènes loisirs) + épave offshore intro |
+| `decorseed beach reset` | Supprime les props `beach_spawn_props` + `beach_immersion_v1` et les replace |
+| `scenario-reset <joueur>` | Réinitialise l’intro plage (beats, caillou/torche/nourriture intro retirés de l’inv) — QA torche/veilleuse |
 | `decorseed s01` | Complète / repositionne les POI S01 seedés (`computeS01DecorPlacements`) |
 | `decorseed s01 reset` | Purge tout decor `s01:*` puis reseed + sync clients |
 | `decoradd prefab tree_palm [here\|x z] [rotY] [scale]` | Pose un palmier — récoltable (bois), croissance progressive |

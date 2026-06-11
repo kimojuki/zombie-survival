@@ -287,3 +287,23 @@ Client emit(intent) → Serveur valide → mute p.inv / p.survival
 
 `world-colliders` : terrain first-client only ; plus de merge décor client.
 
+### Intro plage (beats v3)
+
+Flux **intent → validate → snapshot** comme le reste de l’inventaire.
+
+```
+Client E sur veilleuse → intro-torch-pickup { id, x, z }
+  → tryCampfireBeatNear (zone feu depuis decorItems)
+  → onTorchCampfirePickup → inventory-authoritative
+```
+
+| Fichier | Rôle |
+|---------|------|
+| `packages/shared/src/intro-beach-beats.mjs` | États beats, `beatTriggeredByPosition`, migration |
+| `packages/shared/src/beach-intro-placements.mjs` | Zones beat, `resolveIntroCampfireZone`, placements monde |
+| `apps/server/src/intro-beach-beats.mjs` | Spawn loot perso, pickup torche, ticks beats |
+| `apps/client/public/js/beach_intro_prefabs.js` | Prefab ring + torche intégrée, visibilité sync |
+| `apps/client/public/js/spawn_scenario.js` | `mergeServerScenario`, golden hour |
+
+La zone campfire suit le décor `spawn_beach_campfire_ring` en base (déplacement admin OK). Spec design : `design/secteur/INTRO_BEACH_SCENARIO_V3.md`.
+

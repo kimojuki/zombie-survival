@@ -10,9 +10,15 @@ import {
 
   inBeatZone,
 
+  INTRO_ZONE_CAMPFIRE,
+
   INTRO_ZONE_FOOTPRINTS,
 
   INTRO_ZONE_PIER,
+
+  inIntroCampfirePickupZone,
+
+  resolveIntroCampfireZone,
 
   introPathStageDistances,
 
@@ -43,14 +49,16 @@ test('beach intro world props on sand', () => {
   assert.equal(props.length, BEACH_INTRO_WORLD_PROPS.length);
 
   for (const p of props) {
-
+    assert.ok(isBeachIntroPlacementValid(p), `${p.prefabId}`);
+    if (p.prefabId === 'spawn_beach_offshore_wreck') {
+      assert.ok(!isOnBeachSafeSand(p.x, p.z), 'offshore wreck must be in water');
+      continue;
+    }
     assert.ok(isOnBeachSafeSand(p.x, p.z), `${p.prefabId}`);
-
-    assert.ok(isBeachIntroPlacementValid(p));
-
   }
 
   assert.ok(props.some((p) => p.prefabId === 'spawn_beach_message_bottle' && p.signKind === 'intro_bottle_k'));
+  assert.ok(props.some((p) => p.prefabId === 'spawn_beach_offshore_wreck'));
 
 });
 
@@ -104,5 +112,21 @@ test('intro rock spawns in front of player on east beach cluster', () => {
 
   assert.ok(Math.hypot(far.x - 270, far.z - 40) <= 4.5, 'caillou devant le joueur');
 
+});
+
+test('resolveIntroCampfireZone uses decor position when moved', () => {
+  const moved = resolveIntroCampfireZone([{
+    prefabId: 'spawn_beach_campfire_ring',
+    placementKey: 'beach:intro_campfire',
+    x: 260,
+    z: -12,
+    scale: 1.35,
+  }]);
+  assert.equal(moved.x, 260);
+  assert.equal(moved.z, -12);
+  assert.ok(inIntroCampfirePickupZone(260, -12, moved));
+  assert.equal(inIntroCampfirePickupZone(INTRO_ZONE_CAMPFIRE.x, INTRO_ZONE_CAMPFIRE.z, moved), false);
+  const fallback = resolveIntroCampfireZone([]);
+  assert.deepEqual(fallback, INTRO_ZONE_CAMPFIRE);
 });
 

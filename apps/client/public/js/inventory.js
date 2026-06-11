@@ -4,7 +4,7 @@
 
   const HOTBAR_SIZE = 6;
   const GRAB_RANGE  = 2.2;   // distance max pour ramasser un objet au sol
-  const GRAB_RANGE_INTRO = 3.2;
+  const GRAB_RANGE_INTRO = 3.6;
   let _grabTargetId = null;  // objet actuellement visé (à portée)
   let _selfPlayerId = null;  // id persistant (loot personnel)
 
@@ -178,8 +178,16 @@
       const vis = dx * dx + dz * dz < VIS2;
       if (it.mesh.visible !== vis) it.mesh.visible = vis;
       if (vis) {
-        it.mesh.rotation.y += dt * 1.8;
-        it.mesh.position.y = it.mesh.userData.baseY + Math.sin(now * 2.5) * 0.1;
+        it.mesh.rotation.y += dt * (it.introWake ? 0.45 : 1.8);
+        const bob = it.introWake ? Math.sin(now * 2.2) * 0.04 : Math.sin(now * 2.5) * 0.1;
+        it.mesh.position.y = it.mesh.userData.baseY + bob;
+        if (it.introWake && it.mesh.userData.introGlow) {
+          const pulse = 0.55 + Math.sin(now * 3.4) * 0.22;
+          it.mesh.userData.introGlow.material.opacity = pulse;
+          if (it.mesh.userData.introBeacon) {
+            it.mesh.userData.introBeacon.intensity = 0.85 + Math.sin(now * 3.4) * 0.35;
+          }
+        }
       }
     });
     // Repère l'objet le plus proche dans la portée — PAS de ramassage automatique :
@@ -934,10 +942,11 @@
     }
     const def = _def(d.type);
     if (!def) return;
-    const mesh = _makePickupMesh(def, d.type);
+    const introWake = !!d.introPersonal && d.introBeat === 'wake' && d.type === 'tool_caillou';
+    const mesh = _makePickupMesh(def, d.type, { introWake });
     const baseY = (ZS.getDecorGroundHeight
       ? ZS.getDecorGroundHeight(d.x, d.z)
-      : (ZS.getTerrainHeight ? ZS.getTerrainHeight(d.x, d.z) : 0)) + 0.55;
+      : (ZS.getTerrainHeight ? ZS.getTerrainHeight(d.x, d.z) : 0)) + (introWake ? 0.42 : 0.55);
     mesh.position.set(d.x, baseY, d.z);
     mesh.userData.baseY = baseY;
     _scene.add(mesh);
@@ -945,6 +954,7 @@
       mesh, type: d.type, x: d.x, z: d.z,
       lockId: d.lockId || null,
       ownerPlayerId: d.ownerPlayerId != null ? Number(d.ownerPlayerId) : null,
+      introWake,
     });
   }
 
@@ -1334,6 +1344,7 @@
     });
     const before = _hotbar.map((s) => (s ? { ...s } : null));
     loadFromSave(data, { fullReset: false, skipRender: true });
+    if (data.scenario) ZS.Scenario?.mergeServerScenario?.(data.scenario);
     let slotDirty = false;
     for (let i = 0; i < HOTBAR_SIZE; i++) {
       if (!_sameStack(before[i], _hotbar[i])) {
@@ -1344,6 +1355,7 @@
     if (slotDirty) _updateUseBtn();
     if (_panelOpen) _renderInvPanel();
     _syncArmor();
+    ZS.BeachIntroPrefabs?.syncIntroCampfireTorchVisibility?.();
   }
 
   const STARTER_CAILLOU = { type: 'tool_caillou', qty: 1, durability: 80 };
@@ -2122,6 +2134,7 @@
       const digit = parseInt(e.key);
       if (digit >= 1 && digit <= 6) _setActiveSlot(digit - 1);
       if (e.code === 'KeyE') {
+        if (ZS.AdminLiveDecor?.isActive?.()) return;
         if (e.repeat || ZS.isInteractHoldActive?.()) return;
         if (!grabNearest()) _useActiveItem();
       }
@@ -2206,16 +2219,34 @@
 
   function _def(type) { return ZS.ITEMS?.[type] || null; }
 
-  function _makePickupMesh(def, type) {
+  function _makePickupMesh(def, type, opts = {}) {
     const g = new THREE.Group();
+    const introWake = !!opts.introWake && type === 'tool_caillou';
 
     // Petit halo lumineux au sol pour repérer l'objet à récolter
     const ring = new THREE.Mesh(
-      new THREE.CylinderGeometry(0.30, 0.30, 0.03, 16),
-      new THREE.MeshLambertMaterial({ color: def.color || 0xffffff, transparent: true, opacity: 0.35 })
+      new THREE.CylinderGeometry(introWake ? 0.52 : 0.30, introWake ? 0.52 : 0.30, 0.03, 16),
+      new THREE.MeshLambertMaterial({
+        color: introWake ? 0xffc860 : (def.color || 0xffffff),
+        transparent: true,
+        opacity: introWake ? 0.62 : 0.35,
+      }),
     );
-    ring.position.y = -0.28;
+    ring.position.y = introWake ? -0.18 : -0.28;
     g.add(ring);
+    if (introWake) {
+      const glow = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.68, 0.68, 0.02, 20),
+        new THREE.MeshBasicMaterial({ color: 0xffe8a0, transparent: true, opacity: 0.55 }),
+      );
+      glow.position.y = -0.16;
+      g.add(glow);
+      g.userData.introGlow = glow;
+      const beacon = new THREE.PointLight(0xffc870, 1.1, 7, 1.8);
+      beacon.position.set(0, 0.22, 0);
+      g.add(beacon);
+      g.userData.introBeacon = beacon;
+    }
 
     // Cube de remplacement instantané (le temps que le modèle 3D charge)
     const placeholder = new THREE.Mesh(
@@ -2246,7 +2277,8 @@
     if (type === 'tool_caillou' && ZS.RockPrefab?.buildGroundRock) {
       g.remove(placeholder);
       const rock = new THREE.Group();
-      ZS.RockPrefab.buildGroundRock(rock, { rockSeed: 90210 });
+      ZS.RockPrefab.buildGroundRock(rock, { rockSeed: introWake ? 90210 : 90211, scale: introWake ? 1.22 : 1 });
+      if (introWake) rock.scale.setScalar(1.18);
       g.add(rock);
       return g;
     }
@@ -2272,13 +2304,14 @@
 
   window.ZS = window.ZS || {};
   ZS.Inventory = {
-    init, tick,
+    init, tick, tryGrabNearest: grabNearest,
     spawnWorldItem, removeWorldItem, receivePickup, spawnStructure, collectBag,
     countItem, findItemSlot, addItem, addItemSlot, removeItem, removeStack, getStorageStacks, getStorageSlots, canAddItem, canAddStack, consumeOne,
     getInvSnapshot, syncToServer, applyAuthoritativeInv,
     placeActiveStructure, getActiveItem, hasDoorKey, removeDoorKey, installDoorLockOnNearestDoor, installDoorLockOnAimedDoor, getWeaponAmmo, decrementAmmo, reloadWeapon, wearActiveWeapon,
     getArmorValue, getMaxHealth, togglePanel, loadFromSave, loadRespawnKit,
     ensureStarterCaillou, ensureStarterTorche, ensureStarterRations, clear,
+    hasItemType: _hasItemType,
     setSelfPlayerId,
   };
 }());

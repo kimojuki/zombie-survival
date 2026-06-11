@@ -26,12 +26,27 @@
   let token = '';
   let data = null;
   let view = { centerX: 0, centerY: 0, zoom: 1, w: 800, h: 500 };
-  const DEFAULT_LAYERS_OFF = new Set(['tree', 'rock', 'palm', 'barrier', 'poi-design']);
+  /** Couches masquées par défaut — évite milliers de points (arbres, rochers, barrières…). */
+  const DEFAULT_LAYERS_OFF = new Set([
+    'tree', 'rock', 'palm', 'barrier', 'camp', 'item', 'other', 'poi-design',
+  ]);
+  /** Profil carte in-game (encore plus strict — POI + bâtiments + joueurs). */
+  const INGAME_DEFAULT_ON = [
+    'player', 'poi-live', 'gate', 'building', 'storage', 'sign', 'wreck', 'exclusion',
+  ];
+  const MAX_DRAW_MARKERS = 4000;
+  const CLUSTER_LAYERS = new Set(['tree', 'rock', 'palm', 'barrier', 'camp', 'item']);
+  const CLUSTER_ZOOM_THRESHOLD = 0.52;
   let layers = new Set(Object.keys(LAYER_META).filter((k) => !DEFAULT_LAYERS_OFF.has(k)));
+  let _mode = 'page';
+  let _onMarkerClick = null;
+  let _onMapDblClick = null;
+  let _drawCapWarned = false;
   let dragging = false;
   let dragStart = null;
   let hoverHit = null;
   let anim = 0;
+  let _pulse = null;
   let onRefresh = null;
   let editUi = null;
   let selectedDecorId = null;
@@ -148,9 +163,11 @@
       });
     }
     for (const d of data.decor || []) {
+      const layer = d.layer || 'other';
+      if (!layers.has(layer)) continue;
       if (_decorCoveredByPoi(d)) continue;
       out.push({
-        layer: d.layer || 'other',
+        layer,
         x: d.x,
         z: d.z,
         label: d.prefabId || d.type || d.id,
@@ -330,8 +347,52 @@
     }
   }
 
+  function _clusterMarkers(list) {
+    if (view.zoom >= CLUSTER_ZOOM_THRESHOLD) return list;
+    const cell = 32 / Math.max(0.4, view.zoom);
+    const buckets = new Map();
+    const out = [];
+    for (const m of list) {
+      if (!CLUSTER_LAYERS.has(m.layer)) {
+        out.push(m);
+        continue;
+      }
+      const bx = Math.floor(m.x / cell);
+      const bz = Math.floor(m.z / cell);
+      const key = `${m.layer}:${bx}:${bz}`;
+      let b = buckets.get(key);
+      if (!b) {
+        b = { layer: m.layer, sx: 0, sz: 0, n: 0, sample: m };
+        buckets.set(key, b);
+      }
+      b.sx += m.x;
+      b.sz += m.z;
+      b.n += 1;
+    }
+    for (const b of buckets.values()) {
+      out.push({
+        layer: b.layer,
+        x: b.sx / b.n,
+        z: b.sz / b.n,
+        label: b.n > 1 ? `×${b.n}` : (b.sample.label || ''),
+        id: b.sample.id,
+        meta: { cluster: true, count: b.n },
+        source: b.n > 1 ? 'cluster' : b.sample.source,
+        precise: b.n === 1,
+      });
+    }
+    return out;
+  }
+
   function _drawMarkers(ctx) {
-    const list = _markers();
+    let list = _clusterMarkers(_markers());
+    if (list.length > MAX_DRAW_MARKERS) {
+      if (!_drawCapWarned && _mode === 'ingame') {
+        _drawCapWarned = true;
+        console.warn('[admin-map] trop de marqueurs visibles — activez moins de filtres', list.length);
+      }
+      list = list.slice(0, MAX_DRAW_MARKERS);
+    }
     const byLayer = [...list].sort((a, b) => (LAYER_META[a.layer]?.z || 0) - (LAYER_META[b.layer]?.z || 0));
     for (const m of byLayer) {
       const lm = LAYER_META[m.layer] || LAYER_META.other;
@@ -349,6 +410,19 @@
         ctx.arc(sp.x, sp.y, Math.max(r, 2), 0, Math.PI * 2);
         ctx.stroke();
         ctx.setLineDash([]);
+      } else if (m.meta?.cluster && m.meta.count > 1) {
+        const cr = Math.max(r + 2, 5 + Math.log10(m.meta.count) * 3);
+        ctx.fillStyle = lm.color;
+        ctx.globalAlpha = 0.75;
+        ctx.beginPath();
+        ctx.arc(sp.x, sp.y, cr, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.globalAlpha = 1;
+        ctx.fillStyle = '#fff';
+        ctx.font = '600 10px Consolas, monospace';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(String(m.meta.count), sp.x, sp.y);
       } else if (r > 1.2) {
         ctx.fillStyle = lm.color;
         ctx.strokeStyle = hovered ? '#ffffff' : 'rgba(0,0,0,0.45)';
@@ -383,15 +457,70 @@
     }
   }
 
+  function _drawPulse(ctx) {
+    if (!_pulse || Date.now() > _pulse.until) return;
+    const mp = _worldToMap(_pulse.x, _pulse.z);
+    const sp = _mapToScreen(mp.x, mp.y);
+    const t = (Date.now() % 1000) / 1000;
+    const r = 6 + t * 22;
+    ctx.strokeStyle = `rgba(255, 210, 70, ${0.95 - t * 0.55})`;
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.arc(sp.x, sp.y, r, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.fillStyle = 'rgba(255, 220, 100, 0.35)';
+    ctx.beginPath();
+    ctx.arc(sp.x, sp.y, 4, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  function _animTick() {
+    if (!_pulse || Date.now() > _pulse.until) {
+      _pulse = null;
+      anim = 0;
+      _draw();
+      return;
+    }
+    _draw();
+    anim = requestAnimationFrame(_animTick);
+  }
+
+  function pulseAt(wx, wz, ms = 6000) {
+    if (!Number.isFinite(wx) || !Number.isFinite(wz)) return;
+    _pulse = { x: wx, z: wz, until: Date.now() + ms };
+    if (!anim) anim = requestAnimationFrame(_animTick);
+    else _draw();
+  }
+
   function _drawHud(ctx) {
-    const wpos = _screenToWorld(view.w - 12, 18);
+    const cx = view.w / 2;
+    const cy = view.h / 2;
+    const wpos = _screenToWorld(cx, cy);
+    const total = _markers().length;
+    const hudW = _mode === 'ingame' ? 280 : 210;
+    const hudH = _mode === 'ingame' ? 56 : 42;
     ctx.fillStyle = 'rgba(0,0,0,0.45)';
-    ctx.fillRect(8, 8, 210, 42);
+    ctx.fillRect(8, 8, hudW, hudH);
     ctx.fillStyle = '#94a79b';
     ctx.font = '11px Consolas, monospace';
     ctx.textAlign = 'left';
-    ctx.fillText(`zoom ${(view.zoom * 100).toFixed(0)}%`, 14, 24);
-    ctx.fillText(`curseur x=${_fmtNum(wpos.x)} z=${_fmtNum(wpos.z)}`, 14, 40);
+    ctx.fillText(`zoom ${(view.zoom * 100).toFixed(0)}% · ${total} pt`, 14, 24);
+    ctx.fillText(`centre x=${_fmtNum(wpos.x)} z=${_fmtNum(wpos.z)}`, 14, 40);
+    if (_mode === 'ingame') {
+      ctx.fillStyle = total > MAX_DRAW_MARKERS ? '#ffaa66' : '#7a9a88';
+      ctx.fillText(total > MAX_DRAW_MARKERS ? `cap ${MAX_DRAW_MARKERS} — réduire filtres` : 'dbl-clic vide = TP', 14, 54);
+    }
+    if (_mode === 'ingame') {
+      ctx.strokeStyle = 'rgba(255,220,120,0.55)';
+      ctx.lineWidth = 1;
+      const s = 10;
+      ctx.beginPath();
+      ctx.moveTo(cx - s, cy);
+      ctx.lineTo(cx + s, cy);
+      ctx.moveTo(cx, cy - s);
+      ctx.lineTo(cx, cy + s);
+      ctx.stroke();
+    }
   }
 
   function _draw() {
@@ -404,6 +533,7 @@
     _drawRoads(ctx);
     if (layers.has('exclusion')) _drawExclusionZones(ctx);
     _drawMarkers(ctx);
+    _drawPulse(ctx);
     _drawHud(ctx);
   }
 
@@ -668,11 +798,12 @@
 
     canvas.addEventListener('mousedown', (e) => {
       if (e.button !== 0) return;
+      e.stopPropagation();
       dragging = true;
       didDrag = false;
       pointerDown = { x: e.clientX, y: e.clientY };
       dragStart = { x: e.clientX, y: e.clientY, cx: view.centerX, cy: view.centerY };
-    });
+    }, true);
     window.addEventListener('mousemove', (e) => {
       if (dragging && dragStart) {
         const dx = e.clientX - dragStart.x;
@@ -710,7 +841,10 @@
         const sy = e.clientY - rect.top;
         if (sx >= 0 && sy >= 0 && sx <= rect.width && sy <= rect.height) {
           const hit = _hitTest(sx, sy);
-          if (hit) _openEditPanel(hit);
+          if (hit) {
+            if (_mode === 'ingame' && _onMarkerClick) _onMarkerClick(hit, { sx, sy });
+            else _openEditPanel(hit);
+          }
         }
       }
       dragging = false;
@@ -718,16 +852,70 @@
       pointerDown = null;
       didDrag = false;
     });
-    canvas.addEventListener('dblclick', () => _fitView() || _draw());
+    canvas.addEventListener('dblclick', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      if (_mode === 'ingame') {
+        const sx = e.offsetX;
+        const sy = e.offsetY;
+        const hit = _hitTest(sx, sy);
+        if (!hit && _onMapDblClick) {
+          const w = _screenToWorld(sx, sy);
+          _onMapDblClick(w.x, w.z);
+          return;
+        }
+      }
+      _fitView();
+      _draw();
+    });
   }
 
   function setLayers(enabled) {
     layers = new Set(enabled);
+    _drawCapWarned = false;
+    _draw();
+  }
+
+  function getLayers() {
+    return new Set(layers);
+  }
+
+  function toggleLayer(id, on) {
+    if (on) layers.add(id);
+    else layers.delete(id);
+    _drawCapWarned = false;
     _draw();
   }
 
   function getLayerMeta() {
     return LAYER_META;
+  }
+
+  function getMarkerCount() {
+    return _markers().length;
+  }
+
+  function getMapStats() {
+    return data?.stats || null;
+  }
+
+  function centerOnWorld(wx, wz, zoom) {
+    const mp = _worldToMap(wx, wz);
+    view.centerX = mp.x;
+    view.centerY = mp.y;
+    if (Number.isFinite(zoom)) view.zoom = zoom;
+    _draw();
+  }
+
+  function centerOnPlayer(zoom = 3.2) {
+    const lp = window.ZS?.Network?.getLocalXZ?.();
+    if (!lp) return false;
+    centerOnWorld(lp.x, lp.z, zoom);
+    return true;
+  }
+
+  function screenCenterWorld() {
+    return _screenToWorld(view.w / 2, view.h / 2);
   }
 
   function init(opts) {
@@ -736,8 +924,14 @@
     token = opts.token || '';
     onRefresh = opts.onStats;
     editUi = opts.editPanel || null;
+    _mode = opts.mode === 'ingame' ? 'ingame' : 'page';
+    _onMarkerClick = opts.onMarkerClick || null;
+    _onMapDblClick = opts.onMapDblClick || null;
+    _drawCapWarned = false;
     if (Array.isArray(opts.defaultLayers) && opts.defaultLayers.length) {
       layers = new Set(opts.defaultLayers);
+    } else if (_mode === 'ingame') {
+      layers = new Set(INGAME_DEFAULT_ON);
     }
     if (!canvas) return;
     _resize();
@@ -753,9 +947,14 @@
   function destroy() {
     cancelAnimationFrame(anim);
     window.removeEventListener('resize', _resize);
+    _mode = 'page';
+    _onMarkerClick = null;
+    _onMapDblClick = null;
+    _drawCapWarned = false;
     canvas = null;
     tooltip = null;
     data = null;
+    editUi = null;
   }
 
   window.AdminWorldMap = {
@@ -763,8 +962,18 @@
     refresh,
     destroy,
     setLayers,
+    getLayers,
+    toggleLayer,
     getLayerMeta,
+    getMarkerCount,
+    getMapStats,
+    centerOnWorld,
+    centerOnPlayer,
+    screenCenterWorld,
+    INGAME_DEFAULT_ON,
+    DEFAULT_LAYERS_OFF: [...DEFAULT_LAYERS_OFF],
     fitView: () => { _fitView(); _draw(); },
     closeEditPanel: _closeEditPanel,
+    pulseAt,
   };
 }());

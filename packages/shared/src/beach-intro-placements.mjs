@@ -3,7 +3,17 @@
  * Parcours ~25–30 m : réveil côté océan, indices espacés vers le sentier / panneau sortie.
  */
 
-import { BEACH_SPAWN, BEACH_TRAIL_PTS, INTRO_SPAWN_CLUSTER, isOnBeachSafeSand } from './beach-spawn.mjs';
+import {
+  BEACH_OFFSHORE_WRECK,
+  BEACH_SPAWN,
+  BEACH_TRAIL_PTS,
+  INTRO_SPAWN_CLUSTER,
+  introOffshoreWreckLookTarget,
+  isOnBeachOffshoreWater,
+  isOnBeachSafeSand,
+} from './beach-spawn.mjs';
+
+export { introOffshoreWreckLookTarget };
 
 export const BEACH_INTRO_ZONE_ID = 'beach_intro_v3';
 
@@ -13,20 +23,26 @@ export const BEACH_INTRO_CAMPFIRE_KEY = 'beach:intro_campfire';
 export const BEACH_INTRO_PIER_KEY = 'beach:intro_pier';
 export const BEACH_INTRO_MARKER_MID_KEY = 'beach:intro_marker_mid';
 export const BEACH_INTRO_MARKER_PIER_KEY = 'beach:intro_marker_pier';
+export const BEACH_INTRO_OFFSHORE_KEY = 'beach:intro:offshore_wreck';
 
 /** @typedef {{ x: number, z: number, r: number }} IntroBeatZone */
 
 /** Premier indice partagé — ~12 m à l'ouest du cluster de réveil. */
 export const INTRO_ZONE_FOOTPRINTS = Object.freeze({ x: 269.0, z: -8.0, r: 7.5 });
 
-/** Cible caméra réveil — caillou ~2,6 m devant le joueur (sync intro_starter.js). */
+/** Cible caméra réveil — caillou ~1,75 m devant le joueur (sync intro_starter.js). */
+export const INTRO_ROCK_AHEAD = Object.freeze({ dx: -1.75, dz: 0.15 });
+
 export function introRockLookTarget(playerX, playerZ) {
   if (!Number.isFinite(playerX) || !Number.isFinite(playerZ)) {
-    return { x: INTRO_SPAWN_CLUSTER.cx - 2.6, z: INTRO_SPAWN_CLUSTER.cz + 0.12 };
+    return {
+      x: INTRO_SPAWN_CLUSTER.cx + INTRO_ROCK_AHEAD.dx,
+      z: INTRO_SPAWN_CLUSTER.cz + INTRO_ROCK_AHEAD.dz,
+    };
   }
   return {
-    x: Math.round((playerX - 2.6) * 10) / 10,
-    z: Math.round((playerZ + 0.12) * 10) / 10,
+    x: Math.round((playerX + INTRO_ROCK_AHEAD.dx) * 10) / 10,
+    z: Math.round((playerZ + INTRO_ROCK_AHEAD.dz) * 10) / 10,
   };
 }
 
@@ -35,8 +51,40 @@ export function introFootprintLookTarget() {
   return { x: INTRO_ZONE_FOOTPRINTS.x - 2.0, z: INTRO_ZONE_FOOTPRINTS.z + 0.3 };
 }
 
-/** Veilleuse — milieu de parcours (~11 m après empreintes). */
+/** Veilleuse — milieu de parcours (~11 m après empreintes). Fallback si décor absent. */
 export const INTRO_ZONE_CAMPFIRE = Object.freeze({ x: 252.0, z: -7.6, r: 7 });
+export const INTRO_CAMPFIRE_PICKUP_RADIUS = 5;
+
+/**
+ * Zone feu intro — position du décor `spawn_beach_campfire_ring` (admin move OK).
+ * @param {Iterable<{ prefabId?: string, placementKey?: string, x?: number, z?: number, scale?: number }>} [decorList]
+ */
+export function resolveIntroCampfireZone(decorList) {
+  if (!decorList) return { ...INTRO_ZONE_CAMPFIRE };
+  let anyRing = null;
+  for (const decor of decorList) {
+    if (decor?.prefabId !== 'spawn_beach_campfire_ring') continue;
+    if (!Number.isFinite(decor.x) || !Number.isFinite(decor.z)) continue;
+    const scale = Number.isFinite(decor.scale) ? decor.scale : 1;
+    const zone = {
+      x: decor.x,
+      z: decor.z,
+      r: Math.max(INTRO_ZONE_CAMPFIRE.r, INTRO_ZONE_CAMPFIRE.r * scale * 0.85),
+    };
+    if (decor.placementKey === BEACH_INTRO_CAMPFIRE_KEY) return zone;
+    if (!anyRing) anyRing = zone;
+  }
+  return anyRing ? { ...anyRing } : { ...INTRO_ZONE_CAMPFIRE };
+}
+
+/** Proximité veilleuse (centre décor ou zone beat). */
+export function inIntroCampfirePickupZone(px, pz, zone) {
+  const z = zone || INTRO_ZONE_CAMPFIRE;
+  if (!Number.isFinite(px) || !Number.isFinite(pz)) return false;
+  if (inBeatZone(px, pz, z)) return true;
+  const pickupR = Math.max(INTRO_CAMPFIRE_PICKUP_RADIUS, (z.r || INTRO_ZONE_CAMPFIRE.r) * 0.72);
+  return Math.hypot(px - z.x, pz - z.z) <= pickupR;
+}
 
 /** Épave ponton — bouche du sentier (~7 m après veilleuse). */
 export const INTRO_ZONE_PIER = Object.freeze({ x: 243.5, z: -6.8, r: 7 });
@@ -45,6 +93,21 @@ export const INTRO_ZONE_PIER = Object.freeze({ x: 243.5, z: -6.8, r: 7 });
 export const BEACH_EXIT_APPROACH_ZONE = Object.freeze({ x: 243.8, z: -10.8, r: 7 });
 
 export const BEACH_INTRO_WORLD_PROPS = Object.freeze([
+  {
+    prefabId: 'spawn_beach_offshore_wreck',
+    x: BEACH_OFFSHORE_WRECK.x,
+    z: BEACH_OFFSHORE_WRECK.z,
+    y: BEACH_OFFSHORE_WRECK.y,
+    rotY: BEACH_OFFSHORE_WRECK.rotY,
+    rotZ: BEACH_OFFSHORE_WRECK.rotZ,
+    scale: 2.56,
+    groundLift: 0,
+    grounded: false,
+    collide: false,
+    placementKey: BEACH_INTRO_OFFSHORE_KEY,
+    zoneId: BEACH_INTRO_ZONE_ID,
+    immutable: true,
+  },
   {
     prefabId: 'spawn_beach_footprint_trail',
     x: 269.0,
@@ -116,9 +179,12 @@ export const BEACH_INTRO_WORLD_PROPS = Object.freeze([
 
 /** Positions monde des spawns personnels (léger offset MP par slot joueur). */
 export const INTRO_PERSONAL_WORLD = Object.freeze({
-  rock: { x: INTRO_SPAWN_CLUSTER.cx - 2.6, z: INTRO_SPAWN_CLUSTER.cz + 0.12 },
-  /** Torche ramassable — à l'est du cercle (visible en approchant la veilleuse). */
-  torch: { x: 251.8, z: -7.0 },
+  rock: {
+    x: INTRO_SPAWN_CLUSTER.cx + INTRO_ROCK_AHEAD.dx,
+    z: INTRO_SPAWN_CLUSTER.cz + INTRO_ROCK_AHEAD.dz,
+  },
+  /** Torche ramassable — centre du cercle de pierres (veilleuse). */
+  torch: { x: 252.0, z: -7.6 },
   burnt_note: { x: 244.8, z: -8.9 },
   /** Sous l'épave de jetée — visible depuis le ponton décor. */
   suitcase: { x: 243.2, z: -7.0 },
@@ -165,6 +231,9 @@ export function introPersonalRockPosition(playerX, playerZ, playerId) {
 
 export function isBeachIntroPlacementValid(p) {
   if (!p?.prefabId || !Number.isFinite(p.x) || !Number.isFinite(p.z)) return false;
+  if (p.prefabId === 'spawn_beach_offshore_wreck') {
+    return isOnBeachOffshoreWater(p.x, p.z);
+  }
   if (!isOnBeachSafeSand(p.x, p.z)) return false;
   const { cx, cz } = INTRO_SPAWN_CLUSTER;
   if (Math.hypot(p.x - cx, p.z - cz) < 10) return false;

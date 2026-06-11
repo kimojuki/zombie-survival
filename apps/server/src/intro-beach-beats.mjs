@@ -12,6 +12,8 @@ import {
   introPersonalPosition,
   introPersonalRockPosition,
   introRockLookTarget,
+  inIntroCampfirePickupZone,
+  resolveIntroCampfireZone,
 } from '../../../packages/shared/src/beach-intro-placements.mjs';
 
 const INTRO_BEAT_TOAST = Object.freeze({
@@ -39,6 +41,8 @@ export function createIntroBeachBeats(ctx) {
     nextItemId,
     notifyPlayer,
     log,
+    addStackToInv,
+    emitInvAuth,
   } = ctx;
 
   function _beats(p) {
@@ -82,10 +86,15 @@ export function createIntroBeachBeats(ctx) {
     return true;
   }
 
+  function _hasPersonalTorch(p) {
+    if (_hasPersonalGround(p, 'tool_torche')) return true;
+    return _hasPersonalDecor(p, 'spawn_beach_starter_torch');
+  }
+
   function _shouldSpawnTorch(p) {
     const beats = _beats(p);
     if (beats.pickedTorch || playerOwnsIntroItem(p.inv, 'tool_torche')) return false;
-    if (_hasPersonalGround(p, 'tool_torche')) return false;
+    if (_hasPersonalTorch(p)) return false;
     return true;
   }
 
@@ -94,7 +103,6 @@ export function createIntroBeachBeats(ctx) {
     if (_shouldSpawnRock(p)) _spawnRock(p);
     if (!beats?.footprints) return;
     if (!beats.campfire) return;
-    if (_shouldSpawnTorch(p)) _spawnTorchOnly(p);
     if (!_hasPersonalDecor(p, 'spawn_beach_burnt_note')) {
       const notePos = introPersonalPosition('burnt_note', p.id);
       if (notePos) {
@@ -143,29 +151,26 @@ export function createIntroBeachBeats(ctx) {
   }
 
   function _spawnTorchOnly(p) {
-    if (_hasPersonalGround(p, 'tool_torche')) return null;
+    if (_hasPersonalTorch(p)) return null;
     const torchPos = introPersonalPosition('torch', p.id);
     if (!torchPos) return null;
-    return addGroundItem({
-      id: nextItemId(),
-      type: 'tool_torche',
-      qty: 1,
+    return addDecorItem({
+      id: introDecorId(p.id, 'torch'),
+      prefabId: 'spawn_beach_starter_torch',
       x: torchPos.x,
       z: torchPos.z,
+      rotY: 0.15,
       ownerPlayerId: normPlayerId(p.id),
       introPersonal: true,
       introBeat: 'campfire',
+      interactRole: 'intro_torch',
+      grounded: true,
     });
   }
 
   function _spawnCampfirePersonal(p) {
-    const torchPos = introPersonalPosition('torch', p.id);
     const notePos = introPersonalPosition('burnt_note', p.id);
     const out = [];
-    if (torchPos) {
-      const torch = _spawnTorchOnly(p);
-      if (torch) out.push(torch);
-    }
     if (notePos) {
       out.push(addDecorItem({
         id: introDecorId(p.id, 'note'),
@@ -254,16 +259,29 @@ export function createIntroBeachBeats(ctx) {
     if (socket) _tickBeats(p, socket);
   }
 
+  function _introZoneOverrides() {
+    return { campfire: resolveIntroCampfireZone(decorItems.values()) };
+  }
+
+  function _campfireZoneForDecor(decorId) {
+    if (decorId) {
+      const decor = decorItems.get(decorId);
+      if (decor?.prefabId === 'spawn_beach_campfire_ring'
+          && Number.isFinite(decor.x) && Number.isFinite(decor.z)) {
+        return resolveIntroCampfireZone([decor]);
+      }
+    }
+    return resolveIntroCampfireZone(decorItems.values());
+  }
+
   function _tickBeats(p, socket) {
+    const zones = _introZoneOverrides();
     for (let i = 0; i < 3; i++) {
       const beats = _beats(p);
-      const beat = beatTriggeredByPosition(p.x, p.z, beats);
+      const beat = beatTriggeredByPosition(p.x, p.z, beats, zones);
       if (!beat || !_applyBeat(p, socket, beat)) break;
     }
     const beats = _beats(p);
-    if (beats.footprints && beats.campfire && !beats.kitDone && _shouldSpawnTorch(p)) {
-      _spawnTorchOnly(p);
-    }
     if (beats.campfire && beats.pier && !beats.kitDone && !_hasPersonalDecor(p, 'spawn_beach_starter_suitcase')) {
       _spawnSuitcaseOnly(p);
     }
@@ -293,6 +311,17 @@ export function createIntroBeachBeats(ctx) {
     return false;
   }
 
+  function _onTorchAcquired(p, socket) {
+    const beats = _beats(p);
+    beats.pickedTorch = true;
+    p.dirty = true;
+    if (beats.campfire && !beats.pier) {
+      _applyBeat(p, socket, 'pier');
+    } else if (!beats.pier) {
+      notifyPlayer?.(socket, { toast: INTRO_BEAT_TOAST.pier_after_torch });
+    }
+  }
+
   function onPickup(p, socket, item) {
     if (!item?.introPersonal) return false;
     const beats = _beats(p);
@@ -302,15 +331,84 @@ export function createIntroBeachBeats(ctx) {
       notifyPlayer?.(socket, { toast: INTRO_BEAT_TOAST.footprints });
     }
     if (item.type === 'tool_torche') {
-      beats.pickedTorch = true;
-      p.dirty = true;
-      if (beats.campfire && !beats.pier) {
-        _applyBeat(p, socket, 'pier');
-      } else if (!beats.pier) {
-        notifyPlayer?.(socket, { toast: INTRO_BEAT_TOAST.pier_after_torch });
-      }
+      _onTorchAcquired(p, socket);
     }
     if (item.linkedDecorId) removeDecorItem(item.linkedDecorId);
+    return true;
+  }
+
+  function _resolvePickupXZ(p, clientX, clientZ) {
+    const sx = Number(clientX);
+    const sz = Number(clientZ);
+    if (Number.isFinite(sx) && Number.isFinite(sz)) {
+      if (Math.hypot(sx - p.x, sz - p.z) <= 8) return { x: sx, z: sz };
+    }
+    return { x: p.x, z: p.z };
+  }
+
+  function _inCampfirePickupZone(p, clientX, clientZ, decorId) {
+    const zone = _campfireZoneForDecor(decorId);
+    const { x, z } = _resolvePickupXZ(p, clientX, clientZ);
+    return inIntroCampfirePickupZone(x, z, zone);
+  }
+
+  function tryCampfireBeatNear(p, socket, clientX, clientZ, decorId) {
+    const beats = _beats(p);
+    if (beats.campfire) return true;
+    if (!_inCampfirePickupZone(p, clientX, clientZ, decorId)) return false;
+    if (!beats.footprints) {
+      const hasRock = beats.pickedRock || playerOwnsIntroItem(p.inv, 'tool_caillou');
+      if (!hasRock) return false;
+      _applyBeat(p, socket, 'footprints');
+    }
+    return _applyBeat(p, socket, 'campfire');
+  }
+
+  function canPickupTorchDecor(p, decor) {
+    if (!decor?.introPersonal || decor.prefabId !== 'spawn_beach_starter_torch') return false;
+    if (normPlayerId(decor.ownerPlayerId) !== normPlayerId(p.id)) return false;
+    const beats = _beats(p);
+    if (!beats.campfire) return false;
+    if (beats.pickedTorch || playerOwnsIntroItem(p.inv, 'tool_torche')) return false;
+    return Math.hypot(decor.x - p.x, decor.z - p.z) <= 3.5;
+  }
+
+  function onTorchDecorPickup(p, socket, decor) {
+    if (!canPickupTorchDecor(p, decor)) return false;
+    const stack = { type: 'tool_torche', qty: 1 };
+    if (!addStackToInv) return false;
+    const res = addStackToInv(p.inv, stack);
+    if (res.leftover > 0) return false;
+    removeDecorItem(decor.id);
+    _onTorchAcquired(p, socket);
+    emitInvAuth?.(socket, p);
+    return true;
+  }
+
+  function canPickupTorchAtCampfire(p, clientX, clientZ, decorId) {
+    const beats = _beats(p);
+    if (beats.pickedTorch || playerOwnsIntroItem(p.inv, 'tool_torche')) return false;
+    if (!_inCampfirePickupZone(p, clientX, clientZ, decorId)) return false;
+    const hasRock = beats.pickedRock || playerOwnsIntroItem(p.inv, 'tool_caillou');
+    if (!hasRock) return false;
+    if (!beats.footprints || !beats.campfire) return false;
+    return true;
+  }
+
+  function onTorchCampfirePickup(p, socket, clientX, clientZ, decorId) {
+    if (!canPickupTorchAtCampfire(p, clientX, clientZ, decorId)) return false;
+    const stack = { type: 'tool_torche', qty: 1 };
+    if (!addStackToInv) return false;
+    const res = addStackToInv(p.inv, stack);
+    if (res.leftover > 0) return false;
+    const pid = normPlayerId(p.id);
+    for (const [id, decor] of decorItems.entries()) {
+      if (decor.prefabId !== 'spawn_beach_starter_torch') continue;
+      if (normPlayerId(decor.ownerPlayerId) !== pid) continue;
+      removeDecorItem(id);
+    }
+    _onTorchAcquired(p, socket);
+    emitInvAuth?.(socket, p);
     return true;
   }
 
@@ -361,5 +459,8 @@ export function createIntroBeachBeats(ctx) {
     clearForPlayer,
     isIntroKitDone,
     INTRO_SUITCASE_CAPACITY,
+    tryCampfireBeatNear,
+    onTorchDecorPickup,
+    onTorchCampfirePickup,
   };
 }

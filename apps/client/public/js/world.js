@@ -3,6 +3,9 @@
   'use strict';
 
   let _scene, _ambientLight, _sunLight, _moonLight, _hemiLight, _sunSprite, _moonSprite, _skyRoot, _starField;
+  let _beachIntroGoldenHour = false;
+  /** Matin lisible (pas crépuscule) — le caillou intro doit se voir au sol. */
+  const BEACH_INTRO_GOLDEN_TIME = 0.31;
   const _fireLights = [];
   const _wallClocks = [];
   const _billboards = [];
@@ -304,8 +307,15 @@
     onProgress?.(1, 'Monde prêt');
   }
 
-  function setWorldTime(t) { _timeOfDay = t; }
-  function getWorldTime() { return _timeOfDay; }
+  function setWorldTime(t) {
+    if (!_beachIntroGoldenHour) _timeOfDay = t;
+  }
+  function getWorldTime() { return _beachIntroGoldenHour ? BEACH_INTRO_GOLDEN_TIME : _timeOfDay; }
+  function setBeachIntroGoldenHour(on) {
+    _beachIntroGoldenHour = !!on;
+    if (!on && typeof _timeOfDay !== 'number') _timeOfDay = 0.3;
+  }
+  function isBeachIntroGoldenHour() { return _beachIntroGoldenHour; }
 
   function getFoliageDayBlend() {
     const angle = _timeOfDay * Math.PI * 2;
@@ -333,14 +343,15 @@
     const gpEarly = _optsProfile();
     const dnStride = gpEarly?.dayNightStride ?? 1;
     const dnLite = dnStride > 1 && (_dnFrame % dnStride) !== 0;
-    if (dt > 0) {
+    if (dt > 0 && !_beachIntroGoldenHour) {
       _timeOfDay += dt / _DAY_LENGTH_SEC;
       if (_timeOfDay >= 1) {
         _timeOfDay -= 1;
         _dayCount++;
       }
     }
-    const angle = _timeOfDay * Math.PI * 2;
+    const renderTod = _beachIntroGoldenHour ? BEACH_INTRO_GOLDEN_TIME : _timeOfDay;
+    const angle = renderTod * Math.PI * 2;
     const sunY  = Math.sin(angle - Math.PI * 0.5);
     const sunX  = Math.cos(angle - Math.PI * 0.5);
     const phase = _moonPhase();
@@ -1766,6 +1777,8 @@
   ZS.tickDayNight         = tickDayNight;
   ZS.setWorldTime         = setWorldTime;
   ZS.getWorldTime         = getWorldTime;
+  ZS.setBeachIntroGoldenHour = setBeachIntroGoldenHour;
+  ZS.isBeachIntroGoldenHour  = isBeachIntroGoldenHour;
   ZS.registerWallClock    = registerWallClock;
   ZS.getFoliageDayBlend   = getFoliageDayBlend;
   ZS.setShadowCenter   = setShadowCenter;

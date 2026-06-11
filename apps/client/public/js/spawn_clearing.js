@@ -2070,6 +2070,8 @@
     spawn_lean_to: 'bedroll',
     spawn_workbench: 'workbench',
     spawn_campfire: 'campfire',
+    spawn_beach_starter_torch: 'intro_torch',
+    spawn_beach_campfire_ring: 'intro_campfire_torch',
   };
   const DECOR_SIGNS = new Map();
   const DECOR_BUILDS = new Map();
@@ -2469,14 +2471,17 @@
 
   const _adminPickHits = [];
 
+  const _ADMIN_PICK_SKIP = new Set(['__ald_preview__']);
+
   /** Visée écran → tout décor synchronisé (mode admin édition live). */
   function pickDecorAdminRay(raycaster, maxDist = 80) {
     if (!raycaster || !ZS.Network?.forEachDecor) return null;
     _adminPickHits.length = 0;
-    ZS.Network.forEachDecor((entry) => {
-      if (!entry.root?.parent) return;
+    ZS.Network.forEachDecor((entry, id) => {
+      if (_ADMIN_PICK_SKIP.has(id)) return;
+      if (!entry.root?.parent || entry.root.visible === false) return;
       entry.root.traverse((o) => {
-        if (o.isMesh) _adminPickHits.push(o);
+        if (o.isMesh && o.visible !== false) _adminPickHits.push(o);
       });
     });
     if (!_adminPickHits.length) return null;
@@ -3148,6 +3153,10 @@
     }
 
     if (isMinableRock && !_deferRockSnap) _snapMinableRockToGround(root, x, z);
+
+    root.traverse((o) => {
+      if (o.isMesh) o.userData.decorId = decorId;
+    });
 
     return root;
   }

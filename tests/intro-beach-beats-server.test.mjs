@@ -66,7 +66,7 @@ test('ensure spawns wake rock before footprints beat', () => {
   const rock = [...ctx.items.values()].find((i) => i.type === 'tool_caillou');
   assert.ok(rock, 'wake rock spawned');
   assert.equal(rock.introBeat, 'wake');
-  assert.ok(Math.hypot(rock.x - (p.x - 2.6), rock.z - (p.z + 0.12)) < 0.2, 'rock in front of player');
+  assert.ok(Math.hypot(rock.x - (p.x - 1.75), rock.z - (p.z + 0.15)) < 0.2, 'rock in front of player');
   assert.equal(mod.canPickup(p, rock), true);
 });
 
@@ -116,4 +116,58 @@ test('onPickup marks pickedRock and prevents respawn on next ensure', () => {
   assert.equal(p.inv.scenario.introBeats.pickedRock, true);
   mod.ensure(p, null);
   assert.equal([...ctx.items.values()].filter((i) => i.type === 'tool_caillou').length, 0);
+});
+
+test('tryCampfireBeatNear grants footprints+campfire when rock in inv at veilleuse', () => {
+  const ctx = _makeCtx();
+  const mod = createIntroBeachBeats(ctx);
+  const p = {
+    id: 5,
+    x: 252,
+    z: -7.6,
+    inv: {
+      hotbar: [{ type: 'tool_caillou', qty: 1, durability: 80 }],
+      bag: [],
+      scenario: { step: 'explore', introBeats: { ...defaultIntroBeats(), pickedRock: true } },
+    },
+  };
+  assert.ok(mod.tryCampfireBeatNear(p, null));
+  assert.equal(p.inv.scenario.introBeats.footprints, true);
+  assert.equal(p.inv.scenario.introBeats.campfire, true);
+});
+
+test('tryCampfireBeatNear follows moved campfire decor not default coords', () => {
+  const ctx = _makeCtx();
+  ctx.decorItems.set('camp_moved', {
+    id: 'camp_moved',
+    prefabId: 'spawn_beach_campfire_ring',
+    placementKey: 'beach:intro_campfire',
+    x: 260,
+    z: -12,
+    scale: 1.35,
+  });
+  const mod = createIntroBeachBeats(ctx);
+  const p = {
+    id: 6,
+    x: 260,
+    z: -12,
+    inv: {
+      hotbar: [{ type: 'tool_caillou', qty: 1, durability: 80 }],
+      bag: [],
+      scenario: { step: 'explore', introBeats: { ...defaultIntroBeats(), pickedRock: true } },
+    },
+  };
+  assert.ok(mod.tryCampfireBeatNear(p, null, 260, -12, 'camp_moved'));
+  assert.equal(p.inv.scenario.introBeats.campfire, true);
+  const pOld = {
+    id: 7,
+    x: 252,
+    z: -7.6,
+    inv: {
+      hotbar: [{ type: 'tool_caillou', qty: 1, durability: 80 }],
+      bag: [],
+      scenario: { step: 'explore', introBeats: { ...defaultIntroBeats(), pickedRock: true } },
+    },
+  };
+  assert.equal(mod.tryCampfireBeatNear(pOld, null, 252, -7.6, 'camp_moved'), false);
 });

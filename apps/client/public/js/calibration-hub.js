@@ -15,6 +15,7 @@
       tags: tool.tags || [],
       enabled: tool.enabled !== false,
       soon: !!tool.soon,
+      hideFromCalibration: !!tool.hideFromCalibration,
       open: tool.open,
       close: tool.close || (() => {}),
       isOpen: tool.isOpen || (() => false),
@@ -62,6 +63,7 @@
     grid.className = 'admin-hub-card-grid';
 
     for (const t of tools) {
+      if (t.hideFromCalibration) continue;
       const card = document.createElement('button');
       card.type = 'button';
       card.className = 'admin-hub-card' + (t.soon || !t.enabled ? ' is-disabled' : '');

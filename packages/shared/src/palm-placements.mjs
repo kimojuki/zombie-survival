@@ -9,14 +9,34 @@ import {
 
 export const PALM_ZONES = Object.freeze([
   {
-    id: 'beach_palms',
-    cx: 268,
-    cz: -8,
-    count: 20,
-    radiusX: 22,
-    radiusZ: 75,
+    id: 'beach_palms_n',
+    cx: 275,
+    cz: 24,
+    count: 7,
+    radiusX: 16,
+    radiusZ: 14,
     minCoastWeight: 0.35,
-    seed: 88120,
+    seed: 88121,
+  },
+  {
+    id: 'beach_palms_s',
+    cx: 276,
+    cz: -38,
+    count: 7,
+    radiusX: 16,
+    radiusZ: 14,
+    minCoastWeight: 0.35,
+    seed: 88122,
+  },
+  {
+    id: 'beach_palms_w',
+    cx: 252,
+    cz: -8,
+    count: 6,
+    radiusX: 14,
+    radiusZ: 22,
+    minCoastWeight: 0.35,
+    seed: 88123,
   },
 ]);
 

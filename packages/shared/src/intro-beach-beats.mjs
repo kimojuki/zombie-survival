@@ -83,9 +83,10 @@ export function shouldResetIntroInventoryOnConnect(scenario, inv) {
 }
 
 /** @returns {'footprints'|'campfire'|'pier'|null} */
-export function beatTriggeredByPosition(px, pz, beats) {
+export function beatTriggeredByPosition(px, pz, beats, zoneOverrides = null) {
+  const campfire = zoneOverrides?.campfire || INTRO_ZONE_CAMPFIRE;
   if (!beats?.footprints && inBeatZone(px, pz, INTRO_ZONE_FOOTPRINTS)) return 'footprints';
-  if (beats?.footprints && !beats.campfire && inBeatZone(px, pz, INTRO_ZONE_CAMPFIRE)) return 'campfire';
+  if (beats?.footprints && !beats.campfire && inBeatZone(px, pz, campfire)) return 'campfire';
   if (beats?.campfire && !beats.pier && inBeatZone(px, pz, INTRO_ZONE_PIER)) return 'pier';
   return null;
 }

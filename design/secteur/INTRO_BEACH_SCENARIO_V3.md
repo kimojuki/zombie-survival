@@ -244,6 +244,57 @@ scenario.introBeats = {
 ## Références code actuel
 
 - Scénario : `packages/shared/src/scenario-beach.mjs`
-- Loot v2 : `packages/shared/src/intro-starter-loot.mjs` → à remplacer par `intro-beach-beats.mjs`
-- Prefabs intro : `beach_starter_prefabs.js`
-- Spec joueur v1 : `design/secteur/INTRO_BEACH_PLAYER.md` (à mettre à jour après validation)
+- Beats v3 : `packages/shared/src/intro-beach-beats.mjs` + `apps/server/src/intro-beach-beats.mjs`
+- Placements / zones : `packages/shared/src/beach-intro-placements.mjs`
+- Immersion décor seed : `packages/shared/src/beach-immersion-placements.mjs`
+- Prefabs client : `beach_intro_prefabs.js`, `spawn_clearing.js`
+- Spec joueur v1 : `design/secteur/INTRO_BEACH_PLAYER.md`
+
+---
+
+## Implémentation technique (2026-06-11)
+
+### Beats serveur
+
+`scenario.introBeats` : `footprints`, `campfire`, `pier`, `pickedRock`, `pickedTorch`, `kitDone`.
+
+| Beat | Déclencheur | Effet |
+|------|-------------|-------|
+| `footprints` | zone empreintes **ou** lecture panneau | spawn caillou personnel |
+| `campfire` | zone veilleuse **ou** lecture note brûlée | torche visible au ring |
+| `pier` | zone ponton (après campfire) | valise personnelle |
+| Ramassage torche | **E** sur `spawn_beach_campfire_ring` | `tool_torche` en inv + `pickedTorch` |
+
+### Veilleuse et torche
+
+- La torche allumée est **intégrée** au prefab `spawn_beach_campfire_ring` (pas de décor `spawn_beach_starter_torch` dupliqué au feu).
+- Pickup : socket `intro-torch-pickup` — client envoie `id` du décor + position joueur (`x`/`z`).
+- Serveur : `tryCampfireBeatNear` (auto footprints+campfire si caillou en poche) puis `onTorchCampfirePickup`.
+- Visibilité client : `syncIntroCampfireTorchVisibility` masque la torche si `pickedTorch` ou torche déjà en inv.
+
+### Zone feu dynamique (déplacement admin)
+
+La zone beat **ne** repose plus sur les coords fixes `INTRO_ZONE_CAMPFIRE` (252, -7.6) seules :
+
+- `resolveIntroCampfireZone(decorItems)` lit la position du décor `spawn_beach_campfire_ring` persisté (`placementKey: beach:intro_campfire`).
+- `inIntroCampfirePickupZone(px, pz, zone)` valide la proximité au **centre réel** du feu.
+- `beatTriggeredByPosition(..., { campfire })` utilise la même zone pour les beats de marche.
+
+**QA** : après déplacement du feu en F8 → redémarrer le serveur si besoin ; `scenario-reset <joueur>` pour réinitialiser l’intro.
+
+### Inventaire authoritatif
+
+- `cloneInv` / `normalizeInv` **conservent** `scenario` (sync `introBeats` client).
+- Client : `mergeServerScenario` dans `applyAuthoritativeInv` (`inventory.js`, `spawn_scenario.js`).
+- Erreurs torche : `need_rock`, `need_campfire_beat`, `already_has_torch`, `inventory_full`.
+
+### Réveil et lisibilité
+
+- Caillou à **1,75 m** devant le joueur (`INTRO_ROCK_AHEAD`) + halo/beacon.
+- Golden hour figée (`BEACH_INTRO_GOLDEN_TIME` ~0.31) jusqu’à `walk_west`.
+- Caméra et bulles réveil orientent vers le caillou tant qu’il n’est pas ramassé.
+
+### RCON / reset
+
+- `scenario-reset <joueur>` — remet les beats intro, retire caillou/torche/nourriture intro de l’inv.
+- `decorseed beach [reset]` — props spawn + immersion (4 scènes loisirs plage).

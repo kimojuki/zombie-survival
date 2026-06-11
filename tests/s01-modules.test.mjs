@@ -8,5 +8,7 @@ import { computeS01DecorPlacements } from '../packages/shared/src/s01-world-plac
 test('S01 shared modules load for server boot', () => {
   assert.equal(isS01BuildBlocked(248, -8, 1.5, 1.5), true);
   assert.equal(isInS01SafeZone(248, -8), true);
-  assert.deepEqual(computeS01DecorPlacements(), []);
+  const placements = computeS01DecorPlacements();
+  assert.ok(placements.length >= 1, 'S01 cabin01 POI placements');
+  assert.ok(placements.some((p) => p.prefabId === 'building_survivor_shack'));
 });

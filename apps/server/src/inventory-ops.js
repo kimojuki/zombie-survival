@@ -107,11 +107,15 @@ function normalizeInv(inv) {
   if (Array.isArray(inv)) {
     return { hotbar: inv, bag: [], equip: { ...DEFAULT_EQUIP } };
   }
-  return {
+  const out = {
     hotbar: inv.hotbar || [],
     bag: inv.bag || [],
     equip: inv.equip || { ...DEFAULT_EQUIP },
   };
+  if (inv.scenario && typeof inv.scenario === 'object') {
+    out.scenario = inv.scenario;
+  }
+  return out;
 }
 
 function cloneInv(inv) {

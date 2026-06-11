@@ -173,7 +173,11 @@
       registerFoundation: _noop,
       reconcileAllFoundationHeights: () => [],
     };
-    ZS.Network = { syncWorldColliders: _noop, patchDecorFloorHeight: _noop, getDecorRoot: () => null };
+    ZS.Network = Object.assign(ZS.Network || {}, {
+      syncWorldColliders: _noop,
+      patchDecorFloorHeight: _noop,
+      getDecorRoot: () => null,
+    });
     ZS.Audio = { door: _noop, spatialAt: () => null };
     _installPreviewAnimHooks();
   }

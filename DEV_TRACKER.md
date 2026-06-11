@@ -26,6 +26,195 @@ Chaque feature ou refonte doit laisser une trace pour l'équipe :
 
 Index complet : [README.md](README.md#documentation-à-lire-avant-un-push--review)
 
+### Completed — zone feu intro dynamique (2026-06-11)
+
+- **Cause** : beat torche / `need_campfire_beat` validaient encore `INTRO_ZONE_CAMPFIRE` fixe (252, -7.6) alors que le décor `spawn_beach_campfire_ring` avait été déplacé en admin.
+- **Fix** : `resolveIntroCampfireZone` + `inIntroCampfirePickupZone` (shared) ; serveur lit `decorItems` et l’`id` envoyé par le client au pickup ; `beatTriggeredByPosition` accepte override zone campfire.
+- Tests : décor déplacé accepté au nouveau centre, anciennes coords rejetées.
+
+### Completed — fix ramassage torche intro (2026-06-11)
+
+- **Cause** : `cloneInv`/`normalizeInv` supprimaient `scenario` → `pickedTorch` jamais sync client ; zone feu validée sur position serveur en retard.
+- **Fix** : conserver `scenario` dans l'inv authoritatif ; client envoie x/z au pickup ; zone veilleuse élargie (4,5 m) ; merge beats optimiste.
+- Version client : `20260611-torch-pickup-sync-fix`.
+
+### Completed — correctifs Bugbot intro (2026-06-11)
+
+- Sync `introBeats` via `mergeServerScenario` dans `applyAuthoritativeInv` ; debug snapshot utilise le même chemin.
+- Messages torche : `need_campfire_beat` ; plus de re-émission `introBeat: campfire` après ramassage.
+- Version client : `20260611-bugbot-intro-fixes`.
+
+### Completed — veilleuse torche après scenario-reset (2026-06-11)
+
+- **Cause** : reset scénario sans vider l'inventaire intro → torche masquée côté client ; beats `footprints`/`campfire` non déclenchés → `pickup_failed`.
+- **Fix** : `scenario-reset` retire caillou/torche/nourriture intro + sync inv ; beats auto à la veilleuse si caillou en poche ; `syncIntroCampfireTorchVisibility` sur inv/scénario/décor.
+- Version client : `20260611-campfire-torch-reset-fix`.
+
+### Completed — caillou intro visible au réveil (2026-06-11)
+
+- **Cause** : crépuscule trop sombre (`BEACH_INTRO_GOLDEN_TIME` 0.245), caillou loin (2,6 m), aucune consigne au réveil.
+- **Fix** : lumière matinale 0.31 ; caillou à 1,75 m + halo/beacon ; textes réveil + hint E ; caméra vers le caillou tant qu'il n'est pas ramassé.
+- Version client : `20260611-intro-rock-visibility`.
+
+### Completed — veilleuse feu de camp intro (2026-06-11)
+
+- **Cause** : retrait de la torche intégrée au cercle `spawn_beach_campfire_ring` — plus de flamme ni lumière ; torche personnelle parfois absente.
+- **Fix** : torche allumée de nouveau dans le prefab veilleuse ; ramassage E via zone feu (`onTorchCampfirePickup`) sans décor personnel dupliqué ; masquage local après pickup.
+- Version client : `20260611-campfire-torch-fix`.
+
+### Completed — proue canot sauvetage (2026-06-11)
+
+- **Fix** : cône de proue `spawn_beach_boat_hull` orienté vers l'avant (`rotation.z = -π/2`).
+- Version client : `20260611-boat-hull-bow-fix`.
+
+### Completed — fix torche intro veilleuse (2026-06-11) — remplacé
+
+- Approche torche personnelle seule → régression veilleuse vide. Voir **veilleuse feu de camp intro** ci-dessus.
+
+### Completed — épave bateau sur récif (2026-06-11)
+
+- **Bateau au large** : récif visible + coque inclinée, proue écrasée, brèche flanc, mât cassé, débris flottants.
+- Version client : `20260611-offshore-wreck-rock`.
+
+### Completed — crabes plage (fuite + densité) (2026-06-11)
+
+- **14–24 crabes** sur le sable (tailles/couleurs variées, pinces animées).
+- **Fuite** à ~4 m du joueur — course paniquée, pattes qui battent, réinstallation plus loin.
+- Version client : `20260611-beach-crabs-flee`.
+
+### Completed — mouettes au sol plage (2026-06-11)
+
+- **Mouettes au sol** : 6–11 sur le sable, s'envolent à ~6 m du joueur, vol en arc ~4–8 m, atterrissage ailleurs sur la plage.
+- **Audio** : petit cri au décollage (`scatterSeagull`).
+- Version client : `20260611-beach-ground-gulls`.
+
+### Completed — bateau au large intro (2026-06-11)
+
+- **Épave offshore** : prefab `spawn_beach_offshore_wreck` en eau (318, -7.4) — bateau de l'accident visible depuis le réveil.
+- **Canot** : `spawn_beach_boat_hull` reste le canot de sauvetage sur le sable.
+- **Caméra intro** : regard vers le bateau au large + monologue court (infection à bord).
+- **RCON** : `decorseed beach reset` inclut aussi les props intro (offshore).
+- Version client : `20260611-offshore-wreck-intro`.
+
+### Completed — plage vie + repère + golden hour (2026-06-11)
+
+- **Repère** : coque `spawn_beach_boat_hull` seedée au réveil (292, -7.1) — visible depuis le cluster intro.
+- **Vie** : `beach_ambient_life.js` — mouettes (billboards), crabes marée, brise herbe procédurale.
+- **Audio** : cris mouettes synthétiques sur plage (`Audio.tickBeachLife`).
+- **Golden hour** : lumière figée ~0.245 jusqu’à l’étape `walk_west` (`world.js` + `spawn_scenario.js` + `spawn_intro.js`).
+- Version client : `20260611-beach-life-golden-hour`.
+- **Appliquer** : Ctrl+F5 + `decorseed beach reset`.
+
+### Completed — plage immersion décor (2026-06-11)
+
+- **4 scènes seed** : réveil (bouée, pêche), piste (snorkel, picnic), veilleuse (lanterne, BBQ), ponton (canoë, paddle, barrières) — `beach-immersion-placements.mjs` (17 prefabs).
+- **Palmiers** : 3 bosquets N/S/O (`palm-placements.mjs`) au lieu d’une grille uniforme.
+- **Procédural** : ligne de marée + micro-décor zone réveil (`beach_decor.js`).
+- **RCON** : `decorseed beach [reset]` inclut props base + immersion.
+- Version client : `20260611-beach-immersion-decor`.
+
+### Completed — accroupi PC : touche C (Ctrl+W Chrome) (2026-06-11)
+
+- **Cause** : Chrome réserve **Ctrl+W** — JavaScript ne peut pas l’intercepter (contrairement à Firefox).
+- **Fix** : accroupi PC = **C** en toggle (1× accroupi, 2× debout) · mobile inchangé (bouton ⬇).
+- Version client : `20260611-crouch-toggle-c`.
+
+### Completed — garde raccourcis navigateur en jeu (2026-06-11)
+
+- **Garde** : F5, Ctrl+R, Alt+←/→, etc. via `browser-shortcuts-guard.js` (raccourcis onglets exclus — non bloquables).
+- Version client : `20260611-browser-shortcuts-guard`.
+
+### Completed — F8 : Calibrages UI sans doublon décor (2026-06-11)
+
+- **Calibrages** renommé **Calibrages UI** (menu F8 + vue interne) — poses FPS / viewmodels uniquement.
+- **Édition décor monde** retirée du registre `ZS.Calibration` ; chemin unique F8 → Monde & décor → Édition décor live.
+- **F8** ferme aussi l’éditeur décor actif (plus via le registre calibrages).
+- Version client : `20260611-calibrages-ui-only`.
+
+### Completed — F8 : édition décor unifiée (2026-06-11)
+
+- **Supprimé** : carte racine « Édition monde (E) », entrée Calibrages dupliquée, bouton Monde « Catalogue prefabs » (`admin-prefab-catalog-overlay.js` retiré du bundle).
+- **Unique chemin** : F8 → Monde & décor → **Édition décor live** (catalogue, pose, E, sync).
+- **Fix** : `prefab-catalog-preview.js` ne remplace plus `ZS.Network` entièrement (évitait crash `Network.tick` si overlay chargé).
+- Version client : `20260611-f8-decor-live-unified`.
+
+### Completed — fix crash ZS.Network.tick (2026-06-11)
+
+- **Fix** : boucle jeu protégée si `tick` absent (cache client stale) · export réseau merge-safe · `loadScript` ne recharge plus network/game.
+- Version client : `20260611-network-tick-fix`.
+
+### Completed — pointer lock : erreurs console (2026-06-11)
+
+- **Fix** : promesse `requestPointerLock` capturée, plus de re-lock auto hors clic (fermeture panneau / touche E), `SecurityError` silencieux.
+- Version client : `20260611-pointer-lock-fix`.
+
+### Completed — accroupissement joueur (2026-06-11)
+
+- **PC** : **C** toggle accroupi (1× s'accroupir, 2× se relever) — Ctrl+W réservé par Chrome.
+- **Mobile** : bouton **⬇** à droite (toggle) — vitesse réduite, caméra plus basse, sync multijoueur.
+- Fichiers : `player_stance.js`, `player-stance.mjs`, `game.js`, `ui.js`, `network.js`, `style.css`.
+- Version client : `20260611-player-crouch`.
+
+### Completed — carte admin : double-clic TP (2026-06-11)
+
+- **Fix** : clics sur la carte n'activent plus le pointer lock jeu — dbl-clic vide = TP fonctionne.
+- Version client : `20260611-admin-map-dblclick`.
+
+### Completed — éditeur décor : ciblage E (2026-06-11)
+
+- **Fix** : E sélectionne à nouveau le décor visé — pick prioritaire sur la rotation en mode pose, visée souris sans pointer lock, `decorId` sur tous les meshes, pas de conflit inventaire.
+- Version client : `20260611-decor-editor-pick-e`.
+
+### Completed — toolkit admin tier 6 (2026-06-11)
+
+- **Lot décor** : déplacement visuel groupé · nudge X/Z ±0,5 m · undo/redo lot (`batch_patch`).
+- **Redo** : Ctrl+Y / bouton — pile redo couplée à l'undo (patch, storage, delete, lot).
+- **Annonces** : `POST /api/admin/announce` + F8 Monde (`admin-server-announce.js`).
+- **Carte** : clustering arbres/rochers au zoom faible · profils filtres sauvegardables (`admin-map-presets.js`).
+- **Recherche** : ouvre la carte + pulse si fermée.
+- Version client : `20260611-admin-toolkit-tier6`.
+
+### Completed — toolkit admin tier 5 (2026-06-11)
+
+- **Éditeur** : Ctrl+C/V copier-coller décor · Shift+E sélection multiple · suppression lot · snap rotation 15° · onglet Historique session.
+- **Recherche** : pulse carte sur TP/éditer (si carte ouverte).
+- **F8** : flags serveur live (`POST /api/admin/server-flags`) — zombies, loot, PvP, autoDay.
+- Version client : `20260611-admin-toolkit-tier5`.
+
+### Completed — toolkit admin tier 4 (2026-06-11)
+
+- **Zones monde** : plage safe (contour cyan) + exclusions build POI/bouche sentier (rouge) · panneau couches · POI cabin01 sync `s01_bounds.js`.
+- **Signets TP** : `admin-tp-bookmarks.js` — F8 Monde + éditeur décor · localStorage · max 24.
+- **Coffre admin** : PATCH `clearStorage` / `storage[]` · boutons Vider / Loot test · undo coffre.
+- **Undo** : pile 10 actions (create/delete/patch/storage).
+- Version client : `20260611-admin-toolkit-tier4`.
+
+### Completed — toolkit admin in-game tier 1–3 (2026-06-11)
+
+- **Éditeur décor** : duplication (preview violette) · rotation Q/E · onglet **Chercher** (`GET /api/admin/decor/search`) · undo Ctrl+Z (`admin-decor-undo.js`, `POST /api/admin/decor/restore`) · inspecteur coffre lecture seule.
+- **F8 Monde** : catalogue prefabs in-game (`admin-prefab-catalog-overlay.js`) · heure/cycle (`admin-world-time.js`, `GET/POST /api/admin/world-time`) · zones secteurs au sol (`admin-zone-overlay.js`) · mode vol V (`admin-fly.js`).
+- Version client : `20260611-admin-toolkit-full`.
+
+### Completed — carte admin in-game + filtres (2026-06-11)
+
+- **F8 → Monde → Carte monde** : overlay plein écran (`admin-world-map-overlay.js`), réutilise `admin-world-map.js`.
+- **Filtres** : arbres, palmiers, rochers, barrières, camp, items, other masqués par défaut ; compteur par couche + cap affichage 4000 pts.
+- **Actions** : dbl-clic vide = TP · clic marqueur = Y aller / Éditer décor · centrer sur joueur.
+- Version client : `20260611-admin-map-ingame`.
+
+### Completed — admin téléportation « Aller ici » (2026-06-11)
+
+- **T** (réticule verrouillé) ou bouton F8 → Monde / éditeur décor — TP sous le réticule via `POST /api/admin/teleport-here`.
+- Auth `decor.edit` ou `players.manage` · grace anti-speedhack `_tpGraceUntil`.
+- Fichiers : `admin-go-here.js`, `index.js`, `admin-hub.js`, `admin-live-decor.js`.
+- Version client : `20260611-admin-go-here`.
+
+### Completed — éditeur décor : déplacement visuel (2026-06-11)
+
+- **Modifier** → bouton **Déplacer visuellement** : l'objet d'origine est masqué, preview bleue sous le réticule pendant que l'admin se déplace ; clic gauche = PATCH position ; molette = rotation ; clic droit = annuler.
+- Après validation → panneau Modifier pour affinage (curseurs fins).
+- Version client : `20260611-decor-editor-move-visual`.
+
 ### Completed — éditeur décor : catalogue + pose in-game (2026-06-11)
 
 - **Catalogue** dans l’éditeur décor (F8 → Calibrages → Édition décor monde) : recherche, filtre catégorie, liste prefabs depuis `/api/admin/prefab-catalog`.

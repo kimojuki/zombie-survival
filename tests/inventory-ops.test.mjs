@@ -217,3 +217,13 @@ test('cloneInv deep copy', () => {
   c.hotbar[0].qty = 99;
   assert.equal(inv.hotbar[0].qty, 1);
 });
+
+test('cloneInv preserves scenario introBeats', () => {
+  const inv = emptyInv();
+  inv.scenario = { step: 'explore', introBeats: { campfire: true, pickedTorch: false } };
+  const c = cloneInv(inv);
+  assert.equal(c.scenario?.step, 'explore');
+  assert.equal(c.scenario?.introBeats?.campfire, true);
+  c.scenario.introBeats.pickedTorch = true;
+  assert.equal(inv.scenario.introBeats.pickedTorch, false);
+});

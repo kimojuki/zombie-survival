@@ -12,6 +12,7 @@ import {
   scenarioSpawnRef,
   tutorialPosForPlayer,
 } from '../packages/shared/src/scenario-beach.mjs';
+import { defaultIntroBeats } from '../packages/shared/src/intro-beach-beats.mjs';
 
 test('scenario beach steps are ordered', () => {
   assert.equal(STEPS[0], 'intro_wake');
@@ -29,7 +30,7 @@ test('new scenario starts at intro_wake', () => {
   const s = defaultScenario();
   assert.equal(s.step, 'intro_wake');
   assert.equal(s.completed, false);
-  assert.deepEqual(s.introBeats, { footprints: false, campfire: false, pier: false, kitDone: false });
+  assert.deepEqual(s.introBeats, defaultIntroBeats());
 });
 
 test('walk_west requires intro kit done', () => {

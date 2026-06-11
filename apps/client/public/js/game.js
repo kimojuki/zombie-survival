@@ -40,9 +40,11 @@
       health: parseInt(localStorage.getItem('zombie_health') || '100'),
       kills:  parseInt(localStorage.getItem('zombie_kills')  || '0'),
       playerKills: 0,
-      dead: false
+      dead: false,
+      crouching: false,
+      _crouchT: 0,
     },
-    input:  { moveX: 0, moveZ: 0, sprintHeld: false },
+    input:  { moveX: 0, moveZ: 0, sprintHeld: false, crouchToggle: false },
     camera: { yaw: 0, pitch: 0 },
     keys:   {},
     jumpPressed: false,
@@ -224,29 +226,44 @@
   // Raycaster for shooting
   const raycaster = new THREE.Raycaster();
   const screenCenter = new THREE.Vector2(0, 0);
+  const _viewAimNdc = new THREE.Vector2(0, 0);
+  let _viewAimNdcValid = false;
   const _camWorld = new THREE.Vector3();
   function _cameraWorldPos() {
     return camera.getWorldPosition(_camWorld);
   }
 
+  function _updateViewAimNdc(clientX, clientY) {
+    if (!canvas) return;
+    const rect = canvas.getBoundingClientRect();
+    if (!rect.width || !rect.height) return;
+    _viewAimNdc.x = ((clientX - rect.left) / rect.width) * 2 - 1;
+    _viewAimNdc.y = -((clientY - rect.top) / rect.height) * 2 + 1;
+    _viewAimNdcValid = true;
+  }
+
+  function _raycastNdc() {
+    return (pointerLocked || !_viewAimNdcValid) ? screenCenter : _viewAimNdc;
+  }
+
   /** Cible E / UI : coffre ou porte sous le réticule (pas la plus proche en XZ). */
   function _pickInteractRay(maxDist = 3.5) {
     if (!ZS.pickDecorInteractRay) return null;
-    raycaster.setFromCamera(screenCenter, camera);
+    raycaster.setFromCamera(_raycastNdc(), camera);
     return ZS.pickDecorInteractRay(raycaster, maxDist);
   }
   ZS.pickWorldInteract = _pickInteractRay;
 
   function _pickAdminDecorRay(maxDist = 80) {
     if (!ZS.pickDecorAdminRay) return null;
-    raycaster.setFromCamera(screenCenter, camera);
+    raycaster.setFromCamera(_raycastNdc(), camera);
     return ZS.pickDecorAdminRay(raycaster, maxDist);
   }
   ZS.pickAdminDecorRay = _pickAdminDecorRay;
 
   /** Point de pose admin : visée réticule → sol, sinon devant le joueur. */
   function _pickAdminDecorPlacement(maxDist = 80) {
-    raycaster.setFromCamera(screenCenter, camera);
+    raycaster.setFromCamera(_raycastNdc(), camera);
     const hit = ZS.raycastViewToGround?.(raycaster, maxDist);
     const yaw = state.camera.yaw;
     if (hit) return { x: hit.x, y: hit.y, z: hit.z, rotY: yaw, fromRay: true };
@@ -282,6 +299,9 @@
   ZS.Inventory.init(state, scene, socket);
 
   ZS.Network.init(socket, scene, state);
+  if (typeof ZS.Network?.tick !== 'function' && typeof ZS.networkTick !== 'function') {
+    console.error('[game] ZS.Network.tick absent — videz le cache (Ctrl+F5) ou redeploy client');
+  }
 
   socket.emit('world-water-zones', ZS.getWaterZones());
 
@@ -495,6 +515,15 @@
     return t && (t.id === 'rcon-input' || t.closest?.('#rcon-panel'));
   }
 
+  function _adminDecorTyping(e) {
+    if (!ZS.AdminLiveDecor?.isActive?.()) return false;
+    const sel = '#zs-admin-live-decor input, #zs-admin-live-decor textarea, #zs-admin-live-decor select';
+    const ae = document.activeElement;
+    if (ae?.closest?.(sel)) return true;
+    if (e?.target?.closest?.(sel)) return true;
+    return false;
+  }
+
   document.addEventListener('keydown', (e) => {
     if (ZS.shortcutsBlocked?.(e) || ZS.Chat?.isOpen?.()) return;
     if (ZS.Rcon?.isOpen?.()) {
@@ -526,6 +555,41 @@
       ZS.SleepLoot.closePanel();
       return;
     }
+    if (e.code === 'KeyQ' && ZS.AdminLiveDecor?.isPlacing?.() && ZS.AdminLiveDecor.tryRotateOnKey?.('KeyQ')) {
+      e.preventDefault();
+      return;
+    }
+    if ((e.ctrlKey || e.metaKey) && e.code === 'KeyZ' && ZS.AdminLiveDecor?.isActive?.()) {
+      e.preventDefault();
+      ZS.AdminLiveDecor.tryUndo?.();
+      return;
+    }
+    if ((e.ctrlKey || e.metaKey) && e.code === 'KeyY' && ZS.AdminLiveDecor?.isActive?.()) {
+      e.preventDefault();
+      ZS.AdminLiveDecor.tryRedo?.();
+      return;
+    }
+    if ((e.ctrlKey || e.metaKey) && e.code === 'KeyC' && ZS.AdminLiveDecor?.isActive?.()) {
+      if (ZS.AdminLiveDecor.tryCopyOnKey?.()) {
+        e.preventDefault();
+        return;
+      }
+    }
+    if ((e.ctrlKey || e.metaKey) && e.code === 'KeyV' && ZS.AdminLiveDecor?.isActive?.()) {
+      if (ZS.AdminLiveDecor.tryPasteOnKey?.()) {
+        e.preventDefault();
+        return;
+      }
+    }
+    if (e.code === 'KeyV' && ZS.AdminFly?.tryToggleKey?.('KeyV')) {
+      e.preventDefault();
+      return;
+    }
+    if (e.code === 'KeyC' && !_touchInput && !e.repeat && !(e.ctrlKey || e.metaKey)) {
+      state.input.crouchToggle = !state.input.crouchToggle;
+      e.preventDefault();
+      return;
+    }
     if (e.code === 'KeyE') {
       state.keys[e.code] = true;
       if (ZS.SleepLoot?.isOpen?.()) return;
@@ -534,7 +598,25 @@
         if (_interactHold) e.preventDefault();
         return;
       }
-      if (ZS.AdminLiveDecor?.isActive?.() && ZS.AdminLiveDecor.tryPickOnE?.()) {
+      if (ZS.AdminLiveDecor?.isActive?.()) {
+        if (_adminDecorTyping(e)) return;
+        if (ZS.AdminLiveDecor.isPlacing?.()) {
+          if (ZS.AdminLiveDecor.tryPickOnE?.({ shiftKey: e.shiftKey })) {
+            e.preventDefault();
+            return;
+          }
+          if (ZS.AdminLiveDecor.tryRotateOnKey?.('KeyE')) {
+            e.preventDefault();
+            return;
+          }
+          return;
+        }
+        if (ZS.AdminLiveDecor.tryPickOnE?.({ shiftKey: e.shiftKey })) {
+          e.preventDefault();
+          return;
+        }
+      }
+      if (ZS.Inventory?.tryGrabNearest?.()) {
         e.preventDefault();
         return;
       }
@@ -560,13 +642,24 @@
 
   // ── Input: desktop pointer lock ───────────────────────────────────────────
   let pointerLocked = false;
+  let _lockReqId = 0;
+
+  function _safeExitPointerLock() {
+    if (!document.pointerLockElement) return;
+    _lockReqId += 1;
+    try {
+      document.exitPointerLock();
+    } catch (_) { /* ignore */ }
+  }
 
   function _blocksPointerLock(el) {
     if (!el || el === canvas) return false;
     return !!el.closest?.(
       '#menu-panel, #menu-btn, #inv-panel, #craft-panel, #storage-panel, #storage-backdrop, #sleep-loot-panel, #sleep-loot-backdrop, #sign-backdrop, #sign-panel, #options-backdrop, #options-panel, #admin-backdrop, #admin-panel, #map-overlay, #group-backdrop, #death-screen, '
       + '#connecting-screen, #rcon-panel, #chat-wrap, #hotbar, #craft-btn, #inv-btn, #map-btn, #chat-btn, '
-      + '#build-ctl, #zs-admin-live-decor, #zs-arm-tuner, button, a, input, textarea, select, [contenteditable]'
+      + '#build-ctl, #zs-admin-live-decor, #zs-admin-map-overlay, #zs-admin-prefab-catalog, #zs-arm-tuner, '
+      + '#sprint-btn, #crouch-btn, '
+      + 'button, a, input, textarea, select, [contenteditable]'
     );
   }
 
@@ -590,6 +683,8 @@
     if (ZS.SignUI?.isOpen?.()) return true;
     if (ZS.OptionsUI?.isOpen?.()) return true;
     if (ZS.AdminHub?.isOpen?.()) return true;
+    if (ZS.AdminWorldMapOverlay?.isOpen?.()) return true;
+    if (document.getElementById('zs-admin-prefab-catalog')) return true;
     if (ZS.Calibration?.anyOpen?.() && !ZS.AdminLiveDecor?.isActive?.() && !ZS.ArmTuner?.allowsWalkPreview?.()) return true;
     if (ZS.AdminPanel?.isOpen?.()) return true;
     const death = document.getElementById('death-screen');
@@ -603,38 +698,48 @@
 
   function _onUiPanelOpen() {
     if (_isMobile) return;
-    if (document.pointerLockElement) document.exitPointerLock();
+    _safeExitPointerLock();
   }
 
   function _onUiPanelClose() {
-    if (_isMobile) return;
-    if (ZS.Rcon?.isOpen?.()) return;
-    if (ZS.Chat?.isOpen?.()) return;
-    if (_uiPanelOpen()) return;
-    const conn = document.getElementById('connecting-screen');
-    if (conn && conn.style.display === 'flex') return;
-    if (ZS.Loading?.isActive?.()) return;
-    requestAnimationFrame(() => {
-      requestAnimationFrame(() => _requestPointerLock());
-    });
+    // Pas de requestPointerLock ici : Chrome exige un geste utilisateur (clic canvas).
+    // Le listener mousedown sur le canvas reprend le lock au prochain clic.
   }
 
   function _requestPointerLock() {
     if (ZS.SpawnIntro?.isActive?.()) return;
     if (_isMobile || pointerLocked) return;
+    if (ZS.AdminWorldMapOverlay?.isOpen?.()) return;
     if (ZS.Rcon?.isOpen?.()) return;
     if (ZS.Chat?.isOpen?.() || document.body.classList.contains('chat-open')) return;
     if (_uiPanelOpen()) return;
     const conn = document.getElementById('connecting-screen');
     if (conn && conn.style.display === 'flex') return;
     if (ZS.Loading?.isActive?.()) return;
-    canvas.requestPointerLock();
+    if (!canvas?.requestPointerLock) return;
+    const reqId = ++_lockReqId;
+    let req;
+    try {
+      req = canvas.requestPointerLock();
+    } catch (_) {
+      return;
+    }
+    if (req && typeof req.then === 'function') {
+      req.catch((err) => {
+        if (reqId !== _lockReqId) return;
+        // SecurityError normal si Esc / panneau / extension bloque le lock.
+        if (err?.name !== 'SecurityError' && err?.name !== 'NotAllowedError') {
+          console.warn('[input] pointer lock:', err?.message || err);
+        }
+      });
+    }
   }
 
   if (!_isMobile) {
     document.addEventListener('mousedown', (e) => {
       if (pointerLocked) return;
       if (e.button !== 0) return;
+      if (ZS.AdminWorldMapOverlay?.isOpen?.()) return;
       if (ZS.Rcon?.isOpen?.()) return;
       if (_blocksPointerLock(e.target)) return;
       _requestPointerLock();
@@ -643,7 +748,6 @@
 
   document.addEventListener('pointerlockchange', _syncPointerLockUi);
   document.addEventListener('pointerlockerror', () => {
-    console.warn('[input] pointer lock refusé');
     _syncPointerLockUi();
   });
   _syncPointerLockUi();
@@ -653,7 +757,13 @@
 
   document.addEventListener('mousemove', (e) => {
     if (ZS.SpawnIntro?.isActive?.()) return;
-    if (!pointerLocked) return;
+    if (ZS.AdminWorldMapOverlay?.isOpen?.()) return;
+    if (!pointerLocked) {
+      _updateViewAimNdc(e.clientX, e.clientY);
+      return;
+    }
+    _viewAimNdc.set(0, 0);
+    _viewAimNdcValid = true;
     const sens = ZS.Options?.getLookSensitivity?.().mouse ?? 0.002;
     const inv = ZS.Options?.get?.('invertY') ? -1 : 1;
     state.camera.yaw   -= e.movementX * sens;
@@ -899,7 +1009,8 @@
 
   function attack() {
     if (state.player.dead) return;
-    if (ZS.AdminLiveDecor?.isPlacing?.()) return;
+    if (ZS.AdminLiveDecor?.isPlacing?.() || ZS.AdminFly?.isActive?.()) return;
+    if (ZS.AdminWorldMapOverlay?.isOpen?.()) return;
     if (ZS.SpawnIntro?.blocksInput?.()) return;
     if (ZS.Loading?.isActive?.() || !ZS.Network?.isSpawnReady?.()) return;
     const item = ZS.Inventory.getActiveItem();
@@ -1144,7 +1255,65 @@
     return _interactDoorTap();
   }
 
+  function _canPickupIntroCampfireTorch() {
+    const beats = ZS.Scenario?.getIntroBeats?.();
+    return !!ZS.Scenario?.isActive?.()
+      && !ZS.Inventory?.hasItemType?.('tool_torche')
+      && !beats?.pickedTorch;
+  }
+
+  function _hideIntroCampfireTorchMesh(decorId) {
+    const entry = ZS.Network?.getDecorEntry?.(decorId);
+    const root = entry?.root;
+    if (root) ZS.BeachIntroPrefabs?.setIntroCampfireTorchVisible?.(root, false);
+  }
+
+  function _introTorchPickup(decorId) {
+    ZS.Network?.requestIntroTorchPickup?.(decorId)?.then((res) => {
+      if (res?.ok) {
+        _hideIntroCampfireTorchMesh(decorId);
+        ZS.Network?.forEachDecor?.((id, entry) => {
+          if (entry?.data?.prefabId === 'spawn_beach_campfire_ring') {
+            _hideIntroCampfireTorchMesh(id);
+          }
+        });
+        ZS.Scenario?.mergeServerScenario?.({
+          introBeats: { pickedTorch: true, campfire: true },
+        });
+        ZS.IntroStarter?.onPickup?.('tool_torche');
+        ZS.UI?.showNotif?.('Torche récupérée');
+      } else if (res?.err === 'inventory_full') {
+        ZS.UI?.showNotif?.('Inventaire plein — libère un emplacement');
+      } else if (res?.err === 'no_torch') {
+        ZS.UI?.showNotif?.('Approche la veilleuse — la torche n\'est pas encore là');
+      } else if (res?.err === 'need_rock') {
+        ZS.UI?.showNotif?.('Ramasse d\'abord le caillou sur la plage');
+      } else if (res?.err === 'already_has_torch') {
+        ZS.UI?.showNotif?.('Tu as déjà la torche');
+        ZS.BeachIntroPrefabs?.syncIntroCampfireTorchVisibility?.();
+      } else if (res?.err === 'need_campfire_beat') {
+        ZS.UI?.showNotif?.('Approche le centre du cercle de pierres');
+      } else if (res?.err === 'pickup_failed') {
+        ZS.UI?.showNotif?.('Ramassage impossible');
+      } else {
+        ZS.UI?.showNotif?.('Ramassage impossible');
+      }
+    });
+  }
+
   function _interactCampProp(px, pz) {
+    if (_canPickupIntroCampfireTorch()) {
+      const introTorch = ZS.findNearestDecorInteract?.(px, pz, 3.5, 'intro_torch');
+      if (introTorch) {
+        _introTorchPickup(introTorch.decorId);
+        return true;
+      }
+      const campfireTorch = ZS.findNearestDecorInteract?.(px, pz, 3.5, 'intro_campfire_torch');
+      if (campfireTorch) {
+        _introTorchPickup(campfireTorch.decorId);
+        return true;
+      }
+    }
     const wb = ZS.findNearestDecorInteract?.(px, pz, 3.0, 'workbench');
     if (wb) {
       ZS.Craft?.toggle?.();
@@ -1219,8 +1388,10 @@
     const storage = _storageFromPick(pick);
     const door = _doorFromPick(pick);
     const sign = _signFromPick(pick);
-    const campProp = (!storage && !door && !sign)
+    let campProp = (!storage && !door && !sign)
       ? ZS.findNearestDecorInteract?.(px, pz, 3.2) : null;
+    if (campProp && (campProp.role === 'intro_torch' || campProp.role === 'intro_campfire_torch')
+        && !_canPickupIntroCampfireTorch()) campProp = null;
     const sleeper = (!storage && !door && !sign && !campProp && !state.player.dead)
       ? ZS.SleepLoot?.getNearestForUi?.(px, pz) : null;
     _nearStorage = storage;
@@ -1246,6 +1417,8 @@
       else label = door.open ? 'Fermer' : 'Ouvrir';
     }
     else if (campProp?.role === 'workbench') label = 'Établi';
+    else if ((campProp?.role === 'intro_torch' || campProp?.role === 'intro_campfire_torch')
+        && _canPickupIntroCampfireTorch()) label = 'Ramasser la torche';
     else if (campProp?.role === 'campfire') label = 'Cuire au feu';
     else if (campProp?.role === 'bed') label = 'Repos';
     else if (campProp?.role === 'bedroll') label = 'Repos (sac)';
@@ -1319,6 +1492,7 @@
   let _BIOME_STRIDE = _gfxProf.biomeStride || (_isMobile ? 2 : 1);
   let _BILLBOARD_STRIDE = _gfxProf.billboardStride || (_isMobile ? 2 : 1);
   let _biomeStrideAcc = 0;
+  let _beachLifeStrideAcc = 0;
   let _billboardStrideAcc = 0;
   ZS._gfxRuntime = {
     renderer,
@@ -1403,6 +1577,14 @@
     }
     ZS.SpawnIntro?.tick?.(dt);
     ZS.Scenario?.tick?.(dt);
+    if (!state.player.dead && !ZS.Loading?.isActive?.()) {
+      ZS.BeachAmbientLife?.tick?.(dt, state.player.x, state.player.z);
+      _beachLifeStrideAcc++;
+      if (_beachLifeStrideAcc >= _BIOME_STRIDE) {
+        _beachLifeStrideAcc = 0;
+        ZS.Audio?.tickBeachLife?.(state.player.x, state.player.z, dt * _BIOME_STRIDE);
+      }
+    }
     ZS.AdminLiveDecor?.tick?.();
     const _tunerWalk = ZS.ArmTuner?.allowsWalkPreview?.();
     if (!ZS._armTunerActive || _tunerWalk) {
@@ -1434,7 +1616,7 @@
       if (ZS.updateBillboards) ZS.updateBillboards(camX, camZ);
     }
     ZS.Zombies.tick(dt);
-    ZS.Network.tick(dt);
+    (ZS.Network?.tick || ZS.networkTick)?.(dt);
     ZS.Inventory.tick(dt);
     ZS.Craft.tick(dt);
     ZS.Survival.tick(dt);
@@ -1468,9 +1650,26 @@
   const JUMP_V    = 8;
   const WALK_SPEED = 5;
   const SPRINT_MULT = 1.62;
+  const PS = () => ZS.PlayerStance || { EYE_STAND: 1.7, EYE_CROUCH: 1.05, CROUCH_SPEED_MULT: 0.52, eyeHeight: (t) => 1.7, isCrouched: () => false };
+
+  function _playerEyeH(p) {
+    return PS().eyeHeight(p._crouchT ?? 0);
+  }
 
   function updateMovement(dt) {
     if (ZS.SpawnIntro?.isActive?.()) return;
+    if (ZS.AdminFly?.applyMovement?.(dt, state, camera)) {
+      const p = state.player;
+      const eyeH = PS().EYE_STAND;
+      localAvatar.position.set(p.x, p.y - eyeH, p.z);
+      localAvatar.rotation.y = state.camera.yaw;
+      camera.position.set(p.x, p.y, p.z);
+      camera.rotation.y = state.camera.yaw;
+      camera.rotation.x = state.camera.pitch;
+      p.rotY = state.camera.yaw;
+      ZS.Network.sendMove(p.x, p.y, p.z, p.rotY);
+      return;
+    }
     const keys  = state.keys;
 
     let mx = state.input.moveX;
@@ -1484,13 +1683,26 @@
     const len = Math.hypot(mx, mz);
     if (len > 1) { mx /= len; mz /= len; }
     const moving = len > 0.08;
+
+    const p = state.player;
+    const wantsCrouch = !!state.input.crouchToggle;
+    const canCrouch = !_inWater && p.onGround;
+    const crouchTarget = wantsCrouch && canCrouch ? 1 : 0;
+    if (!Number.isFinite(p._crouchT)) p._crouchT = 0;
+    if (!p.onGround && !wantsCrouch) p._crouchT = Math.max(0, p._crouchT - dt * 10);
+    else p._crouchT += (crouchTarget - p._crouchT) * Math.min(1, dt * 14);
+    const eyeH = _playerEyeH(p);
+    p.crouching = PS().isCrouched(p._crouchT);
+
     const sprintKey = keys['ShiftLeft'] || keys['ShiftRight'];
-    const wantsSprint = (sprintKey || state.input.sprintHeld) && moving;
+    const wantsSprint = (sprintKey || state.input.sprintHeld) && moving && !p.crouching;
     const canSprint = !_inWater && ZS.Survival?.canSprint?.();
     const sprinting = wantsSprint && canSprint;
     state.player.sprinting = sprinting;
     const baseSpeed = _inWater ? 2.8 : WALK_SPEED;
-    const SPEED = sprinting ? baseSpeed * SPRINT_MULT : baseSpeed;
+    let speedMult = sprinting ? SPRINT_MULT : 1;
+    if (p.crouching) speedMult *= PS().CROUCH_SPEED_MULT;
+    const SPEED = baseSpeed * speedMult;
     state.player.isMoving = moving;
     state.player.moveSpeed = len * SPEED;
     ZS.Survival?.tickEndurance?.(dt, { sprinting, moving });
@@ -1499,8 +1711,6 @@
     _fwd.y = 0;
     _fwd.normalize();
     _right.crossVectors(_fwd, _up).normalize();
-
-    const p = state.player;
 
     // Horizontal movement
     let newX = p.x + (_fwd.x * (-mz) + _right.x * mx) * SPEED * dt;
@@ -1520,31 +1730,32 @@
 
     // Collision avec arbres, rochers, murs — respecte la hauteur pour sauter par-dessus
     const colliders = ZS.getCollidersNear?.(newX, newZ, 30) || ZS.getColliders();
-    const feetY = p.y - 1.7; // Y des pieds du joueur
+    const feetY = p.y - eyeH;
+    const playerR = p.crouching ? PLAYER_R * 0.88 : PLAYER_R;
 
     for (const col of colliders) {
       if (col.type === 'seg') {
-        if (ZS.shouldSkipDecorSideCollision?.(col, feetY, p.y, p.velocityY, newX, newZ, PLAYER_R)) continue;
-        const resolved = ZS.resolveDecorSegmentCollision?.(col, newX, newZ, feetY, PLAYER_R);
+        if (ZS.shouldSkipDecorSideCollision?.(col, feetY, p.y, p.velocityY, newX, newZ, playerR)) continue;
+        const resolved = ZS.resolveDecorSegmentCollision?.(col, newX, newZ, feetY, playerR);
         if (resolved) {
           newX = resolved.x;
           newZ = resolved.z;
         }
       } else if (col.type === 'box') {
-        if (ZS.shouldSkipDecorSideCollision?.(col, feetY, p.y, p.velocityY, newX, newZ, PLAYER_R)) continue;
-        const resolved = ZS.resolveDecorBoxCollision?.(col, newX, newZ, feetY, PLAYER_R);
+        if (ZS.shouldSkipDecorSideCollision?.(col, feetY, p.y, p.velocityY, newX, newZ, playerR)) continue;
+        const resolved = ZS.resolveDecorBoxCollision?.(col, newX, newZ, feetY, playerR);
         if (resolved) {
           newX = resolved.x;
           newZ = resolved.z;
         }
       } else {
-        if (ZS.shouldSkipDecorSideCollision?.(col, feetY, p.y, p.velocityY, newX, newZ, PLAYER_R)) continue;
+        if (ZS.shouldSkipDecorSideCollision?.(col, feetY, p.y, p.velocityY, newX, newZ, playerR)) continue;
         // Cylindrique (arbres, rochers) — sautable si topY défini
         if (col.topY !== undefined && feetY >= col.topY - 0.05) continue;
         const dx   = newX - col.x;
         const dz   = newZ - col.z;
         const dist = Math.hypot(dx, dz);
-        const min  = PLAYER_R + col.r;
+        const min  = playerR + col.r;
         if (dist < min && dist > 0.001) {
           const scale = min / dist;
           newX = col.x + dx * scale;
@@ -1569,7 +1780,7 @@
 
     const waterY   = ZS.getWaterSurface(p.x, p.z);
     const inRiver  = waterY !== null;
-    const groundY  = (ZS.getStandHeight?.(p.x, p.z, p.y) ?? ZS.getEffectiveFloorHeight(p.x, p.z, p.y)) + 1.7;
+    const groundY  = (ZS.getStandHeight?.(p.x, p.z, p.y) ?? ZS.getEffectiveFloorHeight(p.x, p.z, p.y)) + eyeH;
     const swimEyeY = inRiver ? waterY - 0.10 : null;
     const minEyeY  = inRiver ? waterY - 0.40 : null;
     const submerged = inRiver && feetY < waterY - 0.06;
@@ -1635,7 +1846,7 @@
       p.onGround = false;
     }
 
-    const bobAmp = (ZS.Options?.isFeature?.('headBob') !== false && moving && p.onGround && !_inWater)
+    const bobAmp = (ZS.Options?.isFeature?.('headBob') !== false && moving && p.onGround && !_inWater && !p.crouching)
       ? 0.016 * Math.min(1, (p.moveSpeed || 0) / 5) * (sprinting ? 1.15 : 1)
       : 0;
     if (bobAmp > 0) _walkBobPhase += dt * (sprinting ? 11 : 9);
@@ -1648,7 +1859,7 @@
       camera.updateProjectionMatrix();
     }
 
-    localAvatar.position.set(p.x, p.y - 1.7, p.z);
+    localAvatar.position.set(p.x, p.y - eyeH, p.z);
     localAvatar.rotation.y = state.camera.yaw;
     camera.position.set(p.x, p.y + headBob, p.z);
     camera.rotation.y = state.camera.yaw;

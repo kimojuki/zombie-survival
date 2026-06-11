@@ -86,6 +86,11 @@
     return isActive() && stepIndex(_scenario.step) < stepIndex('walk_west');
   }
 
+  function _syncGoldenHour() {
+    if (!ZS.setBeachIntroGoldenHour) return;
+    ZS.setBeachIntroGoldenHour(shouldDelayZombieSync());
+  }
+
   function filterZombies(arr) {
     if (!Array.isArray(arr) || isDone()) return arr || [];
     if (shouldDelayZombieSync()) return [];
@@ -286,6 +291,8 @@
     _socket = socket;
     _buildUi();
     _updateHud();
+    _syncGoldenHour();
+    ZS.BeachIntroPrefabs?.syncIntroCampfireTorchVisibility?.();
   }
 
   function onUpdate(data) {
@@ -308,8 +315,11 @@
     }
     if (data.resetIntro && _state) {
       ZS.SpawnIntro?.tryStart?.(_state);
+      ZS.BeachIntroPrefabs?.syncIntroCampfireTorchVisibility?.();
     }
     _updateHud();
+    _syncGoldenHour();
+    ZS.BeachIntroPrefabs?.syncIntroCampfireTorchVisibility?.();
   }
 
   function advance(step) {
@@ -322,10 +332,31 @@
       _revealT += dt * 1000;
     }
     _updateHud();
+    _syncGoldenHour();
   }
 
   function getScenario() {
     return _scenario;
+  }
+
+  function getIntroBeats() {
+    return _scenario?.introBeats || null;
+  }
+
+  /** Fusionne introBeats (et flags clés) depuis l'inventaire authoritatif serveur. */
+  function mergeServerScenario(serverScenario) {
+    if (!serverScenario || typeof serverScenario !== 'object') return;
+    if (!_scenario) {
+      _scenario = { ...serverScenario };
+    } else {
+      if (serverScenario.introBeats && typeof serverScenario.introBeats === 'object') {
+        _scenario.introBeats = { ...(_scenario.introBeats || {}), ...serverScenario.introBeats };
+      }
+      if (typeof serverScenario.step === 'string') _scenario.step = serverScenario.step;
+      if (serverScenario.completed != null) _scenario.completed = !!serverScenario.completed;
+    }
+    _syncGoldenHour();
+    ZS.BeachIntroPrefabs?.syncIntroCampfireTorchVisibility?.();
   }
 
   window.ZS = window.ZS || {};
@@ -341,5 +372,7 @@
     filterZombies,
     getStep: () => _scenario?.step,
     getScenario,
+    getIntroBeats,
+    mergeServerScenario,
   };
 }());

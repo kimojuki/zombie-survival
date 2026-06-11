@@ -4,8 +4,10 @@
 
   const POI_EXCLUSION_R = 10;
 
-  /** POI validés en jeu — remplir au fur et à mesure (coords map v1 non utilisées). */
-  const POIS = [];
+  /** POI validés en jeu — sync packages/shared/src/s01-poi.mjs */
+  const POIS = [
+    { x: 165.1, z: 7.1, r: POI_EXCLUSION_R, id: 'cabin01' },
+  ];
 
   function isInCampSafeZone() {
     return false;
@@ -51,8 +53,11 @@
 
   window.ZS = window.ZS || {};
   ZS.S01Bounds = {
+    POIS,
     isInCampSafeZone,
     isInS01SafeZone,
+    isInBeachTrailMouthExclusion,
+    isInPoiBuildExclusion,
     isS01BuildBlocked,
     POI_EXCLUSION_R,
   };

@@ -44,6 +44,8 @@ export const DECOR_PREFAB_META = {
   spawn_beach_message_bottle: { category: 'plage', label: 'Bouteille message K.', desc: 'Bouteille échouée lisible — indice intro v3.', rcon: '—', notes: 'signKind intro_bottle_k · seed beach_intro_v3' },
   spawn_beach_campfire_ring: { category: 'plage', label: 'Cercle de feu intro', desc: 'Cercle de pierres + cendres — repère veilleuse intro.', rcon: '—', notes: 'Seed beach_intro_v3' },
   spawn_beach_pier_wreck: { category: 'plage', label: 'Ponton cassé intro', desc: 'Charpente de jetée brisée — valise en dessous.', rcon: '—', notes: 'Seed beach_intro_v3' },
+  spawn_beach_boat_hull: { category: 'plage', label: 'Canot de sauvetage', desc: 'Petite coque échouée sur le sable — canot intro.', rcon: 'decoradd prefab spawn_beach_boat_hull here', notes: 'Seed beach_immersion_v1' },
+  spawn_beach_offshore_wreck: { category: 'plage', label: 'Bateau sur récif (au large)', desc: 'Épave échouée sur rocher — impact proue, coque brisée (intro).', rcon: 'decoradd prefab spawn_beach_offshore_wreck here', notes: 'Seed beach_intro_v3 · visible au réveil' },
   spawn_beach_burnt_note: { category: 'plage', label: 'Note brûlée K.', desc: 'Mot carbonisé lisible — spawn personnel beat feu.', rcon: '—', notes: 'signKind intro_burnt_note_k · ownerPlayerId' },
   spawn_beach_starter_torch: { category: 'plage', label: 'Torche intro plage', desc: 'Torche allumée plantée dans le sable — tutoriel intro personnel.', rcon: '—', notes: 'Spawn auto intro joueur · ownerPlayerId' },
   spawn_beach_starter_suitcase: { category: 'plage', label: 'Valise intro plage', desc: 'Valise échouée lootable (eau + sandwich) — tutoriel conteneur.', rcon: '—', notes: 'Spawn auto intro joueur · ownerPlayerId' },

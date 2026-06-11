@@ -173,9 +173,69 @@ function buildAdminDecorCreateItem(prefabId, body, id, adminUser = 'admin') {
   return item;
 }
 
+const STORAGE_PREFAB_IDS = new Set(['storage_chest', 'spawn_beach_starter_suitcase']);
+const STORAGE_CHEST_CAPACITY = 27;
+const STORAGE_SUITCASE_CAPACITY = 12;
+
+function _storageCapacityForPrefab(prefabId) {
+  if (prefabId === 'spawn_beach_starter_suitcase') return STORAGE_SUITCASE_CAPACITY;
+  if (prefabId === 'storage_chest') return STORAGE_CHEST_CAPACITY;
+  return 0;
+}
+
+function _sanitizeStorageSlot(slot) {
+  if (!slot || !slot.type) return null;
+  const type = String(slot.type).slice(0, 64);
+  if (!type) return null;
+  let qty = Math.floor(Number(slot.qty));
+  if (!Number.isFinite(qty) || qty < 1) qty = 1;
+  if (qty > 99) qty = 99;
+  const out = { type, qty };
+  if (slot.lockId) out.lockId = String(slot.lockId).slice(0, 48);
+  if (slot.durability != null && Number.isFinite(Number(slot.durability))) {
+    out.durability = Number(slot.durability);
+  }
+  if (slot.ammo != null && Number.isFinite(Number(slot.ammo))) {
+    out.ammo = Math.max(0, Math.floor(Number(slot.ammo)));
+  }
+  return out;
+}
+
+/**
+ * Patch contenu coffre admin (clear / grille complète).
+ * @param {object} item
+ * @param {object} patch
+ * @returns {string[]} champs modifiés
+ */
+function applyAdminDecorStoragePatch(item, patch) {
+  if (!item || !patch || typeof patch !== 'object') return [];
+  if (!STORAGE_PREFAB_IDS.has(item.prefabId)) return [];
+  const capacity = _storageCapacityForPrefab(item.prefabId);
+  if (!capacity) return [];
+
+  if (patch.clearStorage === true) {
+    item.storage = Array.from({ length: capacity }, () => null);
+    return ['storage'];
+  }
+
+  if (Array.isArray(patch.storage)) {
+    const grid = Array.from({ length: capacity }, () => null);
+    const src = patch.storage;
+    for (let i = 0; i < capacity; i++) {
+      grid[i] = _sanitizeStorageSlot(src[i]);
+    }
+    item.storage = grid;
+    return ['storage'];
+  }
+
+  return [];
+}
+
 module.exports = {
   applyAdminDecorPatch,
+  applyAdminDecorStoragePatch,
   adminDecorSnapshot,
   buildAdminDecorCreateItem,
   NUM_FIELDS,
+  STORAGE_PREFAB_IDS,
 };

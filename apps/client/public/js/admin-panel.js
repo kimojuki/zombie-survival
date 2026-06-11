@@ -195,6 +195,7 @@
   }
 
   function close() {
+    ZS.AdminLiveDecor?.exit?.();
     ZS.Calibration?.closeActive?.();
     if (ZS.AdminHub?.isOpen?.()) {
       ZS.AdminHub.close();

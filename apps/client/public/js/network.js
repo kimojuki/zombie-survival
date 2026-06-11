@@ -160,7 +160,8 @@
       rotY: Number.isFinite(d.rotY) ? d.rotY : 0,
       rotZ: d.rotZ || 0,
       scale: Number.isFinite(d.scale) ? d.scale : 1,
-      grounded: !d.prefabId?.startsWith('wreck_'),
+      grounded: d.grounded === false ? false : !d.prefabId?.startsWith('wreck_'),
+      collide: d.collide !== false,
       groundLift: Number.isFinite(d.groundLift) ? d.groundLift : undefined,
       layFlat: !!d.layFlat,
       offsetX: d.offsetX || 0,
@@ -202,6 +203,10 @@
       d.buildDamage = commonOpts.buildDamage;
       d.buildMaxHp = commonOpts.buildMaxHp;
     }
+    if (d.grounded === false && Number.isFinite(d.y)) {
+      commonOpts.baseY = d.y;
+      commonOpts.grounded = false;
+    }
     const placementKey = d.placementKey ? String(d.placementKey) : '';
     if (placementKey.startsWith('s01:') && Number.isFinite(d.x) && Number.isFinite(d.z)) {
       const rotY = Number.isFinite(d.rotY) ? d.rotY : 0;
@@ -223,6 +228,9 @@
       if (!root) return;
       root.userData.decorId = d.id;
       decorItems.set(d.id, { root, data: d });
+      if (d.prefabId === 'spawn_beach_campfire_ring') {
+        ZS.BeachIntroPrefabs?.syncIntroCampfireTorchVisibility?.();
+      }
       if (_colliderSyncDepth === 0) _syncWorldColliders();
     };
     if (isPrefab) {
@@ -725,6 +733,7 @@
       _socket.emit('request-zombie-sync');
     }
     ZS.SpawnIntro?.tryStart?.(_state);
+    ZS.BeachIntroPrefabs?.syncIntroCampfireTorchVisibility?.();
 
     L?.setPhase?.('finalize', 1, 'Prêt', '');
     console.info('[sync] game-init total', Math.round(performance.now() - t0), 'ms');
@@ -810,8 +819,9 @@
       if (d.id === state.selfId) return;
       const rp = remotePlayers.get(d.id);
       if (!rp) return;
-      // d.y is the sender's eye height (terrain + 1.7); convert to foot level
-      const groundY = d.y - 1.7;
+      const ps = ZS.PlayerStance;
+      const eyeH = d.crouch ? (ps?.EYE_CROUCH ?? 1.05) : (ps?.EYE_STAND ?? 1.7);
+      const groundY = d.y - eyeH;
       const dx = d.x - rp.targetX;
       const dz = d.z - rp.targetZ;
       rp.moveSpeed = Math.hypot(dx, dz) * 20; // speed ~0-6 for walking
@@ -819,6 +829,7 @@
       rp.targetY    = groundY;
       rp.targetZ    = d.z;
       rp.targetRotY = d.rotY;
+      rp.crouching  = !!d.crouch;
     });
 
     socket.on('player-leave', (id) => {
@@ -1300,6 +1311,10 @@
       mesh.position.y += (rp.targetY - mesh.position.y) * Math.min(1, LERP * dt);
       mesh.position.z += (rp.targetZ - mesh.position.z) * Math.min(1, LERP * dt);
 
+      const crouchScale = ZS.PlayerStance?.CROUCH_MESH_SCALE ?? 0.72;
+      const targetScaleY = rp.crouching ? crouchScale : 1;
+      mesh.scale.y += (targetScaleY - mesh.scale.y) * Math.min(1, LERP * dt);
+
       // Interpolate rotation (shortest arc)
       let rotDiff = rp.targetRotY - mesh.rotation.y;
       while (rotDiff >  Math.PI) rotDiff -= Math.PI * 2;
@@ -1429,7 +1444,10 @@
     const now = Date.now();
     if (!force && now - _lastSent < 50) return; // 20 Hz max
     _lastSent = now;
-    _socket.emit('move', { x, y, z, rotY });
+    _socket.emit('move', {
+      x, y, z, rotY,
+      crouch: !!_state?.player?.crouching,
+    });
   }
 
   function _syncPlayerPosToServer() {
@@ -1545,7 +1563,8 @@
       moveSpeed:  0,
       animTime:   0,
       equipped:   p.equipped || null,
-      attack:     null
+      attack:     null,
+      crouching:  !!p.crouch,
     });
 
     // Item déjà tenu en main par ce joueur (rejoint déjà équipé)
@@ -1791,7 +1810,11 @@
         match: JSON.stringify(res?.snap?.food) === JSON.stringify(ZS.ConsumeDebug?.clientSnapshot?.()?.food),
       });
       if (res?.inventory) {
-        ZS.Inventory?.loadFromSave?.(res.inventory);
+        if (ZS.Inventory?.applyAuthoritativeInv) {
+          ZS.Inventory.applyAuthoritativeInv(res.inventory);
+        } else {
+          ZS.Inventory?.loadFromSave?.(res.inventory);
+        }
         ZS.ConsumeDebug?.compare?.(res.inventory, `server-snapshot-${reason || 'manual'}`);
       }
     });
@@ -1894,6 +1917,21 @@
     _socket.emit('build-hit', { id: decorId, toolType });
   }
 
+  function requestIntroTorchPickup(decorId) {
+    return new Promise((resolve) => {
+      if (!_socket) {
+        resolve({ ok: false, err: 'offline' });
+        return;
+      }
+      const lp = getLocalXZ?.();
+      _socket.emit('intro-torch-pickup', {
+        id: decorId || null,
+        x: lp?.x,
+        z: lp?.z,
+      }, (res) => resolve(res || { ok: false, err: 'no_response' }));
+    });
+  }
+
   function requestCampfireCook(decorId, cb) {
     if (!_socket || !decorId) return;
     _socket.emit('campfire-cook', { decorId }, (res) => {
@@ -1945,7 +1983,7 @@
   }
 
   window.ZS = window.ZS || {};
-  ZS.Network = {
+  const _networkApi = {
     preconnect, init, tick, getLocalXZ, sendMove, sendShoot, sendRespawn, sendDied, sendSurvival, sendEquip, sendAttack, sendFootstep,
     notifyDecorChop, notifyDecorMine, requestDecorDoorToggle, requestDecorDoorLock, requestDecorDoorUnlock,
     getLocalUsername, syncWorldColliders: _syncWorldColliders,
@@ -1959,6 +1997,7 @@
     requestStorageHit, requestStoragePickup,
     requestUseItem, requestInvDebugSnapshot, requestCraftQueue, requestCraftCancel,
     requestBuildHit,
+    requestIntroTorchPickup,
     requestCampfireCook,
     requestCampRest,
     getDecorRoot: _getDecorRoot,
@@ -1969,4 +2008,9 @@
     syncDecorFloorHeight,
     resolveRemotePlayerCollision,
   };
+  ZS.Network = Object.assign(ZS.Network || {}, _networkApi);
+  ZS.networkTick = tick;
+  if (typeof ZS.Network.tick !== 'function') {
+    console.error('[network] API invalide — tick absent après init');
+  }
 }());

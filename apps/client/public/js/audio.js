@@ -370,6 +370,72 @@
     }
   }
 
+  let _seagullTimer = 7;
+
+  function _seagullCry(beachAmt, pan) {
+    if (!ctx || _muted || beachAmt < 0.12) return;
+    const t = ctx.currentTime;
+    const out = (() => {
+      if (pan == null || !ctx.createStereoPanner) return ambientBus || master;
+      const p = ctx.createStereoPanner();
+      p.pan.value = Math.max(-1, Math.min(1, pan));
+      p.connect(ambientBus || master);
+      return p;
+    })();
+    for (let i = 0; i < 2; i++) {
+      const start = t + i * 0.24;
+      const f0 = 620 + Math.random() * 140;
+      const o = ctx.createOscillator();
+      o.type = 'sine';
+      o.frequency.setValueAtTime(f0, start);
+      o.frequency.exponentialRampToValueAtTime(f0 * 1.4, start + 0.07);
+      o.frequency.exponentialRampToValueAtTime(f0 * 0.7, start + 0.2);
+      const g = ctx.createGain();
+      const v = (0.05 + Math.random() * 0.05) * beachAmt;
+      g.gain.setValueAtTime(0.0001, start);
+      g.gain.exponentialRampToValueAtTime(v, start + 0.025);
+      g.gain.exponentialRampToValueAtTime(0.0001, start + 0.22);
+      o.connect(g);
+      g.connect(out);
+      o.start(start);
+      o.stop(start + 0.24);
+    }
+  }
+
+  function tickBeachLife(px, pz, dt) {
+    if (!ctx || _muted) return;
+    const bw = ZS.beachCoastWeight?.(px, pz) ?? 0;
+    if (bw < 0.1) {
+      _seagullTimer = 5;
+      return;
+    }
+    _seagullTimer -= dt || 0.016;
+    if (_seagullTimer > 0) return;
+    _seagullTimer = 12 + Math.random() * 22;
+    _seagullCry(Math.max(bw, _mixBeach * 0.55), 0.2 + Math.random() * 0.55);
+  }
+
+  function scatterSeagull(nearness) {
+    if (!ctx || _muted) return;
+    const v = Math.max(0.15, Math.min(1, nearness || 0.6));
+    const t = ctx.currentTime;
+    const out = ambientBus || master;
+    const f0 = 780 + Math.random() * 180;
+    const o = ctx.createOscillator();
+    o.type = 'sine';
+    o.frequency.setValueAtTime(f0, t);
+    o.frequency.exponentialRampToValueAtTime(f0 * 1.55, t + 0.05);
+    o.frequency.exponentialRampToValueAtTime(f0 * 0.65, t + 0.14);
+    const g = ctx.createGain();
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(0.04 * v, t + 0.015);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + 0.16);
+    o.connect(g);
+    g.connect(out);
+    o.start(t);
+    o.stop(t + 0.18);
+  }
+
   function updateBiomeAmbient(px, pz, dt) {
     if (!ctx || _muted) return;
     const tgt = _biomeTargets(px, pz);
@@ -929,6 +995,6 @@
   ZS.Audio = {
     init, gunshot, melee, chopWood, treeFall, door, zombieGroan,
     footstep, footstepSurface, splash, spatialAt, setWaterDepth, setVolumes,
-    updateBiomeAmbient, tickHeldTorch, setMuted, toggleMute, isMuted,
+    updateBiomeAmbient, tickBeachLife, scatterSeagull, tickHeldTorch, setMuted, toggleMute, isMuted,
   };
 }());

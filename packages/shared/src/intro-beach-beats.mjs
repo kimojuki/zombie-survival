@@ -30,6 +30,20 @@ export function isIntroKitDone(beats) {
   return !!beats?.kitDone;
 }
 
+/** Loot / décor intro personnel — visible uniquement pour le propriétaire. */
+export function introPersonalVisibleTo(entry, viewerPlayerId) {
+  if (!entry?.introPersonal) return true;
+  if (entry.ownerPlayerId == null || viewerPlayerId == null) return false;
+  return Number(entry.ownerPlayerId) === Number(viewerPlayerId);
+}
+
+/** Pas de kit magique eau/sandwich tant que la valise intro n'est pas vidée. */
+export function blocksStarterRationsDuringIntro(scenario) {
+  const sc = scenario || {};
+  if (sc.completed || sc.step === 'act1_done') return false;
+  return !isIntroKitDone(migrateIntroBeats(sc));
+}
+
 export function migrateIntroBeats(scenario) {
   if (!scenario || typeof scenario !== 'object') return defaultIntroBeats();
   if (scenario.introBeats && typeof scenario.introBeats === 'object') {
@@ -80,6 +94,69 @@ export function shouldResetIntroInventoryOnConnect(scenario, inv) {
   const sc = scenario || {};
   if (sc.completed || sc.step === 'act1_done') return false;
   return !hasIntroSessionProgress(sc, inv);
+}
+
+function _stripTypeFromSlots(slots, type, changedRef) {
+  if (!Array.isArray(slots)) return;
+  for (let i = 0; i < slots.length; i++) {
+    const s = slots[i];
+    if (!s?.type) continue;
+    if (typeof type === 'string' ? s.type === type : type(s)) {
+      slots[i] = null;
+      changedRef.changed = true;
+    }
+  }
+}
+
+/** Retire le kit magique legacy (hotbar) tant que le kit valise n'est pas fini. */
+export function stripLegacyIntroKit(inv, scenario) {
+  if (!inv || typeof inv !== 'object') return false;
+  const sc = scenario || {};
+  if (sc.completed || sc.step === 'act1_done') return false;
+  const beats = migrateIntroBeats(sc);
+  if (isIntroKitDone(beats)) return false;
+  const changedRef = { changed: false };
+  const isFood = (s) => s.type.startsWith('food_');
+  _stripTypeFromSlots(inv.hotbar, isFood, changedRef);
+  if (Array.isArray(inv.bag) && inv.bag.length) {
+    const next = inv.bag.filter((s) => !s?.type || !s.type.startsWith('food_'));
+    if (next.length !== inv.bag.length) changedRef.changed = true;
+    inv.bag = next;
+  }
+  if (!beats.pickedRock) _stripTypeFromSlots(inv.hotbar, 'tool_caillou', changedRef);
+  if (!beats.pickedTorch) _stripTypeFromSlots(inv.hotbar, 'tool_torche', changedRef);
+  if (inv.bag?.length) {
+    if (!beats.pickedRock) {
+      const next = inv.bag.filter((s) => s?.type !== 'tool_caillou');
+      if (next.length !== inv.bag.length) changedRef.changed = true;
+      inv.bag = next;
+    }
+    if (!beats.pickedTorch) {
+      const next = inv.bag.filter((s) => s?.type !== 'tool_torche');
+      if (next.length !== inv.bag.length) changedRef.changed = true;
+      inv.bag = next;
+    }
+  }
+  if (inv.equip && typeof inv.equip === 'object') {
+    for (const slot of Object.keys(inv.equip)) {
+      const s = inv.equip[slot];
+      if (!s?.type) continue;
+      if (s.type.startsWith('food_')) {
+        inv.equip[slot] = null;
+        changedRef.changed = true;
+        continue;
+      }
+      if (!beats.pickedRock && s.type === 'tool_caillou') {
+        inv.equip[slot] = null;
+        changedRef.changed = true;
+      }
+      if (!beats.pickedTorch && s.type === 'tool_torche') {
+        inv.equip[slot] = null;
+        changedRef.changed = true;
+      }
+    }
+  }
+  return changedRef.changed;
 }
 
 /** @returns {'footprints'|'campfire'|'pier'|null} */

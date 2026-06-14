@@ -1,8 +1,8 @@
-// Textures camp partagées — bois, toile, sac de couchage (prefabs décor + mapgen).
+// Textures camp procédurales (généré — camp_textures/chunks + npm run bundle:camp-textures)
 (function () {
   'use strict';
 
-  const URLS = {
+const URLS = {
     woodLight: '/textures/camp/wood_planks_light.png',
     wood: '/textures/camp/wood_planks.png',
     canvas: '/textures/camp/olive_canvas.png',
@@ -271,7 +271,9 @@
   }
 
   /** Plateau table cabane — planches claires horizontales. */
-  function _drawTableTopCanvas() {
+
+
+function _drawTableTopCanvas() {
     const S = 256;
     const c = document.createElement('canvas');
     c.width = c.height = S;
@@ -461,7 +463,9 @@
   }
 
   /** Cadre bois — planches + lattes sombres. */
-  function _drawBedFrameCanvas() {
+
+
+function _drawBedFrameCanvas() {
     const S = 256;
     const c = document.createElement('canvas');
     c.width = c.height = S;
@@ -578,7 +582,7 @@
       metal: () => new THREE.MeshLambertMaterial({ color: 0x7d7f84 }),
       tool: () => new THREE.MeshLambertMaterial({ color: 0x5f6d46 }),
       trail: (color) => new THREE.MeshLambertMaterial({
-        color: color || 0x9a8870,
+        color: color || 0xa89878,
         map: texTrail,
         polygonOffset: true,
         polygonOffsetFactor: -4,
@@ -590,4 +594,5 @@
 
   window.ZS = window.ZS || {};
   ZS.CampTextures = { URLS, load, materials };
+
 }());

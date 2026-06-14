@@ -1,8 +1,8 @@
-// Points d'ancrage fondations — 4 bords (murs) + 4 extensions (fondations voisines)
+// Points d'ancrage fondations (généré — build_anchors/chunks + npm run bundle:build-anchors)
 (function () {
   'use strict';
 
-  const CELL = 3.0;
+const CELL = 3.0;
   const SNAP_R = 1.75;
   const LEVEL_H = 2.6;
   /** Épaisseur dalle fondation (spawn_clearing build_floor_wood). */
@@ -407,7 +407,9 @@
   }
 
   /** Reconstruit le registre depuis les decors serveur (init ou resync). */
-  function syncRegistryFromDecor(list) {
+
+
+function syncRegistryFromDecor(list) {
     if (!Array.isArray(list)) return;
     for (const d of list) {
       if (!d?.id) continue;
@@ -677,7 +679,9 @@
   }
 
   /** Mur/porte sans ancrage exact : fondation sous la visée → reprend son baseY. */
-  function findFoundationDeckNear(px, pz, buildLevel = 0, maxDist = SNAP_R_WALL) {
+
+
+function findFoundationDeckNear(px, pz, buildLevel = 0, maxDist = SNAP_R_WALL) {
     let best = null;
     let bestD = maxDist;
     for (const f of _floors.values()) {
@@ -796,4 +800,5 @@
     sanitizeAllFoundations, reconcileAllFoundationHeights,
     listFoundations, listExposedWallEdges, listCeilingAnchors, clear, CELL, SNAP_R, SNAP_R_FLOOR, SNAP_R_WALL,
   };
+
 }());

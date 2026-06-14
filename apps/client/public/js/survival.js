@@ -45,8 +45,8 @@
   // Restaure l'état de survie sauvegardé côté serveur (prioritaire sur localStorage).
   function loadFromSave(sv) {
     if (!sv || typeof sv !== 'object') return;
-    _sv.faim       = Math.max(0, Math.min(100, Number(sv.faim) || 0));
-    _sv.soif       = Math.max(0, Math.min(100, Number(sv.soif) || 0));
+    _sv.faim       = Math.max(0, Math.min(100, sv.faim != null ? Number(sv.faim) : 80));
+    _sv.soif       = Math.max(0, Math.min(100, sv.soif != null ? Number(sv.soif) : 80));
     _sv.infection  = Math.max(0, Math.min(100, Number(sv.infection) || 0));
     _sv.saignement = !!sv.saignement;
     _sv.infectionPausedUntil = Number(sv.infectionPausedUntil) || 0;
@@ -154,7 +154,7 @@
       if (res.inventory) ZS.Inventory?.applyAuthoritativeInv?.(res.inventory);
       ZS.ConsumeDebug?.compare?.(res.inventory, 'use-item-fail');
       ZS.Network?.requestInvDebugSnapshot?.(res.trace || ctx?.trace, `fail-${res.err || 'unknown'}`);
-      ZS.UI.showNotif(`Consommation refusée (${res.err || 'erreur'}) — voir console [inv-debug]`);
+      ZS.UI.showNotif(`Consommation refusée (${res.err || 'erreur'})`);
       return;
     }
     if (res.survival) applyServerState(res.survival);
@@ -167,6 +167,7 @@
       );
     }
     ZS.ConsumeDebug?.compare?.(res.inventory, 'use-item-ok');
+    if (ctx?.type?.startsWith?.('food_')) ZS.IntroLessons?.onConsume?.(ctx.type);
   }
 
   function useItem(type, slot) {

@@ -1,9 +1,8 @@
-// SECTOR 05 — MILITARY ZONE
-// Base fortifiée 4 zones : Sécurité · Vie · Opérations · Commandement
+// SECTOR 05 — MILITARY ZONE (généré — sector_05_military/chunks + npm run bundle:sector-05-military)
 (function () {
   'use strict';
 
-  const CX = -200, CZ = -160;
+const CX = -200, CZ = -160;
   const HW = 75, HD = 80;
   const X0 = CX - HW, X1 = CX + HW;  // -275 … -125
   const Z0 = CZ - HD, Z1 = CZ + HD;  // -240 … -80
@@ -221,7 +220,8 @@
   }
   function pm(){return new THREE.MeshLambertMaterial({color:0x3a3a2a});}
 
-  function _buildTrainingRange(scene, B) {
+
+function _buildTrainingRange(scene, B) {
     const cx=-155, cz=-108, y=ZS.getTerrainHeight(cx,cz);
     const sm = new THREE.MeshLambertMaterial({color:0x8a7848});
     const wm = new THREE.MeshLambertMaterial({color:0x8a6030});
@@ -353,7 +353,8 @@
     il.position.set(cx,y+5.5,cz); scene.add(il);
   }
 
-  function _buildMotorPool(scene, B) {
+
+function _buildMotorPool(scene, B) {
     const cx=-253, cz=-193, W=20, D=13, wH=4.5;
     ZS.registerLoot('garage', cx, cz, W, D);
     const y=ZS.getTerrainHeight(cx,cz);
@@ -585,7 +586,8 @@
     }
   }
 
-  function _buildTents(scene, B) {
+
+function _buildTents(scene, B) {
     _tent(scene,B,-175,-110,4,6,0x4a5a30);
     _tent(scene,B,-225,-110,4,6,0x9a8460);
     _tent(scene,B,-200,-125,5,8,0x3a4828);
@@ -740,4 +742,5 @@
 
   // Routes désactivées — brick 0 (voir road_network.js)
   ZS.Buildings.registerSector({ build, roads: [] });
+
 }());

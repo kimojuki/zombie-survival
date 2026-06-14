@@ -1,0 +1,294 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="robots" content="noindex, follow">
+  <title>Jouer — Zombie Survival</title>
+  <meta name="description" content="Connectez-vous à Zombie Survival — early access, jeu en cours de développement. Gratuit dans le navigateur, sans téléchargement.">
+  <link rel="icon" href="/img/favicon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="/img/favicon.svg">
+  <link rel="manifest" href="/manifest.webmanifest">
+  <meta name="theme-color" content="#070707">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&family=Oswald:wght@600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/css/play.css">
+  <script src="/js/landing.js" defer></script>
+</head>
+<body class="play-page">
+<div class="play-bg">
+  <header class="play-header">
+    <a href="/" class="play-back">← Accueil</a>
+    <div class="play-status" data-server-status data-status="loading" aria-live="polite">
+      <span class="play-online-dot" aria-hidden="true"></span>
+      <span><strong data-online-count>—</strong> en ligne</span>
+    </div>
+  </header>
+
+  <main class="play-main">
+    <div class="play-card">
+      <div class="play-brand">
+        <h1 class="play-title">ZOMBIE <span>SURVIVAL</span></h1>
+        <p class="play-subtitle">Survis. Explore. Construis.</p>
+        <p class="play-dev-notice" role="status">Early access — jeu en cours de développement</p>
+      </div>
+
+      <div class="play-tabs" role="tablist" aria-label="Mode de connexion">
+        <button type="button" class="play-tab is-active" role="tab" id="tab-guest" aria-selected="true" aria-controls="panel-guest" data-mode="guest">Invité</button>
+        <button type="button" class="play-tab" role="tab" id="tab-login" aria-selected="false" aria-controls="panel-login" data-mode="login">Connexion</button>
+        <button type="button" class="play-tab" role="tab" id="tab-register" aria-selected="false" aria-controls="panel-register" data-mode="register">Créer un compte</button>
+      </div>
+
+      <div id="panel-guest" class="play-panel is-active" role="tabpanel" aria-labelledby="tab-guest">
+        <p class="play-panel-lead">Jouez tout de suite sans inscription. Votre progression n’est sauvegardée qu’après ~8 minutes de jeu continu.</p>
+        <ul class="play-guest-perks">
+          <li>Accès immédiat — pseudo aléatoire <code>Invite_XXXX</code></li>
+          <li>Partie courte : données effacées si vous quittez avant la sauvegarde</li>
+          <li>Compte complet : choix du pseudo, groupes, progression durable</li>
+        </ul>
+        <button type="button" class="play-submit play-submit-guest" id="guest-btn">Jouer en invité</button>
+      </div>
+
+      <form id="login-form" class="play-panel" role="tabpanel" aria-labelledby="tab-login" hidden>
+        <div class="play-form-group">
+          <label for="login-username">Nom de joueur</label>
+          <input id="login-username" type="text" placeholder="ex: Survivant42" maxlength="50" autocomplete="username" required>
+        </div>
+        <div class="play-form-group">
+          <label for="login-password">Mot de passe</label>
+          <input id="login-password" type="password" placeholder="••••••••" autocomplete="current-password" required>
+        </div>
+        <button type="submit" class="play-submit">Entrer en jeu</button>
+      </form>
+
+      <form id="register-form" class="play-panel" role="tabpanel" aria-labelledby="tab-register" hidden>
+        <div class="play-form-group">
+          <label for="register-username">Choisir un pseudo</label>
+          <input id="register-username" type="text" placeholder="3–50 caractères" maxlength="50" autocomplete="username" required>
+        </div>
+        <div class="play-form-group">
+          <label for="register-password">Mot de passe</label>
+          <input id="register-password" type="password" placeholder="Min. 6 caractères" autocomplete="new-password" required minlength="6">
+        </div>
+        <div class="play-form-group">
+          <label for="register-password2">Confirmer le mot de passe</label>
+          <input id="register-password2" type="password" placeholder="••••••••" autocomplete="new-password" required minlength="6">
+        </div>
+        <button type="submit" class="play-submit">Créer mon compte</button>
+      </form>
+
+      <p class="play-error" id="error-msg" role="alert"></p>
+      <p class="play-hint" id="server-hint">Gratuit · Navigateur · Early access · PC, mobile &amp; tablette</p>
+    </div>
+  </main>
+</div>
+
+<script>
+  const AUTH_KEYS = ['zombie_token', 'zombie_username', 'zombie_is_admin', 'zombie_is_guest', 'zombie_guest_committed', 'zombie_spawn', 'zombie_health', 'zombie_kills'];
+
+  function initDevSession() {
+    localStorage.setItem('zombie_server_id', 'dev');
+    localStorage.setItem('zombie_server_role', 'dev');
+    localStorage.setItem('zombie_server_url', '');
+  }
+
+  function clearAuthSession() {
+    AUTH_KEYS.forEach((k) => localStorage.removeItem(k));
+    ['zs_role', 'zs_role_label', 'zs_permissions'].forEach((k) => localStorage.removeItem(k));
+  }
+
+  function storeAuth(data) {
+    localStorage.setItem('zombie_token', data.token);
+    localStorage.setItem('zombie_username', data.username);
+    localStorage.setItem('zombie_is_admin', data.isAdmin ? '1' : '0');
+    localStorage.setItem('zombie_is_guest', data.guest ? '1' : '0');
+    localStorage.setItem('zombie_guest_committed', data.guestCommitted ? '1' : '0');
+    if (data.role) localStorage.setItem('zs_role', data.role);
+    if (data.roleLabel) localStorage.setItem('zs_role_label', data.roleLabel);
+    if (data.permissions) localStorage.setItem('zs_permissions', JSON.stringify(data.permissions));
+    if (data.serverRole) localStorage.setItem('zombie_server_role', data.serverRole);
+    if (data.spawn) localStorage.setItem('zombie_spawn', JSON.stringify(data.spawn));
+    if (data.health != null) localStorage.setItem('zombie_health', data.health);
+    if (data.kills != null) localStorage.setItem('zombie_kills', data.kills);
+  }
+
+  function setBusy(busy, label) {
+    document.querySelectorAll('.play-submit, .play-submit-guest').forEach((btn) => {
+      btn.disabled = busy;
+      if (busy && label && btn.id === 'guest-btn') btn.textContent = label;
+      else if (!busy && btn.id === 'guest-btn') btn.textContent = 'Jouer en invité';
+    });
+    document.querySelectorAll('.play-panel, #login-form, #register-form').forEach((el) => {
+      if (busy) el.setAttribute('aria-busy', 'true');
+      else el.removeAttribute('aria-busy');
+    });
+  }
+
+  async function authRequest(path, body) {
+    const res = await fetch(path, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    const data = await res.json().catch(() => ({}));
+    return { res, data };
+  }
+
+  function gameServerId() {
+    return localStorage.getItem('zombie_server_id') || 'prod';
+  }
+
+  async function enterGame(data) {
+    if (data.handoff?.code) {
+      window.location.href = '/game.html?handoff=' + encodeURIComponent(data.handoff.code);
+      return;
+    }
+    storeAuth(data);
+    window.location.href = '/game.html';
+  }
+
+  async function handleGuest() {
+    const errEl = document.getElementById('error-msg');
+    errEl.textContent = '';
+    setBusy(true, 'Préparation…');
+    try {
+      const { res, data } = await authRequest('/api/auth/guest', { serverId: gameServerId() });
+      if (!res.ok) {
+        errEl.textContent = data.code === 'dev_admin_only'
+          ? 'Mode invité indisponible sur le serveur dev'
+          : (data.error || 'Erreur inconnue');
+        setBusy(false);
+        return;
+      }
+      await enterGame(data);
+    } catch {
+      errEl.textContent = 'Impossible de joindre le serveur';
+      setBusy(false);
+    }
+  }
+
+  async function handleLogin(e) {
+    e.preventDefault();
+    const errEl = document.getElementById('error-msg');
+    errEl.textContent = '';
+    setBusy(true);
+    const username = document.getElementById('login-username').value.trim();
+    const password = document.getElementById('login-password').value;
+    try {
+      const { res, data } = await authRequest('/api/auth/login', { username, password, serverId: gameServerId() });
+      if (!res.ok) {
+        errEl.textContent = data.code === 'dev_admin_only'
+          ? 'Serveur dev réservé aux administrateurs'
+          : data.code === 'guest_account'
+            ? 'Compte invité — jouez en mode invité ou enregistrez-vous en jeu'
+            : (data.error || 'Erreur inconnue');
+        setBusy(false);
+        return;
+      }
+      await enterGame({ ...data, guest: false, guestCommitted: true });
+    } catch {
+      errEl.textContent = 'Impossible de joindre le serveur';
+      setBusy(false);
+    }
+  }
+
+  async function handleRegister(e) {
+    e.preventDefault();
+    const errEl = document.getElementById('error-msg');
+    errEl.textContent = '';
+    const username = document.getElementById('register-username').value.trim();
+    const password = document.getElementById('register-password').value;
+    const password2 = document.getElementById('register-password2').value;
+    if (password !== password2) {
+      errEl.textContent = 'Les mots de passe ne correspondent pas';
+      return;
+    }
+    setBusy(true);
+    try {
+      const { res, data } = await authRequest('/api/auth/register', { username, password, serverId: gameServerId() });
+      if (!res.ok) {
+        errEl.textContent = data.code === 'dev_admin_only'
+          ? 'Inscription fermée sur le serveur dev'
+          : (data.error || 'Erreur inconnue');
+        setBusy(false);
+        return;
+      }
+      await enterGame({ ...data, guest: false, guestCommitted: true });
+    } catch {
+      errEl.textContent = 'Impossible de joindre le serveur';
+      setBusy(false);
+    }
+  }
+
+  function switchTab(mode) {
+    const tabs = document.querySelectorAll('.play-tab');
+    const panels = {
+      guest: document.getElementById('panel-guest'),
+      login: document.getElementById('login-form'),
+      register: document.getElementById('register-form'),
+    };
+    tabs.forEach((tab) => {
+      const active = tab.dataset.mode === mode;
+      tab.classList.toggle('is-active', active);
+      tab.setAttribute('aria-selected', active ? 'true' : 'false');
+    });
+    Object.entries(panels).forEach(([key, panel]) => {
+      if (!panel) return;
+      const active = key === mode;
+      panel.classList.toggle('is-active', active);
+      panel.hidden = !active;
+    });
+    document.getElementById('error-msg').textContent = '';
+  }
+
+  async function applyServerInfo() {
+    try {
+      const res = await fetch('/api/server-info', { cache: 'no-store' });
+      if (!res.ok) return;
+      const info = await res.json();
+      const hint = document.getElementById('server-hint');
+      if (info.devOnly) {
+        switchTab('login');
+        document.getElementById('tab-guest').hidden = true;
+        document.getElementById('tab-register').hidden = true;
+        if (hint) hint.textContent = 'Serveur dev — connexion admin uniquement';
+        return;
+      }
+      if (!info.guestEnabled) document.getElementById('tab-guest').hidden = true;
+      if (!info.registerEnabled) document.getElementById('tab-register').hidden = true;
+    } catch { /* ignore */ }
+  }
+
+  document.getElementById('guest-btn').addEventListener('click', handleGuest);
+  document.getElementById('login-form').addEventListener('submit', handleLogin);
+  document.getElementById('register-form').addEventListener('submit', handleRegister);
+  document.querySelectorAll('.play-tab').forEach((tab) => {
+    tab.addEventListener('click', () => switchTab(tab.dataset.mode));
+  });
+
+  (async () => {
+    initDevSession();
+    await applyServerInfo();
+    const token = localStorage.getItem('zombie_token');
+    if (!token) return;
+    try {
+      const res = await fetch('/api/auth/me', {
+        headers: { Authorization: 'Bearer ' + token },
+        cache: 'no-store',
+      });
+      if (res.ok) {
+        const me = await res.json();
+        if (me.serverRole) localStorage.setItem('zombie_server_role', me.serverRole);
+        window.location.href = '/game.html';
+        return;
+      }
+    } catch { /* stay on login */ }
+    clearAuthSession();
+  })();
+</script>
+</body>
+</html>

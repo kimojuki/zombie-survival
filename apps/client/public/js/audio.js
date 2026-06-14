@@ -1,9 +1,8 @@
-// Web Audio — ambiances biomes (plage/forêt) + SFX gameplay.
-// Le contexte démarre au premier geste utilisateur (politique autoplay).
+// Web Audio — ambiances + SFX (généré — éditer audio/chunks/*.js puis npm run bundle:audio)
 (function () {
   'use strict';
 
-  const MUTE_KEY = 'zs_audio_muted';
+const MUTE_KEY = 'zs_audio_muted';
   /** Grognements zombies désactivés temporairement (qualité audio à revoir). */
   const ZOMBIE_SFX_ENABLED = false;
 
@@ -184,6 +183,7 @@
       src.start(t, off);
     }
   }
+
 
   // ── Initialisation / reprise du contexte (au 1er geste) ─────────────────────
   function init() {
@@ -415,6 +415,7 @@
     _seagullCry(Math.max(bw, _mixBeach * 0.55), 0.2 + Math.random() * 0.55);
   }
 
+
   function scatterSeagull(nearness) {
     if (!ctx || _muted) return;
     const v = Math.max(0.15, Math.min(1, nearness || 0.6));
@@ -620,6 +621,7 @@
     _outFilter.frequency.setTargetAtTime(Math.max(320, 5600 - d * 2200), t, 0.22);
     if (ambientBus) ambientBus.gain.setTargetAtTime(Math.max(0.22, 0.72 - d * 0.65), t, 0.3);
   }
+
 
   // ── Tir d'arme à feu : échantillon réel (secours = synthèse) ────────────────
   function gunshot(type, vol, pan) {
@@ -857,6 +859,7 @@
     src.start(t); src.stop(t + dur);
   }
 
+
   // ── Panoramique stéréo (gauche/droite) selon position ───────────────────────
   function _panNode(pan) {
     if (pan == null || !ctx.createStereoPanner) return sfxBus;
@@ -997,4 +1000,5 @@
     footstep, footstepSurface, splash, spatialAt, setWaterDepth, setVolumes,
     updateBiomeAmbient, tickBeachLife, scatterSeagull, tickHeldTorch, setMuted, toggleMute, isMuted,
   };
+
 }());

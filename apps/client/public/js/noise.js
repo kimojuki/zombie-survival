@@ -1,8 +1,8 @@
-// Terrain height noise — shared by world generation and player collision
+// Terrain height noise (généré — noise/chunks + npm run bundle:noise)
 (function () {
   'use strict';
 
-  function hash(x, z) {
+function hash(x, z) {
     const n = Math.sin(x * 127.1 + z * 311.7) * 43758.5453;
     return n - Math.floor(n);
   }
@@ -121,7 +121,8 @@
     return h;
   }
 
-  function _baseHeight(x, z) {
+
+function _baseHeight(x, z) {
     let h = _rawHeight(x, z);
     h = _clearingHeight(x, z, h);
     h = _roadCorridorHeight(x, z, h);
@@ -224,7 +225,8 @@
     return h;
   }
 
-  function _smoothHeights(values, radius) {
+
+function _smoothHeights(values, radius) {
     const out = values.slice();
     const r = radius || 2;
     for (let i = 0; i < values.length; i++) {
@@ -266,13 +268,23 @@
     _pushCorridor(_roadCorridors, pts, heights, halfW, halfWidths, blendVal);
   }
 
+  /** Hauteur d'ancrage route — clairières / zones plates, sans autres corridors routiers. */
+  function _corridorAnchorHeight(x, z) {
+    let h = _rawHeight(x, z);
+    h = _clearingHeight(x, z, h);
+    h = _trailCorridorHeight(x, z, h);
+    h = _riverBedHeight(x, z, h);
+    h = _applyFlatZones(x, z, h);
+    return h;
+  }
+
   function registerRoadCorridor(points, halfWidth, blend) {
     if (!Array.isArray(points) || points.length < 2) return;
     const pts = points
       .map(p => [_finite(p[0], null), _finite(p[1], null)])
       .filter(p => p[0] !== null && p[1] !== null);
     if (pts.length < 2) return;
-    let heights = pts.map(([x, z]) => _rawHeight(x, z));
+    let heights = pts.map(([x, z]) => _corridorAnchorHeight(x, z));
     for (let pass = 0; pass < 2; pass++) heights = _smoothHeights(heights, 2);
     const blendVal = Math.max(blend || 4, 0.5);
     _pushRoadCorridor(pts, heights, halfWidth, null, blendVal);
@@ -284,7 +296,7 @@
       .map(p => [_finite(p[0], null), _finite(p[1], null)])
       .filter(p => p[0] !== null && p[1] !== null);
     if (pts.length < 2) return;
-    let heights = pts.map(([x, z]) => _rawHeight(x, z));
+    let heights = pts.map(([x, z]) => _corridorAnchorHeight(x, z));
     for (let pass = 0; pass < 2; pass++) heights = _smoothHeights(heights, 2);
     const blendVal = Math.max(blend || 4, 0.5);
     const hw = (halfWidths || []).map(w => Math.max(w || 0.5, 0.5));
@@ -404,7 +416,7 @@
       .map(p => [_finite(p[0], null), _finite(p[1], null)])
       .filter(p => p[0] !== null && p[1] !== null);
     if (pts.length < 2) return;
-    let heights = pts.map(([x, z]) => _rawHeight(x, z));
+    let heights = pts.map(([x, z]) => _corridorAnchorHeight(x, z));
     for (let pass = 0; pass < 2; pass++) heights = _smoothHeights(heights, 2);
     const blendVal = Math.max(blend || 3, 0.5);
     _pushCorridor(_trailCorridors, pts, heights, halfWidth, null, blendVal);
@@ -458,7 +470,8 @@
     return hit.dist < halfW + (margin || 0);
   }
 
-  function _riverBedHeight(x, z, baseH) {
+
+function _riverBedHeight(x, z, baseH) {
     const hit = _nearestRiverPoint(x, z);
     if (!hit) return baseH;
     const { dist, cx, cz, rp } = hit;
@@ -594,4 +607,5 @@
   ZS.isInRiverChannel        = isInRiverChannel;
   ZS.registerUpperFloor      = registerUpperFloor;
   ZS.registerRamp            = registerRamp;
+
 }());

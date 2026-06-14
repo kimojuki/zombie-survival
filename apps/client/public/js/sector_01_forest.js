@@ -1,9 +1,8 @@
-// SECTOR 01 — START FOREST
-// Zone de spawn. Calme, dense en arbres, peu de zombies.
+// SECTOR 01 — FOREST (généré — sector_01_forest/chunks + npm run bundle:sector-01-forest)
 (function () {
   'use strict';
 
-  // ── Carte locale spawn (rayon ~45 m) ─────────────────────────────────────────
+// ── Carte locale spawn (rayon ~45 m) ─────────────────────────────────────────
   // Clairière au centre → 1 sentier de sortie sud → jonction ville (14,-18)
   // Carrefour forestier isolé à (28,-42) : branches vers cabanes / sud / essence
   // Aucune autre route ne traverse la clairière.
@@ -161,7 +160,8 @@
   // ── Grande tente militaire walkable ───────────────────────────────────────────
   // Entrée face au sud (-Z). Le joueur peut entrer librement par l'avant.
 
-  function _buildLargeTent(scene, B, cx, cz, baseY) {
+
+function _buildLargeTent(scene, B, cx, cz, baseY) {
     const W = 11, D = 7.5;
     const eaveH = 2.1;
     const peakH = 3.7;
@@ -326,7 +326,8 @@
 
   // ── Rivière ───────────────────────────────────────────────────────────────────
 
-  function _buildRiver(scene) {
+
+function _buildRiver(scene) {
     const riverMat = new THREE.MeshLambertMaterial({
       color: 0x1a5e8e, emissive: 0x0a3a6a, emissiveIntensity: 0.14,
       transparent: true, opacity: 0.88,
@@ -490,7 +491,8 @@
 
   // ── Poteaux électriques le long de la route principale ───────────────────────
 
-  function _buildUtilityPoles(scene, B) {
+
+function _buildUtilityPoles(scene, B) {
     const poleMat = new THREE.MeshLambertMaterial({ color: 0x6a4a20 });
     const wireMat = new THREE.MeshLambertMaterial({ color: 0x1a1a1a });
     const insMat  = new THREE.MeshLambertMaterial({ color: 0x8a8a8a });
@@ -670,4 +672,5 @@
 
   ZS.registerFlatZone(SPAWN_CX, SPAWN_CZ, 11, 10, 8);
   ZS.Buildings.registerSector({ build, roads: _forestRoads() });
+
 }());

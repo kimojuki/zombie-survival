@@ -1,8 +1,8 @@
-// Édition décor monde en live — admin : catalogue, pose preview, calibrage, sync live.
+// Édition décor monde en live — admin : catalogue, pose preview, calibrage, sync live. (généré — éditer admin-live-decor/chunks/*.js puis npm run bundle:admin-live-decor)
 (function () {
   'use strict';
 
-  const PANEL_ID = 'zs-admin-live-decor';
+const PANEL_ID = 'zs-admin-live-decor';
   const PICK_DIST = 80;
   const PLACE_DIST = 80;
   const SAVE_DEBOUNCE_MS = 400;
@@ -82,7 +82,8 @@
     return ZS._gfxRuntime?.scene || null;
   }
 
-  const AdminLiveDecor = {
+
+const AdminLiveDecor = {
     active: false,
     _panel: null,
     _banner: null,
@@ -115,6 +116,7 @@
     _batchMoveSnapshots: null,
     _batchMoveOrigin: null,
     _batchHiddenRoots: null,
+
 
     _token() {
       return localStorage.getItem('zombie_token') || '';
@@ -250,6 +252,7 @@
       this._setStatus((res.message || 'Refait') + rest, 'ok');
       return true;
     },
+
 
     enter() {
       if (!this._isAdmin()) {
@@ -599,6 +602,7 @@
       this._setStatus(wasMove ? 'Déplacement annulé.' : 'Pose annulée.');
       return true;
     },
+
 
     onWheel(e) {
       if (!this.isPlacing()) return false;
@@ -1067,6 +1071,7 @@
       }
     },
 
+
     async _selectDecor(id) {
       this._cancelPlacement();
       this._patchUndoBefore = null;
@@ -1114,6 +1119,7 @@
       this._immutable = !!json.immutable;
       return json.item;
     },
+
 
     _buildBanner() {
       if (this._banner?.parent) return;
@@ -1328,6 +1334,7 @@
         this.exit();
       });
     },
+
 
     _syncPlaceButtons() {
       const cancel = this._panel?.querySelector('#zs-ald-cancel-place');
@@ -1706,6 +1713,7 @@
       this._helper = null;
     },
 
+
     _setStatus(msg, kind) {
       this._syncPlaceButtons();
       this._updateBannerPlace();
@@ -1725,4 +1733,5 @@
 
   window.ZS = window.ZS || {};
   ZS.AdminLiveDecor = AdminLiveDecor;
+
 }());

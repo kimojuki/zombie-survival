@@ -1,10 +1,8 @@
-// SECTOR 02 — SMALL TOWN
-// Ville abandonnée, loot intermédiaire, premiers grands groupes de zombies.
+// SECTOR 02 — SMALL TOWN (généré — éditer sector_02_town/chunks/*.js puis npm run bundle:sector-02-town)
 (function () {
   'use strict';
 
-  // Route principale — traverse la map (est → ouest), le sentier spawn arrive sur une ouverture
-  const TOWN_MAIN_PTS = [
+const TOWN_MAIN_PTS = [
     [88, -26], [68, -23], [48, -20], [28, -18.5], [14, -18],
     [-8, -18], [-34, -12], [-64, -8], [-78, -9], [-92, -9],
     [-104, -9], [-118, -8], [-155, 0], [-180, 1], [-210, 0], [-250, 1], [-295, 0],
@@ -154,6 +152,7 @@
       B.box(scene, cx, cz+oz+(oz<0?-0.21:0.21), y+0.71, 0.58, 0.46, 0.06, woodMat);
     }
   }
+
 
   // ── Mini marché (agrandi + intérieur) ─────────────────────────────────────────
 
@@ -443,6 +442,7 @@
     B.box(scene, cx, cz+D/2-1.5, baseY+2.0,  1.2, 0.12, 0.12, altarMat);
   }
 
+
   // ── Maisons résidentielles + intérieurs ───────────────────────────────────────
 
   function _buildHouses(scene, B) {
@@ -561,6 +561,7 @@
     }
   }
 
+
   // ── Immeuble ──────────────────────────────────────────────────────────────────
 
   function _buildApartment(scene, B) {
@@ -655,6 +656,7 @@
     }
     B.addCollider({type:'box',cx,cz,hw:1.0,hd:0.25});
   }
+
 
   // ── Place centrale ────────────────────────────────────────────────────────────
 
@@ -889,6 +891,78 @@
     }
   }
 
+
+  // ── Signalisation ────────────────────────────────────────────────────────────
+
+  function _buildSignage(scene, B) {
+    const polMat  = new THREE.MeshLambertMaterial({ color: 0x4a4a3a });
+    const stopMat = new THREE.MeshLambertMaterial({ color: 0xcc1111 });
+    const whtMat  = new THREE.MeshLambertMaterial({ color: 0xeeeeee });
+    const tfBx    = new THREE.MeshLambertMaterial({ color: 0x181818 });
+    const tfRd    = new THREE.MeshLambertMaterial({ color: 0x991111 }); // rouge éteint
+    const tfGn    = new THREE.MeshLambertMaterial({ color: 0x113311 }); // vert éteint
+    const tfAm    = new THREE.MeshLambertMaterial({ color: 0x442200 }); // orange éteint
+    const dirMat  = new THREE.MeshLambertMaterial({ color: 0x1e4a1e });
+    const zebMat  = new THREE.MeshLambertMaterial({ color: 0xd4d0c8, polygonOffset:true, polygonOffsetFactor:-3, polygonOffsetUnits:-5 });
+    const entMat  = new THREE.MeshLambertMaterial({ color: 0x2a4a22 });
+
+    // --- Panneaux d'entrée / sortie de ville ---
+    for (const [ex,ez] of [[-128,-4],[-264, 4]]) {
+      const ey = ZS.getTerrainHeight(ex,ez);
+      B.box(scene,ex,ez,ey+1.5,0.10,3.0,0.10,polMat);
+      B.box(scene,ex,ez,ey+2.9,2.4,0.58,0.14,entMat);
+      B.box(scene,ex,ez,ey+2.9,2.5,0.60,0.10,whtMat);
+      B.addCollider({ x:ex, z:ez, r:0.10 });
+    }
+
+    // --- Feux de circulation (tous éteints/rouges – apocalypse) ---
+    for (const [tx,tz] of [[-136,-5.8],[-170,-5.8],[-210,-5.8],[-136,5.8],[-170,5.8],[-210,5.8]]) {
+      const ty = ZS.getTerrainHeight(tx,tz);
+      B.box(scene,tx,tz,ty+2.5,0.10,5.0,0.10,polMat);
+      B.box(scene,tx,tz,ty+5.05,0.38,0.92,0.26,tfBx);
+      B.box(scene,tx,tz,ty+5.30,0.26,0.26,0.28,tfRd);
+      B.box(scene,tx,tz,ty+5.02,0.26,0.26,0.28,tfAm);
+      B.box(scene,tx,tz,ty+4.74,0.26,0.26,0.28,tfGn);
+      B.addCollider({ x:tx, z:tz, r:0.10 });
+    }
+
+    // --- Panneaux STOP aux intersections ---
+    for (const [px,pz] of [[-134,-6.2],[-168,-6.2],[-208,-6.2],[-134,6.2],[-208,6.2]]) {
+      const py = ZS.getTerrainHeight(px,pz);
+      B.box(scene,px,pz,py+1.5,0.08,3.0,0.08,polMat);
+      B.box(scene,px,pz,py+3.12,0.58,0.58,0.10,stopMat);
+      B.box(scene,px,pz,py+3.12,0.40,0.40,0.12,whtMat);
+      B.addCollider({ x:px, z:pz, r:0.10 });
+    }
+
+    // --- Panneaux de direction ---
+    for (const [dx,dz,ry] of [[-130,6,0.3],[-130,-5.5,-0.3]]) {
+      const dy = ZS.getTerrainHeight(dx,dz);
+      B.box(scene,dx,dz,dy+1.5,0.08,4.0,0.08,polMat);
+      B.box(scene,dx,dz,dy+3.9,1.8,0.35,0.12,dirMat);
+      B.box(scene,dx+0.6,dz,dy+3.9,0.6,0.24,0.14,dirMat); // flèche
+      B.addCollider({ x:dx, z:dz, r:0.10 });
+    }
+
+    // --- Passages piétons aux transversales ---
+    for (const zx of [-136,-170,-210]) {
+      for (const zz of [-3.4,-2.2,-1.0,0.2,1.4,2.6]) {
+        const zy = ZS.getTerrainHeight(zx,zz)+0.06;
+        B.slab(scene,zx,zz,zy,3.2,0.7,zebMat);
+      }
+    }
+
+    // --- Bollards jaunes le long des trottoirs (toutes les 8m) ---
+    const bollMat = new THREE.MeshLambertMaterial({ color: 0xe8b820 });
+    for (let bx=-134; bx>=-248; bx-=8) {
+      for (const bz of [-5.65, 5.65]) {
+        const by = ZS.getTerrainHeight(bx,bz);
+        B.box(scene,bx,bz,by+0.52,0.18,1.04,0.18,bollMat);
+        B.addCollider({ x:bx, z:bz, r:0.12 });
+      }
+    }
+  }
+
   // ── Étals de marché abandonnés ────────────────────────────────────────────────
 
   function _buildMarketStalls(scene, B) {
@@ -1022,4 +1096,5 @@
   // ─────────────────────────────────────────────────────────────────────────────
 
   ZS.Buildings.registerSector({ build, roads: TOWN_ROADS });
+
 }());

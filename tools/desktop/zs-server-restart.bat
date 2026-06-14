@@ -1,23 +1,22 @@
 @echo off
-title Zombie Survival — Redemarrage serveur
+title Zombie Survival — Redemarrer serveurs
 call "%~dp0zs-server-env.bat"
 
-echo Redemarrage du serveur Zombie Survival...
+if /i "%~1"=="--auth" set "ZS_START_AUTH=1"
+if /i "%~1"=="--standalone" set "ZS_START_AUTH=1"
+
+echo.
+echo Redemarrage Zombie Survival...
 echo.
 
-set "FOUND=0"
-for /f "tokens=5" %%P in ('netstat -ano ^| findstr ":3000" ^| findstr "LISTENING"') do (
-  set "FOUND=1"
-  echo Arret PID %%P...
-  taskkill /PID %%P /F >nul 2>&1
-)
+call "%~dp0zs-server-stop.bat" silent
 
-if "%FOUND%"=="1" (
-  echo Attente 2 secondes...
-  timeout /t 2 /nobreak >nul
+echo Attente 2 secondes...
+timeout /t 2 /nobreak >nul
+echo.
+
+if "%ZS_START_AUTH%"=="1" (
+  call "%~dp0zs-server-start.bat" --auth
 ) else (
-  echo Aucun serveur actif — demarrage direct.
+  call "%~dp0zs-server-start.bat"
 )
-
-echo.
-call "%~dp0zs-server-start.bat"

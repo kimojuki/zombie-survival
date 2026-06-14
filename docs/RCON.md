@@ -170,6 +170,9 @@ Erreurs : `403` (mauvais mot de passe), `503` (RCON non configuré ou serveur en
 | `tp check cabane_pied` | TP au pied de la cabane |
 | `tp check sentier` | TP bouche du sentier (panneau) |
 | `tp check fin_sentier` | TP fin du sentier forêt |
+| `tp check route_cabane` | Jonction route terre `(85, -6)` → cabane |
+| `tp check lit_cabane` | Devant le lit cabane #1 (E = repos) |
+| `tp check clairiere` | Hub clairière `(0, -6)` — route cabane via outil admin |
 | `tp alice 0 -5` | TP un joueur (nom partiel OK) |
 | `bring bob` | TP un joueur vers vous |
 | `goto alice` | TP vers un joueur |
@@ -213,6 +216,8 @@ Objets visibles par tous les joueurs, synchronisés via `decorItems` au `game-in
 | **Carte monde in-game** | F8 → Monde & décor → **Carte monde** (`admin-world-map-overlay.js`) — overlay zoomable, **filtres stricts** (arbres/rochers/barrières/camp masqués par défaut), compteur par couche, dbl-clic vide = TP, clic POI = éditer décor. Auth `world.map` ou `decor.edit`. |
 | **Zones monde in-game** | F8 → Monde → **Zones monde** (`admin-zone-overlay.js`) — secteurs · plage safe (cyan) · exclusions build (rouge) · panneau couches. |
 | **Signets TP** | F8 → Monde — signets nommés (position joueur ou réticule) · `admin-tp-bookmarks.js` · localStorage. |
+| **Routes admin (in-game)** | F8 → Monde → **Routes admin** — clic = points XZ, Entrée = enregistrer, **F5** pour appliquer terrain. Permission `decor.edit`. |
+| **Routes admin (API)** | `GET /api/world/admin-roads` (lecture publique) · `GET/POST/PATCH/DELETE /api/admin/roads` — persist `world_meta.adminRoads`. Body POST : `{ label?, pts: [[x,z],…], width?, type?: dirt\|path\|trail\|asphalt }`. |
 | **Coffre admin (API)** | `PATCH /api/admin/decor/:id` patch `{ clearStorage: true }` ou `{ storage: […grille…] }` — prefabs coffre uniquement. |
 | **Mode vol admin** | F8 → Monde → **Mode vol** ou touche **V** (`admin-fly.js`) — noclip, Espace/Ctrl vertical, Shift sprint. |
 | **Flags serveur (API)** | `GET /api/admin/world-state` inclut `serverFlags` · `POST /api/admin/server-flags` body `{ zombieAI?, zombieSpawn?, lootEnabled?, pvp?, autoDay? }` — broadcast `server-flags`. F8 → Monde : toggles live. |

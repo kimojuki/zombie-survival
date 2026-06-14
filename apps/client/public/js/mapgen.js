@@ -1,8 +1,8 @@
-// Procedural map generation helpers.
+// Procedural map generation (généré — mapgen/chunks + npm run bundle:mapgen)
 (function () {
   'use strict';
 
-  const _texLoader = new THREE.TextureLoader();
+const _texLoader = new THREE.TextureLoader();
   const _texCache = new Map();
 
   function _campTexture(url, repeatX, repeatY) {
@@ -71,7 +71,8 @@
     return count ? sum / count : ZS.getTerrainHeight(x, z);
   }
 
-  function createSpawnBuilder(scene, opts) {
+
+function createSpawnBuilder(scene, opts) {
     const texWood = _campTexture('/textures/camp/wood_planks_light.png', 2.2, 1.6);
     const texWoodFine = _campTexture('/textures/camp/wood_planks_light.png', 1.2, 1.0);
     const texCanvas = _campTexture('/textures/camp/olive_canvas.png', 1.4, 1.2);
@@ -429,6 +430,7 @@
       return g;
     }
 
+
     function workbench(cx, cz, baseY, rotY) {
       const g = new THREE.Group();
       g.position.set(cx, baseY, cz);
@@ -541,4 +543,5 @@
 
   window.ZS = window.ZS || {};
   ZS.MapGen = { createSpawnBuilder };
+
 }());

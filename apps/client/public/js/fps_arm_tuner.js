@@ -1,8 +1,8 @@
-// Calibrage bras FPS — torche, main vide, presets partagés. Menu admin (F8) → Calibrages.
+// Calibration bras FPS + items (généré — éditer fps_arm_tuner/chunks/*.js puis npm run bundle:fps-arm-tuner)
 (function () {
   'use strict';
 
-  const PRESETS_KEY = 'zs_arm_tuner_presets';
+const PRESETS_KEY = 'zs_arm_tuner_presets';
 
   const ARM_FIELDS = [
     { path: 'shoulder.x', label: 'Épaule X', min: -0.6, max: 0.6, step: 0.01 },
@@ -265,7 +265,8 @@
     },
   };
 
-  function _getPath(obj, path) {
+
+function _getPath(obj, path) {
     const parts = path.split('.');
     let cur = obj;
     for (let i = 0; i < parts.length - 1; i++) {
@@ -563,7 +564,8 @@
     return pose;
   }
 
-  const ArmTuner = {
+
+const ArmTuner = {
     open: false,
     profileId: null,
     walkPreviewOn: false,
@@ -976,6 +978,7 @@
       }
     },
 
+
     _buildPanel() {
       if (this._panel?.parent) this._panel.parent.remove(this._panel);
       const profile = this._profile();
@@ -1171,6 +1174,7 @@
     },
   };
 
+
   window.ZS = window.ZS || {};
   ZS.ArmTuner = ArmTuner;
 
@@ -1178,4 +1182,5 @@
   _ensureDerivedCalibrationsSeeded();
   _registerCalibrationTools();
   _ensurePresetsMigrated();
+
 }());

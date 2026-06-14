@@ -73,6 +73,12 @@
       window.__ZS_CLIENT_VERSION = v;
       var css = document.getElementById('zs-css');
       if (css) css.href = '/css/style.css?v=' + encodeURIComponent(v);
+      if (!document.getElementById('zs-devlog-js')) {
+        var d = document.createElement('script');
+        d.id = 'zs-devlog-js';
+        d.src = '/js/dev_log.js?v=' + encodeURIComponent(v);
+        document.head.appendChild(d);
+      }
       if (!document.getElementById('zs-loading-js')) {
         var s = document.createElement('script');
         s.id = 'zs-loading-js';
@@ -481,15 +487,23 @@
   (async () => {
     setConnectingMsg('Connexion au serveur…', 'Vérification de la version', 0);
     await waitForClientVersion();
+    window.ZS?.LoadLog?.stepStart?.('wait-server');
     await waitForServer();
-    const { LEGACY_MODULES } = await import('/src/bootstrap/legacy-modules.js?v=' + encodeURIComponent(CACHE_BUST));
+    window.ZS?.LoadLog?.stepEnd?.('wait-server');
+    window.ZS?.LoadLog?.stepStart?.('client-engine');
+    await import(/* @vite-ignore */ '/src/engine/install.js?v=' + encodeURIComponent(CACHE_BUST));
+    window.ZS?.LoadLog?.stepEnd?.('client-engine');
+    window.ZS?.LoadLog?.stepStart?.('legacy-scripts');
+    const { LEGACY_MODULES, LEGACY_MODULES_DEFER } = await import(/* @vite-ignore */ '/src/bootstrap/legacy-modules.js?v=' + encodeURIComponent(CACHE_BUST));
     const modules = LEGACY_MODULES.filter((src) => !src.includes('loading.js'));
-    const scriptMin = 12;
-    const scriptMax = 22;
+    const deferModules = LEGACY_MODULES_DEFER.filter((src) => !src.includes('loading.js'));
+    const scriptMin = 10;
+    const scriptMax = 20;
     const bust = (src) => src + (src.includes('?') ? '&' : '?') + 'v=' + CACHE_BUST;
-    const texts = new Array(modules.length);
+    const texts = new Array(modules.length + deferModules.length);
     let fetched = 0;
-    await Promise.all(modules.map((src, i) =>
+    const allFetch = [...modules, ...deferModules];
+    await Promise.all(allFetch.map((src, i) =>
       fetch(bust(src), { cache: 'no-store', credentials: 'same-origin' })
         .then((r) => {
           if (!r.ok) throw new Error('Échec du chargement de ' + src);
@@ -498,10 +512,11 @@
         .then((code) => {
           texts[i] = code;
           fetched++;
-          const pct = scriptMin + (scriptMax - scriptMin) * (fetched / modules.length);
-          setConnectingMsg('Chargement des modules…', `${fetched} / ${modules.length}`, pct);
+          const pct = scriptMin + (scriptMax - scriptMin) * (fetched / allFetch.length);
+          setConnectingMsg('Chargement des modules…', `${fetched} / ${allFetch.length}`, pct);
         }),
     ));
+    const deferTexts = texts.slice(modules.length);
     const yieldToMain = () => new Promise((resolve) => {
       requestAnimationFrame(() => setTimeout(resolve, 0));
     });
@@ -512,9 +527,32 @@
       const done = i + 1;
       const pct = scriptMin + (scriptMax - scriptMin) * (done / modules.length);
       setConnectingMsg('Initialisation…', `${done} / ${modules.length}`, pct);
-      await yieldToMain();
+      if (i % 5 === 4) await yieldToMain();
     }
     window.ZS?.Loading?.setPhase?.('scripts', 1, 'Modules chargés', '');
+    window.ZS?.LoadLog?.stepEnd?.('legacy-scripts', { count: modules.length, defer: deferModules.length });
+    window.ZS?.LoadLog?.summary?.('boot-client');
+    const runDeferredLegacy = () => {
+      window.ZS?.LoadLog?.mark?.('legacy-defer-start', { count: deferModules.length });
+      const t0 = performance.now();
+      for (let i = 0; i < deferModules.length; i++) {
+        const s = document.createElement('script');
+        s.textContent = deferTexts[i] + '\n//# sourceURL=' + deferModules[i];
+        document.body.appendChild(s);
+      }
+      try {
+        if (ZS._fpsArms) ZS.ArmTuner?.init?.(ZS._fpsArms);
+        ZS.AdminHub?.init?.();
+      } catch (e) {
+        console.warn('[boot] legacy defer init', e);
+      }
+      window.ZS?.LoadLog?.mark?.('legacy-defer-done', { count: deferModules.length, ms: Math.round(performance.now() - t0) });
+    };
+    if (typeof requestIdleCallback === 'function') {
+      requestIdleCallback(runDeferredLegacy, { timeout: 5000 });
+    } else {
+      setTimeout(runDeferredLegacy, 120);
+    }
   })().catch(err => {
     console.error(err);
     setConnectingMsg('Erreur de chargement', err.message || String(err));

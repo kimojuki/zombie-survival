@@ -24,6 +24,9 @@ export const BEACH_FOOTPRINT = Object.freeze({
   rz: 88,
 });
 
+/** Sentier design (checkpoints, panneau, seeds) — mesh/aplati : CMS admin si false. */
+export const ENABLE_CODEGEN_TRAIL_MESH = false;
+
 /** Sentier : bord sable → forêt → jonction sud (14, -18). */
 export const BEACH_TRAIL_PTS = Object.freeze([
   [242, -8],

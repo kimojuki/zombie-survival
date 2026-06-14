@@ -12,7 +12,10 @@ Index pour l'équipe — à maintenir à jour à chaque push.
 | [ROAD_NETWORK.md](ROAD_NETWORK.md) | Routes, sentiers, terrain, spawn |
 | [S01_DECOR_PLACEMENT.md](S01_DECOR_PLACEMENT.md) | Seed S01 : position, rotY, hauteur intérieur shack, checklist |
 | [DECOR_PREFAB_ORIENTATION.md](DECOR_PREFAB_ORIENTATION.md) | Devant / derrière / rotY — convention −Z et repères par prefab |
-| [DEPLOY.md](DEPLOY.md) | Prod Infomaniak, cron / webhook auto-deploy |
+| [ARCHITECTURE_TIERS.md](ARCHITECTURE_TIERS.md) | **3 tiers** — VM app + VM db, compose split |
+| [VM_DEPLOY.md](VM_DEPLOY.md) | Prod VM Ubuntu + Docker (mono ou split) |
+| [DOCKER_PROD_SIM.md](DOCKER_PROD_SIM.md) | Simuler la VM sur PC dev (Docker) |
+| [DEPLOY.md](DEPLOY.md) | Legacy Infomaniak / pm2 (migration en cours) |
 | [adr/](adr/) | Décisions d'architecture |
 
 ## Ailleurs dans le repo

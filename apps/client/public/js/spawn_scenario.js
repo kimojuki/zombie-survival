@@ -46,8 +46,9 @@
   ];
 
   const TUTORIAL_POS = { x: 208, z: -8 };
-  /** Seules étapes avec HUD — tutoriel combat/loot, pas de guidage exploration. */
-  const HUD_STEPS = new Set(['fight', 'loot']);
+  /** HUD exploration légère jusqu'au combat — pas de quête checklist. */
+  const HUD_STEPS = new Set(['breathe', 'explore', 'walk_west', 'silhouette', 'approach', 'fight', 'loot']);
+  let _goldenToastShown = false;
   const STEPS = [
     'intro_wake', 'intro_stand', 'breathe', 'explore', 'walk_west',
     'silhouette', 'approach', 'reveal', 'fight', 'loot', 'epilogue',
@@ -88,7 +89,33 @@
 
   function _syncGoldenHour() {
     if (!ZS.setBeachIntroGoldenHour) return;
-    ZS.setBeachIntroGoldenHour(shouldDelayZombieSync());
+    const on = shouldDelayZombieSync();
+    ZS.setBeachIntroGoldenHour(on);
+    if (on && !_goldenToastShown) {
+      _goldenToastShown = true;
+      ZS.UI?.showNotif?.('L\'aube reste suspendue sur la plage', 5200);
+    }
+  }
+
+  function _hintForStep(step) {
+    const beats = _scenario?.introBeats || {};
+    if (step === 'breathe') return STEP_HINT.breathe;
+    if (step === 'explore') {
+      if (!beats.kitDone) {
+        if (!beats.pickedRock && !ZS.Inventory?.hasItemType?.('tool_caillou')) {
+          return `Un caillou brille devant toi — ${ZS.IntroLessons?.interactVerb?.() || 'E'}.`;
+        }
+        if (!beats.campfire) return 'Suis les empreintes ou la fumée vers la veilleuse.';
+        if (!beats.pickedTorch && !ZS.Inventory?.hasItemType?.('tool_torche')) {
+          return 'La torche attend au cercle de pierres.';
+        }
+        if (!beats.pier) return 'La valise est sous les planches, plus à l\'ouest.';
+        return 'Fouille la valise et prends eau + sandwich.';
+      }
+      return 'Marche vers l\'ouest — le sentier mène à la forêt.';
+    }
+    if (step === 'walk_west') return 'Le sentier part vers l\'intérieur. Continue vers l\'ouest.';
+    return STEP_HINT[step] || '';
   }
 
   function filterZombies(arr) {
@@ -116,24 +143,25 @@
     _hud.style.cssText = [
       'display:none',
       'position:fixed',
-      'bottom:max(108px,calc(env(safe-area-inset-bottom) + 96px))',
-      'right:12px',
+      'top:max(12px,env(safe-area-inset-top))',
+      'right:58px',
       'left:auto',
-      'max-width:min(280px,calc(100vw - 24px))',
-      'z-index:240',
+      'max-width:min(220px,calc(100vw - 80px))',
+      'z-index:215',
       'pointer-events:none',
-      'padding:12px 14px',
-      'border-radius:12px',
-      'border:1px solid rgba(200,180,130,.45)',
-      'background:rgba(12,10,8,.82)',
+      'padding:8px 10px',
+      'border-radius:10px',
+      'border:1px solid rgba(200,180,130,.4)',
+      'background:rgba(12,10,8,.78)',
       'color:#f0e6d0',
-      'font:400 13px/1.45 system-ui,sans-serif',
-      'box-shadow:0 8px 28px rgba(0,0,0,.35)',
+      'font:400 12px/1.35 system-ui,sans-serif',
+      'box-shadow:0 4px 16px rgba(0,0,0,.3)',
+      'backdrop-filter:blur(4px)',
     ].join(';');
     _hud.innerHTML = [
-      '<div id="scenario-act" style="font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:#b8955a;margin-bottom:4px"></div>',
-      '<div id="scenario-objective" style="font-weight:700;font-size:15px;margin-bottom:4px"></div>',
-      '<div id="scenario-hint" style="opacity:.85;font-size:12px"></div>',
+      '<div id="scenario-act" style="font-size:10px;letter-spacing:.07em;text-transform:uppercase;color:#b8955a;margin-bottom:2px"></div>',
+      '<div id="scenario-objective" style="font-weight:700;font-size:13px;margin-bottom:2px"></div>',
+      '<div id="scenario-hint" style="opacity:.82;font-size:11px;line-height:1.3"></div>',
     ].join('');
     document.body.appendChild(_hud);
 
@@ -210,7 +238,7 @@
     _hud.style.display = 'block';
     document.getElementById('scenario-act').textContent = `Acte ${act.id}/3 — ${act.title}`;
     document.getElementById('scenario-objective').textContent = title;
-    document.getElementById('scenario-hint').textContent = STEP_HINT[step] || '';
+    document.getElementById('scenario-hint').textContent = _hintForStep(step);
   }
 
   function _showCombatHint() {
@@ -297,7 +325,15 @@
 
   function onUpdate(data) {
     if (!data) return;
+    const prevStep = _scenario?.step;
     if (data.scenario) _scenario = data.scenario;
+    if (data.scenario?.step && data.scenario.step !== prevStep) {
+      ZS.DevLog?.scenario?.('step', { from: prevStep, to: data.scenario.step, beats: data.scenario.introBeats });
+      const walkIdx = stepIndex('walk_west');
+      if (stepIndex(prevStep) < walkIdx && stepIndex(_scenario.step) >= walkIdx && _socket) {
+        _socket.emit('request-zombie-sync');
+      }
+    }
     if (data.dialogue && STEP_DIALOGUE[data.dialogue]) {
       _showDialogue(STEP_DIALOGUE[data.dialogue]);
     }
@@ -305,8 +341,15 @@
     if (data.combatTutorial) _showCombatHint();
     if (data.epilogue) _showEpilogue();
     if (data.toast) ZS.UI?.showNotif?.(data.toast);
-    if (data.introBeat) ZS.IntroStarter?.onBeat?.(data.introBeat);
-    if (data.starterLootComplete) ZS.IntroStarter?.onBeat?.('kit_done');
+    if (data.introBeat) {
+      ZS.IntroStarter?.onBeat?.(data.introBeat);
+      _updateHud();
+    }
+    if (data.starterLootComplete) {
+      ZS.IntroStarter?.onBeat?.('kit_done');
+      ZS.IntroLessons?.onKitDone?.();
+      if (_scenario?.step === 'explore') _updateHud();
+    }
     if (data.introComplete) {
       _revealActive = false;
       _epilogueActive = false;
@@ -314,6 +357,8 @@
       if (_socket) _socket.emit('request-zombie-sync');
     }
     if (data.resetIntro && _state) {
+      ZS.IntroLessons?.reset?.();
+      _goldenToastShown = false;
       ZS.SpawnIntro?.tryStart?.(_state);
       ZS.BeachIntroPrefabs?.syncIntroCampfireTorchVisibility?.();
     }

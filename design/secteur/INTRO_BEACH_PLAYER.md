@@ -1,43 +1,49 @@
-# Intro plage — spec joueur (validée par questionnaires 2026-06-09)
+# Intro plage — spec joueur (validée + implémentation v3, 2026-06-11)
 
-Source : questionnaires Bruno + `docs/AI_WORKFLOW.md`.
+Source : questionnaires Bruno + `INTRO_BEACH_SCENARIO_V3.md`.
 
 ## Principes
 
 - **Pas de kit magique** en hotbar au réveil.
 - **Multijoueur** : loot départ **personnel** (visible par tous, **ramassage réservé au propriétaire**).
-- **Décor narratif** (débris, affaires, bois flotté seed) = **monde unique partagé** (D1).
-- **Pas de HUD quête** exploration ; tuto = ramassage + interfaces.
+- **Décor narratif** (empreintes, bouteille, ponton, feu) = **monde unique partagé** (`beach_intro_v3`).
+- **HUD léger** exploration (objectif discret coin écran) ; bulles pensée pour la narration.
+- **Pas de checklist quête** — progression par beats zones + lectures.
 
 ## Spawn
 
-- Point de base : plage (`pickBeachSpawn` / offset autour de `BEACH_SPAWN`).
-- **Écart min 8–12 m** entre joueurs connectés en même temps sur le sable.
-- Ancre scénario `anchorX/Z` = position de réveil du joueur.
+- Cluster réveil est (`pickBeachSpawnForIntro`) — écart **10 m** min entre joueurs (`BEACH_SPAWN_MIN_PLAYER_GAP`).
+- Ancre scénario = position de réveil du joueur.
 
 ## Kit départ (4 objets personnels)
 
 | Stop | Objet | Leçon UI |
 |------|--------|----------|
-| 1 | `tool_caillou` | Ramassage au sol (E) |
-| 2 | `tool_torche` | Hotbar — sélection slot |
-| 3 | `food_eau_bouteille` | Inventaire (panneau sac) |
-| 4 | `food_sandwich` | Consommer faim/soif (+ équiper torche entre stops 2–3 si retenu) |
+| 1 | `tool_caillou` | Ramassage (`E` / bouton Ramasser) — bulle réveil |
+| 2 | `tool_torche` | **Leçon hotbar** — `IntroLessons.onTorchAcquired()` |
+| 3 | `food_eau_bouteille` | **Leçon sac** — `IntroLessons.onSuitcaseOpen()` à l'ouverture valise |
+| 4 | `food_sandwich` | **Leçon consommer** — `IntroLessons.onKitDone()` après valise vidée |
 
-- **Parcours** : mini chemin ~10–15 m autour du spawn perso (F3), **ordre forcé** O1.
-- **Association leçons** : L1 (une bulle / gate par stop).
+- **Parcours** : ~25–30 m le long de la côte (empreintes → veilleuse → ponton).
+- **Ordre beats** : footprints → campfire → pier → kit_done.
 
-## Scénario technique (à brancher)
+## Guidage joueur (2026-06-11)
 
-- Étapes intro existantes (`intro_wake` → …) + sous-étapes loot `loot_caillou` … ou flags `scenario.starterLoot`.
-- Blocage avancement tant que stop courant non ramassé + leçon UI acquittée.
+- HUD actif : `breathe`, `explore`, `walk_west`, `silhouette`, `approach`, `fight`, `loot`.
+- Hints `explore` dynamiques selon `introBeats` (caillou → veilleuse → valise → ouest).
+- Toast + bulle à `kit_done` : « Suis le sentier vers l'ouest ».
+- Golden hour figée communiquée : « L'aube reste suspendue sur la plage ».
 
-## Implémentation (ordre)
+## Technique
 
-1. ✅ **Brique 1** — inventaire vide intro ; `ownerPlayerId` + pickup owner-only (visible tous) ; spawn plage espacé 10 m.
-2. ✅ Spawn des 4 pickups séquentiels le long du mini-parcours (`intro-starter-loot.mjs`). ⏳ bulles tuto UI.
-3. ⏳ Bulles tuto UI (E, hotbar, sac, consommer, équiper torche).
+- Beats : `packages/shared/src/intro-beach-beats.mjs` + `apps/server/src/intro-beach-beats.mjs`
+- Zone feu dynamique (déplacement admin) : `resolveIntroCampfireZone`
+- Props monde seedés à la connexion intro : `ensureBeachIntroProps`
+- Reset QA : `scenario-reset <joueur>`
 
-## Non couvert (questionnaires suivants)
+## QA manuelle
 
-- Texte réveil v2, heure du jour intro, jalons `explore` sans distance 15 m.
+1. Nouveau compte / `scenario-reset` → réveil → caillou visible → kit complet &lt; 8 min.
+2. Mobile : textes « bouton Ramasser », pas « E » seul.
+3. Après valise : HUD « Va vers l'intérieur » visible.
+4. `decorseed beach reset` si props monde absents (vieille BDD).

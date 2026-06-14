@@ -429,10 +429,12 @@
     if (urlDbg) showWireframes(true);
   }
 
-  log('init', {
-    msg: 'BuildingDebug prêt',
-    help: 'Filtre: building-debug | ZS.BuildingDebug.enable() | showWireframes(true) | dumpShack() | probePlayer() | Shift+F8',
-  });
+  if (_enabled) {
+    log('init', {
+      msg: 'BuildingDebug prêt',
+      help: 'Filtre: building-debug | ZS.BuildingDebug.enable() | showWireframes(true) | dumpShack() | probePlayer() | Shift+F8',
+    });
+  }
 
   window.addEventListener('keydown', (e) => {
     if (e.shiftKey && e.key === 'F8') {

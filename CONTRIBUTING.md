@@ -21,6 +21,7 @@ Voir **[docs/GIT_WORKFLOW.md](docs/GIT_WORKFLOW.md)** : `git pull` au début, `g
 - The change is scoped and documented.
 - `npm run lint`, `npm test`, `npm run build` pass, or the PR explains why a check could not run.
 - Relevant docs are updated: `DEV_TRACKER.md` always, plus architecture/deploy/RCON/road docs as needed.
+- **Release toward `master`** : update [docs/RELEASE_NOTES.md](docs/RELEASE_NOTES.md) (joueurs + section « Données joueurs »), [CHANGELOG.md](CHANGELOG.md), run `npm run release:check`. Deploy prod uses automatic DB backup — see [docs/RELEASE_PROCESS.md](docs/RELEASE_PROCESS.md). **Never ship destructive DB changes without backup and reconnect test.**
 - Client JavaScript changes update the cache bust value in `apps/client/game.html` while legacy scripts are still used.
 - Server changes preserve `/api/health`, auth routes, Socket.io events and SQLite/MySQL compatibility.
 
@@ -33,7 +34,7 @@ npm run dev:server
 npm run dev:client
 ```
 
-After **server** changes (`apps/server/`), restart Node — a running process does not pick up edits until restart. Verify `GET /api/health` returns `invDebugBuild` matching `apps/client/public/client-version.json`, then hard-refresh the browser (Ctrl+F5). See [docs/INVENTORY_CONSUMPTION.md](docs/INVENTORY_CONSUMPTION.md) for inventory / consumption debugging.
+After **server** changes (`apps/server/`, `apps/auth-server/`), **the agent restarts Node** — never ask the user to reboot. See `.cursor/rules/dev-servers.mdc`. Verify `GET /api/health` returns expected fields, then hard-refresh the browser (Ctrl+F5). See [docs/INVENTORY_CONSUMPTION.md](docs/INVENTORY_CONSUMPTION.md) for inventory / consumption debugging.
 
 Use `npm run test:smoke` for server boot checks and `npm run test:visual` for the FPS arm preview captures.
 

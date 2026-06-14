@@ -1,8 +1,8 @@
-// Buildings — shared utilities + sector registry
+// Buildings — shared utilities (généré — buildings/chunks + npm run bundle:buildings)
 (function () {
   'use strict';
 
-  const _colliders = [];
+const _colliders = [];
   const _sectors   = [];
   const _spawnSectors = [];
   function isNearRoad(x, z, margin) {
@@ -37,6 +37,21 @@
   const _texTrail   = ZS.CampTextures?.load
     ? ZS.CampTextures.load('/textures/camp/trail_forest.png', 2.8, 2.8)
     : _texDirt;
+
+  function _whenTextureReady(tex) {
+    if (!tex) return Promise.resolve();
+    if (tex.image && (tex.image.complete || tex.image.width > 0)) return Promise.resolve();
+    return new Promise((resolve) => {
+      const done = () => resolve();
+      tex.addEventListener('load', done, { once: true });
+      tex.addEventListener('error', done, { once: true });
+    });
+  }
+
+  /** Évite « Texture marked for update but no image data » au premier render route. */
+  function whenRoadTexturesReady() {
+    return Promise.all([_whenTextureReady(_texAsphalt), _whenTextureReady(_texDirt), _whenTextureReady(_texTrail)]);
+  }
 
   // ── Materials ─────────────────────────────────────────────────────────────────
   const M = {
@@ -147,7 +162,8 @@
 
   // ── Reusable building templates ───────────────────────────────────────────────
 
-  function _house(scene, cx, cz, W, D, wallH, wallMat, roofMat, doorDir) {
+
+function _house(scene, cx, cz, W, D, wallH, wallMat, roofMat, doorDir) {
     registerLoot('maison', cx, cz, W, D);
     const baseY = ZS.getTerrainHeight(cx, cz);
     const T     = 0.22;
@@ -376,7 +392,8 @@
     _slab(scene, canX, cz, apronY + 0.01, 6, 8, M.concDark);
   }
 
-  const _WHEEL_SLOTS = [[-0.97, -1.38], [0.97, -1.38], [-0.97, 1.38], [0.97, 1.38]];
+
+const _WHEEL_SLOTS = [[-0.97, -1.38], [0.97, -1.38], [-0.97, 1.38], [0.97, 1.38]];
 
   function _carcass(scene, cx, cz, opts) {
     opts = opts || {};
@@ -484,6 +501,7 @@
   window.ZS = window.ZS || {};
   ZS.B = {
     M,
+    whenRoadTexturesReady,
     mesh:         _mesh,
     wall:         _wall,
     slab:         _slab,
@@ -506,4 +524,5 @@
   ZS.isNearRoad     = isNearRoad;
   ZS.getRoadPaths   = () => (ZS.RoadNetwork ? ZS.RoadNetwork.getResolvedEdges() : []);
   ZS.Buildings = { buildAll, registerSector, applyRoadFlattening, getLootBuildings: () => _lootBuildings };
+
 }());

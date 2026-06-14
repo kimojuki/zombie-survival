@@ -1,0 +1,36 @@
+# Edge / site public — NE PAS arrêter lors des rebuild game (évite Cloudflare 502).
+# cloudflared → :443 → edge (static + proxy game | maintenance)
+#
+#   npm run docker:sim:edge:up    # une fois, ou après reboot machine
+#   npm run docker:sim:restart    # rebuild game sans couper edge
+
+name: zs-edge
+
+services:
+  edge:
+    image: nginx:1.27-alpine
+    container_name: zs-edge-nginx
+    restart: unless-stopped
+    stop_grace_period: 5s
+    ports:
+      - '443:443'
+      - '4000:4000'
+    volumes:
+      - ./nginx/nginx.edge.conf:/etc/nginx/nginx.conf:ro
+      - ./nginx/proxy_game.conf:/etc/nginx/proxy_game.conf:ro
+      - ./edge/www:/var/www/zs:ro
+    networks:
+      - zs-edge
+    healthcheck:
+      test: ['CMD', 'wget', '-q', '-O', '-', 'http://127.0.0.1:4000/']
+      interval: 10s
+      timeout: 3s
+      retries: 3
+      start_period: 5s
+    mem_limit: 128m
+    cpus: 0.25
+
+networks:
+  zs-edge:
+    name: zs-edge
+    driver: bridge

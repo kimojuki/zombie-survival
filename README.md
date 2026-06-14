@@ -48,6 +48,8 @@ ADMIN_USERS=votre_username
 | [SECURITY.md](SECURITY.md) | Secrets, données locales, signalement sécurité |
 | [docs/RCON.md](docs/RCON.md) | Console admin in-game + API |
 | [docs/DEPLOY.md](docs/DEPLOY.md) | Prod Infomaniak, auto-deploy (cron / webhook) |
+| [docs/RELEASE_NOTES.md](docs/RELEASE_NOTES.md) | **Notes de version joueurs** (early access) |
+| [docs/RELEASE_PROCESS.md](docs/RELEASE_PROCESS.md) | **Deploy sans perte de progression** — checklist |
 | [docs/ROAD_NETWORK.md](docs/ROAD_NETWORK.md) | Architecture routes/sentiers (2026-06) |
 | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | Vue d'ensemble client/serveur |
 | [docs/INVENTORY_CONSUMPTION.md](docs/INVENTORY_CONSUMPTION.md) | Inventaire authoritatif, `use-item`, debug `[inv-debug]` |

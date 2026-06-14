@@ -72,6 +72,24 @@ loot basique dans les coffres seed (quand POI posés)
 - Rivière : `s01_terrain.js` / `s01-river.mjs`
 - **Objets dans / près d'un shack** (position, rotY, hauteur, pièges) : **[docs/S01_DECOR_PLACEMENT.md](../../docs/S01_DECOR_PLACEMENT.md)**
 
+## Parcours joueur — sentier plage → forêt (audit UX)
+
+Flux après l’intro plage (tous les joueurs) :
+
+| Phase | Repère | Assets | Ressenti cible |
+|-------|--------|--------|----------------|
+| Réveil | spawn `(248, -8)` | intro, `beach_decor`, ambient life | Riche, guidé |
+| Sable → bouche | `BEACH_TRAIL_PTS[0]` `(242, -8)` | sentier mesh + pierres bordure | Transition OK |
+| **Corridor forêt** | segments `x < ~175` → `(14, -18)` | `forest_trail_decor` (bordures), arbres seed hors ±4 m | Sol vivant, chemin lisible |
+| Clairière | `(0, -6)` → hub | camp seed, clearing ring | Respiration |
+| POI cabane | `s01:cabin01` `(165, 7)` | shack + coffre + lit seed | Routes dirt : sentier `(85,-6)` → cabane → clairière `(0,-6)` |
+
+**Gaps comblés (brique 1)** : micro-déco procédurale sur **tout le footprint S01** (grille + scatter) + sur-densité corridor sentier ; clairance arbres ±4 m ; sentier légèrement plus clair.
+
+**Phase 2 (planifiée)** : `forest_ambient_life`, props seed narratifs (`forest-immersion-placements`).
+
+Debug playtest : filtre console `zs-dev`, catégorie `trail-decor`, `ZS.DevLog.dump()` après marche sentier.
+
 ## Roadmap
 
 Voir **[S01_ROADMAP.md](./S01_ROADMAP.md)** — ancres validées + phases.

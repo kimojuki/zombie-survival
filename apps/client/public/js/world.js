@@ -1,8 +1,8 @@
-// World: terrain, végétation, lumières, ciel + cycle jour/nuit
+// World: terrain, végétation, lumières, ciel (généré — éditer world/chunks/*.js puis npm run bundle:world)
 (function () {
   'use strict';
 
-  let _scene, _ambientLight, _sunLight, _moonLight, _hemiLight, _sunSprite, _moonSprite, _skyRoot, _starField;
+let _scene, _ambientLight, _sunLight, _moonLight, _hemiLight, _sunSprite, _moonSprite, _skyRoot, _starField;
   let _beachIntroGoldenHour = false;
   /** Matin lisible (pas crépuscule) — le caillou intro doit se voir au sol. */
   const BEACH_INTRO_GOLDEN_TIME = 0.31;
@@ -186,16 +186,18 @@
 
   // ── API ──────────────────────────────────────────────────────────────────────
 
-  function _yieldFrame() {
+function _yieldFrame() {
     return new Promise((resolve) => {
       requestAnimationFrame(() => setTimeout(resolve, 0));
     });
   }
 
   async function _buildWorldCore(scene, onProgress, asyncMode) {
-    const _perf = typeof performance !== 'undefined' && window.__ZS_PERF;
+    const LL = ZS.LoadLog;
+    const _perf = typeof performance !== 'undefined' && (window.__ZS_PERF || LL?.isEnabled?.());
     const _t0 = _perf ? performance.now() : 0;
     let _t = _t0;
+    LL?.stepStart?.('world-core');
     _scene = scene;
     _skyRoot = new THREE.Group();
     _skyRoot.name = 'skyRoot';
@@ -252,46 +254,167 @@
     spawnClouds();
 
     onProgress?.(0.08, 'Ciel et éclairage');
+    LL?.mark?.('world-sky');
+    onProgress?.(0.06, 'Routes');
+    if (ZS.AdminRoads?.prefetch) await ZS.AdminRoads.prefetch();
+    if (ZS.S01Terrain?.registerWorld) ZS.S01Terrain.registerWorld();
     if (ZS.SpawnZone?.registerTerrain) ZS.SpawnZone.registerTerrain();
     if (ZS.Roads?.registerTerrain) ZS.Roads.registerTerrain();
+    if (ZS.S01Roads?.registerRoads) ZS.S01Roads.registerRoads();
+    if (ZS.AdminRoads?.registerRoads) ZS.AdminRoads.registerRoads();
     if (ZS.Buildings?.applyRoadFlattening) ZS.Buildings.applyRoadFlattening();
     onProgress?.(0.22, 'Terrain');
+    LL?.stepStart?.('world-terrain');
     if (asyncMode) {
       await buildTerrainAsync(scene, (t) => onProgress?.(0.22 + t * 0.28, 'Terrain'));
     } else {
       await buildTerrainAsync(scene);
     }
-    if (_perf) { console.log('[world] terrain', Math.round(performance.now() - _t), 'ms'); _t = performance.now(); }
+    if (_perf) {
+      const terrainMs = Math.round(performance.now() - _t);
+      console.log('[world] terrain', terrainMs, 'ms');
+      LL?.stepEnd?.('world-terrain', { ms: terrainMs });
+      _t = performance.now();
+    } else {
+      LL?.stepEnd?.('world-terrain');
+    }
     if (asyncMode) await _yieldFrame();
     onProgress?.(0.55, 'Plage et camp');
+    LL?.stepStart?.('world-buildings');
     const buildingColliders = ZS.Buildings.buildAll(scene, { deferBeachDecor: true });
-    if (_perf) { console.log('[world] buildings', Math.round(performance.now() - _t), 'ms'); _t = performance.now(); }
-    if (ZS.RoadNetwork?.buildMeshes) {
-      const _buildRoadMeshes = () => {
-        ZS.BarrierPrefabs?.resetBarrierColliders?.();
-        ZS.RoadNetwork.buildMeshes(scene, ZS.B.M);
-        if (_perf) console.log('[world] roads', Math.round(performance.now() - _t), 'ms');
-      };
-      if (_mobileBuild) {
-        const idle = typeof requestIdleCallback === 'function'
-          ? (fn) => requestIdleCallback(fn, { timeout: 2500 })
-          : (fn) => setTimeout(fn, 80);
-        idle(_buildRoadMeshes);
-      } else {
-        const idle = typeof requestIdleCallback === 'function'
-          ? (fn) => requestIdleCallback(fn, { timeout: 1200 })
-          : (fn) => setTimeout(fn, 0);
-        idle(_buildRoadMeshes);
-      }
+    if (_perf) {
+      const buildMs = Math.round(performance.now() - _t);
+      console.log('[world] buildings', buildMs, 'ms');
+      LL?.stepEnd?.('world-buildings', { ms: buildMs });
+      _t = performance.now();
+    } else {
+      LL?.stepEnd?.('world-buildings');
     }
-    if (_perf) console.log('[world] total', Math.round(performance.now() - _t0), 'ms');
+    // Routes / décor plage-forêt : différés après game-init (buildMeshes ~100s bloquait le sync).
+    if (_perf) {
+      const totalMs = Math.round(performance.now() - _t0);
+      console.log('[world] total', totalMs, 'ms');
+      LL?.stepEnd?.('world-core', { ms: totalMs });
+    } else {
+      LL?.stepEnd?.('world-core');
+    }
     for (const c of buildingColliders) _colliders.push(c);
     ZS.buildSectorWalls?.(scene);
     tickDayNight(0);
-    ZS.SpawnZone?.finishBeachDecorAsync?.();
-    ZS.finishForestDecorAsync?.(scene);
     applyGraphicsOptions(_optsProfile());
     return buildingColliders;
+  }
+
+  /** Attend que le ring LOD urgent se vide (timeout pour ne pas bloquer indéfiniment). */
+  async function _waitLodUrgentBelow(max, timeoutMs) {
+    const t0 = performance.now();
+    while (performance.now() - t0 < timeoutMs) {
+      const n = ZS.Network?.getLodUrgentPending?.() ?? 0;
+      if (n <= max) return n;
+      await _yieldFrame();
+      const s = ZS.PerfMonitor?.getStats?.();
+      if (s?.frameMsP95 > 95 || (s?.fps != null && s.fps < 13)) {
+        await new Promise((resolve) => setTimeout(resolve, 40));
+      }
+    }
+    return ZS.Network?.getLodUrgentPending?.() ?? -1;
+  }
+
+  let _postSpawnVisualsStarted = false;
+
+  /** Routes + décor plage/forêt — après game-init pour ne pas bloquer le sync. */
+  function runPostSpawnVisualBuilds(scene) {
+    if (_postSpawnVisualsStarted) return;
+    _postSpawnVisualsStarted = true;
+    const s = scene || _scene;
+    if (!s) return;
+    const LL = ZS.LoadLog;
+    LL?.mark?.('post-spawn-visuals-scheduled');
+
+    const idle = typeof requestIdleCallback === 'function'
+      ? (fn) => requestIdleCallback(fn, { timeout: 2500 })
+      : (fn) => setTimeout(fn, 120);
+
+    idle(async () => {
+      LL?.mark?.('post-spawn-visuals-start');
+      try {
+        if (ZS.RoadNetwork?.buildMeshesAsync) {
+          LL?.stepStart?.('road-meshes');
+          const t0 = performance.now();
+          ZS.BarrierPrefabs?.resetBarrierColliders?.();
+          if (ZS.B?.whenRoadTexturesReady) {
+            LL?.mark?.('road-textures-wait');
+            await ZS.B.whenRoadTexturesReady();
+          }
+          const deferN = ZS._backlogPlan?.pressure?.defer
+            ?? ZS.Network?.getDeferPendingCount?.()
+            ?? 0;
+          const lodMid = ZS._backlogPlan?.pressure?.lodMid ?? 999;
+          const roadHeavy = deferN > 480 && lodMid > 140;
+          const roadBudget = roadHeavy
+            ? (ZS._isMobile ? 6 : 9)
+            : (ZS._roadBuildBudgetMs ?? (ZS._isMobile ? 9 : 12));
+          await ZS.RoadNetwork.buildMeshesAsync(s, ZS.B.M, {
+            ribbonStep: roadHeavy ? 0.55 : 0.42,
+            laneStep: roadHeavy ? 0.72 : 0.58,
+            budgetMs: roadBudget,
+            cols: ZS._isMobile ? 3 : 4,
+            skipShoulder: false,
+            skipLaneOverlay: roadHeavy,
+            deferLaneOverlay: !roadHeavy,
+            skipBarriers: roadHeavy,
+            deferBarriers: false,
+            fastGround: true,
+            resnapMeshes: false,
+            refineNormals: false,
+          });
+          const ms = Math.round(performance.now() - t0);
+          console.log('[world] roads', ms, 'ms (post-spawn async)');
+          LL?.stepEnd?.('road-meshes', { ms, async: true });
+          await _yieldFrame();
+        } else if (ZS.RoadNetwork?.buildMeshes) {
+          LL?.stepStart?.('road-meshes');
+          const t0 = performance.now();
+          ZS.BarrierPrefabs?.resetBarrierColliders?.();
+          ZS.RoadNetwork.buildMeshes(s, ZS.B.M);
+          const ms = Math.round(performance.now() - t0);
+          console.log('[world] roads', ms, 'ms (post-spawn)');
+          LL?.stepEnd?.('road-meshes', { ms });
+          await _yieldFrame();
+        }
+        if (ZS.SpawnZone?.finishBeachDecorAsync) {
+          const urgentLeft = await _waitLodUrgentBelow(64, 3500);
+          LL?.mark?.('beach-decor-wait-urgent', { urgentLeft });
+          LL?.stepStart?.('beach-decor-deferred');
+          ZS._sectorDecorBusy = true;
+          try {
+            await ZS.SpawnZone.finishBeachDecorAsync(s);
+          } finally {
+            ZS._sectorDecorBusy = false;
+            ZS._markSectorDecorCooldown?.();
+          }
+          LL?.stepEnd?.('beach-decor-deferred');
+          await _yieldFrame();
+        }
+        if (ZS.finishForestDecorAsync) {
+          const urgentLeft = await _waitLodUrgentBelow(48, 6000);
+          LL?.mark?.('forest-decor-wait-urgent', { urgentLeft });
+          LL?.stepStart?.('forest-decor-deferred');
+          ZS._sectorDecorBusy = true;
+          try {
+            await ZS.finishForestDecorAsync(s);
+          } finally {
+            ZS._sectorDecorBusy = false;
+            ZS._markSectorDecorCooldown?.();
+          }
+          LL?.stepEnd?.('forest-decor-deferred');
+        }
+        LL?.postSummary?.('post-spawn-visuals');
+      } catch (e) {
+        console.warn('[world] post-spawn visuals', e);
+        LL?.mark?.('post-spawn-visuals-error', { err: String(e?.message || e) });
+      }
+    });
   }
 
   function buildWorld(scene) {
@@ -307,7 +430,7 @@
     onProgress?.(1, 'Monde prêt');
   }
 
-  function setWorldTime(t) {
+function setWorldTime(t) {
     if (!_beachIntroGoldenHour) _timeOfDay = t;
   }
   function getWorldTime() { return _beachIntroGoldenHour ? BEACH_INTRO_GOLDEN_TIME : _timeOfDay; }
@@ -748,7 +871,7 @@
     }
   }
 
-  function applyGraphicsOptions(profile) {
+function applyGraphicsOptions(profile) {
     const p = profile || _optsProfile();
     if (!p) return;
     _waterAnimEnabled = p.waterAnim !== false;
@@ -861,8 +984,10 @@
           _triSlope(pa, i00, i11, i10),
           _triSlope(pa, i00, i01, i11),
         );
-        cellDirt[iz * SEG + ix] = beachWCell < 0.08 && !inBeach
-          && (inRiver || onRoad || inClearing || slope > 0.22 || avgH > 13.5) ? 1 : 0;
+        // Routes terre S01 sur ceinture plage→forêt : splat dirt même si beachW modéré.
+        const roadDirt = onRoad && beachWCell < 0.55 && !inRiver;
+        cellDirt[iz * SEG + ix] = roadDirt || (beachWCell < 0.08 && !inBeach
+          && (inRiver || onRoad || inClearing || slope > 0.22 || avgH > 13.5)) ? 1 : 0;
       }
       if (onChunk && iz % yieldRows === 0) {
         onChunk(0.5 + iz / (SEG * 2));
@@ -989,7 +1114,7 @@
 
   // ── Fleurs ───────────────────────────────────────────────────────────────────
 
-  function spawnFlowers(scene, count) {
+function spawnFlowers(scene, count) {
     const petalGeo = new THREE.CylinderGeometry(1, 0.6, 0.04, 6);
     const stemGeo  = new THREE.CylinderGeometry(0.015, 0.020, 1, 4);
     const stemMat  = new THREE.MeshLambertMaterial({ color: 0x2e5e1e });
@@ -1186,7 +1311,7 @@
     return tree;
   }
 
-  function registerChoppableTree(scene, group, x, z, decorId, opts = {}) {
+function registerChoppableTree(scene, group, x, z, decorId, opts = {}) {
     if (decorId) removeChoppableTree(decorId);
     if (opts.baseScale == null) opts.baseScale = group.scale.x || 1;
     return _registerTree(scene, group, x, z, { decorId }, decorId, opts);
@@ -1398,7 +1523,7 @@
     return rock;
   }
 
-  function registerMinableRock(scene, group, x, z, decorId, opts = {}) {
+function registerMinableRock(scene, group, x, z, decorId, opts = {}) {
     return _registerRock(scene, group, x, z, decorId, opts);
   }
 
@@ -1487,7 +1612,7 @@
     };
   }
 
-  function spawnTrees(scene, count) {
+function spawnTrees(scene, count) {
     for (let i = 0; i < count; i++) {
       const x = (_rng() - 0.5) * 560, z = (_rng() - 0.5) * 560;
       if (Math.hypot(x, z) < 4) continue;
@@ -1709,7 +1834,7 @@
     }
   }
 
-  function registerBillboards(meshes) {
+function registerBillboards(meshes) {
     for (const m of meshes) if (m) _billboards.push(m);
   }
 
@@ -1767,6 +1892,7 @@
   window.ZS = window.ZS || {};
   ZS.buildWorld             = buildWorld;
   ZS.buildWorldAsync        = buildWorldAsync;
+  ZS.runPostSpawnVisualBuilds = runPostSpawnVisualBuilds;
   ZS.applyGraphicsOptions   = applyGraphicsOptions;
   ZS.World                  = { applyGraphicsOptions };
   ZS.registerGroundMesh      = registerGroundMesh;
@@ -1782,15 +1908,26 @@
   ZS.registerWallClock    = registerWallClock;
   ZS.getFoliageDayBlend   = getFoliageDayBlend;
   ZS.setShadowCenter   = setShadowCenter;
-  function registerDecorColliders(id, colliders) {
+  let _decorColliderRegisterBatch = 0;
+
+function registerDecorColliders(id, colliders) {
     if (!id) return;
     if (!colliders || !colliders.length) {
       _decorColliders.delete(id);
-      invalidateColliderCache();
+      if (_decorColliderRegisterBatch === 0) invalidateColliderCache();
       return;
     }
     _decorColliders.set(id, colliders);
-    invalidateColliderCache();
+    if (_decorColliderRegisterBatch === 0) invalidateColliderCache();
+  }
+
+  function beginDecorColliderRegisterBatch() {
+    _decorColliderRegisterBatch++;
+  }
+
+  function endDecorColliderRegisterBatch() {
+    _decorColliderRegisterBatch = Math.max(0, _decorColliderRegisterBatch - 1);
+    if (_decorColliderRegisterBatch === 0) invalidateColliderCache();
   }
 
   function removeDecorColliders(id) {
@@ -2218,13 +2355,15 @@
     return true;
   }
 
-  ZS.getColliders           = getColliders;
+ZS.getColliders           = getColliders;
   ZS.getCollidersForServer  = getCollidersForServer;
   ZS.getCollidersNear       = getCollidersNear;
   ZS.invalidateColliderCache = invalidateColliderCache;
   ZS.registerSectorCollider = registerSectorCollider;
   ZS.getBarrierColliders     = () => (ZS.BarrierPrefabs?.getBarrierColliders?.() || []);
   ZS.registerDecorColliders = registerDecorColliders;
+  ZS.beginDecorColliderRegisterBatch = beginDecorColliderRegisterBatch;
+  ZS.endDecorColliderRegisterBatch = endDecorColliderRegisterBatch;
   ZS.removeDecorColliders   = removeDecorColliders;
   ZS.clearDecorColliders    = clearDecorColliders;
   ZS.getStandHeight         = getStandHeight;

@@ -5,7 +5,7 @@
   const STAND_MS = 1400;
 
   const LINES = [
-    'Du sable. Des vagues. Le bateau est encore là-bas.',
+    'Du sable. Des vagues. Quelque chose brille à l\'horizon — une épave, peut-être.',
     'L\'océan à l\'est. La forêt… là-bas, à l\'ouest.',
     'Un caillou brille dans le sable, à portée de main.',
   ];
@@ -174,6 +174,7 @@
   function tryStart(state) {
     if (_active || !_shouldPlay()) return false;
     if (!state?.player || state.player.dead) return false;
+    if (!ZS._camera) return false;
     _state = state;
     _buildUi();
     _active = true;

@@ -7,13 +7,13 @@
   window.ZS = window.ZS || {};
   /** Plages de % — couvrent tout 0–100 (plus de plafond à 24 %). */
   const PHASES = Object.freeze({
-    server: { min: 0, max: 12 },
-    scripts: { min: 12, max: 22 },
-    auth: { min: 22, max: 28 },
-    world: { min: 28, max: 48 },
-    socket: { min: 48, max: 58 },
-    sync: { min: 58, max: 92 },
-    finalize: { min: 92, max: 100 },
+    server: { min: 0, max: 10 },
+    scripts: { min: 10, max: 20 },
+    auth: { min: 20, max: 24 },
+    world: { min: 24, max: 42 },
+    socket: { min: 42, max: 50 },
+    sync: { min: 50, max: 88 },
+    finalize: { min: 88, max: 100 },
   });
 
   let _pct = 0;
@@ -62,6 +62,7 @@
     const t = Math.max(0, Math.min(1, local01));
     if (!phase) return setProgress(Math.round(t * 100), msg, detail);
     const p = phase.min + (phase.max - phase.min) * t;
+    ZS.LoadLog?.phase?.(phaseKey, p, msg, detail);
     setProgress(p, msg, detail);
   }
 
@@ -85,11 +86,13 @@
   }
 
   function hide({ delay = 350 } = {}) {
+    ZS.LoadLog?.mark?.('loading-hide', { delay, pct: _pct });
     forceProgress(100, 'Prêt', 'Bonne survie.');
     _active = false;
     clearTimeout(_hideTimer);
+    const { screen } = _els();
+    if (screen) screen.style.pointerEvents = 'none';
     _hideTimer = setTimeout(() => {
-      const { screen } = _els();
       if (screen) {
         screen.classList.add('connecting-fade-out');
         setTimeout(() => {

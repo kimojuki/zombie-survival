@@ -1,9 +1,8 @@
-// Collisions 2D (XZ) pour décors prefab / item — local → monde avec rotY + scale.
+// Collisions 2D décor prefab / item (généré — éditer decor_colliders/chunks/*.js puis npm run bundle:decor-colliders)
 (function () {
   'use strict';
 
-  // Offsets locaux (lx, lz) relatifs au pivot du décor. minY/maxY = bande verticale active (monde = baseY + offset).
-  const PREFAB_COLLIDERS = {
+const PREFAB_COLLIDERS = {
     spawn_campfire: [
       { type: 'box', lx: 0, lz: 0, hw: 0.52, hd: 0.52, maxY: 0.42 },
     ],
@@ -175,7 +174,9 @@
     spawn_prop_workbench: [
       { type: 'box', lx: 0, lz: 0, hw: 0.76, hd: 0.36, maxY: 0.95 },
     ],
-    spawn_prop_double_bed: [
+
+
+spawn_prop_double_bed: [
       { type: 'box', lx: 0, lz: 0, hw: 0.72, hd: 0.98, maxY: 0.48 },
     ],
     spawn_prop_nightstand: [
@@ -338,7 +339,9 @@
     spawn_urban_snack_machine: [
       { type: 'box', lx: 0, lz: 0, hw: 0.36, hd: 0.28, maxY: 1.55 },
     ],
-    spawn_prop_barber_chair: [
+
+
+spawn_prop_barber_chair: [
       { type: 'box', lx: 0, lz: 0.02, hw: 0.26, hd: 0.24, maxY: 0.92 },
     ],
     spawn_urban_clothesline: [
@@ -837,7 +840,8 @@
     tree_palm: [{ type: 'cyl', lx: 0, lz: 0, r: 0.38 }],
   };
 
-  /** Dimensions épaves — miroir de vehicle_prefabs.js BODY (carrosserie + habitacle). */
+
+/** Dimensions épaves — miroir de vehicle_prefabs.js BODY (carrosserie + habitacle). */
   const WRECK_BODY = {
     wreck_sedan:  { w: 1.78, h: 0.72, d: 4.1,  cw: 1.48, ch: 0.62, cd: 2.15, cz: -0.18 },
     wreck_pickup: { w: 1.85, h: 0.78, d: 4.55, cw: 1.52, ch: 0.68, cd: 1.85, cz: -0.35 },
@@ -872,7 +876,8 @@
     res_planche: { type: 'box', lx: 0, lz: 0, hw: 0.20, hd: 0.08, maxY: 0.06, layFlat: true },
   };
 
-  /** Pièces validées une par une — miroir packages/shared/src/survivor-shack-*.mjs */
+
+/** Pièces validées une par une — miroir packages/shared/src/survivor-shack-*.mjs */
   function _survivorShackColliderDefs() {
     return [
       _survivorShackFloorColliderDef(),
@@ -1076,7 +1081,8 @@
     };
   }
 
-  function buildDecorColliders(spec) {
+
+function buildDecorColliders(spec) {
     if (!spec) return [];
     if (spec.prefabId === 'road_barrier_rail' && spec.railSeg) {
       const baseY = Number.isFinite(spec.baseY) ? spec.baseY : 0;
@@ -1185,4 +1191,5 @@
   ZS.DECOR_PREFAB_COLLIDERS = PREFAB_COLLIDERS;
   ZS.DECOR_ITEM_COLLIDERS = ITEM_COLLIDERS;
   ZS.WRECK_BODY = WRECK_BODY;
+
 }());

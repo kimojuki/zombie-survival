@@ -1,8 +1,8 @@
-// Carte admin — monde zoomable, POI / décor / joueurs (hover + filtres).
+// Carte admin monde (généré — admin-world-map/chunks + npm run bundle:admin-world-map)
 (function () {
   'use strict';
 
-  const LAYER_META = {
+const LAYER_META = {
     player: { label: 'Joueurs', color: '#9fdf7a', screenPx: 6, z: 50 },
     'poi-live': { label: 'POI (live/seed)', color: '#ffd27a', screenPx: 5, z: 48 },
     'poi-design': { label: 'POI design (placeholder)', color: '#d8b45f', screenPx: 4, z: 36, dashed: true },
@@ -248,7 +248,8 @@
     return lines.join('<br>');
   }
 
-  function _drawPaper(ctx) {
+
+function _drawPaper(ctx) {
     const { w, h } = view;
     const bg = ctx.createRadialGradient(w * 0.45, h * 0.5, 20, w * 0.5, h * 0.5, Math.max(w, h) * 0.75);
     bg.addColorStop(0, '#1a2a22');
@@ -537,7 +538,8 @@
     _drawHud(ctx);
   }
 
-  function _resize() {
+
+function _resize() {
     if (!canvas) return;
     const rect = canvas.parentElement?.getBoundingClientRect();
     const w = Math.max(320, Math.floor(rect?.width || 800));
@@ -767,7 +769,8 @@
     }
   }
 
-  function _bindEditPanel() {
+
+function _bindEditPanel() {
     if (!editUi) return;
     editUi.close?.addEventListener('click', _closeEditPanel);
     editUi.save?.addEventListener('click', () => _saveDecor());
@@ -918,7 +921,8 @@
     return _screenToWorld(view.w / 2, view.h / 2);
   }
 
-  function init(opts) {
+
+function init(opts) {
     canvas = opts.canvas;
     tooltip = opts.tooltip;
     token = opts.token || '';
@@ -976,4 +980,5 @@
     closeEditPanel: _closeEditPanel,
     pulseAt,
   };
+
 }());

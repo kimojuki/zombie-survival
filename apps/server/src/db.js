@@ -93,8 +93,8 @@ function createSqlitePool() {
     path: dbPath,
     async execute(sql, params = []) {
       const normalizedSql = sql.trim().replace(/\s+/g, ' ');
-      const isSelect = /^\s*select\b/i.test(normalizedSql);
-      if (isSelect) {
+      const isRead = /^\s*(select|pragma|with)\b/i.test(normalizedSql);
+      if (isRead) {
         const stmt = db.prepare(sql);
         return [stmt.all(params)];
       }
@@ -111,22 +111,160 @@ function createSqlitePool() {
 
 const pool = DB_CLIENT === 'mysql' ? createMySqlPool() : createSqlitePool();
 
-async function getPlayer(username) {
+async function ensurePlayersSchema() {
+  if (DB_CLIENT !== 'mysql') return;
+  await pool.execute(`
+    CREATE TABLE IF NOT EXISTS players (
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      username VARCHAR(50) UNIQUE NOT NULL,
+      password_hash VARCHAR(255) NOT NULL,
+      pos_x FLOAT DEFAULT 0.0,
+      pos_y FLOAT DEFAULT 1.0,
+      pos_z FLOAT DEFAULT 0.0,
+      rot_y FLOAT DEFAULT 0.0,
+      health INT DEFAULT 100,
+      kills INT DEFAULT 0,
+      inventory JSON,
+      last_saved TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    )
+  `);
+}
+
+async function ensurePlayersGuestSchema() {
+  if (DB_CLIENT === 'mysql') {
+    await ensurePlayersSchema();
+    const alters = [
+      'ALTER TABLE players ADD COLUMN is_guest TINYINT(1) NOT NULL DEFAULT 0',
+      'ALTER TABLE players ADD COLUMN guest_committed TINYINT(1) NOT NULL DEFAULT 0',
+      'ALTER TABLE players ADD COLUMN account_id INT NULL UNIQUE',
+    ];
+    for (const sql of alters) {
+      try { await pool.execute(sql); } catch { /* column exists */ }
+    }
+    return;
+  }
+  const cols = await pool.execute('PRAGMA table_info(players)');
+  const names = new Set((cols[0] || []).map((c) => c.name));
+  if (!names.has('is_guest')) {
+    await pool.execute('ALTER TABLE players ADD COLUMN is_guest INTEGER NOT NULL DEFAULT 0');
+  }
+  if (!names.has('guest_committed')) {
+    await pool.execute('ALTER TABLE players ADD COLUMN guest_committed INTEGER NOT NULL DEFAULT 0');
+  }
+  if (!names.has('account_id')) {
+    await pool.execute('ALTER TABLE players ADD COLUMN account_id INTEGER NULL');
+  }
+}
+
+async function ensureAccountIdSchema() {
+  await ensurePlayersGuestSchema();
+  if (DB_CLIENT === 'mysql') {
+    try {
+      await pool.execute('ALTER TABLE players ADD COLUMN account_id INT NULL UNIQUE');
+    } catch { /* exists */ }
+  }
+}
+
+async function getPlayerByAccountId(accountId) {
+  await ensureAccountIdSchema();
   const [rows] = await pool.execute(
-    'SELECT id, username, password_hash, pos_x, pos_y, pos_z, rot_y, health, kills, inventory FROM players WHERE username = ?',
+    'SELECT id, account_id, username, password_hash, pos_x, pos_y, pos_z, rot_y, health, kills, inventory, last_saved, is_guest, guest_committed FROM players WHERE account_id = ?',
+    [accountId],
+  );
+  return rows[0] || null;
+}
+
+async function setPlayerAccountId(playerId, accountId) {
+  await ensureAccountIdSchema();
+  await pool.execute('UPDATE players SET account_id = ? WHERE id = ?', [accountId, playerId]);
+}
+
+async function createLinkedPlayer({
+  accountId,
+  username,
+  passwordHash,
+  inventory,
+  spawn,
+  isGuest = false,
+  guestCommitted = false,
+}) {
+  await ensureAccountIdSchema();
+  const sp = spawn || { x: 0, y: 1, z: -5, rotY: 0 };
+  const inv = inventory || JSON.stringify([]);
+  const [result] = await pool.execute(
+    'INSERT INTO players (account_id, username, password_hash, inventory, pos_x, pos_y, pos_z, rot_y, health, kills, is_guest, guest_committed) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 100, 0, ?, ?)',
+    [accountId, username, passwordHash, inv, sp.x, sp.y, sp.z, sp.rotY, isGuest ? 1 : 0, guestCommitted ? 1 : 0],
+  );
+  return result.insertId;
+}
+
+async function getPlayer(username) {
+  await ensurePlayersGuestSchema();
+  const [rows] = await pool.execute(
+    'SELECT id, username, password_hash, pos_x, pos_y, pos_z, rot_y, health, kills, inventory, last_saved, is_guest, guest_committed FROM players WHERE username = ?',
     [username]
   );
   return rows[0] || null;
 }
 
+async function getPlayerById(id) {
+  await ensurePlayersGuestSchema();
+  const [rows] = await pool.execute(
+    'SELECT id, username, password_hash, pos_x, pos_y, pos_z, rot_y, health, kills, inventory, last_saved, is_guest, guest_committed FROM players WHERE id = ?',
+    [id]
+  );
+  return rows[0] || null;
+}
+
 async function createPlayer(username, passwordHash, inventory, spawn) {
+  await ensurePlayersGuestSchema();
   const sp = spawn || { x: 0, y: 1, z: -5, rotY: 0 };
   const inv = inventory || JSON.stringify([]);
   const [result] = await pool.execute(
-    'INSERT INTO players (username, password_hash, inventory, pos_x, pos_y, pos_z, rot_y, health, kills) VALUES (?, ?, ?, ?, ?, ?, ?, 100, 0)',
+    'INSERT INTO players (username, password_hash, inventory, pos_x, pos_y, pos_z, rot_y, health, kills, is_guest, guest_committed) VALUES (?, ?, ?, ?, ?, ?, ?, 100, 0, 0, 0)',
     [username, passwordHash, inv, sp.x, sp.y, sp.z, sp.rotY]
   );
   return result.insertId;
+}
+
+async function createGuestPlayer(username, inventory, spawn, passwordPlaceholder) {
+  await ensurePlayersGuestSchema();
+  const sp = spawn || { x: 0, y: 1, z: -5, rotY: 0 };
+  const inv = inventory || JSON.stringify([]);
+  const [result] = await pool.execute(
+    'INSERT INTO players (username, password_hash, inventory, pos_x, pos_y, pos_z, rot_y, health, kills, is_guest, guest_committed) VALUES (?, ?, ?, ?, ?, ?, ?, 100, 0, 1, 0)',
+    [username, passwordPlaceholder, inv, sp.x, sp.y, sp.z, sp.rotY]
+  );
+  return result.insertId;
+}
+
+async function setGuestCommitted(id) {
+  await ensurePlayersGuestSchema();
+  const [result] = await pool.execute(
+    'UPDATE players SET guest_committed = 1, last_saved = CURRENT_TIMESTAMP WHERE id = ? AND is_guest = 1',
+    [id]
+  );
+  return result.affectedRows || 0;
+}
+
+async function deleteGuestPlayer(id) {
+  await ensurePlayersGuestSchema();
+  await pool.execute('DELETE FROM world_sleepers WHERE player_id = ?', [id]);
+  const [result] = await pool.execute(
+    'DELETE FROM players WHERE id = ? AND is_guest = 1 AND guest_committed = 0',
+    [id]
+  );
+  return result.affectedRows || 0;
+}
+
+async function upgradeGuestPlayer(id, newUsername, passwordHash) {
+  await ensurePlayersGuestSchema();
+  const [result] = await pool.execute(
+    'UPDATE players SET username = ?, password_hash = ?, is_guest = 0, guest_committed = 1, last_saved = CURRENT_TIMESTAMP WHERE id = ? AND is_guest = 1',
+    [newUsername, passwordHash, id]
+  );
+  return result.affectedRows || 0;
 }
 
 async function savePlayerState(id, x, y, z, rotY, health, kills, inventory, username) {
@@ -312,10 +450,13 @@ async function deleteWorldZombie(id) {
 }
 
 async function loadAllWorldSleepers() {
-  const [rows] = await pool.execute('SELECT player_id, payload FROM world_sleepers ORDER BY player_id');
+  const [rows] = await pool.execute(
+    'SELECT player_id, payload, updated_at FROM world_sleepers ORDER BY player_id'
+  );
   return rows.map((r) => ({
     player_id: r.player_id,
     payload: typeof r.payload === 'string' ? r.payload : JSON.stringify(r.payload),
+    updated_at: r.updated_at,
   }));
 }
 
@@ -366,7 +507,17 @@ async function setWorldMeta(key, value) {
 module.exports = {
   pool,
   getPlayer,
+  getPlayerById,
   createPlayer,
+  createGuestPlayer,
+  setGuestCommitted,
+  deleteGuestPlayer,
+  upgradeGuestPlayer,
+  ensurePlayersGuestSchema,
+  ensureAccountIdSchema,
+  getPlayerByAccountId,
+  setPlayerAccountId,
+  createLinkedPlayer,
   savePlayerState,
   DB_CLIENT,
   ensureWorldSchema,

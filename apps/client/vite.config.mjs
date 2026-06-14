@@ -9,6 +9,7 @@ export default defineConfig({
     rollupOptions: {
       input: {
         index: 'apps/client/index.html',
+        play: 'apps/client/play.html',
         game: 'apps/client/game.html',
         armPreview: 'apps/client/arm-preview.html',
         modelsPreview: 'apps/client/models-preview.html',

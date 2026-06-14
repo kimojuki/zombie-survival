@@ -1,0 +1,84 @@
+---
+description: Démarrer, reboot et maintenir les serveurs dev — toujours par l'agent, jamais demander à l'utilisateur
+alwaysApply: true
+---
+
+# Serveurs dev — reboot autonome (obligatoire)
+
+**L'agent redémarre toujours les serveurs lui-même.** Ne jamais dire à l'utilisateur « redémarre le serveur », « lance npm start », ou « Ctrl+C puis relance » — c'est le job de l'agent.
+
+## Stack locale
+
+| Process | Commande | Port | Exposé | URL |
+|---------|----------|------|--------|-----|
+| **Game + front public** | `npm start` | **3000** | Oui (Cloudflare `survival.badom.ch`) | http://localhost:3000/api/health |
+| Client Vite (dev) | `npm run dev:client` | 5173 | Non | http://localhost:5173/ |
+| Auth interne (optionnel) | `npm run start:auth` | 3001 | Non (`127.0.0.1`) | http://127.0.0.1:3001/api/health |
+
+Le tunnel Cloudflare pointe **uniquement** sur `:3000`. Vite proxy `/api` + `/socket.io` → `:3000`.
+
+## Quand reboot (sans exception)
+
+| Situation | Action agent |
+|-----------|--------------|
+| Fin de session avec changement `apps/server/**` | **Reboot `:3000`** avant de conclure |
+| Changement `apps/auth-server/**` | Reboot `:3001` (+ `:3000` si proxy auth) |
+| Changement `vite.config.mjs` | Reboot `:5173` |
+| Avant test manuel / playtest demandé | Vérifier health ; reboot si stale ou après edits serveur |
+| Fin de session avec changements client/serveur testés via Docker | **`npm run docker:sim:restart`** (edge reste up) — **jamais `docker:sim:down` seul avant up** |
+| Après `bundle:network`, `client-version.json`, ou edits client/serveur pour playtest Docker | **`npm run docker:sim:restart`** avant de conclure |
+| `EADDRINUSE` | Tuer l'ancien PID, relancer **une** instance |
+| `/api/health` sans commit/build attendu | Reboot `:3000` (process stale) |
+
+## Workflow reboot (Windows)
+
+```powershell
+# 1. Libérer le port
+Get-NetTCPConnection -LocalPort 3000 -ErrorAction SilentlyContinue |
+  ForEach-Object { Stop-Process -Id $_.OwningProcess -Force -ErrorAction SilentlyContinue }
+
+# 2. Relancer en background
+cd d:\Projects\zombie-survival
+npm start   # block_until_ms: 0 → background
+
+# 3. Vérifier
+Start-Sleep 3
+Invoke-RestMethod http://127.0.0.1:3000/api/health
+```
+
+Répéter pour `:5173` (`npm run dev:client`) et `:3001` (`npm run start:auth`) si concernés.
+
+## Docker sim (prod-like, port **4000**)
+
+Stack **edge** (nginx site public) + **app** (MariaDB + auth + game). **Ne jamais couper edge** lors d'un rebuild client/serveur — évite Cloudflare 502.
+
+```powershell
+cd d:\Projects\zombie-survival
+npm run docker:sim:edge:up       # site public :443/:4000 (une fois / après reboot machine)
+npm run docker:sim:restart       # rebuild game/auth SANS couper edge (préféré)
+npm run docker:sim:up             # edge + stack complète (premier boot)
+npm run docker:sim:down           # arrête game/db/auth seulement — edge reste up
+npm run docker:sim:down:all       # tout arrêter (maintenance infra)
+npm run docker:sim:test           # smoke http://127.0.0.1:4000
+```
+
+Pendant un `docker:sim:restart` : landing `/` reste en ligne, `/play.html` et `/api/` affichent la page maintenance (503) au lieu d'un 502 Cloudflare.
+
+URL jeu : http://127.0.0.1:4000 · prod : https://survival.badom.ch
+
+## Début de session dev
+
+1. Vérifier ports 3000 / 5173 (3001 si auth standalone).
+2. Health `:3000` → 200 et `ready: true` ? Sinon reboot.
+3. Lancer ce qui manque en **background** — ne pas bloquer la conversation.
+
+## Ne jamais faire
+
+- Demander à l'utilisateur de reboot ou ouvrir un terminal.
+- Laisser un serveur stale après modification `index.js`, `db.js`, routes auth.
+- Lancer un second `npm start` si health OK **et** code à jour (vérifier `invDebugBuild` / uptime si doute).
+- Exposer `:3001` sur Cloudflare — auth reste interne.
+
+## Scripts desktop (optionnel)
+
+`tools/desktop/zs-server-{start,stop,restart,status}.bat` — raccourcis bureau via `create-desktop-shortcuts.ps1`. L'agent peut aussi utiliser PowerShell directement (voir ci-dessus).

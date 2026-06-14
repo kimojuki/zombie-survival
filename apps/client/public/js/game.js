@@ -1,17 +1,63 @@
-// Main game loop — Three.js setup, FPS movement, shooting
+// Main game loop — Three.js setup, FPS movement, shooting (généré — éditer game/chunks/*.js puis npm run bundle:game)
 (async function () {
   'use strict';
 
-  function _clearAuthSession() {
-    ['zombie_token', 'zombie_username', 'zombie_is_admin', 'zombie_spawn', 'zombie_health', 'zombie_kills']
+function _clearAuthSession() {
+    ['zombie_token', 'zombie_username', 'zombie_is_admin', 'zombie_is_guest', 'zombie_guest_committed', 'zombie_spawn', 'zombie_health', 'zombie_kills']
       .forEach((k) => localStorage.removeItem(k));
+  }
+
+  function _storeAuthPayload(data) {
+    localStorage.setItem('zombie_token', data.token);
+    localStorage.setItem('zombie_username', data.username);
+    localStorage.setItem('zombie_is_admin', data.isAdmin ? '1' : '0');
+    localStorage.setItem('zombie_is_guest', data.guest ? '1' : '0');
+    localStorage.setItem('zombie_guest_committed', data.guestCommitted ? '1' : '0');
+    if (data.role) localStorage.setItem('zs_role', data.role);
+    if (data.roleLabel) localStorage.setItem('zs_role_label', data.roleLabel);
+    if (data.permissions) localStorage.setItem('zs_permissions', JSON.stringify(data.permissions));
+    if (data.serverRole) localStorage.setItem('zombie_server_role', data.serverRole);
+    if (data.spawn) localStorage.setItem('zombie_spawn', JSON.stringify(data.spawn));
+    if (data.health != null) localStorage.setItem('zombie_health', data.health);
+    if (data.kills != null) localStorage.setItem('zombie_kills', data.kills);
+  }
+
+  // ── Handoff standalone (auth-server → game JWT) ───────────────────────────
+  const _handoffCode = new URLSearchParams(window.location.search).get('handoff');
+  if (_handoffCode) {
+    window.ZS?.Loading?.setPhase?.('auth', 0, 'Connexion au serveur…', '');
+    ZS.LoadLog?.stepStart?.('auth');
+    try {
+      const serverId = localStorage.getItem('zombie_server_id') || 'prod';
+      const hres = await fetch('/api/auth/handoff', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ code: _handoffCode, serverId }),
+      });
+      const hdata = await hres.json().catch(() => ({}));
+      if (!hres.ok) {
+        ZS.LoadLog?.stepEnd?.('auth', { ok: false, status: hres.status, handoff: true });
+        _clearAuthSession();
+        window.location.href = '/play.html';
+        return;
+      }
+      _storeAuthPayload(hdata);
+      history.replaceState(null, '', '/game.html');
+      window.ZS?.Loading?.setPhase?.('auth', 1, 'Compte vérifié', '');
+      ZS.LoadLog?.stepEnd?.('auth', { ok: true, handoff: true });
+    } catch {
+      _clearAuthSession();
+      window.location.href = '/play.html';
+      return;
+    }
   }
 
   // ── Auth guard ────────────────────────────────────────────────────────────
   const token = localStorage.getItem('zombie_token');
-  if (!token) { window.location.href = '/'; return; }
+  if (!token) { window.location.href = '/play.html'; return; }
 
   window.ZS?.Loading?.setPhase?.('auth', 0, 'Vérification du compte…', '');
+  ZS.LoadLog?.stepStart?.('auth');
 
   try {
     const authRes = await fetch('/api/auth/me', {
@@ -19,14 +65,17 @@
       cache: 'no-store',
     });
     if (!authRes.ok) {
+      ZS.LoadLog?.stepEnd?.('auth', { ok: false, status: authRes.status });
       _clearAuthSession();
       window.location.href = '/';
       return;
     }
     window.ZS?.Loading?.setPhase?.('auth', 1, 'Compte vérifié', '');
+    ZS.LoadLog?.stepEnd?.('auth', { ok: true });
   } catch {
     // Tunnel/serveur en cours de démarrage — on laisse Socket.io retenter.
     window.ZS?.Loading?.setPhase?.('auth', 0.5, 'Compte…', 'Serveur lent — connexion directe');
+    ZS.LoadLog?.stepEnd?.('auth', { ok: false, fallback: true });
   }
 
   // ── State ─────────────────────────────────────────────────────────────────
@@ -115,7 +164,7 @@
   let _walkBobPhase = 0;
   let _camFov = 75;
 
-  function _updateWaterEffect(px, pz, py) {
+function _updateWaterEffect(px, pz, py) {
     const waterY = ZS.getWaterSurface(px, pz);
     const feetY = (py || 0) - 1.7;
     const nowIn  = waterY !== null && waterY > feetY - 0.05;
@@ -174,10 +223,11 @@
     transports: ['polling', 'websocket'],
     reconnectionAttempts: 8,
   });
-  ZS.Network.preconnect(socket);
+  ZS.Network?.preconnect?.(socket);
 
   // ── Build world ───────────────────────────────────────────────────────────
   window.ZS?.Loading?.setPhase?.('world', 0, 'Construction du monde…', 'Terrain et routes');
+  ZS.LoadLog?.stepStart?.('world-build');
   const _tWorld = performance.now();
   if (ZS.buildWorldAsync) {
     await ZS.buildWorldAsync(scene, (p, detail) => {
@@ -192,8 +242,12 @@
     ZS.buildWorld(scene);
     window.ZS?.Loading?.setPhase?.('world', 0.72, 'Construction du monde…', 'Végétation et camp');
   }
-  console.log('[world] build', Math.round(performance.now() - _tWorld), 'ms');
-  if (socket.connected) console.log('[socket] connect', Math.round(performance.now() - _tSocket), 'ms (parallel)');
+  const _worldMs = Math.round(performance.now() - _tWorld);
+  const _sockMs = Math.round(performance.now() - _tSocket);
+  console.log('[world] build', _worldMs, 'ms');
+  if (socket.connected) console.log('[socket] connect', _sockMs, 'ms (parallel)');
+  ZS.LoadLog?.stepEnd?.('world-build', { ms: _worldMs, socketMs: _sockMs, socketConnected: socket.connected });
+  ZS.DevLog?.boot?.('world-ready', { worldMs: _worldMs, socketMs: _sockMs, socketConnected: socket.connected });
 
   const _worldLights = [];
   const _playerTorchLights = [];
@@ -275,7 +329,6 @@
       : (ZS.getTerrainHeight ? ZS.getTerrainHeight(x, z) : 0));
     return { x, y, z, rotY: yaw, fromRay: false };
   }
-  ZS.pickAdminDecorPlacement = _pickAdminDecorPlacement;
 
   // Position camera at spawn before first render
   state.player.y = (ZS.getDecorGroundHeight
@@ -299,6 +352,7 @@
   ZS.Inventory.init(state, scene, socket);
 
   ZS.Network.init(socket, scene, state);
+  ZS.LoadLog?.mark?.('game-modules-init', { socketConnected: socket.connected });
   if (typeof ZS.Network?.tick !== 'function' && typeof ZS.networkTick !== 'function') {
     console.error('[game] ZS.Network.tick absent — videz le cache (Ctrl+F5) ou redeploy client');
   }
@@ -387,28 +441,107 @@
   const _isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) ||
                  (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
 
-  function _resizeToViewport() {
+  let _frameRecoverUntil = 0;
+  let _zombieRecoverSkip = 0;
+  let _adaptivePrUntil = 0;
+  let _adaptivePrRestoreAfter = 0;
+  let _adaptivePrLastResizeAt = 0;
+  let _adaptivePrCap = null;
+  const _ADAPTIVE_PR_HOLD_MS = 1800;
+  const _ADAPTIVE_PR_RESTORE_MS = 3400;
+  const _ADAPTIVE_PR_RESIZE_COOLDOWN_MS = 2800;
+  let _lastVpW = 0;
+  let _lastVpH = 0;
+  let _lastVpPr = 0;
+  let _lastVpTop = 0;
+  let _lastVpLeft = 0;
+
+  let _bootRenderWarmup = 0;
+
+  ZS.beginBootRenderWarmup = (frames) => {
+    _bootRenderWarmup = Math.max(0, frames | 0);
+    if (_bootRenderWarmup > 0) {
+      _adaptivePrCap = ZS._isMobile ? 0.68 : 0.82;
+      _adaptivePrRestoreAfter = performance.now() + _ADAPTIVE_PR_RESTORE_MS;
+      _resizeToViewport(true);
+    }
+  };
+  ZS.getBootRenderWarmup = () => _bootRenderWarmup;
+
+  ZS.isFrameRecovering = () => performance.now() < _frameRecoverUntil;
+
+  function _effectivePixelRatioMax() {
+    const base = ZS.Options?.getProfile?.()?.pixelRatioMax ?? _gfxProf.pixelRatioMax;
+    if (_adaptivePrCap != null) return Math.min(base, _adaptivePrCap);
+    return base;
+  }
+
+  function _resizeToViewport(force = false) {
     // visualViewport donne la vraie zone visible (sous la barre Safari sur iOS)
     const vp = window.visualViewport;
     const w  = vp ? vp.width  : window.innerWidth;
     const h  = vp ? vp.height : window.innerHeight;
-    const pr = ZS.Options?.getProfile?.()?.pixelRatioMax;
-    if (pr) renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, pr));
+    const prMax = _effectivePixelRatioMax();
+    const pr = Math.min(window.devicePixelRatio || 1, prMax);
+    const top = vp ? vp.offsetTop : 0;
+    const left = vp ? vp.offsetLeft : 0;
+    if (!force
+        && Math.abs(w - _lastVpW) < 0.5
+        && Math.abs(h - _lastVpH) < 0.5
+        && Math.abs(pr - _lastVpPr) < 0.01
+        && Math.abs(top - _lastVpTop) < 0.5
+        && Math.abs(left - _lastVpLeft) < 0.5) {
+      return;
+    }
+    _lastVpW = w;
+    _lastVpH = h;
+    _lastVpPr = pr;
+    _lastVpTop = top;
+    _lastVpLeft = left;
+    renderer.setPixelRatio(pr);
     renderer.setSize(w, h);
     camera.aspect = w / h;
     camera.updateProjectionMatrix();
     canvas.style.width  = w + 'px';
     canvas.style.height = h + 'px';
-    canvas.style.top    = (vp ? vp.offsetTop  : 0) + 'px';
-    canvas.style.left   = (vp ? vp.offsetLeft : 0) + 'px';
+    canvas.style.top    = top + 'px';
+    canvas.style.left   = left + 'px';
+  }
+
+  function _tickAdaptivePixelRatio(frameMs) {
+    const fps = ZS.PerfMonitor?.getStats?.()?.fps;
+    const recover = ZS.isFrameRecovering();
+    const sectorBusy = ZS.Network?.isSectorLoadBusy?.();
+    const now = performance.now();
+    const stressed = frameMs >= 52 || recover || sectorBusy || (fps != null && fps < 15);
+    if (stressed) {
+      _adaptivePrUntil = now + _ADAPTIVE_PR_HOLD_MS;
+      _adaptivePrRestoreAfter = now + _ADAPTIVE_PR_RESTORE_MS;
+    }
+    const dropCap = ZS._isMobile ? 0.82 : 0.95;
+    const shouldDrop = now < _adaptivePrUntil
+      || (_adaptivePrCap != null && now < _adaptivePrRestoreAfter);
+    const newCap = shouldDrop ? dropCap : null;
+    if (newCap === _adaptivePrCap) return;
+    if (now - _adaptivePrLastResizeAt < _ADAPTIVE_PR_RESIZE_COOLDOWN_MS) return;
+    _adaptivePrCap = newCap;
+    _adaptivePrLastResizeAt = now;
+    _resizeToViewport();
+    if (shouldDrop && ZS.LoadLog?.isEnabled?.()) {
+      ZS.LoadLog.post('adaptive-pr-drop', {
+        cap: newCap,
+        frameMs: Math.round(frameMs),
+        fps: fps ?? null,
+      });
+    }
   }
 
   if (window.visualViewport) {
     window.visualViewport.addEventListener('resize', _resizeToViewport);
-    window.visualViewport.addEventListener('scroll', _resizeToViewport);
+    if (_isIOS) window.visualViewport.addEventListener('scroll', _resizeToViewport);
   }
   window.addEventListener('resize', _resizeToViewport);
-  _resizeToViewport();
+  _resizeToViewport(true);
 
   // ── Plein écran + orientation paysage ─────────────────────────────────────
   let _fsActive = false;
@@ -515,6 +648,15 @@
     return t && (t.id === 'rcon-input' || t.closest?.('#rcon-panel'));
   }
 
+  function _adminRoadsTyping(e) {
+    if (!ZS.AdminLiveRoads?.isActive?.()) return false;
+    const sel = '#zs-admin-live-roads input, #zs-admin-live-roads textarea, #zs-admin-live-roads select';
+    const ae = document.activeElement;
+    if (ae?.closest?.(sel)) return true;
+    if (e?.target?.closest?.(sel)) return true;
+    return false;
+  }
+
   function _adminDecorTyping(e) {
     if (!ZS.AdminLiveDecor?.isActive?.()) return false;
     const sel = '#zs-admin-live-decor input, #zs-admin-live-decor textarea, #zs-admin-live-decor select';
@@ -526,6 +668,12 @@
 
   document.addEventListener('keydown', (e) => {
     if (ZS.shortcutsBlocked?.(e) || ZS.Chat?.isOpen?.()) return;
+    if (ZS.BedSleep?.isActive?.() && e.code === 'Space') {
+      e.preventDefault();
+      ZS.BedSleep.tryWake();
+      return;
+    }
+    if (ZS.BedSleep?.isActive?.()) return;
     if (ZS.Rcon?.isOpen?.()) {
       if (_rconTyping(e)) return;
       if (e.code === 'Backquote' || e.code === 'F2' || e.code === 'Escape') {
@@ -589,6 +737,25 @@
       state.input.crouchToggle = !state.input.crouchToggle;
       e.preventDefault();
       return;
+    }
+    if (ZS.AdminLiveRoads?.isActive?.() && !_adminRoadsTyping(e)) {
+      if (e.code === 'Enter' && ZS.AdminLiveRoads.tryFinishOnEnter?.()) {
+        e.preventDefault();
+        return;
+      }
+      if (e.code === 'Backspace' && ZS.AdminLiveRoads.tryUndoPointOnBackspace?.()) {
+        e.preventDefault();
+        return;
+      }
+      if (e.code === 'Escape') {
+        e.preventDefault();
+        if (document.pointerLockElement === canvas) {
+          document.exitPointerLock?.();
+          return;
+        }
+        ZS.AdminLiveRoads.exit();
+        return;
+      }
     }
     if (e.code === 'KeyE') {
       state.keys[e.code] = true;
@@ -657,7 +824,7 @@
     return !!el.closest?.(
       '#menu-panel, #menu-btn, #inv-panel, #craft-panel, #storage-panel, #storage-backdrop, #sleep-loot-panel, #sleep-loot-backdrop, #sign-backdrop, #sign-panel, #options-backdrop, #options-panel, #admin-backdrop, #admin-panel, #map-overlay, #group-backdrop, #death-screen, '
       + '#connecting-screen, #rcon-panel, #chat-wrap, #hotbar, #craft-btn, #inv-btn, #map-btn, #chat-btn, '
-      + '#build-ctl, #zs-admin-live-decor, #zs-admin-map-overlay, #zs-admin-prefab-catalog, #zs-arm-tuner, '
+      + '#build-ctl, #zs-admin-live-decor, #zs-admin-live-roads, #zs-admin-map-overlay, #zs-admin-prefab-catalog, #zs-arm-tuner, '
       + '#sprint-btn, #crouch-btn, '
       + 'button, a, input, textarea, select, [contenteditable]'
     );
@@ -714,7 +881,7 @@
     if (ZS.Chat?.isOpen?.() || document.body.classList.contains('chat-open')) return;
     if (_uiPanelOpen()) return;
     const conn = document.getElementById('connecting-screen');
-    if (conn && conn.style.display === 'flex') return;
+    if (conn && conn.style.display === 'flex' && !conn.classList.contains('connecting-fade-out')) return;
     if (ZS.Loading?.isActive?.()) return;
     if (!canvas?.requestPointerLock) return;
     const reqId = ++_lockReqId;
@@ -741,6 +908,7 @@
       if (e.button !== 0) return;
       if (ZS.AdminWorldMapOverlay?.isOpen?.()) return;
       if (ZS.Rcon?.isOpen?.()) return;
+      if (ZS.AdminLiveRoads?.isActive?.()) return;
       if (_blocksPointerLock(e.target)) return;
       _requestPointerLock();
     }, true);
@@ -1009,7 +1177,8 @@
 
   function attack() {
     if (state.player.dead) return;
-    if (ZS.AdminLiveDecor?.isPlacing?.() || ZS.AdminFly?.isActive?.()) return;
+    if (ZS.BedSleep?.isActive?.()) return;
+    if (ZS.AdminLiveDecor?.isPlacing?.() || ZS.AdminLiveRoads?.isPlacing?.() || ZS.AdminFly?.isActive?.()) return;
     if (ZS.AdminWorldMapOverlay?.isOpen?.()) return;
     if (ZS.SpawnIntro?.blocksInput?.()) return;
     if (ZS.Loading?.isActive?.() || !ZS.Network?.isSpawnReady?.()) return;
@@ -1030,7 +1199,7 @@
     if (!def) _fistPunch();   // mains vides → coup de poing
   }
 
-  function _placeHeldStructure() {
+function _placeHeldStructure() {
     if (state.player.dead) return false;
     const item = ZS.Inventory.getActiveItem();
     const def = item ? ZS.ITEMS[item.type] : null;
@@ -1281,6 +1450,7 @@
           introBeats: { pickedTorch: true, campfire: true },
         });
         ZS.IntroStarter?.onPickup?.('tool_torche');
+        ZS.IntroLessons?.onTorchAcquired?.();
         ZS.UI?.showNotif?.('Torche récupérée');
       } else if (res?.err === 'inventory_full') {
         ZS.UI?.showNotif?.('Inventaire plein — libère un emplacement');
@@ -1292,7 +1462,7 @@
         ZS.UI?.showNotif?.('Tu as déjà la torche');
         ZS.BeachIntroPrefabs?.syncIntroCampfireTorchVisibility?.();
       } else if (res?.err === 'need_campfire_beat') {
-        ZS.UI?.showNotif?.('Approche le centre du cercle de pierres');
+        ZS.UI?.showNotif?.('Approche la veilleuse — le feu doit te sentir proche');
       } else if (res?.err === 'pickup_failed') {
         ZS.UI?.showNotif?.('Ramassage impossible');
       } else {
@@ -1331,7 +1501,7 @@
     }
     const bedFurniture = ZS.findNearestDecorInteract?.(px, pz, 3.2, 'bed');
     if (bedFurniture) {
-      ZS.Network?.requestCampRest?.(bedFurniture.decorId);
+      ZS.BedSleep?.tryStart?.(bedFurniture.decorId);
       return true;
     }
     return false;
@@ -1438,9 +1608,27 @@
   };
   state.onJump   = () => { state.jumpPressed = true; };
   document.addEventListener('mousedown', (e) => {
-    if (!pointerLocked) return;
+    if (!pointerLocked) {
+      if (_blocksPointerLock(e.target)) return;
+      if (e.target !== canvas) return;
+      if (e.button === 2) {
+        if (ZS.AdminLiveRoads?.tryCancelOnRightClick?.()) {
+          e.preventDefault();
+        }
+        return;
+      }
+      if (e.button !== 0) return;
+      if (ZS.AdminLiveRoads?.tryPlaceOnClick?.()) {
+        e.preventDefault();
+      }
+      return;
+    }
     if (_blocksPointerLock(e.target)) return;
     if (e.button === 2) {
+      if (ZS.AdminLiveRoads?.tryCancelOnRightClick?.()) {
+        e.preventDefault();
+        return;
+      }
       if (ZS.AdminLiveDecor?.tryCancelOnRightClick?.()) {
         e.preventDefault();
         return;
@@ -1449,6 +1637,10 @@
       return;
     }
     if (e.button !== 0) return;
+    if (ZS.AdminLiveRoads?.tryPlaceOnClick?.()) {
+      e.preventDefault();
+      return;
+    }
     if (ZS.AdminLiveDecor?.tryPlaceOnClick?.()) {
       e.preventDefault();
       return;
@@ -1456,8 +1648,13 @@
     attack();
   });
   document.addEventListener('contextmenu', (e) => {
-    if (!pointerLocked) return;
-    if (ZS.AdminLiveDecor?.isPlacing?.()) {
+    if (!pointerLocked) {
+      if (ZS.AdminLiveRoads?.isActive?.() && e.target === canvas) {
+        e.preventDefault();
+      }
+      return;
+    }
+    if (ZS.AdminLiveDecor?.isPlacing?.() || ZS.AdminLiveRoads?.isPlacing?.()) {
       e.preventDefault();
       return;
     }
@@ -1466,8 +1663,12 @@
     if (def?.category === 'structure') e.preventDefault();
   });
   document.addEventListener('wheel', (e) => {
-    if (!pointerLocked) return;
+    if (!pointerLocked) {
+      if (ZS.AdminLiveRoads?.onWheel?.(e)) e.preventDefault();
+      return;
+    }
     if (ZS.AdminLiveDecor?.onWheel?.(e)) e.preventDefault();
+    if (ZS.AdminLiveRoads?.onWheel?.(e)) e.preventDefault();
   }, { passive: false });
   document.addEventListener('keydown', (e) => {
     if (ZS.shortcutsBlocked?.(e) || ZS.Chat?.isOpen?.()) return;
@@ -1493,6 +1694,34 @@
   let _BILLBOARD_STRIDE = _gfxProf.billboardStride || (_isMobile ? 2 : 1);
   let _biomeStrideAcc = 0;
   let _beachLifeStrideAcc = 0;
+  let _s01ZoneLog = '';
+  const _S01_CABIN_XZ = { x: 165.1, z: 7.1 };
+  const _S01_CLEARING_XZ = { x: 0, z: -6 };
+  const _S01_ROUTE_JUNC = { x: 85, z: -6 };
+
+  function _tickS01DevLog(px, pz) {
+    if (!ZS.DevLog?.isEnabled?.()) return;
+    const bed = ZS.findNearestDecorInteract?.(px, pz, 3.5, 'bed');
+    const dCab = Math.hypot(px - _S01_CABIN_XZ.x, pz - _S01_CABIN_XZ.z);
+    const dRoute = Math.hypot(px - _S01_ROUTE_JUNC.x, pz - _S01_ROUTE_JUNC.z);
+    const dClear = Math.hypot(px - _S01_CLEARING_XZ.x, pz - _S01_CLEARING_XZ.z);
+    const onRoad = ZS.isNearRoad?.(px, pz, 1.35);
+    let zone = null;
+    if (bed) zone = 'lit_cabane';
+    else if (dCab < 14) zone = 'cabane01_proche';
+    else if (dClear < 12) zone = 'clairiere_hub';
+    else if (dRoute < 10) zone = 'route_jonction';
+    else if (onRoad && px > 70 && px < 175) zone = 'route_cabane';
+    else if (onRoad && px < 70 && px > -15) zone = 'route_clearing';
+    if (!zone || zone === _s01ZoneLog) return;
+    _s01ZoneLog = zone;
+    ZS.DevLog.s01(`zone:${zone}`, {
+      x: Math.round(px * 10) / 10,
+      z: Math.round(pz * 10) / 10,
+      bedId: bed?.decorId || null,
+      onRoad: !!onRoad,
+    });
+  }
   let _billboardStrideAcc = 0;
   ZS._gfxRuntime = {
     renderer,
@@ -1546,10 +1775,40 @@
   }
 
   let _shadowTick = 0;
+  let _roadsRenderSkip = 0;
+
+  let _sceneRendered = false;
+
   function loop(timestamp) {
     requestAnimationFrame(loop);
+    const rawDt = (timestamp - state.lastTime) / 1000;
+    const spawnReady = ZS.Network?.isSpawnReady?.();
+    if (!spawnReady) {
+      ZS._frameId = (ZS._frameId | 0) + 1;
+      state.lastTime = timestamp;
+      if (_sceneRendered) renderer.render(scene, camera);
+      return;
+    }
+    const _frameT0 = performance.now();
+    let _sectT = _frameT0;
+    const _sect = {};
+    const _markSect = (k) => {
+      _sect[k] = (_sect[k] || 0) + (performance.now() - _sectT);
+      _sectT = performance.now();
+    };
     ZS._frameId = (ZS._frameId | 0) + 1;
-    const dt = Math.min((timestamp - state.lastTime) / 1000, 0.05);
+    if (_bootRenderWarmup > 0) {
+      _bootRenderWarmup--;
+      if (_bootRenderWarmup === 0) {
+        _adaptivePrCap = null;
+        _adaptivePrUntil = 0;
+        _adaptivePrRestoreAfter = 0;
+        _resizeToViewport(true);
+      }
+    }
+    const dt = window.__zsBenchMove
+      ? Math.min(Math.max(rawDt, 0.001), 1)
+      : Math.min(rawDt, 0.05);
     state.lastTime = timestamp;
 
     if (!state.player.dead && !ZS.Loading?.isActive?.() && ZS.Network?.isSpawnReady?.()
@@ -1558,9 +1817,12 @@
       _updateWaterEffect(state.player.x, state.player.z, state.player.y);
       _updateBeachZoneUi(state.player.x, state.player.z);
       _biomeStrideAcc++;
-      if (_biomeStrideAcc >= _BIOME_STRIDE) {
+      const biomeStride = ZS.isFrameRecovering?.()
+        ? _BIOME_STRIDE * 2
+        : _BIOME_STRIDE;
+      if (_biomeStrideAcc >= biomeStride) {
         _biomeStrideAcc = 0;
-        ZS.Audio?.updateBiomeAmbient?.(state.player.x, state.player.z, dt * _BIOME_STRIDE);
+        ZS.Audio?.updateBiomeAmbient?.(state.player.x, state.player.z, dt * biomeStride);
       }
       _tickFootsteps(dt);
       const activeType = ZS.Inventory?.getActiveItem?.()?.type;
@@ -1578,14 +1840,19 @@
     ZS.SpawnIntro?.tick?.(dt);
     ZS.Scenario?.tick?.(dt);
     if (!state.player.dead && !ZS.Loading?.isActive?.()) {
-      ZS.BeachAmbientLife?.tick?.(dt, state.player.x, state.player.z);
+      if (!ZS.isFrameRecovering?.()) {
+        ZS.BeachAmbientLife?.tick?.(dt, state.player.x, state.player.z);
+      }
       _beachLifeStrideAcc++;
       if (_beachLifeStrideAcc >= _BIOME_STRIDE) {
         _beachLifeStrideAcc = 0;
-        ZS.Audio?.tickBeachLife?.(state.player.x, state.player.z, dt * _BIOME_STRIDE);
+        if (!ZS.isFrameRecovering?.()) {
+          ZS.Audio?.tickBeachLife?.(state.player.x, state.player.z, dt * _BIOME_STRIDE);
+        }
       }
     }
     ZS.AdminLiveDecor?.tick?.();
+    ZS.AdminLiveRoads?.tick?.();
     const _tunerWalk = ZS.ArmTuner?.allowsWalkPreview?.();
     if (!ZS._armTunerActive || _tunerWalk) {
       ZS.tickFPSArms(fpsArms, dt, {
@@ -1603,32 +1870,101 @@
     });
     ZS.setShadowCenter(state.player.x, state.player.z);
     ZS.tickDayNight(dt);
-    if (ZS.hasActiveTreeAnims?.()) ZS.tickTreeFalls?.(dt);
-    if (ZS.hasActiveRockMines?.()) ZS.tickRockMines?.(dt);
+    if (!ZS.isFrameRecovering?.()) {
+      if (ZS.hasActiveTreeAnims?.()) ZS.tickTreeFalls?.(dt);
+      if (ZS.hasActiveRockMines?.()) ZS.tickRockMines?.(dt);
+    }
     ZS.tickDecorDoors?.(dt);
     const camPos = _cameraWorldPos();
     const camX = camPos.x, camZ = camPos.z;
     _billboardStrideAcc++;
     if (_billboardStrideAcc >= _BILLBOARD_STRIDE
-        && Math.hypot(camX - _bbCamX, camZ - _bbCamZ) > 0.2) {
+        && Math.hypot(camX - _bbCamX, camZ - _bbCamZ) > 0.2
+        && !ZS.Network?.isInitVisRevealBusy?.()
+        && !ZS.isFrameRecovering?.()) {
       _billboardStrideAcc = 0;
       _bbCamX = camX; _bbCamZ = camZ;
       if (ZS.updateBillboards) ZS.updateBillboards(camX, camZ);
     }
-    ZS.Zombies.tick(dt);
+    if ((!ZS._roadsPostSpawnBusy || (_roadsRenderSkip % 4 === 0))
+        && !ZS.Network?.isInitVisRevealBusy?.()
+        && !ZS.Network?.isSectorLoadBusy?.()
+        && _bootRenderWarmup <= 4) {
+      const fpsStats = ZS.PerfMonitor?.getStats?.();
+      const fps = fpsStats?.fps;
+      if ((fps == null || fps >= 12)
+          && (fpsStats?.frameMsP95 == null || fpsStats.frameMsP95 <= 90)) {
+        const streamer = ZS.Engine?.ChunkStreamer;
+        const reenter = streamer?.hasHiddenNear?.(camX, camZ);
+        const src = ZS.Engine?.ContentLoader?.getStreamingSource?.();
+        const moving = src && ((src.vx ?? 0) ** 2 + (src.vz ?? 0) ** 2 > 1.44);
+        const forceVis = reenter || moving;
+        streamer?.tick?.(camX, camZ, forceVis ? 6 : 2, { force: forceVis });
+        ZS.updateForestDecorVisibility?.(camX, camZ);
+      }
+    }
+    _tickS01DevLog(state.player.x, state.player.z);
+    if (!ZS.Network?.isInitVisRevealBusy?.()) {
+      if (!ZS.isFrameRecovering?.() || (++_zombieRecoverSkip % 2 === 0)) {
+        ZS.Zombies.tick(dt);
+      }
+    }
+    _markSect('preNet');
     (ZS.Network?.tick || ZS.networkTick)?.(dt);
+    _markSect('network');
     ZS.Inventory.tick(dt);
-    ZS.Craft.tick(dt);
+    if (!ZS.isFrameRecovering?.()) ZS.Craft.tick(dt);
     ZS.Survival.tick(dt);
-    ZS.Map?.tick?.(dt);
+    if (!ZS.Network?.isSectorLoadBusy?.() && !ZS.isFrameRecovering?.()) {
+      ZS.Map?.tick?.(dt);
+    }
+    _markSect('systems');
     _updateInteractHold(dt);
     _updateDoorInteractUi();
     _cullLights();
 
-    if (++_shadowTick >= _SHADOW_INTERVAL) { _shadowTick = 0; renderer.shadowMap.needsUpdate = true; }
+    if (!ZS.Network?.isInitVisRevealBusy?.() && !ZS.isFrameRecovering?.()) {
+      const fpsStats = ZS.PerfMonitor?.getStats?.();
+      const sectorBusy = ZS.Network?.isSectorLoadBusy?.();
+      const shadowEvery = (fpsStats?.fps != null && fpsStats.fps < 14) || sectorBusy
+        ? Math.round(_SHADOW_INTERVAL * 2.2)
+        : _SHADOW_INTERVAL;
+      if (++_shadowTick >= shadowEvery) { _shadowTick = 0; renderer.shadowMap.needsUpdate = true; }
+    }
 
     ZS.BuildingDebug?.tick?.();
+    _roadsRenderSkip = 0;
     renderer.render(scene, camera);
+    _sceneRendered = true;
+    _markSect('render');
+    ZS.PerfMonitor?.tickFrame?.();
+
+    const frameMs = performance.now() - _frameT0;
+    ZS.LoadLog?.tickPerfSample?.(frameMs, _sect);
+    if (frameMs >= 68) {
+      const initVisBusy = ZS.Network?.isInitVisRevealBusy?.();
+      const recoverMs = initVisBusy
+        ? Math.min(360, Math.max(120, Math.round(frameMs * 0.5)))
+        : Math.min(280, Math.max(80, Math.round(frameMs * 0.42)));
+      _frameRecoverUntil = performance.now() + recoverMs;
+      if (frameMs >= 110 && ZS.LoadLog?.isEnabled?.()) {
+        ZS.LoadLog.post('frame-recover', {
+          ms: Math.round(frameMs),
+          recoverMs,
+          render: Math.round(_sect.render || 0),
+          network: Math.round(_sect.network || 0),
+        });
+      }
+    }
+    _tickAdaptivePixelRatio(frameMs);
+    if (ZS.LoadLog?.isEnabled?.() && frameMs >= 80) {
+      ZS.LoadLog.slowFrame(frameMs, {
+        preNet: Math.round(_sect.preNet || 0),
+        network: Math.round(_sect.network || 0),
+        systems: Math.round(_sect.systems || 0),
+        render: Math.round(_sect.render || 0),
+      });
+    }
   }
 
   requestAnimationFrame((t) => {
@@ -1672,6 +2008,13 @@
     }
     const keys  = state.keys;
 
+    if (ZS.BedSleep?.isActive?.()) {
+      state.input.moveX = 0;
+      state.input.moveZ = 0;
+      state.input.sprintHeld = false;
+      return;
+    }
+
     let mx = state.input.moveX;
     let mz = state.input.moveZ;
 
@@ -1679,6 +2022,17 @@
     if (keys['KeyS'] || keys['ArrowDown'])  mz += 1;
     if (keys['KeyA'] || keys['ArrowLeft'])  mx -= 1;
     if (keys['KeyD'] || keys['ArrowRight']) mx += 1;
+
+    const benchMove = window.__zsBenchMove;
+    if (benchMove && typeof benchMove === 'object') {
+      if (benchMove.worldDir && typeof benchMove.worldDir === 'object') {
+        mx = benchMove.worldDir.x ?? 0;
+        mz = benchMove.worldDir.z ?? 0;
+      } else {
+        if (Number.isFinite(benchMove.mx)) mx = benchMove.mx;
+        if (Number.isFinite(benchMove.mz)) mz = benchMove.mz;
+      }
+    }
 
     const len = Math.hypot(mx, mz);
     if (len > 1) { mx /= len; mz /= len; }
@@ -1701,6 +2055,7 @@
     state.player.sprinting = sprinting;
     const baseSpeed = _inWater ? 2.8 : WALK_SPEED;
     let speedMult = sprinting ? SPRINT_MULT : 1;
+    if (benchMove?.sprint && moving) speedMult = Math.max(speedMult, SPRINT_MULT);
     if (p.crouching) speedMult *= PS().CROUCH_SPEED_MULT;
     const SPEED = baseSpeed * speedMult;
     state.player.isMoving = moving;
@@ -1713,8 +2068,18 @@
     _right.crossVectors(_fwd, _up).normalize();
 
     // Horizontal movement
-    let newX = p.x + (_fwd.x * (-mz) + _right.x * mx) * SPEED * dt;
-    let newZ = p.z + (_fwd.z * (-mz) + _right.z * mx) * SPEED * dt;
+    let newX;
+    let newZ;
+    if (benchMove?.worldDir && typeof benchMove.worldDir === 'object') {
+      const wx = benchMove.worldDir.x ?? 0;
+      const wz = benchMove.worldDir.z ?? 0;
+      const wlen = Math.hypot(wx, wz) || 1;
+      newX = p.x + (wx / wlen) * SPEED * dt;
+      newZ = p.z + (wz / wlen) * SPEED * dt;
+    } else {
+      newX = p.x + (_fwd.x * (-mz) + _right.x * mx) * SPEED * dt;
+      newZ = p.z + (_fwd.z * (-mz) + _right.z * mx) * SPEED * dt;
+    }
 
     if (ZS.SectorBounds?.clamp) {
       const bc = ZS.SectorBounds.clamp(newX, newZ);
@@ -1729,9 +2094,11 @@
     }
 
     // Collision avec arbres, rochers, murs — respecte la hauteur pour sauter par-dessus
-    const colliders = ZS.getCollidersNear?.(newX, newZ, 30) || ZS.getColliders();
+    const benchNoclip = !!(benchMove && benchMove.noclip);
     const feetY = p.y - eyeH;
     const playerR = p.crouching ? PLAYER_R * 0.88 : PLAYER_R;
+    if (!benchNoclip) {
+    const colliders = ZS.getCollidersNear?.(newX, newZ, 30) || ZS.getColliders();
 
     for (const col of colliders) {
       if (col.type === 'seg') {
@@ -1773,6 +2140,7 @@
       const out = ZS.Network.resolveRemotePlayerCollision(newX, newZ, PLAYER_R);
       newX = out.x;
       newZ = out.z;
+    }
     }
 
     p.x = newX;

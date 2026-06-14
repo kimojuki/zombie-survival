@@ -121,7 +121,10 @@ function _distToSegment(px, pz, x0, z0, x1, z1) {
   return Math.hypot(px - (x0 + dx * t), pz - (z0 + dz * t));
 }
 
-function _nearTrail(x, z, margin = 1.25) {
+/** Clairance corridor sentier spawn → forêt (lisibilité chemin). */
+export const TRAIL_TREE_CLEAR_M = 4;
+
+function _nearTrail(x, z, margin = TRAIL_TREE_CLEAR_M) {
   for (let i = 1; i < SPAWN_TRAIL_PTS.length; i++) {
     const [x0, z0] = SPAWN_TRAIL_PTS[i - 1];
     const [x1, z1] = SPAWN_TRAIL_PTS[i];

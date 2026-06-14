@@ -1,8 +1,8 @@
-// Crafting system — recettes, file d'attente et fabrication temporisée
+// Craft UI + queue (généré — craft/chunks + npm run bundle:craft)
 (function () {
   'use strict';
 
-  const MAX_QUEUE = 12;
+const MAX_QUEUE = 12;
 
   const RECIPES = [
     { result: 'wpn_lance_bois', qty: 1, ingredients: { res_bois_brut: 10 } },
@@ -286,7 +286,8 @@
     }
   }
 
-  function _buildQueueHud() {
+
+function _buildQueueHud() {
     _queueHud = document.createElement('div');
     _queueHud.id = 'craft-queue-hud';
     _queueHud.hidden = true;
@@ -537,7 +538,8 @@
     return card;
   }
 
-  function _ingHtml(rec) {
+
+function _ingHtml(rec) {
     return Object.entries(rec.ingredients).map(([id, need]) => {
       const have = ZS.Inventory.countItem(id);
       const lbl = ZS.ITEMS[id]?.label || id;
@@ -548,4 +550,5 @@
 
   window.ZS = window.ZS || {};
   ZS.Craft = { init, toggle, tick, getQueueLength: () => _queue.length, applyServerQueue, onServerComplete };
+
 }());

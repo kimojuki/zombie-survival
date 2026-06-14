@@ -49,6 +49,13 @@ test('position advances explore and walk_west', () => {
   assert.equal(checkPositionAdvance('walk_west', 240, -8), null);
 });
 
+test('breathe advances on cumulative yaw or short walk', () => {
+  const ref = { x: 248, z: -8 };
+  assert.equal(checkPositionAdvance('breathe', 248, -8, { spawnRef: ref, yawDelta: 0.1 }), null);
+  assert.equal(checkPositionAdvance('breathe', 248, -8, { spawnRef: ref, yawAccum: 0.45 }), 'explore');
+  assert.equal(checkPositionAdvance('breathe', 251, -8, { spawnRef: ref }), 'explore');
+});
+
 test('explore uses scenario anchor not global ref when spawn is offset', () => {
   const anchor = { x: 270, z: -8 };
   const ref = scenarioSpawnRef({ anchorX: anchor.x, anchorZ: anchor.z });

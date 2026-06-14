@@ -1,8 +1,8 @@
-// Prefabs ville / urbain — catalogue RCON pour construction de map (S02+).
+// Prefabs ville / urbain — catalogue RCON pour construction de map (S02+). (généré — éditer urban_prefabs/chunks/*.js puis npm run bundle:urban-prefabs)
 (function () {
   'use strict';
 
-  function _add(parent, geo, mat, x, y, z, rx, ry, rz) {
+function _add(parent, geo, mat, x, y, z, rx, ry, rz) {
     const m = new THREE.Mesh(geo, mat);
     m.position.set(x, y, z);
     if (rx) m.rotation.x = rx;
@@ -18,7 +18,8 @@
     return ZS.CampTextures?.materials?.() || null;
   }
 
-  function _buildTrashBin(root) {
+
+function _buildTrashBin(root) {
     const metal = new THREE.MeshLambertMaterial({ color: 0x3a5a38 });
     const rim = new THREE.MeshLambertMaterial({ color: 0x2a3a28 });
     _add(root, new THREE.CylinderGeometry(0.22, 0.26, 0.72, 10), metal, 0, 0.36, 0);
@@ -460,7 +461,8 @@
     _add(root, new THREE.BoxGeometry(0.04, 0.04, 0.28), frame, 0.08, 0.42, -0.28, 0, 0.2, 0.8);
   }
 
-  function _buildOfficeDesk(root) {
+
+function _buildOfficeDesk(root) {
     const M = _M();
     const top = M?.tableTop?.() || new THREE.MeshLambertMaterial({ color: 0x8a7868 });
     const leg = M?.tableLeg?.() || new THREE.MeshLambertMaterial({ color: 0x3a2820 });
@@ -809,7 +811,8 @@
     _add(root, new THREE.BoxGeometry(0.22, 0.02, 0.02), metal, 0.08, 0.88, -0.16, 0.3, 0, 0);
   }
 
-  function _buildBathtub(root) {
+
+function _buildBathtub(root) {
     const enamel = new THREE.MeshLambertMaterial({ color: 0xd8dce0 });
     const inner = new THREE.MeshLambertMaterial({ color: 0xb8c0c8 });
     const chrome = new THREE.MeshLambertMaterial({ color: 0x9a9890 });
@@ -1174,7 +1177,8 @@
     _add(root, new THREE.BoxGeometry(0.08, 0.22, 0.02), top, 0.22, 0.62, -0.32);
   }
 
-  function _buildJerseyBarrier(root) {
+
+function _buildJerseyBarrier(root) {
     const concrete = new THREE.MeshLambertMaterial({ color: 0x9a9890 });
     const stripe = new THREE.MeshLambertMaterial({ color: 0xd8a818 });
     _add(root, new THREE.BoxGeometry(1.42, 0.52, 0.48), concrete, 0, 0.26, 0);
@@ -1417,7 +1421,8 @@
     _add(root, new THREE.BoxGeometry(0.04, 0.38, 0.04), frame, 0.28, 0.78, -0.78);
   }
 
-  function _buildSlotMachine(root) {
+
+function _buildSlotMachine(root) {
     const body = new THREE.MeshLambertMaterial({ color: 0x9a2828 });
     const trim = new THREE.MeshLambertMaterial({ color: 0xd8a818 });
     const screen = new THREE.MeshLambertMaterial({ color: 0x1a2838, emissive: 0x2a0818, emissiveIntensity: 0.25 });
@@ -1549,7 +1554,8 @@
     _add(root, new THREE.CylinderGeometry(0.025, 0.03, 0.08, 8), white, 0, 0.84, -0.04, 0.5, 0, 0);
   }
 
-  function _buildEvCharger(root) {
+
+function _buildEvCharger(root) {
     const body = new THREE.MeshLambertMaterial({ color: 0x3a4858 });
     const panel = new THREE.MeshLambertMaterial({ color: 0x1a2838 });
     const glow = new THREE.MeshLambertMaterial({ color: 0x48c878, emissive: 0x184828, emissiveIntensity: 0.5 });
@@ -1770,7 +1776,8 @@
     _add(root, new THREE.BoxGeometry(0.08, 0.04, 0.02), handle, -0.28, 0.52, -0.31);
   }
 
-  if (ZS.registerDecorPrefab) {
+
+if (ZS.registerDecorPrefab) {
     ZS.registerDecorPrefab('spawn_urban_trash_bin', { build: _buildTrashBin, label: 'Poubelle urbaine', category: 'ville', desc: 'Bac métal vert ~0,72 m — trottoir / parc.' });
     ZS.registerDecorPrefab('spawn_urban_bench', { build: _buildParkBench, label: 'Banc public', category: 'ville', desc: 'Banc bois / fer ~1,05 m — assise −Z.' });
     ZS.registerDecorPrefab('spawn_urban_street_lamp', { build: _buildStreetLamp, label: 'Lampadaire', category: 'ville', desc: 'Poteau ~3,1 m + lumière chaude — alignement rue.' });
@@ -1908,4 +1915,5 @@
     ZS.registerDecorPrefab('spawn_prop_grandfather_clock', { build: _buildGrandfatherClock, label: 'Horloge comtoise', category: 'ville', desc: 'Pendule ~1,92 m — salon.' });
     ZS.registerDecorPrefab('spawn_prop_kitchen_island', { build: _buildKitchenIsland, label: 'Îlot cuisine', category: 'ville', desc: 'Îlot central ~1,22 m — cuisine ouverte.' });
   }
+
 }());

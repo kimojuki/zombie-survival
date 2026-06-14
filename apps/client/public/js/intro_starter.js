@@ -7,12 +7,15 @@
   const ROCK_AHEAD = Object.freeze({ dx: -1.75, dz: 0.15 });
 
   const WAKE_LINE = 'Un caillou dans le sable, juste devant moi. Comme s\'il m\'attendait.';
-  const ROCK_HINT_LINE = 'Je m\'approche et je le ramasse — E.';
+  function _rockHintLine() {
+    const v = ZS.IntroLessons?.interactVerb?.() || (ZS._isMobile ? 'le bouton Ramasser' : 'E');
+    return `Je m'approche et je le ramasse — ${v}.`;
+  }
   const BEAT_LINES = Object.freeze({
     footprints: 'Des empreintes dans le sable — elles mènent vers l\'ouest.',
     campfire: 'Une torche allumée au milieu des pierres. K. l\'a laissée pour moi.',
     pier: 'Sous les planches… une valise. À fouiller.',
-    kit_done: 'De quoi tenir. Et ces initiales : K. — qui c\'est ?',
+    kit_done: 'De quoi tenir. Et ces initiales : K. — qui c\'est ? Suis le sentier vers l\'ouest.',
   });
   const PICKUP_LINES = Object.freeze({
     tool_caillou: 'Caillou en poche. Je suis les traces vers l\'ouest — la torche fume encore.',
@@ -92,12 +95,22 @@
     clearTimeout(onWake._hintT);
     onWake._hintT = setTimeout(() => {
       if (!ZS.Scenario?.isActive?.() || ZS.Inventory?.hasItemType?.('tool_caillou')) return;
-      _showLine(ROCK_HINT_LINE, 6800);
+      _showLine(_rockHintLine(), 6800);
     }, 4200);
+  }
+
+  function _pulseBeat() {
+    const hud = document.getElementById('scenario-hud');
+    if (!hud || hud.style.display === 'none') return;
+    hud.style.transition = 'box-shadow .35s ease';
+    hud.style.boxShadow = '0 0 22px rgba(255,200,100,.55)';
+    setTimeout(() => { hud.style.boxShadow = '0 8px 28px rgba(0,0,0,.35)'; }, 420);
   }
 
   function onBeat(beat) {
     if (BEAT_LINES[beat]) _showLine(BEAT_LINES[beat]);
+    if (beat && beat !== 'kit_done') _pulseBeat();
+    if (beat === 'kit_done') ZS.IntroLessons?.onKitDone?.();
   }
 
   function onPickup(type) {
@@ -107,6 +120,7 @@
   function onStorageOpen(data) {
     if (data?.prefabId === 'spawn_beach_starter_suitcase' || data?.title === 'Valise échouée') {
       _showLine(SUITCASE_OPEN_LINE, 4800);
+      ZS.IntroLessons?.onSuitcaseOpen?.();
     }
   }
 

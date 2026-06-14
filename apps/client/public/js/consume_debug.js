@@ -4,7 +4,12 @@
 
   const TAG = '[inv-debug]';
   let _seq = 0;
-  let _enabled = true;
+  const _devInvDebug = () => (
+    localStorage.getItem('zombie_is_admin') === '1'
+    || /(?:^|[?&])invdebug(?:=|&|$)/.test(location.search)
+    || localStorage.getItem('zs_inv_debug') === '1'
+  );
+  let _enabled = _devInvDebug();
 
   function traceId(prefix) {
     return `${prefix || 'c'}${Date.now().toString(36)}-${++_seq}`;
@@ -113,6 +118,10 @@
     ZS.Network?.requestInvDebugSnapshot?.(traceId('manual'), reason || 'console-dump');
   }
 
+  function isEnabled() {
+    return _enabled;
+  }
+
   ZS.ConsumeDebug = {
     traceId,
     log,
@@ -122,15 +131,19 @@
     clientSnapshot,
     foodFromInv: _foodFromInv,
     setEnabled,
+    isEnabled,
     TAG,
   };
 
-  log('init', {
-    msg: 'ConsumeDebug actif',
-    help: 'Filtre console: inv-debug | ZS.ConsumeDebug.dump() | ZS.ConsumeDebug.dumpWithServer()',
-  });
+  if (_enabled) {
+    log('init', {
+      msg: 'ConsumeDebug actif',
+      help: 'Filtre console: inv-debug | ZS.ConsumeDebug.dump() | ZS.ConsumeDebug.dumpWithServer()',
+    });
+  }
 
   (async () => {
+    if (!_enabled) return;
     try {
       const res = await fetch('/api/health');
       const h = await res.json();
@@ -147,7 +160,7 @@
           uptime: h.uptime,
           commit: h.commit,
         });
-        ZS.UI?.showNotif?.('Serveur pas redémarré — npm run dev:server');
+        if (_devInvDebug()) ZS.UI?.showNotif?.('Serveur pas redémarré — npm run dev:server');
       }
       if (clientV && h.clientVersion && h.clientVersion !== clientV) {
         console.warn(TAG, 'CLIENT CACHE — Ctrl+F5 (client ≠ clientVersion serveur)', {

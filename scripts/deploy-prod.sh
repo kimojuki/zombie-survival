@@ -99,6 +99,18 @@ if ! command -v pm2 >/dev/null 2>&1; then
   exit 1
 fi
 
+if [ -f "$APP_DIR/tools/pre-deploy-backup.mjs" ]; then
+  log "pre-deploy backup (progression joueurs)"
+  if node "$APP_DIR/tools/pre-deploy-backup.mjs" 2>&1 | tee -a "$LOG_FILE"; then
+    log "pre-deploy backup OK"
+  else
+    log "ERROR: pre-deploy backup failed — deploy aborted (progression joueurs)"
+    exit 1
+  fi
+else
+  log "WARN: tools/pre-deploy-backup.mjs missing — deploy without DB backup"
+fi
+
 pm2 restart "$PM2_NAME" 2>&1 | tee -a "$LOG_FILE"
 NEW=$(git rev-parse --short HEAD)
 log "pm2 restart $PM2_NAME OK — commit $NEW"

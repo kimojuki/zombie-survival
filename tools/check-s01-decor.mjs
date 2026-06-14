@@ -41,10 +41,18 @@ if (chestDb && chestExp) {
 const bedExp = expected.find((p) => p.placementKey === 's01:cabin01:bed');
 const bedDb = rows.find((r) => r.id.includes('cabin01:bed') || r.payload.includes('s01:cabin01:bed'));
 if (bedExp) {
-  const ok = bedDb
-    && JSON.parse(bedDb.payload).prefabId === 'spawn_single_bed'
-    && Math.abs(JSON.parse(bedDb.payload).x - bedExp.x) < 0.05;
-  console.log(ok ? '✓ lit seed OK' : '✗ lit missing or stale — redémarrer serveur ou `decorseed s01 reset`');
+  const bedPayload = bedDb ? JSON.parse(bedDb.payload) : null;
+  const ok = bedPayload
+    && bedPayload.prefabId === 'spawn_single_bed'
+    && bedPayload.interactRole === 'bed'
+    && Math.abs(bedPayload.x - bedExp.x) < 0.05
+    && Math.abs(bedPayload.z - bedExp.z) < 0.05
+    && Math.abs(bedPayload.rotY - bedExp.rotY) < 0.02;
+  console.log(ok ? '✓ lit seed OK (spawn_single_bed, interact bed)' : '✗ lit missing or stale — redémarrer serveur ou `decorseed s01 reset`');
+  if (bedPayload && !ok) {
+    console.log('  expected', bedExp.x, bedExp.z, bedExp.rotY);
+    console.log('  got     ', bedPayload.x, bedPayload.z, bedPayload.rotY);
+  }
 }
 
 const oldBedroll = rows.find((r) => r.payload.includes('cabin01:bedroll'));

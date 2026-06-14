@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630" role="img" aria-label="Zombie Survival">
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#1a0a08"/>
+      <stop offset="100%" style="stop-color:#070707"/>
+    </linearGradient>
+    <linearGradient id="accent" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" style="stop-color:#c44a2a"/>
+      <stop offset="100%" style="stop-color:#e85d3a"/>
+    </linearGradient>
+  </defs>
+  <rect width="1200" height="630" fill="url(#bg)"/>
+  <rect x="0" y="520" width="1200" height="110" fill="#000" opacity="0.4"/>
+  <text x="80" y="280" fill="#ececec" font-family="system-ui,sans-serif" font-size="72" font-weight="900" letter-spacing="4">ZOMBIE</text>
+  <text x="80" y="360" fill="url(#accent)" font-family="system-ui,sans-serif" font-size="72" font-weight="900" letter-spacing="4">SURVIVAL</text>
+  <text x="80" y="430" fill="#9a9a9a" font-family="system-ui,sans-serif" font-size="28">Survie post-apocalyptique - Free-to-play - Navigateur</text>
+  <text x="80" y="480" fill="#4ade80" font-family="system-ui,sans-serif" font-size="24" font-weight="700">250+ joueurs par carte</text>
+</svg>

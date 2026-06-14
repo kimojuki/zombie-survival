@@ -1,8 +1,8 @@
-// Décor procédural plage — coquillages, rondins, déchets, textures procédurales.
+// Décor procédural plage (généré — beach_decor/chunks + npm run bundle:beach-decor)
 (function () {
   'use strict';
 
-  const SPAWN_X = 248;
+const SPAWN_X = 248;
   const SPAWN_Z = -8;
   const MAP_EAST_X = 295;
 
@@ -395,7 +395,7 @@
     parent.add(bow);
   }
 
-  const _BUILDERS = [
+const _BUILDERS = [
     { w: 22, fn: _pebbleCluster, gap: 0.75, tiny: false },
     { w: 20, fn: _shells, gap: 0.7, tiny: false },
     { w: 18, fn: _smallLog, gap: 0.45, tiny: true },
@@ -534,7 +534,7 @@
     return list.slice(0, Math.max(minN, Math.ceil(list.length * frac)));
   }
 
-  async function buildBeachDecorAsync(scene) {
+async function buildBeachDecorAsync(scene) {
     if (!scene) return;
     const scale = ZS.Options?.getDecorScale?.() ?? 1;
     const mobile = scale < 0.85 || !!(window.__ZS_TOUCH_MODE || window.ZS?._touchInput || window.ZS?._isMobile);

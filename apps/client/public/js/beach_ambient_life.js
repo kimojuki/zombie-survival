@@ -290,6 +290,8 @@
     _scatterSfxCd = Math.max(0, _scatterSfxCd - dt);
     const rng = Math.random;
     const hasPlayer = Number.isFinite(px) && Number.isFinite(pz);
+    const introCalm = !!ZS.Scenario?.shouldDelayZombieSync?.();
+    const calmR2 = introCalm ? 42 * 42 : 0;
 
     for (const b of _birds) {
       const ang = _t * b.speed + b.phase;
@@ -312,7 +314,9 @@
         if (hasPlayer && g.scareCd <= 0) {
           const dx = g.x - px;
           const dz = g.z - pz;
-          if (dx * dx + dz * dz < SCARE_R2) _scatterGroundGulls(g, px, pz, rng);
+          const d2 = dx * dx + dz * dz;
+          if (introCalm && d2 < calmR2) { /* calme près du réveil intro */ }
+          else if (d2 < SCARE_R2) _scatterGroundGulls(g, px, pz, rng);
         }
       } else {
         g.flyT += dt;
@@ -352,7 +356,9 @@
         if (hasPlayer && c.scareCd <= 0) {
           const dx = c.x - px;
           const dz = c.z - pz;
-          if (dx * dx + dz * dz < CRAB_SCARE_R2) _fleeCrab(c, px, pz, rng);
+          const d2 = dx * dx + dz * dz;
+          if (introCalm && d2 < calmR2) { /* pas de panique pendant l'intro */ }
+          else if (d2 < CRAB_SCARE_R2) _fleeCrab(c, px, pz, rng);
         }
       } else {
         c.fleeT += dt;

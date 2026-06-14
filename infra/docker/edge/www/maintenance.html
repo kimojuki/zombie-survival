@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Zombie Survival — Redémarrage en cours</title>
+  <meta name="robots" content="noindex">
+  <link rel="icon" href="/img/favicon.svg" type="image/svg+xml">
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-family: Inter, system-ui, sans-serif;
+      background: #070707;
+      color: #e8e8e8;
+      padding: 24px;
+      text-align: center;
+    }
+    .box { max-width: 420px; }
+    h1 {
+      font-family: Oswald, sans-serif;
+      font-size: 1.6rem;
+      letter-spacing: 0.06em;
+      margin-bottom: 12px;
+    }
+    h1 span { color: #c44; }
+    p { line-height: 1.55; opacity: 0.88; margin-bottom: 20px; }
+    a {
+      color: #fff;
+      text-decoration: none;
+      border: 1px solid #444;
+      padding: 10px 18px;
+      border-radius: 6px;
+      display: inline-block;
+    }
+    a:hover { border-color: #888; }
+    .pulse {
+      width: 10px; height: 10px; border-radius: 50%;
+      background: #c44; display: inline-block;
+      margin-right: 8px;
+      animation: pulse 1.2s ease-in-out infinite;
+    }
+    @keyframes pulse { 50% { opacity: 0.35; } }
+  </style>
+</head>
+<body>
+  <div class="box">
+    <h1>ZOMBIE <span>SURVIVAL</span></h1>
+    <p><span class="pulse" aria-hidden="true"></span>Le serveur de jeu redémarre. Cela prend généralement moins d'une minute.</p>
+    <p>La page d'accueil reste disponible pendant la mise à jour.</p>
+    <a href="/">Retour à l'accueil</a>
+  </div>
+  <script>
+    setTimeout(function () { location.reload(); }, 15000);
+  </script>
+</body>
+</html>

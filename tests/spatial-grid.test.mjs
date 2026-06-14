@@ -12,6 +12,18 @@ test('spatial grid returns items within radius', () => {
   assert.equal(near[0], 'a');
 });
 
+test('spatial grid rebuild/query uses live data.x/z', () => {
+  const grid = createSpatialGrid(16);
+  const player = { id: 1, x: 0, z: 0 };
+  grid.rebuild([{ data: player, x: 99, z: 99 }]);
+  player.x = 40;
+  player.z = 0;
+  grid.rebuild([{ data: player, x: 99, z: 99 }]);
+  const near = grid.query(40, 0, 5);
+  assert.equal(near.length, 1);
+  assert.equal(near[0].id, 1);
+});
+
 test('spatial grid spans multiple cells', () => {
   const grid = createSpatialGrid(8);
   const pts = [

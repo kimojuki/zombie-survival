@@ -122,9 +122,14 @@ Le webhook n'agit que sur la branche `master` (ou `ZOMBIE_DEPLOY_BRANCH`).
 |-----|------|---------|
 | `http://localhost:3000` | Dev direct (PC) | Node local |
 | `https://survival.badom.ch` | **Dev partagé** (tunnel) | cloudflared → `127.0.0.1:3000` |
+
+**Auth-server** (`apps/auth-server`, port 3001 interne) : **ne pas** exposer sur Cloudflare. En mode `AUTH_MODE=standalone`, le process `:3000` proxy `/api/auth/*` vers `127.0.0.1:3001`. Landing, play et game restent sur `:3000`.
+
 | `https://3k51myccypp.preview.infomaniak.website` | **Prod / preview** | Infomaniak (pm2 + Apache) |
 
 Ne pas mélanger les sessions : le JWT de la preview Infomaniak **≠** celui du serveur local. Se reconnecter sur chaque URL.
+
+**Release & progression joueurs** : voir [RELEASE_PROCESS.md](./RELEASE_PROCESS.md) — backup automatique avant `pm2 restart`, notes [RELEASE_NOTES.md](./RELEASE_NOTES.md).
 
 ---
 

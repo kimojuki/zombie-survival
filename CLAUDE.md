@@ -31,6 +31,8 @@ Copy `.env.example` → `.env` for local development.
 | Doc | When to update |
 |-----|----------------|
 | `DEV_TRACKER.md` | **Always** — every work session |
+| `docs/RELEASE_NOTES.md` | **Before merge `dev → master`** — joueurs + données |
+| `CHANGELOG.md` | Same release — détail technique |
 | `README.md` | Setup, onboarding changes |
 | `CONTRIBUTING.md` | Workflow, Definition of Done |
 | `docs/DEPLOY.md` | Prod deploy, pm2, cron, webhook |

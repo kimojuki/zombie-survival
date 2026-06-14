@@ -198,8 +198,9 @@ export function createScenarioBeach(ctx) {
       return true;
     }
     _setStep(p, socket, step);
-    if (step === 'intro_stand') {
-      p._lastYaw = p.rotY;
+    if (step === 'intro_stand' || step === 'breathe') {
+      p._lastYaw = Number.isFinite(p.rotY) ? p.rotY : 0;
+      if (step === 'breathe') p._breatheYawAccum = 0;
     }
     return true;
   }
@@ -214,9 +215,13 @@ export function createScenarioBeach(ctx) {
         if (yawDelta > Math.PI) yawDelta = Math.PI * 2 - yawDelta;
       }
       p._lastYaw = rotY;
+      p._breatheYawAccum = (p._breatheYawAccum || 0) + yawDelta;
     }
     introBeatsTick?.(p, socket);
-    advanceFromPosition(p, socket, { yawDelta });
+    advanceFromPosition(p, socket, {
+      yawDelta,
+      yawAccum: p._breatheYawAccum || 0,
+    });
     if (isInvincibleDuringIntro(sc)) p.invincible = true;
   }
 

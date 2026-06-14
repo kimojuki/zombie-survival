@@ -5,6 +5,7 @@ import {
   BEACH_FOOTPRINT,
   BEACH_CENTER,
   BEACH_TRAIL_PTS,
+  ENABLE_CODEGEN_TRAIL_MESH,
   BEACH_SHORE_X,
   BEACH_COAST_RECT,
   MAP_EAST_X,
@@ -44,6 +45,10 @@ test('beach tapers naturally at north and south tips', () => {
 test('beach trail starts at sand edge and reaches forest clearing', () => {
   assert.deepEqual(BEACH_TRAIL_PTS[0], [242, -8]);
   assert.deepEqual(BEACH_TRAIL_PTS[BEACH_TRAIL_PTS.length - 1], [14, -18]);
+});
+
+test('codegen trail mesh disabled — admin CMS routes', () => {
+  assert.equal(ENABLE_CODEGEN_TRAIL_MESH, false);
 });
 
 test('pickBeachSpawn stays on coast strip', () => {

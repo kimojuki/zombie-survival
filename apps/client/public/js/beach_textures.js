@@ -1,8 +1,8 @@
-// Textures procédurales plage — sable, coquillages, bois, déchets, etc.
+// Textures procédurales plage (généré — beach_textures/chunks + npm run bundle:beach-textures)
 (function () {
   'use strict';
 
-  const SAND_UV_TILE = 3.2;
+const SAND_UV_TILE = 3.2;
   const OCEAN_UV_TILE_V = 8;
   const PEBBLE_POOL = 10;
   const WOOD_POOL = 6;
@@ -208,7 +208,8 @@
     return c;
   }
 
-  function _drawSeaweedCanvas() {
+
+function _drawSeaweedCanvas() {
     const S = 64;
     const c = document.createElement('canvas');
     c.width = c.height = S;
@@ -640,7 +641,8 @@
     return _matFromKey('sanddollar', 0xffffff, { emissive: 0x201810, emissiveIntensity: 0.06, side: THREE.DoubleSide });
   }
 
-  function _drawOceanCanvas() {
+
+function _drawOceanCanvas() {
     const W = 512;
     const H = 192;
     const c = document.createElement('canvas');
@@ -823,4 +825,5 @@
     OCEAN_UV_TILE_V,
   };
   ZS.tickBeachLighting = tickBeachLighting;
+
 }());

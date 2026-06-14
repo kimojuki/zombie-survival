@@ -13,7 +13,9 @@ Guide technique détaillé (position, rotY, hauteur, pièges) : **[docs/S01_DECO
 | Cabane #1 | `s01:cabin01:shack` | `(165.1, 7.1)` | `0.55` | ✅ mesh 7/7 |
 | Coffre cabane #1 | `s01:cabin01:chest` | local `(1.64, 1.36)` → monde via `cabin01ChestWorldXZ()` | `cabin01ChestFaceDoorRotY()` | ✅ playtest (coin NE, 10 cm murs) |
 | Sac de couchage cabane #1 | `s01:cabin01:bedroll` | — | — | ❌ remplacé par lit |
-| Lit cabane #1 | `s01:cabin01:bed` | local `(-1.76, 0.83)` → `cabin01BedWorldXZ()` | `rotY` shack (coin NO) | 🔄 playtest |
+| Lit cabane #1 | `s01:cabin01:bed` | local `(-1.76, 0.83)` → `cabin01BedWorldXZ()` | `rotY` shack (coin NO) | 🔄 playtest sommeil (E → dormir, Espace = réveil, regen PV) |
+| Route terre #1 | — | retirée (CMS admin) | — | 🔄 refaire in-game |
+| Route cabane → clairière | — | **outil admin routes** (F8) | dirt/path | 🔄 à tracer |
 
 Loot coffre : `S01_CABIN_CHEST_LOOT` (haricots, eau, 3 planches).
 
@@ -26,7 +28,7 @@ Loot coffre : `S01_CABIN_CHEST_LOOT` (haricots, eau, 3 planches).
 | 1 | Cabane `building_survivor_shack` (7 pièces + colliders) | ✅ |
 | 2 | Coffre loot intérieur `storage_chest` | ✅ |
 | 3 | Lit une place `spawn_single_bed` (coin NO cabane) | 🔄 |
-| 4 | Route terre depuis sentier | ⏳ |
+| 4 | Routes terre : sentier → cabane + cabane → clairière | 🔄 |
 | 5 | Cabane #2, station essence, … | ⏳ |
 
 ---
@@ -34,9 +36,14 @@ Loot coffre : `S01_CABIN_CHEST_LOOT` (haricots, eau, 3 planches).
 ## Commandes playtest rapides
 
 ```text
-tp repere          # proche cabane #1 (RCON)
-decorseed s01      # complète seeds S01 manquants (serveur déjà à jour)
-node tools/check-s01-decor.mjs   # vérif SQLite : 3 rows cabin01 (shack + coffre + lit)
+tpcheck route_cabane   # jonction route terre (85, -6)
+tpcheck clairiere      # hub (0, -6) — fin route cabane → clairière
+tpcheck lit_cabane     # lit cabane #1 — E repos
+tpcheck cabane         # vue sentier vers cabane
+decorseed s01          # complète seeds S01 manquants (serveur déjà à jour)
+node tools/check-s01-decor.mjs   # vérif SQLite : shack + coffre + lit
 ```
+
+Console client (filtre `zs-dev`, catégorie `s01`) : zones `route_jonction`, `route_cabane`, `cabane01_proche`, `lit_cabane`.
 
 Après changement `packages/shared` : **redémarrer le serveur** (pas seulement `decorseed`).

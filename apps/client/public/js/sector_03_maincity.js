@@ -1,9 +1,8 @@
-// SECTOR 03 — MAIN CITY  (CX=-20, CZ=-185 | X:-85→+45, Z:-250→-120)
-// Tous les bâtiments sont accessibles + montables étage par étage
+// SECTOR 03 — MAIN CITY (généré — sector_03_maincity/chunks + npm run bundle:sector-03-maincity)
 (function () {
   'use strict';
 
-  const CX = -20, CZ = -185;
+const CX = -20, CZ = -185;
   ZS.registerFlatZone(CX, CZ, 65, 65, 15);
 
   const CITY_ROADS = [
@@ -90,7 +89,8 @@
   // HÔPITAL — NW  (porte côté SUD vers rue nord)
   // ══════════════════════════════════════════════════════════════════════════════
 
-  function _buildHospital(scene, B) {
+
+function _buildHospital(scene, B) {
     const cx=-55, cz=-244, W=16, D=9, wH=14.0, flH=2.8, floors=5;
     ZS.registerLoot('hopital', cx, cz, W, D);
     const y=ZS.getTerrainHeight(cx,cz);
@@ -336,7 +336,8 @@
   // BANQUE — ouest  (porte côté EST)
   // ══════════════════════════════════════════════════════════════════════════════
 
-  function _buildBank(scene,B){
+
+function _buildBank(scene,B){
     const cx=-56,cz=-168,W=12,D=9,wH=6.0,flH=3.0,floors=2;
     const y=ZS.getTerrainHeight(cx,cz);
     const bnM=new THREE.MeshLambertMaterial({color:0x8a7860});
@@ -513,7 +514,8 @@
   // DÉCOMBRES
   // ══════════════════════════════════════════════════════════════════════════════
 
-  function _buildDebris(scene,B){
+
+function _buildDebris(scene,B){
     const y=ZS.getTerrainHeight(CX,CZ);
     const rubM=new THREE.MeshLambertMaterial({color:0x706a58});
     const cncM=new THREE.MeshLambertMaterial({color:0x8a8070});
@@ -540,4 +542,5 @@
 
   // ─────────────────────────────────────────────────────────────────────────────
   ZS.Buildings.registerSector({ build, roads: [CITY_ROADS[0]] });
+
 }());

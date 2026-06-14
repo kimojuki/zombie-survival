@@ -17,6 +17,7 @@ Chaque feature ou refonte doit laisser une trace pour l'équipe :
 | Action | Fichier(s) |
 |--------|------------|
 | Toute session de dev | **DEV_TRACKER.md** — section datée « Completed » |
+| Architecture chargement client | **design/RESOURCE_LOADING.md** |
 | Nouvelle variable `.env` | **.env.example** — commentaire + exemple |
 | Feature admin / API | **docs/RCON.md** |
 | Routes / terrain / spawn | **docs/ROAD_NETWORK.md** |
@@ -24,7 +25,1436 @@ Chaque feature ou refonte doit laisser une trace pour l'équipe :
 | Onboarding / setup | **README.md** |
 | Changement JS client | **apps/client/public/client-version.json** → incrémenter `version` |
 
-Index complet : [README.md](README.md#documentation-à-lire-avant-un-push--review)
+Index complet : [README.md](README.md#documentation-à-lire-avant-un-push--review) · Stratégie refonte : [docs/V2_REFONTE_STRATEGY.md](docs/V2_REFONTE_STRATEGY.md) · **Plans actifs** : [docs/ROADMAP_PLANS.md](docs/ROADMAP_PLANS.md) · **Chargement ressources** : [design/RESOURCE_LOADING.md](design/RESOURCE_LOADING.md)
+
+### Completed — SpatialChunkStreamer L3 (2026-06-09)
+
+- **`spatial-chunk-keys.js`** + **`spatial-chunk-streamer.js`** — grille 64 m, couches forêt/plage, tick visibilité, prefetch NEAR.
+- **`forest_decor`** — chunks 44→64 m, enregistrement couche `forest`, vis via streamer.
+- **`beach_decor`** — couche `beach` enregistrée au build.
+- **`network/tick`** — streaming source synchronisée sur ChunkStreamer.
+- Engine v1.3.0 · 7 tests chunk streamer · `client-version.json` → `20260609-chunk-streamer-l3`.
+
+### Completed — Routes chunkées L3b (2026-06-09)
+
+- **`road_network/chunks/09-road-chunks.js`** — parent `roadNetworkChunks`, grille 64 m, couche `roads` ChunkStreamer.
+- Meshes ruban/lanes parentés par centroid ; `road-chunks-registered` LoadLog.
+- **`game/chunks/12-loop.js`** — `ChunkStreamer.tick` centralisé (forêt + plage + routes).
+- Hook `onUnload` routes prêt (`unloadBeyondFar: false` jusqu’au lazy rebuild).
+- `client-version.json` → `20260609-road-chunks-l3b`.
+
+### Completed — Exploration reload L3c (2026-06-09)
+
+- **Prune defer assoupli** — rayon min 416 m, max 80 drops/événement, P0 jamais supprimés (`_pruneDecorDeferFarFrom`).
+- **`ContentLoader.evaluateExplorationBoost`** — boost drain quand CRITICAL+NEAR ≥ 15 autour du joueur.
+- **`BudgetGovernor`** — exploration bypass recenter/post-spawn/sector ; quota +18 obj/frame.
+- **`ChunkStreamer.hasHiddenNear` + `tick({ force })`** — ré-affichage chunks prioritaire à la ré-entrée.
+- Recenter pause réduite (900 ms) si pending local ≥ 24 · log `spawn-zone-defer-flush` même à 0 spawn.
+- Engine v1.3.1 · `client-version.json` → `20260609-explore-l3c`.
+
+### Completed — Prefetch prédictif L3d (2026-06-09)
+
+- **Vélocité joueur** → `ContentLoader.setStreamingSource(x, z, { vx, vz })` chaque frame.
+- **Lead anchor** ~110 m devant (vitesse × 2,8 s) — drain defer + fetch API décalés.
+- **`approach-prefetch`** — bypass gates recenter/lod, quota jusqu'à 24 obj/frame, stream cap 48.
+- Arbres devant le joueur : pas de skip LOD pendant prefetch.
+- ChunkStreamer force tick en mouvement (forêt procédurale visible plus tôt).
+- Engine v1.4.0 · `client-version.json` → `20260609-prefetch-l3d`.
+
+### Completed — LOD texture surge L3l (2026-06-09)
+
+- **Log prod l3h (`1781436144299`)** : build `prefetch-l3h` (L3k+ non déployé) ; spam `stream-pause` ~1/frame ; gap #1 **45s timeout** pending=26 sans spawn à l'arrêt ; arbres `simpleLod` visibles en masse.
+- **`lod-texture-surge`** — urgent≥4 ou mid≥16 → boost budget LOD, priority `lod`, fenêtre upgrades élargie.
+- **`_treeSpawnSimpleLod`** — mesh complet ≤110 m si backlog defer/mid LOD élevé.
+- **`hasEmergencyGap()`** — gap >8 s sans spawn → bypass gates defer.
+- **`_setStreamGate`** — log pause uniquement au changement de raison.
+- Version `20260609-lod-texture-l3l`.
+
+### Completed — Idle gap fill + collider fix L3k (2026-06-09)
+
+- **Log prod l3h (2e session)** : gap #2 **22s+ bloqué** pending=28 sans spawn (LOD skip à l'arrêt) ; colliders post-boot **5757ms** pour 0 near ; stream idle continue d'ajouter du pending.
+- **Idle gap fill** — pendingNear≥8 + joueur immobile → bypass skip LOD critical/near, mesh complet dans 72m.
+- **Gap drain boost** — quota spawn 20–30/frame + budget ms augmenté pendant gap actif.
+- **Stream idle** — pause fetch si immobile + near≥6 ou total≥8.
+- **Colliders post-boot** — sortie immédiate si 0 near (plus de spin 5s).
+- **Stream-pause log** — pulse 5s uniquement (suppression pendingJump).
+- Version `20260609-gap-fill-l3k`.
+
+### Completed — Gap surge + log throttle L3j (2026-06-09)
+
+- **Log prod l3h** : ~1660× `stream-pause` (1/frame) ; gap #2 pending bloqué 25 pendant 4s idle ; fetch async pendant gap actif.
+- **Stream-pause throttle** — log `start`/`pulse`/`resume` max 1×/3s (plus de spam console).
+- **decor-demand-stream throttle** — batch ≥6 ou pulse 2.5s.
+- **Gap surge** — `decorGapActive`/`lodGapActive` boost defer spawn + budget, bypass gates, priority defer, block queue fetch in-flight.
+- **`shouldPauseStreamFetch`** — gap actif dès `total≥1` (même en mouvement).
+- Version `20260609-gap-surge-l3j` (inclut L3i lod-gap monitor).
+
+### Completed — Texture LOD gap monitor L3i (2026-06-09)
+
+- **`lod-gap-monitor.js`** — mesure les périodes où le joueur voit des arbres/textures **simpleLod** (basique) en attente du mesh final.
+- Events : `lod-gap-start`, `lod-gap-wait`, `lod-gap-first-upgrade`, `lod-gap-spawn-simple`, `lod-gap-end`, `lod-gap-unfulfilled`, heartbeat/sample.
+- Hooks : spawn simpleLod, `_upgradeTreeLodEntry`, tick réseau via `_sampleLodGap` (compteurs urgent/mid/near + raison blocage upgrade).
+- Filtre console **`lod-gap`** · `ZS.LodGapMonitor.dump()` · `?lodgap=0` pour couper.
+- Tests `engine-lod-gap-monitor.test.mjs` · `client-version.json` → `20260609-texture-lod-l3i`.
+
+### Completed — Drain-first + FAR ring L3h (2026-06-09)
+
+- **Log prod l3g** : pending global 92–174 mais `pendingNear:0` (anneau FAR) ; stream continue ; gap #2 bloqué (1 spawn, pending 32) ; pas de `critical-surge` visible.
+- **`pendingRingSummary`** — métriques `pendingFar`, `disk320` dans samples gap.
+- **`shouldDeferStreamFetch`** — disk320≥72 et NEAR≤6 → gate `drain-first`.
+- **`spawn-only`** étendu : gap actif, seuils near≥12, exploration bypass LOD arbres NEAR.
+- Log **`decor-gap-stream-pause`** · `client-version.json` → `20260609-prefetch-l3h`.
+
+### Completed — Ring surge + spawn-only L3g (2026-06-09)
+
+- **Log prod l3f** : backlog dans anneau **NEAR** (57 pending, critical=0) → `critical-surge` jamais actif ; stream continue à l'arrêt (-10,-69) pending 47→159 ; gap #2 bloqué 42s+.
+- **`evaluateCriticalSurge`** étendu NEAR (≥18), idle near (≥12), travel near (≥14).
+- **`shouldPauseStreamFetch`** — idle + near≥15 → gate `spawn-only`, pas de fetch.
+- **Gap monitor** : `travel-near-backlog` ; `visible-filled` seulement si ringDemand ≤4.
+- **Backlog** : defer autorisé si `pendingNearRing≥18` malgré lodUrgent · `client-version.json` → `20260609-prefetch-l3g`.
+
+### Completed — Critical surge L3f (2026-06-09)
+
+- **`evaluateCriticalSurge`** — active quand CRITICAL ≥ 18, ring total ≥ 32, ou mouvement + backlog devant.
+- **BacklogScheduler / BudgetGovernor** — bypass gates defer-drain/lod-pause, quota spawn jusqu'à 32/frame desktop, priorité defer.
+- **Tick order fix** — prefetch/surge mis à jour **avant** `_buildBacklogPlan` (plus de lag 1 frame).
+- **FrameRunner** — force priorité defer si `criticalSurge`.
+- Gap monitor : raison `travel-critical` · `client-version.json` → `20260609-prefetch-l3f`.
+
+### Completed — Decor gap trace L3e4 (2026-06-09)
+
+- **Analyse log prod** (`survival.badom.ch`, `l3e3`) : monitoring OK (heartbeat, samples, stream) mais **`gaps: 0`** pendant ~140 s alors que le joueur s’arrête à (74,-52) avec `pendingNear: 60`, `pendingCritical: 10`.
+- **Cause** : `_shouldStart` comparait `visibleNear` (décor déjà spawné dans 160 m) au pending — le décor lointain masquait le backlog local.
+- **Fix** : seuils `idle-backlog` (idle + ringDemand ≥ 10), `idle-critical`, `idle-underfill` (ratio pending/visible+demand), champ **`underfill`** dans les samples.
+- Test reproduit le cas log prod · Engine v1.4.2 · `client-version.json` → `20260609-gap-trace-l3e4`.
+
+### Completed — Decor gap trace L3e (2026-06-09)
+
+- **`DecorGapMonitor`** — mesure temps sans décor autour du joueur.
+- Logs: `decor-gap-start`, `decor-gap-wait`, `decor-gap-first-spawn`, `decor-gap-end`, `decor-demand-stream`, `decor-gap-unfulfilled`.
+- Filtre console: **decor-gap** · résumé: `ZS.Engine.DecorGapMonitor.dump()`.
+- Engine v1.4.1 · `client-version.json` → `20260609-gap-trace-l3e`.
+
+**Prochain lot L4 :** Workers IO hors main thread.
+
+### Completed — Edge nginx séparé (2026-06-14)
+
+- **`docker-compose.edge.yml`** — conteneur `zs-edge-nginx` indépendant (:443, :4000).
+- Landing marketing servie en static ; game/api en proxy avec **maintenance** (503/ page) si game down.
+- **`npm run docker:sim:restart`** — rebuild sans couper edge (évite Cloudflare 502).
+- **`npm run docker:sim:down`** — arrête app/db seulement ; edge reste up.
+
+### Completed — WorldContentLoader L2c (2026-06-09)
+
+- **`BudgetGovernor`** — `evaluateDeferSpawnGate`, `computeDeferSpawnQuota`, `treeFetchBlockReason`.
+- **`ContentLoader.drainDecorRing` / `drainDecorRingAsync`** — unifie flush spawn + tick defer.
+- **`src/net/decor-pressure.js`** — `DecorPressure.evaluate` via `ZS.Engine.DecorPressure`.
+- **`network/chunks/`** — gates defer consolidés ; stream via `canWork('stream')`.
+- Engine v1.2.0 · 12 tests engine · `client-version.json` → `20260609-content-loader-l2c`.
+
+### Completed — WorldContentLoader L2a (2026-06-09)
+
+- **`design/RESOURCE_LOADING.md`** — architecture cible, lots L0–L5, métriques LoadLog.
+- **`apps/client/src/engine/`** — `world-content-loader.js`, `content-rings.js`, `content-priority.js`, `budget-governor.js` ; engine v1.1.0.
+- **`network/chunks/`** — queue `_decorSpawnDefer` déléguée à `ContentLoader` ; scoring P0 dans `_tickDecorSpawnDefer` ; `BudgetGovernor` dans tick ; streaming source à chaque frame.
+- **`tests/engine-world-content-loader.test.mjs`** — 8 tests anneaux, scoring, batch, budget.
+- Docs : `ARCHITECTURE.md`, `V2_CLIENT_MIGRATION.md`, `ROADMAP_PLANS.md`.
+- `client-version.json` → `20260609-content-loader-l2a`.
+
+### Hotfix — import SQLite → Docker MariaDB (comptes login) (2026-06-09)
+
+- Cause login 401 : MariaDB Docker ne contenait que des `Invite_*` (world clean slate) ; comptes réels dans `database/local-dev.sqlite` + `auth-local.sqlite`.
+- **`tools/import-sqlite-accounts-to-mysql.mjs`** — 326 auth + 323 players importés (dont **Bruno**).
+- **`npm run docker:sim:import-sqlite`** — copie sqlite + import en une commande.
+- **`deploy-vm.sh`** — lance `migrate-game-accounts-to-auth.mjs --apply` après `up`.
+
+### Hotfix — map `SPAWN_X` + beach_decor preamble (2026-06-09)
+
+- Même cause que admin-hub : extracteurs démarraient trop bas (`let _state` / `function _rng`) sans `const SPAWN_X` etc.
+- Fix : `extract-map-chunks.mjs`, `extract-beach-decor-chunks.mjs` · `tools/reextract-from-git.mjs` · rebundle.
+- `client-version.json` → `20260609-map-beach-chunk-fix`.
+
+### Hotfix — admin-hub `_els is not defined` (2026-06-09)
+
+- Cause : extracteur `admin-hub` démarrait sur `function _q` — **`VIEWS`, `_open`, `_view`, `_els`, `_keyHandler`** absents du bundle.
+- Fix : `extract-admin-hub-chunks.mjs` → start `const VIEWS =` · rebundle · `client-version.json` → `20260609-admin-hub-els-fix`.
+
+### Completed — noise, camp_textures, admin roads/zones, tree, mapgen, sector_03, buildings (2026-06-09)
+
+- **`noise/chunks/`** — 4 fichiers + `npm run bundle:noise`.
+- **`camp_textures/chunks/`** — 3 fichiers + `npm run bundle:camp-textures`.
+- **`admin-live-roads/chunks/`** — 3 fichiers + `npm run bundle:admin-live-roads`.
+- **`tree_prefabs/chunks/`** — 4 fichiers + `npm run bundle:tree-prefabs`.
+- **`admin-zone-overlay/chunks/`** — 3 fichiers + `npm run bundle:admin-zone-overlay`.
+- **`mapgen/chunks/`** — 3 fichiers + `npm run bundle:mapgen`.
+- **`sector_03_maincity/chunks/`** — 4 fichiers + `npm run bundle:sector-03-maincity`.
+- **`buildings/chunks/`** — 3 fichiers + `npm run bundle:buildings`.
+- **`npm run bundle:client:all`** — **34 modules** chunkés.
+- `npm test` 404/404 · `node --check` OK · `client-version.json` → `20260609-noise-buildings-chunks`.
+
+### Completed — sector_05/01, prefab-catalog, beach_decor, ui, craft, map chunks (2026-06-09)
+
+- **`sector_05_military/chunks/`** — 4 fichiers + `npm run bundle:sector-05-military`.
+- **`sector_01_forest/chunks/`** — 4 fichiers + `npm run bundle:sector-01-forest`.
+- **`prefab-catalog-preview/chunks/`** — 4 fichiers + `npm run bundle:prefab-catalog-preview`.
+- **`beach_decor/chunks/`** — 3 fichiers + `npm run bundle:beach-decor`.
+- **`ui/chunks/`** — 3 fichiers + `npm run bundle:ui`.
+- **`craft/chunks/`** — 3 fichiers + `npm run bundle:craft`.
+- **`map/chunks/`** — 3 fichiers + `npm run bundle:map`.
+- Extracteurs : `tools/extract-sector-05-military-chunks.mjs`, `extract-sector-01-forest-chunks.mjs`, `extract-prefab-catalog-preview-chunks.mjs`, `extract-beach-decor-chunks.mjs`, `extract-ui-chunks.mjs`, `extract-craft-chunks.mjs`, `extract-map-chunks.mjs`.
+- **`npm run bundle:client:all`** — **26 modules** chunkés.
+- `npm test` 404/404 · `node --check` OK · `client-version.json` → `20260609-sector-ui-craft-map-chunks`.
+
+### Completed — admin-world-map, forest_decor, beach_textures, build_anchors, admin-hub (2026-06-09)
+
+- **`admin-world-map/chunks/`** — 5 fichiers + `npm run bundle:admin-world-map`.
+- **`forest_decor/chunks/`** — 4 fichiers + `npm run bundle:forest-decor`.
+- **`beach_textures/chunks/`** — 3 fichiers + `npm run bundle:beach-textures`.
+- **`build_anchors/chunks/`** — 3 fichiers + `npm run bundle:build-anchors`.
+- **`admin-hub/chunks/`** — 4 fichiers + `npm run bundle:admin-hub`.
+- **`npm run bundle:client:all`** — **19 modules** chunkés.
+- `npm test` 404/404 · `node --check` OK · `client-version.json` → `20260609-admin-forest-beach-chunks`.
+
+### Completed — leisure, decor_colliders, fps_arm_tuner, audio, sector_02 (2026-06-09)
+
+- **`leisure_prefabs/chunks/`** — 6 fichiers + `npm run bundle:leisure-prefabs`.
+- **`decor_colliders/chunks/`** — 6 fichiers (PREFAB×3, wreck/items, shack, build) + `npm run bundle:decor-colliders`.
+- **`fps_arm_tuner/chunks/`** — 5 fichiers + `npm run bundle:fps-arm-tuner`.
+- **`audio/chunks/`** — 5 fichiers + `npm run bundle:audio`.
+- **`sector_02_town/chunks/`** — 6 fichiers + `npm run bundle:sector-02-town`.
+- **`tools/bundle-chunk-module.mjs`** — bundle générique IIFE depuis un dossier `*/chunks/`.
+- **`npm run bundle:client:all`** étendu à 14 modules chunkés.
+- `npm test` 404/404 · `node --check` OK · `client-version.json` → `20260609-leisure-audio-sector-chunks`.
+
+### Completed — road_network + urban_prefabs + admin-live-decor chunks (2026-06-09)
+
+- **`road_network/chunks/`** — 9 fichiers (constants, ground, trails, resolve, meshes sync/async, export) + `npm run bundle:road-network`.
+- **`urban_prefabs/chunks/`** — 8 fichiers (helpers, outdoor, interior, misc×4, register) + `npm run bundle:urban-prefabs`.
+- **`admin-live-decor/chunks/`** — 9 fichiers (config, object fields, méthodes par domaine, export) + `npm run bundle:admin-live-decor`.
+- **`npm run bundle:client:all`** = bundle:client + road-network + urban-prefabs + admin-live-decor.
+- Extracteurs : `tools/extract-road-network-chunks.mjs`, `extract-urban-prefabs-chunks.mjs`, `extract-admin-live-decor-chunks.mjs`.
+- Plus gros chunks : `urban_prefabs/01-build-outdoor.js` (~441), `admin-live-decor/04-methods-catalog.js` (~466), `road_network/07-async-build.js` (~295).
+- `npm test` 404/404 · `node --check` road/urban/admin OK · `client-version.json` → `20260609-road-urban-admin-chunks`.
+
+### Completed — game.js + player/inventory chunks client (2026-06-09)
+
+- **`game/chunks/`** — 14 fichiers (auth, renderer, socket/world, input×2, combat, interact, loop, movement) + `npm run bundle:game`.
+- **`player/chunks/`** — `03-fps-arms` → `part1-pose` (~690 L) + `part2-anim-tick` (~219 L) ; 9 chunks total.
+- **`inventory/chunks/`** — `05-ui-panel` → `part1-drag` (~475 L) + `part2-panel` (~384 L) ; 8 chunks total.
+- **`npm run bundle:client`** : network + spawn_clearing + world + player + inventory + game.
+- **`tools/extract-game-chunks.mjs`**, configs split dans `tools/split-configs/player-fps-*.json`, `inventory-ui-*.json`.
+- Plus gros chunks restants : `09-interact.js` (~400), `13-movement-export.js` (~266), `08-combat.js` (~259).
+- `npm test` 404/404 · `node --check` game/player/inventory OK · `client-version.json` → `20260609-game-player-inv-chunks`.
+
+### Completed — sous-découpage chunks + world.js (2026-06-09)
+
+- **network/chunks** : `02-decor-spawn-stream` → 3 parts ; `03-decor-lod-vis` → 4 parts (17 chunks total).
+- **spawn_clearing/chunks** : `01-props-camp` → 3 parts (14 chunks total).
+- **`world/chunks/`** — 11 fichiers + `npm run bundle:world` (+ inclus dans `bundle:client`).
+- **`tools/split-chunk-file.mjs`** + configs dans `tools/split-configs/`.
+- Plus gros chunks restants : `01-props-part2-cabin.js` (~801), `03-decor-part2-lod.js` (~410), `02-daynight.js` (~440).
+- `npm test` 404/404 · `node --check` network/spawn/world OK.
+
+### Completed — spawn_clearing.js chunks client (2026-06-09)
+
+- **`apps/client/public/js/spawn_clearing/chunks/`** — 12 fichiers (geo, props×2, camp, décor registry/spawn/interact, trail, export).
+- **`tools/extract-spawn-clearing-chunks.mjs`** + **`npm run bundle:spawn-clearing`** (+ **`bundle:client`** = network + spawn).
+- Plus gros chunk : `01-props-camp.js` (~1280 lignes).
+- `node --check` OK · `npm test` 404/404 · `client-version.json` bumpé.
+
+### Completed — network.js chunks client (2026-06-09)
+
+- **`apps/client/public/js/network/chunks/`** — 12 fichiers source (état, colliders, décor×4, init, game-init, socket handlers, tick/joueurs, requests, export).
+- **`tools/extract-network-chunks.mjs`** + **`tools/bundle-network.mjs`** → `npm run bundle:network` regénère `network.js`.
+- Chunk le plus gros : `03-decor-lod-vis.js` (~1013 lignes) — `network.js` reste chargé tel quel par le client (bundle concat).
+- `client-version.json` bumpé · `node --check` OK · `npm test` 404/404.
+
+### Completed — admin-routes split (2026-06-09)
+
+- **`tools/extract-admin-routes.mjs --write`** — 8 modules dans `routes/admin/` :
+  - `helpers.js`, `rcon-routes`, `map-routes`, `player-routes`, `road-routes`, `decor-routes`, `server-routes`, `backup-routes`, `prefab-routes`.
+- **`admin-routes.js`** : ~881 → **~104 lignes** (orchestration + helpers joueur/backup partagés).
+- Fix duplicata `teleport-here` / `decor/search` dans l'extracteur décor.
+- `npm test` 404/404 OK · plus aucun monolithe serveur ≥ 500 lignes hors `decor-handlers.js` / `db.js` / `create-game-stack.js`.
+
+### Completed — socket handlers + RCON commands split (2026-06-09)
+
+- **`tools/extract-socket-chunks.mjs --write`** — 10 handlers extraits de `register-sockets.js` :
+  - `socket-auth`, `connection-bootstrap`, `world-sync`, `player-sync`, `combat`, `decor`, `inventory-craft`, `sleep-loot`, `social`, `disconnect` (+ `inventory-handlers` déjà présent).
+- **`register-sockets.js`** : ~1975 → **~48 lignes** (orchestration `with(deps)`).
+- **`tools/extract-rcon-chunks.mjs --write`** — `rcon/commands/{core,world,zombie,player,decor,qa}.js` + **`rcon/helpers.js`**.
+- **`rcon.js`** : ~940 → **~135 lignes**.
+- `npm test` 404/404 · `npm run audit:game-deps` OK · `node --check` sur tous les modules socket/rcon OK.
+
+### Completed — audit monolithes + socket inventory handlers (2026-06-09)
+
+- **`docs/MONOLITH_AUDIT.md`** — cartographie server/client, priorités.
+- **`tools/audit-monoliths.mjs`** + **`tools/audit-game-deps.mjs`** — `npm run audit:monoliths` / `audit:game-deps`.
+- **`socket/handlers/inventory-handlers.js`** — premier extrait de `register-sockets.js` (use-item, debug-inv).
+- **`tools/extract-socket-handlers.mjs`** — script d'extraction verbatim.
+
+### Fixed — socket 502 crash loop post-bootstrap (2026-06-09)
+
+- **`catchUpSleeperSurvival`** manquant dans le contexte Socket.io → crash à chaque connexion → nginx **502**.
+- **`_decorStats`** manquant dans les deps `world-loops` → crash ~60 s après boot (interval `serverStats`) → restart loop.
+- Chemin **`spatial-grid.mjs`** corrigé (`../../../packages/...` au lieu de `../../packages/...`).
+- Conteneur `game` : **0 restart**, connexion socket OK, smoke `:443` OK.
+
+### Completed — bootstrap + game-stack wiring (2026-06-09)
+
+- **`src/game/create-game-stack.js`** (~500 lignes) — instancie state + tous les `create*` game, RCON, session.
+- **`src/build-http-route-context.js`** (~180 lignes) — contexte `registerHttpRoutes`.
+- **`src/build-socket-context.js`** (~280 lignes) — contexte Socket.io (fix `_treeWoodForPhase` export décor).
+- **`src/build-server-runtime-context.js`** (~220 lignes) — config loops + boot runtime.
+- **`src/bootstrap-game-server.js`** (~340 lignes) — orchestration complète.
+- **`index.js`** : ~1150 → **~10 lignes** (bootstrap uniquement).
+- `npm test` : 404 OK.
+
+### Completed — game-state + server-config + mod-imports (2026-06-09)
+
+- **`src/game/game-state.js`** (~120 lignes) — `createGameState` : players, zombies, decorItems, compteurs, prefabs, colliders.
+- **`src/game/shared-mod-imports.js`** (~80 lignes) — URLs + promises ESM (combat, survival, beach, S01, weapon-stats, scenario, groups…).
+- **`src/game/player-starter-kit.js`** (~55 lignes) — `buildStartingSave`, `buildBenchSave`, constantes starter.
+- **`src/server-config.js`** (~95 lignes) — `createServerConfig`, `authFromHeader` ; owners, JWT, chemins client, git commit.
+- **`src/game/decor-query.js`** (~25 lignes) — `createDecorQueryHelpers` (beyond/near player).
+- **`index.js`** : ~1269 → ~1152 lignes ; compteurs/colliders via `gs.*` ; doublons `mods` / `structureColliders` retirés.
+- `npm test` : 404 OK.
+
+### Completed — register-http-routes + server-runtime + socket bindings (2026-06-09)
+
+- **`src/register-http-routes.js`** (~130 lignes) — auth, health, admin, world, dev en un seul appel.
+- **`src/server-runtime.js`** (~145 lignes) — resource regen, world-loops, world-boot, `startServer`.
+- **`src/socket/build-socket-bindings.js`** + **`game-socket-context.js`** — bindings Socket.io via `deps-names.json`.
+- **`index.js`** : ~1319 → ~1269 lignes.
+- `npm test` : 404 OK.
+
+### Completed — client-static + world-clock + interact + rcon (2026-06-09)
+
+- **`src/client-static.js`** (~70 lignes) — pages HTML + assets statiques Vite/prod.
+- **`src/game/world-clock.js`** (~75 lignes) — temps mondial, flags, boot status, eau (slow factor).
+- **`src/game/player-interact.js`** (~25 lignes) — `distXZ`, `getNearbyDoor`.
+- **`src/game/zombie-sync.js`** (~25 lignes) — `compactZombiesForSync` (partagé sockets/scenario).
+- **`src/server-rcon.js`** (~110 lignes) — catalog prefabs décor + boot RCON ; fix URL catalog manquante dans index.
+- **`index.js`** : ~1405 → ~1319 lignes.
+- `npm test` : 404 OK.
+
+### Completed — player-auth-session + player-survival + scenario-runtime (2026-06-09)
+
+- **`src/game/player-auth-session.js`** (~95 lignes) — `normPlayerId`, rôles/permissions, handoff session live.
+- **`src/game/player-survival.js`** (~65 lignes) — `emitSurvivalUpdate`, `getItemFx`, `maybeSyncEquipArmor`.
+- **`src/game/scenario-runtime.js`** (~100 lignes) — lazy init groups / intro beats / scénario plage.
+- **`index.js`** : ~1497 → ~1405 lignes ; fix `_compactZombiesForSync` (référencé par sockets/scenario).
+- `npm test` : 404 OK.
+
+### Completed — player-inventory + beach-spawn (2026-06-09)
+
+- **`src/game/player-inventory.js`** (~230 lignes) — `saveBlob`, inv-auth coalescé, persist, guest commit, storage payload, starter kit.
+- **`src/game/beach-spawn.js`** (~100 lignes) — spawn plage, cluster intro, safe sand, build block S01/plage.
+- **`index.js`** : ~1630 → ~1497 lignes.
+- `npm test` : 404 OK.
+
+### Completed — player-sleep (2026-06-09)
+
+- **`src/game/player-sleep.js`** (~145 lignes) — sleepers, lit, `saveSleepingToDb`, `findLootTarget`, `wakeFromBedSleep`.
+- **`index.js`** : ~1700 → ~1630 lignes.
+- `npm test` : 404 OK.
+
+### Completed — decor-core (2026-06-09)
+
+- **`src/game/decor-core.js`** (~165 lignes) — `makeDecorItem`, `removeDecorItem`, purge arbres/intro, `decorStats`, immuable S01.
+- **`index.js`** : ~1796 → ~1720 lignes.
+- `npm test` : 404 OK.
+
+### Completed — building-loot (2026-06-09)
+
+- **`src/game/building-loot.js`** (~165 lignes) — tables loot, `generateLoot`/`clearLoot`, `lootQty`, `hasPersistedBuildingLoot`.
+- **`index.js`** : ~1900 → ~1810 lignes ; `lootBuildings` déplacé près de `items`.
+- `npm test` : 404 OK.
+
+### Completed — ground-items (2026-06-09)
+
+- **`src/game/ground-items.js`** — `addGroundItem`, `removeGroundItem`, `dropWorldItem`, overflow coffre, `spawnWorldDrop`, TTL 30 min.
+- **`index.js`** : ~1945 → ~1890 lignes.
+- `npm test` : 404 OK.
+
+### Completed — player-combat (2026-06-09)
+
+- **`src/game/player-combat.js`** (~270 lignes) — dégâts PvP/PvE, mort, sacs de mort, tir, loot zombie, life stats.
+- **`index.js`** : ~2140 → ~1980 lignes.
+- `npm test` : 404 OK.
+
+### Completed — zombie-spawn (2026-06-09)
+
+- **`src/game/zombie-spawn.js`** (~280 lignes) — zones, `makeZombie`, `ensureZombiePopulation`, collision/LOS, constantes AI (`DETECT_RANGE`, …).
+- **`index.js`** : ~2310 → ~2180 lignes.
+- `npm test` : 404 OK.
+
+### Completed — world-wipe (2026-06-09)
+
+- **`src/game/world-wipe.js`** — `wipePlayerWorld`, `runWorldCleanSlateOnce` (RCON + boot marker).
+- **`index.js`** : ~2350 → ~2310 lignes ; fix admin `getPlacementKey` → wrapper world-seed.
+- `npm test` : 404 OK.
+
+### Completed — world-seed (2026-06-09)
+
+- **`src/game/world-seed.js`** (~430 lignes) — `ensureRoadWrecks` … `ensureS01World`, `seedSpawnDecorItems` ; helpers `seedDecorId` / `getPlacementKey` partagés avec `_makeDecorItem`.
+- **`index.js`** : ~2740 → ~2480 lignes.
+- `npm test` : 404 OK.
+
+### Completed — world-loops (2026-06-09)
+
+- **`src/game/world-loops.js`** (~445 lignes) — expiry loot, sync zombie, regen, persist worldTime, AI 100 ms, auto-save, survie 1 s, craft ; spatial grid + `broadcastPlayerMove`.
+- **`index.js`** : ~2910 → ~2740 lignes ; doublons spatial/player-move retirés.
+- Outils : `tools/extract-world-loops.mjs`, `tools/patch-index-world-loops.mjs`.
+- `npm test` : 404 OK.
+
+### Completed — player-session + world-boot (2026-06-09)
+
+- **`src/game/player-session.js`** — `buildGameInitPayload`, bench username, décor/sleepers filtrés.
+- **`src/game/world-boot.js`** — `loadPersistedWorld`, `reloadWorldFromDatabase`, séquence boot, SIGTERM/SIGINT.
+- **`index.js`** : ~3320 → ~3210 lignes.
+- `npm test` OK.
+
+### Completed — décomposition monolithe : world + dev + Socket.io (2026-06-09)
+
+- **`src/routes/world-routes.js`** — `/api/world/decor-trees|props|stream|rocks`.
+- **`src/routes/dev-routes.js`** — bench Playwright + QA checklist.
+- **`src/socket/register-sockets.js`** — ~2200 lignes extraites de `index.js` (`with deps` + getters lazy).
+- **`index.js`** : ~5800 → ~3350 lignes ; HTTP entièrement modularisé côté routes.
+- Outils regen : `tools/extract-socket-handlers.mjs`, `tools/generate-socket-deps.mjs`.
+- `npm test` + `docker:sim:test:443` OK.
+
+### Completed — décomposition monolithe : health + admin REST (2026-06-09)
+
+- **`src/routes/health-routes.js`** — `/api/health`, `/api/public/status`, `/api/client-version`, `/api/server-info`, `/api/servers`.
+- **`src/routes/admin-routes.js`** — `/api/admin/*`, `/api/rcon`, `/api/rcon/session`, carte monde, backups, roles.
+- `index.js` : ~850 lignes HTTP retirées ; `registerHealthRoutes` + `registerAdminRoutes` branchés après `setWorldTime`.
+- `npm test` + `docker:sim:test:443` OK.
+
+### Completed — décomposition monolithe : auth HTTP (2026-06-09)
+
+- **`registerAuthRoutes(app)`** branché dans `index.js` — routes `/api/auth/*` retirées du monolithe.
+- Modules : `src/routes/auth-routes.js` (standalone proxy + handoff + `/me`), `auth-embedded.js` (legacy dev).
+- **`docs/DECOMPOSE_MONOLITH.md`** — roadmap extraction `index.js`.
+- **`docs/ARCHITECTURE_TIERS.md`** — cible **1 VM / conteneur par rôle** (pas migration 2 VM).
+- `npm test` : 404 tests OK.
+
+### Completed — architecture 3 tiers db/app split (2026-06-14)
+
+- **`docker-compose.db.yml`** (VM db) + **`docker-compose.app.yml`** (VM app).
+- **`docs/ARCHITECTURE_TIERS.md`** · `.env.db.example` / `.env.app.example` · `deploy-db-vm.sh` / `deploy-app-vm.sh`.
+
+### Completed — persistance Docker bind mount (2026-06-14)
+
+- **`ZS_DATA_DIR`** : `mariadb/`, `backups/`, `logs/` sur disque hôte (pas volume opaque).
+- VM prod : `/var/lib/zombie-survival` · dev : `infra/docker/data/`.
+- `stop_grace_period` game 60s (flush SIGTERM) · backup avant deploy · rétention 14 dumps.
+
+### Completed — cible prod VM Ubuntu + Docker (2026-06-14)
+
+- **Décision** : VM dédiée 4 CPU / 12 Go, Ubuntu LTS, stack entière en Docker (plus MariaDB cloud Infomaniak).
+- **`docs/VM_DEPLOY.md`** : install, UFW, fail2ban, cloudflared, deploy, sécu checklist.
+- **`infra/docker/scripts/deploy-vm.sh`** + **`backup-vm.sh`** — même compose dev + prod.
+- PC dev = simulation VM (`npm run docker:sim:up`).
+
+### Completed — Docker simulation prod (2026-06-14)
+
+- **`infra/docker/`** : compose MariaDB + auth + game + **nginx** (:443 / :4000).
+- Chaîne **Cloudflare → cloudflared → nginx HTTP :443 → game**.
+
+### Completed — Phase D migration comptes + login standalone validé (2026-06-14)
+
+- **`npm run migrate:accounts-to-auth -- --apply`** : 320 comptes créés/lierés, 3 invités trial ignorés, 0 erreur.
+- **Login `Bruno`** en mode standalone (`ZS - Démarrer (+ auth)`) — flux complet OK :
+  - auth `:3001` — `login ok` → `handoff exchanged` (accountId 8)
+  - game `:3000` — `handoff ok` → socket connect, spawn sauvegardé, hotbar existante (pas kit départ), session RCON owner.
+- **Cause 401 avant migration** : comptes dans `local-dev.sqlite` uniquement, absents de `auth-local.sqlite`.
+
+### Completed — outillage test standalone Phase B–E (2026-06-14)
+
+- **`docs/TEST_STANDALONE.md`** : checklist testeur (embedded OK → standalone → migration).
+- **`tools/test-auth-standalone.mjs`** + `npm run test:auth-standalone`.
+- **`tools/migrate-game-accounts-to-auth.mjs`** + `npm run migrate:accounts-to-auth` (dry-run / `--apply`).
+- **Desktop** : « ZS - Démarrer (+ auth) » lance game avec `AUTH_MODE=standalone` + proxy `:3001`.
+- **`infra/ecosystem.config.cjs`** : `zs-auth` + `zs-game` (+ alias `zombie` legacy).
+
+### Completed — fix intro réveil invité différée (2026-06-13)
+
+- **Cause** : `SpawnIntro.tryStart` ne s'exécutait qu'en post-init (après reveal visuel), ~20–60 s après la sync — le joueur pouvait déjà se déplacer et recevoir les beats intro sans le cinématique « réveil ».
+- **Fix** : lancement immédiat après `_spawnReady` dans `network.js` ; garde caméra dans `spawn_intro.js`.
+- Client `20260613-intro-wake-fix`.
+
+### Completed — Phase B auth standalone + handoff (2026-06-13)
+
+- **`AUTH_MODE=standalone`** : proxy `/api/auth/:action` → auth-server `:3001` ; routes embedded désactivées.
+- **`POST /api/auth/handoff`** sur game : exchange code → JWT game (`aud: game`, `id` joueur shard) + lien `account_id`.
+- Client : `play.html` redirect `game.html?handoff=…` ; `game.js` consomme le code avant guard auth.
+- Modules : `auth-mode.js`, `auth-proxy.js`, `auth-handoff.js`, `auth-player-link.js` ; `db.js` `account_id`.
+- Tests : `tests/auth-mode.test.mjs` ; client `20260613-auth-handoff-b`.
+- Prod reste **`AUTH_MODE=embedded`** jusqu'à validation dual-process.
+
+### Completed — fix guest auth 500 SQLite PRAGMA (2026-06-13)
+
+- **Cause** : `PRAGMA table_info` passait par `stmt.run()` au lieu de `stmt.all()` → migration `is_guest` cassée.
+- **Fix** : `db.js` traite `PRAGMA`/`WITH` comme lectures SQLite.
+- Test : `tests/db-sqlite-pragma.test.mjs` ; serveur rebooté.
+
+### Completed — scripts bureau serveurs v2 (2026-06-13)
+
+- **`tools/desktop/`** refonte : start/stop/restart/status pour game `:3000`, Vite `:5173`, auth `:3001`.
+- `zs-kill-ports.ps1`, `zs-server-status.ps1`, raccourcis bureau mis à jour (5 icônes).
+- Anciens raccourcis « serveur » (singulier) supprimés automatiquement.
+
+### Completed — processus release & protection progression (2026-06-13)
+
+- **`docs/RELEASE_NOTES.md`** : notes joueurs par version (early access).
+- **`docs/RELEASE_PROCESS.md`** : checklist deploy, migrations additives, rollback.
+- **`tools/pre-deploy-backup.mjs`** : backup SQLite/MySQL avant deploy ; intégré `deploy-prod.sh`.
+- **`npm run release:check`** + **`npm run backup:pre-deploy`**.
+- Règle : **jamais perdre progression** — backup obligatoire prod, `ensure*Schema` idempotent.
+
+### Completed — correction architecture ports auth (2026-06-13)
+
+- **Front public** = `PORT=3000` (`survival.badom.ch` via Cloudflare) — inchangé.
+- **auth-server** = service interne `127.0.0.1:3001` — non exposé tunnel.
+- Phase C roadmap : pas de portail séparé ; proxy `/api/auth/*` depuis :3000.
+- Handoff `game.html` → URL publique (`ZS_TEAM_URL` / `PORT=3000`).
+
+### Completed — auth-server Phase A scaffold (2026-06-13)
+
+- **`apps/auth-server/`** : service interne `127.0.0.1:3001` (DB auth) — **pas** exposé Cloudflare.
+- **`packages/shared/src/auth-contract.mjs`** : routes, JWT `aud` portal/game, codes erreur handoff.
+- Routes : `login`, `register`, `guest`, `upgrade-guest`, `me`, `logout`, `exchange`, `GET /api/servers`.
+- Sessions hybrides : ticket handoff 60s → JWT game avec `sid` ; portal token pour `/me`/`logout`.
+- Scripts : `npm run start:auth`, `npm run dev:auth` ; `.env.example` section `AUTH_*`.
+- Tests : `auth-contract.test.mjs`, `auth-session.test.mjs` (400 tests verts).
+- **Prochain** : Phase B — `AUTH_MODE` sur game, `POST /api/auth/handoff`, client `?handoff=`.
+
+### Completed — consolidation plans Cursor + roadmap (2026-06-13)
+
+- **`docs/ROADMAP_PLANS.md`** : fusion des plans actifs (auth server, client v2, backlog monde).
+- Plans Cursor **terminés** ou **hors repo** (rogue/worms) supprimés du dossier `.cursor/plans`.
+- Plan **auth_server_migration** mis à jour (Phase 0 guest/register = done).
+- Build : `npm test` + `npm run build` verts.
+
+### Completed — mode invité + inscription play (2026-06-13)
+
+- **Invité** : `POST /api/auth/guest`, pseudo `Invite_XXXX`, persistance après ~8 min (`GUEST_COMMIT_MINUTES`), purge si quitte avant.
+- **Play** : onglets Invité / Connexion / Créer un compte ; dev masque invité + register.
+- **Upgrade** : `POST /api/auth/upgrade-guest` + menu ☰ « Créer mon compte » (`guest-account.js`).
+- **Limites invité** : pas de fondation de groupe ; login mot de passe refusé sur comptes invité.
+- DB : `is_guest`, `guest_committed` sur `players`.
+- Version client : `20260613-guest-auth-play`.
+
+### Completed — mention early access / en développement (2026-06-13)
+
+- Landing : badge hero, trust bar, lead, univers, footer, FAQ + JSON-LD.
+- Play : bandeau `play-dev-notice`, meta et hint.
+- Manifest PWA : description early access.
+- Version client : `20260613-landing-early-access`.
+
+### Completed — landing UX interactions plateformes (2026-06-13)
+
+- **Menu mobile** : scroll lock iOS (`position: fixed`), focus trap Tab, restore focus, fermeture resize ≥900px.
+- **Touch** : `:active` drawer/FAQ/boutons ; `(pointer: coarse)` → cibles 48px ; trust bar scroll-snap.
+- **FAQ** : chevron +/−, bordure ouverte, feedback tactile.
+- **Sticky CTA** : masqué quand drawer ouvert ; focus-visible étendu (logo, footer, nav).
+- **Play** : `:user-invalid`, autofill WebKit, `aria-busy` formulaire, coarse 48px.
+- Tests : 13 checks (compat + platform + ergonomie).
+- Version client : `20260613-landing-ux`.
+
+### Completed — CSS plateformes audit détail (2026-06-13)
+
+- **`site-tokens.css`** : tokens partagés landing + play (safe areas, breakpoints, focus ring).
+- **Phone ≤379px** : logo/compteur/CTA compact ; **639px** : CTA hero wrap ; footer + sticky CTA.
+- **Tablet 640–899** : grilles 2 col., steps 2×2 ; **900–1023** : nav desktop compacte (sans pill).
+- **Desktop 1024+** : pill serveur, hover `(pointer: fine)` only, exigences 4 col.
+- **play.css** : focus-visible, landscape clavier, tablet/desktop, standalone PWA.
+- Tests : `landing-platform-css.test.mjs` (4 suites) + compat 8 checks.
+- Version client : `20260613-landing-platform-css`.
+
+### Completed — landing polish + play rebrand (2026-06-13)
+
+- **`#pourquoi`** : comparaison navigateur vs jeu installé + piliers chiffrés (0 Mo, &lt;1 min, 250 joueurs).
+- **`play.html`** : `play.css` dédié (sans `style.css` jeu), branding landing, compteur live, FR.
+- **PWA** : `manifest.webmanifest` + preload CSS landing.
+- **UX** : scroll reveal sections (`IntersectionObserver`), CTA sticky masqué près du footer, hero glow animé.
+- **SEO** : JSON-LD `HowTo` ; tests `landing-compat` → 8 checks.
+- Version client : `20260613-landing-polish`.
+
+### Completed — landing contenu enrichi (2026-06-13)
+
+- **Sections** : `#univers` (showcase CSS + secteurs), `#survie` (piliers gameplay), `#multijoueur`, `#exigences` (config navigateur/mobile/PC).
+- **Features** : cycle jour/nuit, inventaire, 8 cartes jeu ; FAQ +5 questions ; JSON-LD `FAQPage`.
+- **Nav** : liens univers/survie/multijoueur (desktop + drawer) ; footer enrichi.
+- **Responsive** : grilles 1→2 col (640px) → 3–4 col (900–1024px) ; showcase CSS pur (pas d'images lourdes).
+- Tests : `landing-compat.test.mjs` étendu (8 tests).
+- Version client : `20260613-landing-content`.
+
+### Completed — audit compat suite 2 (2026-06-13)
+
+- **Tests auto** : `tests/landing-compat.test.mjs` (6 checks HTML/CSS/JS/SEO/assets) — verts.
+- **Smoke HTTP** : `/`, `/play.html`, `/css/landing.css`, `/js/landing.js`, `/api/public/status`, `/robots.txt` → 200.
+- **Favicon** : `/img/favicon.svg` + apple-touch-icon (index + play).
+- **SEO** : `play.html` retiré du sitemap ; `Disallow: /play.html` dans robots.txt.
+- **UX/a11y** : `scroll-padding-top` ancres ; `inert` sur main/footer/CTA quand drawer ouvert.
+- **OG image** : texte SVG encodage corrigé.
+- Version client : `20260613-landing-audit`.
+
+### Completed — landing responsive mobile/tablette/PC (2026-06-13)
+
+- **Menu mobile** : drawer + hamburger, backdrop, Escape pour fermer.
+- **Hero 2 colonnes** (≥768px) : copy + panel live côte à côte.
+- **Barre CTA sticky** (mobile) : joueurs en ligne + bouton Jouer.
+- **Safe areas** iOS (`viewport-fit=cover`, `env(safe-area-inset-*)`).
+- **Breakpoints** 640 / 768 / 1024 / 1280 — grilles features, stats, plateformes.
+- **Touch** : cibles 44px+, boutons pleine largeur mobile, trust bar scroll horizontal.
+- **`play.html`** : classe `login-page`, champs 48px, `font-size: 16px` anti-zoom iOS.
+- Version client : `20260613-landing-responsive`.
+
+### Completed — audit compat multi-plateforme landing (2026-06-13)
+
+- **Audit** : mobile / tablette / desktop / iOS safe-area / navigateurs sans `backdrop-filter`.
+- **Fixes** : nav desktop à 900px (iPad portrait garde hamburger), fallback `overflow-x: hidden`, `100vh`+`100dvh`, `@supports text-wrap: balance`, pill header tronquée, poll pause onglet caché, meta PWA.
+- Version client : `20260613-landing-compat`.
+
+### Completed — landing compteur joueurs live (2026-06-13)
+
+- **`GET /api/public/status`** : online, capacity 250, fillPct, slotsRemaining (cache 10 s).
+- **`landing.js`** : poll 15 s, compteur animé, barre remplissage, statut serveur (online/starting/offline).
+- **UI pro** : panel « Population en direct », pill header, trust bar, typo Inter/Oswald, hover cards, footer structuré.
+- Version client : `20260613-landing-live`.
+
+### Completed — landing SEO vitrine (2026-06-13)
+
+- **`/`** : page marketing post-apo (free-to-play, navigateur, 250+ joueurs, FAQ SEO).
+- **`/play.html`** : connexion (ex-`index.html`), `noindex` pour ne pas cannibaliser la home.
+- SEO : meta, Open Graph, Twitter, JSON-LD `VideoGame`, `robots.txt`, `sitemap.xml`, image OG SVG.
+- Styles dédiés `public/css/landing.css` — route serveur + Vite build.
+- Version client : `20260613-landing-seo`.
+
+### Completed — defer tail drain 180+ (2026-06-13)
+
+- Log `localhost-1781360645942` : **430→240 en 5 s** (fix bande 404 OK) ; puis **237 bloqué ~90 s** — `deferForced` off dès `defer≤240`.
+- **deferForced** : actif dès **defer≥180** && lodMid<72 (plus seulement >240).
+- **maxSpawn** : boost bande 180–379 en tail drain.
+- Version client : `20260613-defer-tail-drain`.
+
+### Completed — fix defer drain 404 bande (2026-06-13)
+
+- Log `localhost-1781359918481` : defer **404 bloqué** ~2 min ; `maxSpawn: 4` malgré `deferForced` ; LOD monte pendant drain mort.
+- **Scheduler** : cap `defer>200` ignoré si `deferForced`.
+- **network.js** : caps `lodNear` ignorés si `deferForced && lodMid<72` ; boost bande 380–420 ; skip simpleLod trees relaxé en forced drain.
+- Règle `.cursor/rules/refonte-playtest-loop.mdc` (boucle refonte + playtest).
+- Version client : `20260613-defer-forced-drain`.
+
+### Completed — socle moteur client v2 E0 (2026-06-09)
+
+- **Migration progressive** : `apps/client/src/engine/` (BacklogScheduler, FrameRunner, Telemetry, install).
+- **`game.html`** : import `/src/engine/install.js` avant scripts legacy ; alias `ZS.BacklogScheduler` conservé.
+- **`network.js`** : tick décor via `ZS.Engine.FrameRunner` ; snapshots `Engine.Telemetry`.
+- **`public/js/backlog_scheduler.js`** : stub (source de vérité = module ES).
+- **Doc** : `docs/V2_CLIENT_MIGRATION.md` ; tests `tests/engine-backlog-scheduler.test.mjs`.
+- Version client : `20260609-engine-v1`.
+
+### Completed — boot warmup + defer-drain lodMid (2026-06-13)
+
+- Log `1781358458407` : game-init **806 ms** OK ; freeze 1re frame **1504 ms** (render concentré) ; defer 430→331 en 4 s puis **remontée 233→340** via stream ; spam `urgent-lod` ; LOD **196** bloqué.
+- **Boot render warmup** : PR réduit 14–20 frames + budget décor limité au démarrage loop.
+- **defer-drain** : stream off si defer>220 && lodMid<72 (empêche refill pendant pression mid-ring).
+- **urgent-lod** : seuil 55 + lodMid>52 (moins d’oscillation).
+- **deferForced** : defer 240–420 && lodMid<72 ; priorité LOD si lodMid>65.
+- **stream-soft-extend** : off si defer>200.
+- Version client : `20260613-boot-warmup-drain`.
+
+### Completed — fix defer 379 + boot render (2026-06-13)
+
+- Log `1781358066128` : defer **379 bloqué ~27 s** (379 < RESUME 380 → pas de `deferForced`) ; tree-fetch **12,5 s** ; stream recharge defer 217→266 ; freeze render boot **748 ms** ; roads **1514 ms** (OK).
+- **`deferForced`** : bande **340–420** + lodMid<48 avant check RESUME ; boot si defer≥320.
+- **defer-drain** : stream off si defer>240 && lodMid<40 (évite refill 217→303).
+- **spawnReady** : après init-vis hold (plus de render loop concurrent pendant hold).
+- **Tree-fetch** : bypass si lodMid<24 && defer>250.
+- Version client : `20260613-defer-resume-edge`.
+
+### Completed — pression LOD mid-ring + roads lite (2026-06-13)
+
+- Log `1781357738314` : defer **402 bloqué ~20 s** (lodNear **226** vs lodMid **34**) ; gate `lod-near` à tort ; roads **4612 ms** ; defer remonte via stream (347) ; tree-fetch `post-drain` 18 s.
+- **`deferForced`** : pression sur **lodMid** (plus lodNear lointain 110–212 m).
+- **Gates stream/spawn** : `lodMid` + `lodPressure` (mid + far cap 32) ; mode **defer-drain** (stream off, queueCap 0) si defer>300 && lodMid<56.
+- **Bande 380–420** : maxSpawn boost si lodMid<64 ; band drain si lodMid<96.
+- **Roads** : skip lanes/barriers si defer>200 ou lodMid>96 (ribbonStep 0,62, budget 4–6 ms).
+- Version client : `20260613-lodmid-pressure`.
+
+### Completed — fix drain bande defer 380–420 (2026-06-13)
+
+- Log `1781355008519` : pas d’erreur JS ; defer **418 bloqué ~33 s** (hysteresis) ; `defer-pause` 9,8 s ; tree-fetch `post-drain` 17,8 s ; LOD bloqué si `lodNear 139 < 140` ; roads **2778 ms** ; freezes render init **477 ms**.
+- **`deferForced`** : bug `deferN <= PAUSE` retournait false pour toute la bande 381–420 → drain forcé jamais actif.
+- **Quotas** : maxSpawn renforcé en bande/boot ; LOD gate alignée sur `lodMid` (plus seuil `lodNear < 140` dans network).
+- **Tree-fetch** : bypass `post-drain` si `deferForced`.
+- **Roads** : budget/step réduits si defer>300 au build post-spawn.
+- **Frame recover** : cooldown plus long pendant init-vis (shader compile).
+- Version client : `20260613-defer-band-drain`.
+
+### Completed — fix `lodPending is not defined` (2026-06-13)
+
+- Log `1781349420560` : **`ReferenceError: lodPending is not defined`** à `_tickDecorSpawnDefer` L1090 — spam chaque frame dès +4,9 s ; defer **430 bloqué** (spawn jamais exécuté).
+- Cause : refactor backlog-scheduler a renommé la métrique en `lodNear` mais laissé une référence `lodPending` dans la boucle spawn.
+- Fix : skip simpleLod trees si `lodNear > 120` ; log `defer-cap` expose `lodNear` + `lodTotal`.
+- Version client : `20260613-lodpending-fix`.
+
+### Completed — BacklogScheduler unifié (2026-06-13)
+
+- Log `1781347758794` : boot OK mais **lod 264 bloqué** (lodMid=0) — gates utilisaient le total LOD lointain au lieu de la pression proche.
+- **`backlog_scheduler.js`** : une évaluation/frame (phases boot/init-vis/stream/sector/steady), hysteresis defer 420/380, quotas maxSpawn/lodWindow/streamQueue/roadBudget, priorité lod|defer|balanced.
+- **`network.js`** : `_lodNearPendingCount` (simpleLod dans rayon vis+72 m) ; `_buildBacklogPlan()` remplace les gates fragmentés ; tick piloté par `plan.priority` ; stream fetch via `plan.allow` + `streamQueueCap`.
+- **`world.js`** : budget roads depuis `ZS._roadBuildBudgetMs`.
+- Version client : `20260613-backlog-scheduler`.
+
+### Completed — fix deadlock defer 360 / LOD 299 (2026-06-13)
+
+- Log `1781347758794` : boot OK (**1332 ms**, decor-batch **520 ms**) ; **lod 239** dès batch ; defer **bloqué 360** ~45 s (hysteresis `360` jamais `< 360`) ; `deferHeavy` bloquait LOD alors que lod **299**.
+- **Hysteresis** : resume **380** (≤ pour débloquer) ; bande 380–420 + lod>100 = travail autorisé.
+- **Tick** : `deferHeavy` seulement si defer>220 **et** lod<140 ; `lodHeavy` si lod>140 et (defer<400 ou lod>defer+60).
+- **Init** : full LOD arbres jusqu’à **105 m** (vs 90).
+- **LOD window** : boost drain si defer<150 et pending>200.
+- Version client : `20260613-defer-lod-deadlock`.
+
+### Completed — LOD/stream balance (2026-06-13)
+
+- Log `1781347405078` : defer drain OK (**430→212** en ~22 s, fps **38**) ; mais **lod 279**, batch **96 upgrades/4 s**, stream recharge defer, decor-batch **1193 ms**.
+- **decor-batch** : pas de `_markLodQueueDirty` / invalidation vis par item (batch depth).
+- **Spawn** : cap forcé si `lodMid>20` ; stream fetch pause si `lod>180`.
+- **LOD window** : cap 24–52 selon pending (>120/>180/>260).
+- **Tick** : priorité LOD si `lod>150 && defer<220` ; stream-soft-extend off si lod lourd.
+- Version client : `20260613-lod-stream-balance`.
+
+### Completed — defer drain2 + LOD/spawn priorité (2026-06-13)
+
+- Log `1781347058613` : boot OK (game-init **1810 ms**, freeze **427 ms**) ; defer **425** bloqué ~43 s car `lodMid===5` désactivait le drain d’urgence ; freezes **826+970 ms** (roads) ; **1171 ms** (spawn+LOD).
+- **Drain forcé** : urgence si `lodMid ≤ 48` ; boot grace (12 s) si defer>360 ; spawn pendant roads/sector en mode forcé.
+- **Tick réseau** : si defer>220 → spawn prioritaire, LOD skip ; LOD skip aussi si defer>240 && lodMid<64.
+- **Ground refine** post-init budgeté (6+4/frame idle).
+- Init-vis toggles réduits (48 expand / 56 hold).
+- Version client : `20260613-defer-drain2`.
+
+### Completed — fix flashs noirs écran en jeu (2026-06-09)
+
+- **Cause** : pixel ratio adaptatif basculait toutes les ~520 ms (frames ≥52 ms fréquentes) → `renderer.setSize()` répété = frame WebGL vide (noir) ; coupure réseau brève affichait l’overlay `connecting-screen` + skip render si `!spawnReady`.
+- **Fix game** : hystérésis PR (hold 1,8 s / restore 3,4 s / cooldown resize 2,8 s) ; cache dimensions viewport ; `visualViewport scroll` iOS seulement ; render dernière frame si spawn pas prêt.
+- **Fix network** : `socket.recovered` + déjà spawné → pas d’overlay ni `_spawnReady=false` ; overlay disconnect retardé 480 ms (micro-coupures Cloudflare).
+- Version client : `20260609-black-flash-fix`.
+
+### Completed — spawn zone loader (colliders + defer boost) (2026-06-09)
+
+- Logs plage : **colliders near 48 → 106 s** (gates `_decorTickHeavyAllowed` + idle) ; **430 décor différés** ; forest-decor 8,7 s bloque defer.
+- **Phase spawn-zone** : colliders sync **≤260 ms** juste après batch init ; post-boot complète le reste (rAF, budget 14 ms, pas idle).
+- **Boost 25 s** post-spawn : defer band-0 (proche) ignore `postSpawnVisualBusy` / soft caps ; maxSpawn ×1,3.
+- Colliders lointains : autorisés pendant spawn-zone boost (seuils frame assouplis).
+- Version client : `20260609-spawn-zone-loader`.
+
+### Completed — contenu spawn plage (sentier + arbres) (2026-06-09)
+
+- **Sentier invisible** : `ENABLE_CODEGEN_TRAIL_MESH` réactivé + mesh procédural plage au build monde.
+- **430 décor différés** : cap init 680 + rayon 100 m jamais capped ; flush immédiat post-batch (`spawn-zone-defer-flush`).
+- **Post-spawn** : attente LOD 25–45 s supprimée (3–6 s max) ; routes non dégradées tant que defer <480.
+- Version client : `20260609-spawn-content-fix`.
+
+### Completed — fix syntaxe `_lodMidStreamThresholds` (2026-06-13)
+
+- Boot : **`SyntaxError: Unexpected token 'function'`** ligne 477 — en-tête `_lodMidStreamThresholds` supprimé par erreur → **network.js ne chargeait pas** → cascade `sendEquip` undefined.
+- Restauration de la fonction ; version client : `20260613-init-defer-drain-fix`.
+
+### Completed — init-vis + defer drain (2026-06-13)
+
+- Log `1781346641929` : **plus d’erreur LOD** (`lod-list-fix` OK) ; freezes init **1369+806 ms** (520 meshes visibles au batch) ; defer **430** bloqué ~43 s (oscillation stream).
+- **Init-vis** : reveal démarré **avant** batch spawn ; non-pinned spawn **hidden** ; budget toggles/frame (64 expand, 80 hold) ; expand min Δr² **28**.
+- **Defer drain** : hysteresis stream pause **420 / resume 360** ; spawn d’urgence si defer>420 && lodMid=0 ; spawn autorisé pendant expand (pas hold) ; drain minimal pendant sector/post-spawn si defer bloqué ; stream-soft-extend off si defer>300 && lodMid=0.
+- Version client : `20260613-init-defer-drain`.
+
+### Completed — fix crash `_lodUpgradeList` null pass 2 (2026-06-13)
+
+- Log `1781346334027` : spam **`TypeError: Cannot read properties of null (reading 'length')`** à `_tickLodUpgrades` pass 2 (~73 s+) → tick réseau cassé, defer/lod bloqués.
+- Cause : `_adjustLodPendingCached` invalidait aussi la liste LOD mid-tick (pass 1 upgrade → pass 2 sur `null`).
+- `_invalidateLodRingCache` ne touche plus qu’au ring cache ; rebuild liste uniquement via `_markLodQueueDirty` (spawn / resync).
+- Pass 2 : snapshot `pass2List` + rebuild si liste vide avant mid-ring.
+- Version client : `20260613-lod-list-fix`.
+
+### Completed — fix « Cliquez pour jouer » (TDZ _adaptivePrCap) (2026-06-13)
+
+- Log `1781346030410` : **`ReferenceError: Cannot access '_adaptivePrCap' before initialization`** à `_resizeToViewport()` pendant game-init → **boucle de jeu + listeners souris jamais enregistrés** après la ligne 427.
+- Variables perf (`_adaptivePrCap`, `_frameRecoverUntil`, …) et `_tickAdaptivePixelRatio` déplacées **avant** le premier `_resizeToViewport()`.
+- Version client : `20260613-play-fix`.
+
+### Completed — fix crash `lp` duplicate (2026-06-13)
+
+- Log `1781345941747` : **SyntaxError** `Identifier 'lp' has already been declared` dans `_tickDeferredTreeLoader` → **network.js ne chargeait pas**, cascade `ZS.Network.preconnect` undefined.
+- Suppression du second `const lp` ; garde optionnelle `ZS.Network?.preconnect?.(socket)`.
+- Version client : `20260613-stream-throttle-fix`.
+
+### Completed — stream throttle + colliders soft (2026-06-13)
+
+- **Defer spawn** : skip arbres simpleLod si **lodMid > seuil.pause** ; log `lodMid`.
+- **Tree defer queue** : skip simpleLod mid-ring si lodMid haut ; cap spawn réduit.
+- **Stream soft extend** aussi si **lodMid > pause×0,88** (log lodMid).
+- **Post-reveal soft** : **+6 s** si lodMid > pause au post-init.
+- **Sector drain** : **+2–4 s** selon lodMid à la fin plage/forêt.
+- **Defer prune** : marge keep **12–28 m** (vs 64) si lodMid élevé.
+- **Colliders sync** : debounce (pas force) si defer/lod/sector/recover lourds ; skip si frame recover ; debounce **380–420 ms** si backlog.
+- Init vis expand step min **20 m²** (vs 16).
+- Craft tick pause pendant frame recover.
+- Version client : `20260613-stream-throttle`.
+
+### Completed — LOD cache + pixel ratio adaptatif (2026-06-13)
+
+- **Cache LOD** : `simpleLod` total incrémental ; ring urgent/mid en **1 scan** / 120 ms ou Δ8 m (vs 3–5 scans/frame).
+- Rebuild liste LOD upgrade max **1×/900 ms** si immobile.
+- Resync full après batch init decor.
+- **Pixel ratio adaptatif** : cap **0,82 mobile / 0,95 desktop** pendant 520 ms si frame ≥52 ms, recover, sector busy ou FPS <15.
+- Log `adaptive-pr-drop`.
+- Biome ambient stride ×2 pendant frame recover.
+- Version client : `20260613-lod-cache`.
+
+### Completed — frame recover + post-drain LOD (2026-06-13)
+
+- **`ZS.isFrameRecovering()`** : après frame **≥68 ms**, pause 80–280 ms sur decor heavy, zombies (×2), map, billboards, ombres, tree/rock anims.
+- Log `frame-recover` si frame **≥110 ms** (ms, recoverMs, render, network).
+- **Init vis expand** : easing **easeOutCubic** (moins de nouveaux meshes en fin d’expand).
+- **Colliders boot** : délai adaptatif **2,2–5,6 s** selon defer + lodMid.
+- **Trees/props defer** : +2,5 s si lodMid > seuil.pause au post-init.
+- **Stream fetch** : cap queue **8–14** items si lodMid élevé (vs limit API).
+- **Defer loaders** : gates `lod-mid` / `post-drain-lod`.
+- **LOD window** : boost drain post-sector si defer=0 et midLod > pause×0,32.
+- FPS table : champ `frameRecover`.
+- Version client : `20260613-frame-recover`.
+
+### Completed — sector drain + builds adaptatifs (2026-06-13)
+
+- **LOD urgent pendant sector cooldown** : ring ≤64 m continue (cap 4–6/frame) si urgent **≥8** ; pass 2 mid-ring off.
+- **Defer prune** aussi si **lodMid > lodMidTh.pause**.
+- **Network tick** : rotation LOD / defer / vis (3 phases) pour éviter starvation.
+- **Tree/prop loaders + colliders bg** : pause si frame spike ou sector busy.
+- **Plage/forêt decor build** : batch FPS-adaptatif + pause 28 ms si p95 **>88 ms**.
+- **_waitLodUrgentBelow** : pause extra si frame lourde avant beach/forêt decor.
+- **Ombres** : intervalle ×2,2 si FPS **<14** ou sector busy.
+- **Post-init ground refine** skip si sector busy.
+- Fix duplicate `const th` dans `_fetchDecorStreamNearBatch`.
+- Version client : `20260613-sector-drain`.
+
+### Completed — init vis anneau + garde frame heavy (2026-06-13)
+
+- **Init vis reveal** : mise à jour par **anneau** (`lastAppliedR2`) au lieu de rescan complet à chaque frame hold/expand.
+- Expand throttlé : pas de step si Δr² **<16** (4 m) ; durée expand **3200 ms**.
+- Logs `init-vis-hold-step` si step **≥12 ms** (ms + touched).
+- **`_decorTickHeavyAllowed`** : skip defer spawn + LOD si frame max **>110 ms** ou p95 **>95 ms**.
+- Defer spawn caps aussi sur **lodMid** (seuils adaptatifs).
+- Drain LOD : triggers liés à `lodMidTh.pause` (×0.25 / ×0.45) vs constantes fixes.
+- Colliders far defer + forest vis : skip si frame spike (p95 **>88–90 ms**).
+- Version client : `20260613-init-vis-ring`.
+
+### Completed — LOD boot grace + init full LOD 90 m (2026-06-13)
+
+- Log `1781345171862` : **FPS avg 18**, **peakDefer 0** ✓ ; early **lodMid 223–466** bloquait stream (`lod-high` à +9 s).
+- Seuils **adaptatifs** mid-ring : boot grace 12 s (pause **200** / high **280**), sector busy (**125** / **215**), normal (**105** / **175**).
+- Init spawn : arbres **≤90 m** en LOD complet (`initFullLodTrees`) → moins de simpleLod mid-ring au boot.
+- Vis décor skip si frame **>100 ms** ou p95 **>85 ms** ou FPS **<12**.
+- Tree-fetch gate utilise les mêmes seuils adaptatifs.
+- Version client : `20260613-lod-boot-grace`.
+
+### Completed — LOD mid-ring stream gates (2026-06-13)
+
+- Log `1781344770287` : **peakDefer 0** ✓ ; **lod total ~680** bloquait stream (arbres lointains).
+- Stream gates sur **lodMid ≤110 m** (pause **>95**, hard **>145**) vs total 680.
+- Mode drain LOD : fenêtre **96–110** si defer=0 et midLod>25/45.
+- Debug : `lodMid` dans stream-gate, defer-cap, backlog, FPS table.
+- Init vis hold démarre **10 m** (vs 12).
+- Version client : `20260613-lod-midring`.
+
+### Completed — perf batch4 vis idle + colliders + systems (2026-06-13)
+
+- **Decor vis** : stride x3 si joueur immobile ; batch réduit si FPS/sector busy.
+- **Colliders sync** : debounce 280–320 ms boot ; skip si sector busy.
+- **Post-init ground refine** différé idle (`post-init-ground-refine`).
+- **Colliders post-boot** delay **3,8 s** si defer **>350**.
+- **Defer prune** aussi si lod **>520/620**.
+- **Stream soft extend** dès defer **>180**.
+- **LOD boot grace 3,5 s** ; init reveal expand **2,4 s**.
+- **Zombies/Map/forêt vis** allégés pendant init-reveal / sector busy / FPS<12.
+- Log `init-decor-cap`.
+- Version client : `20260613-perf-batch4` (inclut batch1–3).
+
+### Completed — perf batch3 init vis + colliders + stream extend (2026-06-13)
+
+- **Spawn init** : visibilité decor limitée au rayon `init-vis-reveal` (évite flash shader compile).
+- **LOD off** pendant tout `init-vis-reveal` (expand inclus).
+- **Stream soft +6 s** auto si defer **>220** à la fin du soft (`stream-soft-extend`).
+- **Recenter pause 3,5 s** si defer **>280**.
+- **Colliders lointains** : pause sector/drain/defer ; intervalle FPS-adaptatif ; log `collider-defer-done`.
+- **Forêt vis** skip pendant init-reveal + sector load busy.
+- **game-init** sliceMs desktop **14 ms**.
+- Version client : `20260613-perf-batch3` (inclut batch1+2).
+
+### Completed — perf batch2 budget adaptatif + gates tree (2026-06-13)
+
+- **Decor budget FPS-adaptatif** (35–100 % selon fps + post-drain).
+- **Defer spawn** limité par budget frame (6–9 ms) + budget réseau restant.
+- **Vis stride** +10 pendant cooldown/drain ; +4–8 si defer/lod backlog.
+- **Tree/prop fetch** gate identique au stream (`tree-fetch-gate`).
+- **Defer prune** périodique (4 s) si queue **>280** pendant drain/cooldown.
+- Init : pause frames **4**, game-init yieldEvery desktop **10**, roads budget **10 ms**.
+- Billboards off pendant `init-vis-reveal`.
+- Debug : `defer-prune`, `tree-fetch-gate`, `decorBudget` dans fps/backlog.
+- Version client : `20260613-perf-batch2` (inclut batch1 stream-pause).
+
+### Completed — perf batch + debug backlog (2026-06-13)
+
+- **Post-sector drain soft 8 s** après cooldown (stream limité, defer 4/tick).
+- **LOD pause** pendant cooldown sector + si defer **>420** ; fenêtre LOD dynamique (24–80).
+- **Ombres off** pendant tout `init-vis-reveal` (pas seulement hold).
+- **Debug** : `stream-gate` / `stream-gate-clear`, `defer-cap`, `backlog-snapshot` (20 s), peaks dans `FPS-RÉSUMÉ`.
+- Version client : `20260613-perf-batch`.
+
+### Completed — stream pause sector + defer backlog cap (2026-06-13)
+
+- Log `1781344028660` : cooldown OK mais **stream-fetch** pendant pause → defer **834** puis flood **12/tick** à +36 s.
+- Pause stream pendant `sector-decor-cooldown` + si defer **>420**.
+- Cap fetch (12–20) si defer **>150** ; intervalle plus long si defer **>120/250**.
+- Defer spawn **3–4/tick** si queue **>400/600** (indépendant du lodPending).
+- Version client : `20260613-stream-pause`.
+
+### Completed — sector cooldown fix + defer cap 380 (2026-06-13)
+
+- Log `1781343702596` : pending **361→628** après flood defer **12/tick** post-forêt ; cooldown sector **jamais actif** (typo export).
+- Fix `ZS._markSectorDecorCooldown` export ; log `sector-decor-cooldown`.
+- Defer max **5/tick** si `lodPending > 320`.
+- Version client : `20260613-cooldown-fix`.
+
+### Completed — fix zombie sync + stream LOD cap (2026-06-13)
+
+- Log `1781343332749` : defer soft OK (4/tick) ; pending **685→379** ; recenter OK ; FPS avg **14**.
+- **Zombies invisibles** : sync reporté au post-init idle (~8 s) + `zombie-tick` full avec `filter=[]` vidait la scène.
+- Sync zombies juste après `Scenario.init` ; ignore `zombie-tick` pendant intro delay ; resync au passage `walk_west`.
+- Stream fetch cap **8** si `lodPending > 680` ; defer max 4 si `lodPending > 550`.
+- Version client : `20260613-zombie-sync`.
+
+### Completed — defer throttle + stream LOD pause (2026-06-13)
+
+- Log `1781343017350` : recenter téléport **OK** (plus de 1773 ms) ; pending **801→428** ; beach/forêt wait **urgent≤3** ; spike post-forêt **116** ; defer 430 items en ~2 s.
+- Soft spawn post-reveal **15 s** (max 3–4/tick) ; pause defer **8 s** après beach/forêt.
+- Stream/deferred-trees pause si `lodPending > 680`.
+- Pass 2 mid-ring boost (cap 6–8 si FPS ≥20).
+- decor-batch yieldEvery 8 (moins de freeze init).
+- Version client : `20260613-defer-throttle`.
+
+### Completed — recenter soft + mid LOD drain (2026-06-13)
+
+- Log `1781342679094` : freeze init **425 ms** (record) ; LOD burst **60–80** OK ; `forest-decor-wait` timeout **urgentLeft:67** ; freeze **1773 ms** au recenter téléport (sleep wake).
+- Recenter : plus de fetch immédiat ; pause 2–5 s ; soft restart ; prune defer lointain.
+- Defer spawn pause si `urgentPending > 50` ou recenter pause actif.
+- Pass 2 mid-ring actif quand urgent=0 (cap 2–5 si backlog ~800).
+- Beach wait ≤20 ; forêt wait ≤15 avec retry si encore >30.
+- Version client : `20260613-recenter-soft`.
+
+### Completed — LOD burst urgent + hold 12 m (2026-06-13)
+
+- Log `1781342364632` : freeze **571+666 ms** (−21 %) ; `urgentPending` pic **120** (vs 206) ; FPS avg **16** ; batch LOD **23** malgré urgent=46 (burst cap 6).
+- Fix pass 1 urgent : ignore burst cap sous pression → jusqu'à 80/window.
+- Hold ramp **12→64 m** (8 paliers, 3 frames pause) ; ombres off pendant hold.
+- Stream pause si `urgentPending > 50` ; defer throttle si `lodPending > 720`.
+- Beach/forêt attendent `urgentPending ≤ 25`.
+- Version client : `20260613-lod-burst`.
+
+### Completed — init vis ramp + urgent LOD fix (2026-06-13)
+
+- Log `1781342037282` : stream soft OK ; freeze **721+817 ms** (render shader compile) ; `urgentPending` 1→206 @ +24 s ; FPS avg 15.
+- **Hold radius ramp** 20→32→44→56→64 m (6 frames) — étale le premier paint GPU.
+- Fix `_tickInitVisReveal` qui réinitialisait le rayon à 64 m chaque frame.
+- **LOD urgent** : seuil pression 40 ; fenêtre 80 réservée au ring urgent ; supprime `tickCap=5` sous pression.
+- Spawn full LOD arbres ≤72 m ; pause spawn simple si `urgentPending > 80`.
+- Beach/forêt décor attendent `urgentPending ≤ 35` (timeout 14 s).
+- Version client : `20260613-init-ramp`.
+
+### Completed — stream warmup + urgent LOD boost (2026-06-13)
+
+- Log `1781341630257` : cap LOD ≤80 OK ; freeze régressé 926+1000 ms ; spike `urgentPending` 42→168 au stream start.
+- **Stream progressif** : soft start 12 s (batch 12–20, intervalle ≥0,45 s), pas de fetch immédiat à `decor-stream-start`.
+- **Spawn urgent** : `_treeSpawnSimpleLod` force LOD complet ≤64 m (defer + deferred-trees + decor-batch).
+- **Hold init** : 4 frames + pause 2 rAF avant expand ; inv debug différé post-reveal.
+- **LOD urgent pressure** : si `urgentPending > 60`, pass 2 désactivé + budget pass 1 boosté.
+- Arbres/props différés décalés +4 s après stream ; throttle spawn pendant soft start.
+- Version client : `20260613-stream-urgent`.
+
+### Completed — reveal polish + LOD window fix (2026-06-13)
+
+- Log `1781341335084` : freeze 597+667 ms (−44 %), ordre expand OK ; batch LOD 132 (>80) bug compteur.
+- Fix fenêtre LOD : log à rollover 4 s (plus d'accumulation inter-fenêtres) ; hard stop à 80.
+- Stream / post-init / roads idle **après** `init-vis-reveal-done` (`post-init-stream-start`).
+- Colliders sync différé idle post-hold ; expansion 2,2 s ; busy pendant tout expand.
+- Version client : `20260613-reveal-polish`.
+
+### Completed — reveal hold 3 frames (2026-06-13)
+
+- Log `1781340998194` : freeze 1058 ms car expansion démarrait avant `_spawnReady` (~65 % à +5,2 s).
+- Phase **pre/hold** : rayon 64 m figé jusqu’à 3× `requestAnimationFrame` après spawn ready.
+- Log `init-vis-reveal-expand` après les frames hold ; LOD upgrades pausés en hold.
+- Version client : `20260613-reveal-hold`.
+
+### Completed — init vis reveal + LOD window cap (2026-06-13)
+
+- Log `1781340645806` : urgent OK mais freeze render 1066+1133 ms, burst 299 upgrades → FPS 52→13.
+- **init-vis-reveal** : après batch, visibilité 64 m puis expansion 1,8 s → 140 m (évite 1er rendu massif).
+- Stream / defer spawn / deferred-trees pausés pendant ~65 % du reveal.
+- **LOD cap 80 / 4 s** + tickCap ≤5 si urgentPending >24.
+- Version client : `20260613-init-reveal`.
+
+### Completed — LOD urgent + stream throttle (2026-06-13)
+
+- Log `1781340277864` : pending 992→2239 (stream + deferred-trees), `urgentPending` manquant.
+- Métrique `urgentLodPending` (<64 m) dans post:fps et lod-upgrade-batch.
+- Stream / deferred-trees pausés si pending >800 ; limites réduites si >450.
+- Defer spawn : skip arbres simple lointains quand backlog >800.
+- Upgrades : boost anneau urgent si `urgentPending>0` ; pass 2 coupé si backlog + urgent restant.
+- Batch init : arbres ≤64 m en premier, slice 16 ms, yield post-batch.
+- `ZS.TREE_LOD_URGENT_R` + `treeWantsSimpleLodAt` exportés.
+- Version client : `20260613-lod-urgent`.
+
+### Completed — LOD backlog + spawn distance (2026-06-13)
+
+- Log `1781339956505` : throttle LOD OK (7 lignes vs 189) mais pending 574→1024, FPS 28→9, batch 217 upgrades en 4 s.
+- Décor defer : `simpleLod` distance-only (plus de full LOD forcé band 0 à 260 m).
+- Urgent ring 64 m ; cap 3–5 upgrades/tick si pending >450 ; pass 2 coupé en backlog.
+- `FPS-LOW` → `console.info` (évite ~3k lignes de stack Chrome).
+- Version client : `20260613-lod-backlog`.
+
+### Completed — LOD throttle + urgent 48 m (2026-06-13)
+
+- Log `1781339775746` : upgrades OK (265→131) mais **189 logs/tick** + FPS **31→9** (rebuild mesh sync).
+- Urgent ring **48 m** rescan chaque tick ; file compactée après upgrade.
+- Budget 8–14 ms, pause si FPS<10, burst réduit si FPS<22.
+- Logs batch toutes les **4 s** seulement (`pending` = vrai count simpleLod).
+- Version client : `20260613-lod-throttle`.
+
+### Completed — LOD arbres priorité joueur (2026-06-13)
+
+- Bug : `spawn_clearing` forçait simpleLod même si `simpleLod: false` (distance >42 m).
+- Upgrades LOD bloqués 12 s + désactivés si >1500 décor + 1/tick → file dédiée nearest-first.
+- **32 m** : détail immédiat au spawn ; au-delà simple puis upgrade urgente (6–10/tick proche).
+- Rescan file LOD si déplacement >36 m.
+- Version client : `20260613-lod-priority`.
+
+### Completed — pause décor sector + visibilité batch (2026-06-13)
+
+- Log `1781339085155` : routes **1 s**, boot scripts **3,5 s**, FPS **24–32** — pic +13 s (beach 839 ms + stream décor).
+- `_sectorDecorBusy` : pause spawn/stream pendant plage/forêt (séquentiel await).
+- Visibilité décor **round-robin** si >1200 objets (batch 260–420/tick).
+- Plage : scatter instancé async avec yields.
+- Version client : `20260613-decor-vis-batch`.
+
+### Completed — boot defer admin + logs allégés (2026-06-13)
+
+- Log `1781338806613` : routes **1,5 s** (town_main 300 ms, lanes 189 ms), jeu **25–38 FPS** stable.
+- **25 scripts admin/calibration** différés (`requestIdleCallback`) — boot joueur ~74 modules au lieu de 99.
+- Textures routes préchargées avant `buildMeshesAsync` (plus de spam WebGL 167k lignes).
+- `FRAME-FREEZE` console : seulement ≥80 ms si FPS<24 ou ≥200 ms.
+- Version client : `20260613-boot-defer-admin`.
+
+### Completed — routes fastGround + lanes async (2026-06-13)
+
+- Log `1781338520253` : `town_main` 4,3 s freeze, lanes différées 4,9 s (raycasts sync).
+- **fastGround** : hauteur analytique (`getVisibleTerrainHeight`) — plus de raycast par vertex ni prewarm sync.
+- **Lanes async** : `_buildLaneOverlayAsync` step 0,6, budget 12 ms, normales plates.
+- **Resnap arbres** : queue limitée à `fastGroundSpawn` (évite 2472 checks inutiles ~3 s).
+- Version client : `20260613-road-fastground`.
+
+### Completed — perf routes différées + décor léger (2026-06-13)
+
+- **Routes post-spawn** : rubans d'abord → `_roadsPostSpawnBusy` off → lignes/barrières en pass différé (log: 15 s / 3 FPS).
+- **Opts** : accotements skip async, `refineNormals` off, step 0.4, budget 18 ms.
+- **Décor** : pause spawn/stream/fetch pendant busy routes ; stride visibilité adaptatif (2679 obj → stride 20) ; LOD off si >1500.
+- Version client : `20260613-perf-roads-decor`.
+
+### Completed — monitoring FPS dans LoadLog (2026-06-13)
+
+- **Demande** : corréler les rames aux logs playtest (`zs-load`).
+- **LoadLog** : échantillon `post:fps` toutes les 8 s (fps, fpsMin, p95 ms, draw calls, décor pending, split render/network).
+- **Alertes** : `FPS-LOW` si fps < 22 ; `FRAME-FREEZE` inclut fps courant.
+- **Fin session** : `post-fps-summary` + table des 12 derniers échantillons (3 min watchdog).
+- **PerfMonitor** : `getStats()` / `getRenderStats()` ; HUD inchangé (`?perfhud=1`).
+- Version client : `20260613-fps-monitor`.
+
+### Completed — API decor-stream près joueur (2026-06-13)
+
+- **Cause racine** : game-init max 950 + APIs `decor-trees/props` = anneau **au-delà** du spawn ; en traversant la map le client n'avait jamais reçu le décor loin du point de spawn.
+- **Serveur** : `decorItemsNearPlayer` + `GET /api/world/decor-stream?x&z&r` (disque autour du joueur, paginé).
+- **Client** : fetch continu `_tickDecorStreamFetch` même queue vide ; recentrage à +160 m ; trees/props restent preload global spawn.
+- Version client : `20260613-decor-near-stream` (**redéployer le serveur** pour la nouvelle route).
+
+### Completed — streaming décor centré joueur (2026-06-13)
+
+- **Symptôme** : seule la zone autour du spawn se remplit ; traverser la map laisse le reste vide.
+- **Cause** : spawn différé filtré par rayon sans tri spatial ; APIs decor-trees/props ancrées au spawn ; props API bloquées tant que queue > 32.
+- **Fix** : `_tickDecorSpawnDefer` trie par distance au joueur (bandes vis/stream/preload) ; fetch API avec position joueur ; recentrage pagination à +160 m ; props en parallèle.
+- Version client : `20260613-decor-stream`.
+
+### Completed — fix chargement secteur + routes complètes (2026-06-13)
+
+- **Régression prod** (log `survival.badom.ch-1781336481632`) : moitié secteur vide, barrières absentes, route principale incomplète.
+- **Routes post-spawn** : réactivation bandes d'accotement, lignes et barrières (`skipShoulder/Lane/Barriers: false`) ; defaults async corrigés (`!!opts.skip*`).
+- **Barrières async** : `buildRoadBarriersAsync` budgeté dans `barrier_prefabs.js`.
+- **Décor différé** : spawn background hors rayon si queue > 80 ; plus de blocage total pendant routes ; grace boot assouplie si grosse queue.
+- **Render** : plus de skip 1 frame / 2 pendant build routes.
+- Version client : `20260613-sector-load-fix`.
+
+- **Ancrage sol v2** : raycast mesh terrain + lift 2 cm (pente = lift réduit) — fini l'effet vol latéral.
+- Version client : `20260613-admin-roads-ground`.
+
+### Completed — routes wall-time + render throttle (2026-06-13)
+
+- **Yield routes** : `setTimeout(0)` sans `rAF` en async → wall ~12 s → ~2–4 s estimé.
+- **Prewarm cache** ruban avant boucle async (raycasts sync, loop = cache hits).
+- **Budget** 28 ms · render 1 frame / 2 pendant `_roadsPostSpawnBusy`.
+- **Resnap arbres** : queue filtrée (`fastGroundSpawn` / `simpleLod` seulement).
+- Version client : `20260613-roads-walltime`.
+
+### Completed — post-spawn perf décor + routes (2026-06-13)
+
+- **Routes** : resnap Y désactivé par défaut (−17 s, terrain OK au 1er pass) · normals seules · flag `ZS._roadsPostSpawnBusy` pause décor pendant build.
+- **Network tick** : budget décor 12 ms/frame · arbres/props/défer pause si routes · resnap arbres différé budgeté (fini le pic 507 ms).
+- **Visibilité décor** : stride 24–32 pendant boot/routes.
+- Prochaine piste : draw calls (~4400 post-forêt).
+- Version client : `20260613-postspawn-perf`.
+
+### Completed — routes async alignement terrain (2026-06-13)
+
+- **Régression visuelle** : `fastGround` analytique → routes sous le mesh / morceaux manquants.
+- **Fix** : raycast `raycastTerrainHeight` + cache 0,35 m · lift pente restauré · step 0,36–0,55 (plus fin).
+- **Post-pass** : resnap vertices (grille 0,28 m) + `computeVertexNormals` budgeté.
+- Version client : `20260613-roads-terrain`.
+
+### Completed — fix crash océan / eau (`feetY`) (2026-06-13)
+
+- **Bug** : `feetY` déclaré dans le bloc collision decor — hors scope pour la physique eau ; crash `ReferenceError` dès `inRiver === true` (bord océan).
+- **Fix** : `feetY` + `playerR` hoistés avant le bloc `benchNoclip`.
+- Version client : `20260613-feety-water`.
+
+### Completed — routes async fastGround + skip détails boot (2026-06-13)
+
+- **Cause racine** : `_roadVertexY` → 6× `raycastGroundHeight` / vertex (~20k raycasts / ribbon).
+- **Fix** : terrain analytique (`getVisibleTerrainHeight`) + cache grille 0,45 m · pas de pente au boot.
+- **Boot asphalt** : skip lane overlay + barrières (admin `rebuildMeshes` = qualité full).
+- **Mesh** : normals plats (skip `computeVertexNormals`) · step 0,48–0,78 · budget 18 ms.
+- Logs arbres différés throttlés (4 s).
+- Version client : `20260613-roads-fastground`.
+
+### Completed — routes async budget + LOD chargement (2026-06-13)
+
+- **Routes post-spawn** : budget **12 ms/frame** (8 ms mobile) · `RIBBON_STEP` 0.42–0.58 (longues routes) · 4 cols · épaules asphalt skippées au boot (surface seule).
+- **Logs** : `FRAME-FREEZE` en `console.info` + throttle (évite exports 14 Mo).
+- Objectif : ~92 s → ~15–25 s, frames ~50–80 ms max pendant routes.
+- Version client : `20260613-roads-budget`.
+
+### Completed — routes async + clic post-chargement (2026-06-13)
+
+- **Clic « Cliquez pour jouer »** : overlay chargement `pointer-events: none` dès hide + fade ; pointer lock autorisé pendant fade-out.
+- **Routes post-spawn** : `buildMeshesAsync` — yield tous les 28 samples / entre edges (thread libre, clic + souris OK).
+- Logs : `road-ribbon-slow`, `road-edge-slow` si edge lourd.
+- Version client : `20260613-roads-async-click`.
+
+### Completed — logs post-spawn / freeze in-game (2026-06-13)
+
+- **LoadLog post-spawn** : `post:*` events, `FRAME-FREEZE` watchdog (3 min), `ZS.LoadLog.postSummary()`.
+- **Instrumenté** : routes (progression par 20 edges), plage/forêt décor, décor différé, arbres/props API, colliders post-boot, LOD upgrades, network tick lent, breakdown frame (preNet/network/render).
+- Version client : `20260613-post-load-log`.
+
+### Completed — fix chargement : routes différées post-spawn (2026-06-13)
+
+- **Cause** (LoadLog) : `RoadNetwork.buildMeshes` ~106 s via `requestIdleCallback` pendant game-init — bloquait le spawn décor (avg 1 ms/obj, mais UI figée à 68 %).
+- **Fix** : routes + décor plage/forêt déplacés dans `ZS.runPostSpawnVisualBuilds()` — appelé après game-init (`_runPostInitIdle`).
+- Version client : `20260613-roads-defer`.
+
+### Completed — logs client chargement LoadLog (2026-06-13)
+
+- **`ZS.LoadLog`** (`dev_log.js`) — timeline chargement avec filtre console **`zs-load`**.
+- Activation : localhost auto · `?loadlog` · `localStorage zs_load_log=1` · hérite de DevLog.
+- Instrumentation : `loading.js` (phases), `game.html` (scripts + wait-server), `game.js` (auth, world), `world.js` (terrain/bâtiments), `network.js` (game-init, décor batch, slow spawns ≥25 ms).
+- API : `ZS.LoadLog.summary()` · `ZS.LoadLog.dump()` · `payloadBytes()` pour taille game-init.
+- Version client : `20260613-load-log`.
+
+### Completed — logs serveur console + fichiers (2026-06-13)
+
+- **Logger** : console colorée (`LOG_CONSOLE=pretty`) · fichiers `logs/server/YYYY-MM-DD.log` + `error.log` · banner boot · résumé par étape avec timing.
+- **Boot** : `_startServer()` unifié — world_persist → seed → zombies, chaque phase loggée (`▶` / `✓` + ms).
+- **Stats** : `serverStats` inclut décor détaillé.
+- Env : `LOG_DIR`, `LOG_FILE`, `LOG_CONSOLE` (`.env.example`).
+- Tests : `tests/logger.test.mjs`.
+
+### Completed — Sommeil lit type RPG (2026-06-13)
+
+- **`spawn_single_bed`** : E = dormir · regen PV ~2.8/s · faim/soif ↓ · **Espace** = réveil · attaque = réveil.
+- Sac de couchage / lean-to : repos instantané endurance uniquement (`camp-rest`).
+- Shared `bed-sleep.mjs` + tests · version client `20260613-bed-sleep`.
+
+### Fix — survie déco/reco : faim/soif figées à la déco (2026-06-13)
+
+- **Cause** : le corps endormi tickait faim/soif offline et **écrasait** `players.inventory` toutes les 5 s ; à la reco, `wokeFromSleep` appliquait ces stats (souvent 0/0) → dégâts faim/soif après la grace 8 s (ex. ~20 PV).
+- **Fix serveur** : snapshot `_survivalAtDisconnect` à la déco ; persistance sleeper via `saveBlobFromSleeper` ; reco lit le snapshot, pas la survie tickée offline ; boot migre les sleepers legacy.
+- Tests : +2 `player-connect-restore.test.mjs`.
+
+### Completed — Backups monde F8 (2026-06-13)
+
+- **Hub F8 → Monde** : panel backups — carte (décor + meta, option constructions joueurs) · snapshot complet (joueurs, loot, zombies, sleepers, rôles).
+- **Serveur** : `world-backup.js` · fichiers dans `database/backups/` · API `/api/admin/backups` (create/list/export/import/restore).
+- **Permissions** : `rcon` (créer/exporter) · `rcon.dangerous` (restaurer/importer/supprimer) · permission `world.backup` ajoutée aux rôles admin.
+- Version client : `20260613-world-backups`.
+
+### Fix — chargement bloqué ~74 % synchronisation (2026-06-13)
+
+- **Cause** : boucle de jeu (render 3D ~500 ms/frame) tournait pendant le spawn de ~2400 objets game-init → le thread principal saturé, sync décor paraissait figée.
+- **Fix** : pas de render/simulation tant que `Loading` actif ou spawn non prêt ; batch décor plus petit + yields `setTimeout`/`rAF` plus fréquents ; repli timeout 90 s → décor restant différé.
+- Version client : `20260613-sync-perf`.
+
+### Fix — chargement bloqué 83 % collisions décor (2026-06-13)
+
+- **Cause** : rebuild synchrone de tous les colliders proches (centaines d'arbres) bloquait la phase « Collisions décor… ».
+- **Fix** : priorité bâtiments/coffres/builds · max ~160 colliders sync · timeout 22 s · reste en idle · compteur `done/total` à l'écran.
+- Version client : `20260613-sync-colliders`.
+
+### Fix — page ne répond pas à 100 % (2026-06-13)
+
+- **Cause** : `_tickDecorVisibility` appelait `upgradeTreeLod` sur **tous** les arbres simpleLod dans un rayon de 42 m en une seule frame → reconstruction synchrone de centaines de meshes Three.js → Chrome « Page ne répondant pas ».
+- **Fix** : max **1** upgrade LOD / tick · grâce 12 s post-boot · spawn décor par budget temps (10 ms) · colliders/déferré reportés après le fade loading.
+- Version client : `20260613-sync-lod-fix`.
+
+### Fix — chargement bloqué (cause racine) (2026-06-13)
+
+- **Cause** : serveur envoyait **tout** le seed `s01:` en game-init (~2000 objets) ; client rebuildait colliders **near+far** en idle ; resnap global post-init ; boucle jeu sans render tant que `Loading.isActive` même après spawnReady.
+- **Fix serveur** : `isCriticalPinnedDecorServer` (builds/coffres/portes) + cap ~950 décor init.
+- **Fix client** : colliders proches seulement au init (+ file lointaine) ; resnap/chunk post-init différé ; render dès `spawnReady` ; 100 % seulement après 1 frame peinte.
+- Version client : `20260613-sync-root-fix`.
+
+### Fix — chargement bloqué 94 % + init lent (2026-06-13)
+
+- **Cause** : tous les POI `s01:` traités comme « épinglés » → ~2000+ décors spawn init ; UI collisions background réécrivait la barre après finalize (`Math.max` → figé à 94 %) ; double `rAF` + attente colliders avant `_spawnReady`.
+- **Fix** : `_isCriticalPinnedDecor` (builds/coffres/portes seulement) + cap init ~880 décors ; flag `_gameInitColliderUi` coupe les updates UI colliders après finalize ; `forceProgress(100)` + `_spawnReady` immédiat sans attendre colliders ; `_frameId` incrémenté pendant sync.
+- Version client : `20260613-sync-fast-init`.
+
+### Fix — colliders non bloquants + test chargement auto (2026-06-13)
+
+- **Cause 83 %** : un prefab bloquait le rebuild synchrone des colliders (freeze à ~32/160).
+- **Fix** : colliders en **arrière-plan** (`requestIdleCallback`) — game-init continue sans attendre.
+- **Test auto** : `npm run test:sync-load` (Playwright) — vérifie `isSpawnReady` + logs `[sync]`.
+- Résultat local (2135 décor) : ~61 s game-init, colliders background ~200 ms, **OK**.
+- Version client : `20260613-sync-bg-colliders`.
+
+### Fix — routes admin mesh live + jointures + sol (2026-06-13)
+
+- **Affichage live** après Enregistrer : `reloadAndRefresh()` + socket `admin-roads-changed` (plus besoin de F5 pour voir le mesh).
+- **Jointures** : ruban resamplé continu (fini les coupures aux angles) + Chaikin x2 si lissage.
+- **Ancrage sol** : `_roadVertexY` = max(terrain, decorGround) + lift — colle sans voler.
+- F5 reste nécessaire pour **aplati terrain** (corridors noise).
+- Version client : `20260613-admin-roads-mesh`.
+
+### Fix — Routes admin ne s'ouvrait pas (2026-06-13)
+
+- **Cause** : `SyntaxError` dans `admin-live-roads.js` L321 (`?.disabled =` invalide) → script jamais chargé, `ZS.AdminLiveRoads` undefined.
+- **Fix** : assignation via variable intermédiaire + notif hub si module absent.
+- Version client : `20260613-admin-roads-mouse` — mode souris libre (plus « Cliquez pour jouer »), clic jeu sans lock, Esc = souris puis quitter.
+
+### Completed — UX routes admin : preview live + panel droit (2026-06-13)
+
+- Panel fixe à droite (type/largeur/lissage/points), preview ruban + curseur sous réticule, molette = largeur.
+- Fix clics : `requestPointerLock` à l'entrée, pose auto au mode trace, panel dans `_blocksPointerLock`.
+- Version client : `20260613-admin-roads-ui`.
+
+### Completed — Retrait sentier plage codegen (2026-06-13)
+
+- **Mesh + décor sentier** plage→forêt désactivés (`ENABLE_CODEGEN_TRAIL_MESH = false`) — refaire via CMS admin routes.
+- Points `BEACH_TRAIL_PTS` conservés (checkpoints, panneau, seeds).
+- Version client : `20260613-no-spawn-trail`.
+
+### Completed — Retrait routes terre S01 codegen (2026-06-13)
+
+- **Retrait total** : `s01_trail_cabin01` + `s01_cabin01_clearing` — plus aucune route dirt codegen S01 (mesh + aplati terrain cabane→clairière).
+- Routes S01 : **CMS admin uniquement** (`F8` → Routes admin).
+- Version client : `20260613-no-s01-dirt-roads`.
+
+### Completed — Routes admin in-game + retrait route cabane→clairière (2026-06-13)
+
+- **Retrait** : `s01_cabin01_clearing` supprimée (bug vol terrain/mesh) — seule `s01_trail_cabin01` reste en codegen.
+- **Outil admin** : F8 → Monde → **Routes admin** — clic = points XZ, Entrée = enregistrer, persist `world_meta.adminRoads`, chargées au build monde.
+- **API** : `GET /api/world/admin-roads` · `POST/PATCH/DELETE /api/admin/roads` (perm `decor.edit`).
+- Version client : `20260613-admin-roads`.
+
+### Completed — Fix arbres/décor flottants post-cabane (2026-06-13)
+
+- **Cause** : Y serveur (terrain brut) posé sur arbres/props au spawn ; client aplati ensuite le terrain (`registerRoadCorridor`) → écart visible ouest cabane / routes S01.
+- **Fix** : `spawnDecorPrefab` — arbres/rochers/`fastGround` utilisent `getDecorGroundHeight` ; `_resnapGroundedWorldDecor()` post game-init + fin chargement arbres différés ; ancres corridor route/trail sur `_corridorAnchorHeight` (clairières + zones plates).
+- Version client : `20260613-decor-ground-snap`.
+
+### Completed — Fix mort instant reconnect après restart serveur (2026-06-13)
+
+- **Cause** : corps endormi obsolète en `world_sleepers` (delete non flushé au réveil + SIGINT sans disconnect) écrasait l'état récent `players.last_saved` → faim/soif à 0 + dégâts starvation au connect.
+- **Fix** : détection sleeper stale (`players.last_saved` > sleeper `updated_at`) — purge boot + ignore au connect ; SIGINT persiste les joueurs connectés ; delete sleeper sync au réveil ; grâce 8 s sans dégâts survie au connect ; client `loadFromSave` ne force plus faim/soif à 0 si absent.
+- Version client : `20260613-survival-reconnect`.
+
+### Completed — Fix route #2 cabane → clairière (2026-06-13)
+
+- **Playtest Bruno** : route #1 ✅ ; route #2 KO (sable, mesh en l'air) — tracé diagonal `(110,1)→(55,-4)` hors corridor validé.
+- **Fix** : route #2 reprend branche #1 `(cabane→125,1→85,-6)` + sentier spawn `(85,-6→45,-6→0,-6)` ; splat terrain dirt sous routes en ceinture plage (`beachW < 0.55`).
+- Version client : `20260613-s01-road-clearing`.
+
+### Completed — Fix cailloux intro visibles partout (2026-06-13)
+
+- **Cause** : cailloux intro persistés (sessions bench `zsbench_*`) renvoyés dans `game-init` sans filtre propriétaire → plusieurs rochers lumineux autour du spawn plage.
+- **Fix** : filtre `introPersonal` par `ownerPlayerId` (game-init items + décor, emit `item-spawn` owner-only, client `spawnWorldItem`) ; purge au boot des loots intro persistés (recréés au connect via `ensure()`).
+- Version client : `20260613-intro-rock-owner`.
+
+### Completed — S01 route #2 cabane → clairière (2026-06-09)
+
+- **`s01_cabin01_clearing`** : cabane `(165.1, 7.1)` → clairière `(0, -6)` ; aplat hub ; `tpcheck clairiere`.
+- DevLog zone `clairiere_hub` / `route_clearing`.
+- Version client : `20260612-s01-road2`.
+
+### Completed — S01 playtest RCON + DevLog zones (2026-06-09)
+
+- **RCON** : `tpcheck route_cabane`, `tpcheck lit_cabane` (`s01-checkpoints.mjs`).
+- **DevLog** : catégorie `s01` — log entrée zones route/cabane/lit (`game.js`).
+- Version client : `20260612-s01-playtest`.
+
+### Completed — S01 route terre cabane + lit playtest tools (2026-06-09)
+
+- **Brique B** : `s01_trail_cabin01` — route terre `(85,-6)` → `(125,1)` → cabane `(165.1, 7.1)` ; `s01_roads.js` + `world.js` (terrain S01 réactivé).
+- **Brique A** : `check-s01-decor.mjs` vérifie lit (`spawn_single_bed`, `interactRole: bed`, pos/rotY).
+- Tests : `tests/s01-roads.test.mjs` ; `S01_ROADMAP.md` mis à jour.
+- Version client : `20260612-s01-road-bed`.
+
+### Completed — perf sync spawn + bench v5 + move spatial grid (2026-06-09)
+
+- **Serveur** : broadcast `player-move` via `SpatialGrid` (rebuild + query 150 m) quand ≥16 joueurs ; rebuild à connect/disconnect.
+- **`spatial-grid.mjs`** : query lit `data.x/z` live (pas seulement position au rebuild).
+- **`network.js`** : spawn ready anticipé — inventaire/scénario avant `Prêt` ; rochers/structures/zombies en `requestIdleCallback` ; batch décor desktop 52 ; visibilité forêt après spawn ; colliders near chunk 36.
+- **Bench v5** : `history/` horodaté, delta vs `latest.json`, budgets régression (spawn/sync/FPS/draw calls/mesh ratio), `meshVisibleRatioAvg` dans rapport.
+- Version client : `20260612-sync-perf`.
+- **Bench quick validé** (2026-06-12) : spawn p50 **39,5 s** (−60 % vs 98,7 s), sync décor p50 **17,4 s** (−61 %), game-init p95 151 ms, marche 76,6 m, draw calls 3435. Budget régression game-init : ignore bruit &lt; 500 ms.
+- **Colliders spawn v2** : batch register (pas de sync/invalidate par item), rayon near 72 m, skip props sans defs + arbres simpleLod lointains, chunks 64, resnap rochers/S01 en idle ; bench trace `[sync] colliders N ms`.
+- Version client : `20260612-collider-batch`.
+- **Bench post-collider v2** : spawn p50 **24,6 s** (−37 % vs 39 s), game-init total **~17 s**, colliders p50 **537 ms**, verdict PASS, durée bench 86 s.
+- **Décor fastGround** : batch spawn sans `raycastGroundHeight` (Y serveur / terrain analytique), chunks 96, refine idle 52 m ; version `20260612-decor-fastground`.
+- **Bench post-fastGround** : spawn p50 **15,8 s** (−36 %), sync décor p50 **5,8 s** (−63 %), game-init total **~8 s**, durée bench **68 s**.
+
+### Completed — benchmark réaliste navigateur + socket (2026-06-09)
+
+- **`tools/bench-real.mjs`** : `npm run test:bench` — N clients Chromium (sync, marche WASD, FPS/draw calls) **pendant** charge socket concurrente.
+- **`tools/bench-lib.mjs`** : utilitaires partagés (`bench-token`, `SOCKET_CLIENT_MOVE`).
+- **`tools/load-bench.mjs`** : fix `emit('move')` (était `player-move` → no-op) ; échantillon pagination `decor-trees` / `decor-props`.
+- **`tests/bench-real.test.mjs`** : non-régression événements socket + présence Playwright.
+- Sortie : `notes-local/bench-real/latest.json`. Vars : `BENCH_CLIENTS`, `BENCH_SOCKET`, `BENCH_WALK_MS`, `BENCH_HEADED=1`.
+- **v2** : clients parallèles, focus canvas + vérif marche, FPS échantillonné, HealthSampler, preflight bench-token, verdict PASS/FAIL, `npm run test:bench:quick`.
+- **v3** : bots socket déconnectés avant Chromium ; sleepers/items game-init filtrés ; `bench-reset`.
+- **v4** : marche forêt (`worldDir` + noclip bench), slots espacés, score capacité, `latest.md`, game-init total ms.
+
+### Completed — test de charge serveur (2026-06-12)
+
+- **`tools/load-bench.mjs`** : bots Socket.io (`zsbench_XXXX`), mesure game-init / payload / players serveur.
+- **`POST /api/dev/bench-token`** (localhost + SQLite + `PERF_LOCAL_BENCH=1`).
+- `npm run test:load` — sortie `notes-local/load-bench/latest.json`.
+
+### Completed — instancing micro-déco forêt (2026-06-12)
+
+- **`forest_decor.js`** : fougères, herbe, branches, cônes, bouleaux, tapis d’aiguilles → `InstancedMesh` par chunk (44 m) ; ancres lourdes (rondins, rochers moussus…) restent en mesh.
+- Version client : `20260612-forest-instancing`.
+
+### Completed — rayons spawn décor élargis (2026-06-12)
+
+- **Spawn ≠ visibilité** : meshes créés à `decorVisRadius + marge` (PC +120 m, mobile +85 m), affichés seulement dans `decorVisRadius`.
+- **Game-init / APIs** : 320 m desktop, 220 m mobile (était 180 / 100).
+- Version client : `20260612-decor-spawn-radius`.
+
+### Completed — filtre serveur décor game-init (2026-06-12)
+
+- **`decor-game-init.js`** : game-init n’envoie plus tous les props — proches spawn + épinglés (100 m mobile / 180 m desktop) ; reste via `GET /api/world/decor-props` (paginé).
+- **`network.js`** : charge les props lointains en file (`_beginDeferredProps`) + spawn différé existant.
+- Tests : `tests/decor-game-init.test.mjs`.
+- Version client : `20260612-server-decor-filter`.
+
+### Completed — spawn décor différé game-init (2026-06-12)
+
+- **`network.js`** : au login, seul le décor dans `decorVisRadius` est spawné ; le reste reste en file et s’instancie au fil des déplacements (max 3–6/frame) ; arbres proches en `simpleLod` au boot.
+- Version client : `20260612-decor-spawn-defer`.
+
+### Completed — monitoring perf client (2026-06-11)
+
+- **`perf_monitor.js`** : `ZS.perfSnapshot()` (draw calls, triangles, geo/tex, FPS, comptage forêt) ; `ZS.perfWatch(ms)` ; `ZS.perfHud(true)` / `?perfhud=1` ; snapshot auto après build décor forêt.
+- Version client : `20260611-perf-monitor`.
+- **Automatisation** : `npm run test:perf` (Playwright Chromium) → `notes-local/perf/latest.json` ; `.env` : `PERF_USER=Bruno` + `PERF_LOCAL_BENCH=1` (login localhost SQLite, sans mot de passe).
+
+### Completed — perf décor forêt S01 (2026-06-11)
+
+- **Cause** : grille sectorielle (~11k cellules) + triple passe → milliers de meshes individuels et O(n²) au placement.
+- **Fix** : budget strict par tier (high ~110 ancres + ~212 instanciés) ; une seule passe ; builders légers en scatter ; chunks 44 m + `updateForestDecorVisibility` (cull distance) ; pas d’ombres sur micro-déco.
+- Version client : `20260611-forest-decor-perf`.
+
+### Completed — micro-déco forêt S01 entière (2026-06-11)
+
+- **`forest_decor.js`** : passage scatter ellipse → footprint S01 (`-94..228` × `-118..104`) ; `buildForestSectorDecorAsync` (grille + fougères/mousse/litière partout) ; pipeline scatter → grille → corridor sentier ; registre `placed` partagé.
+- Même palette micro-détails que le corridor sentier sur tout le sol forestier (centre sentier / clairière / plage exclus).
+- DevLog : `forest-sector-decor`, `forest-decor-scatter`, total `forest S01`.
+- Version client : `20260611-forest-sector-decor`.
+
+### Completed — corridor sentier forêt + lisibilité (2026-06-11)
+
+- **`forest_decor.js`** : `buildTrailCorridorDecorAsync` — fougères, mousse, litière, champignons en bordure sentier (`BEACH_TRAIL_PTS`, bande 1.2–4 m, centre libre) ; chaîné après décor global.
+- **Lisibilité** : clairance arbres ±4 m (`tree-placements.mjs` + filtre client `network.js`) ; teinte sentier légèrement plus claire (`camp_textures.js`).
+- **`dev_log.js`** : catégorie `trail-decor` + perf `forest-trail-decor`.
+- Doc UX : `design/secteur/START_FOREST.md` — parcours spawn → jonction.
+- Tests : `tree-placements.test.mjs` — corridor trail clearance.
+- Version client : `20260611-forest-trail-decor`.
+- **Phase 2** (ambient life, props seed) : reportée — hors scope brique 1.
+
+### Completed — DevLog console client (2026-06-11)
+
+- **`dev_log.js`** : logs structurés `[zs-dev]` — actif localhost / `?devlog` ; `ZS.DevLog.dump()`.
+- Hooks : boot monde, sync décor/colliders/game-init, changements étape scénario.
+- Version client : `20260611-dev-log`.
+
+### Completed — intro lessons + perf sync + move grace (2026-06-11)
+
+- **intro_lessons.js** : tutos hotbar (torche), sac (valise), consommer — mobile vs desktop.
+- **move-correction** : grace 8 s serveur en intro ; pas de toast/console si scénario actif.
+- **Colliders décor** : zone ~95–120 m autour du spawn en priorité ; reste en `idle`.
+- Version client : `20260611-intro-lessons-perf`.
+
+### Completed — garde ensureStarterRations intro (2026-06-11)
+
+- **use-item** : plus de kit magique eau/sandwich si `introBeats.kitDone` est faux (tuto consommer / clic sans valise).
+- Version client : `20260611-intro-rations-guard`.
+
+### Completed — intro inv sync + inv-debug opt-in (2026-06-11)
+
+- **Inventaire intro** : `stripLegacyIntroKit` retire eau/sandwich/caillou/torche du hotbar legacy tant que `kitDone` est faux ; `request-game-init` n'appelle plus `ensureStarterRations` pendant l'intro.
+- **Console** : `[inv-debug]` uniquement admin / `?invdebug` / `localStorage zs_inv_debug=1` (plus auto localhost).
+- Version client : `20260611-intro-inv-sync`.
+
+### Completed — intro breathe + HUD haut (2026-06-11)
+
+- **breathe → explore** : rotation cumulée serveur (`_breatheYawAccum`) — un tour lent de tête débloque l’étape.
+- **HUD scénario** : compact en haut à droite, à gauche du menu hamburger (`z-index:215`).
+- Version client : `20260611-intro-breathe-hud`.
+
+### Completed — perf chargement colliders + inv-debug (2026-06-11)
+
+- **Colliders** : enregistrement différé pendant le batch décor ; rebuild étalé sur rAF (28/chunk) au lieu d’un bloc sync.
+- **Post-init** : `BuildAnchors` / `reconcileAllBuildFloors` en idle ; snapshot `debug-inv` seulement si `ConsumeDebug.isEnabled()`.
+- **Console** : `building-debug` init silencieux hors mode debug.
+- Version client : `20260611-load-perf-colliders`.
+
+### Completed — UX intro rejoin (guidage + tutos + perf) (2026-06-11)
+
+- **HUD** : `breathe` / `explore` / `walk_west` + hints dynamiques selon `introBeats`.
+- **Tutos** : `intro_lessons.js` — hotbar torche, sac, consommer (mobile vs desktop).
+- **Post-kit** : bulle + toast « suis le sentier ouest » ; golden hour expliquée.
+- **Perf load** : plages loading rééquilibrées ; décor batch chunk↓ rafEvery↑ ; colliders après 1 rAF.
+- **Polish** : caillou halo mobile ; vie plage calme pendant intro ; `inv-debug` silencieux hors admin/dev.
+- Version client : `20260611-intro-ux-guidance`.
 
 ### Completed — zone feu intro dynamique (2026-06-11)
 

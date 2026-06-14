@@ -34,9 +34,18 @@
 
 | ID | Source | Tracé | Largeur | Type |
 |----|--------|-------|---------|------|
-| `spawn_trail` | `SPAWN_TRAIL_PTS` | camp → point le plus proche sur `town_main` | 1,55 m | trail (flatten only) |
+| `spawn_trail` | retiré (mesh) — CMS admin ; points design conservés |
 | `town_main` | `proc_roads.js` | est→ouest | 8,4 m | asphalt + ligne jaune |
 | `city_highway` | `proc_roads.js` | `(-104,-9)` → `(-20,-122)` | 12 m | asphalt |
+| `s01_trail_cabin01` | retirée — CMS admin |
+| `admin_road_*` | **CMS in-game** | points posés admin | configurable | dirt/path/trail/asphalt |
+
+### Routes admin (CMS)
+
+- **UI** : F8 → Monde & décor → **Routes admin** (`admin-live-roads.js`)
+- **Workflow** : Nouvelle route → clic gauche (points au sol) → Entrée → **F5** pour appliquer terrain + mesh
+- **Persistance** : `world_meta.adminRoads` · chargement client via `GET /api/world/admin-roads` avant build monde
+- **API** : voir `docs/RCON.md` (section routes admin)
 
 Routes S02 résidentielles / grille S03 / S05 : **pas encore** dans `RoadNetwork` (trottoirs manuels ou `roads: []`).
 

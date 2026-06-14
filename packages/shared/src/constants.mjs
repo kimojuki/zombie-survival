@@ -1,5 +1,8 @@
 export const APP_NAME = 'Zombie Survival';
 
+/** Capacité cible affichée vitrine / statut public par carte. */
+export const MAP_PLAYER_CAPACITY = 250;
+
 export const SOCKET_EVENTS = Object.freeze({
   CHAT_MESSAGE: 'chat-message',
   PLAYER_ATTACK: 'player-attack',
@@ -25,6 +28,7 @@ export const SOCKET_EVENTS = Object.freeze({
 
 export const ROUTES = Object.freeze({
   HEALTH: '/api/health',
+  PUBLIC_STATUS: '/api/public/status',
   RCON: '/api/rcon',
   LOGIN: '/api/auth/login',
   REGISTER: '/api/auth/register',

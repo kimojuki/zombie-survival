@@ -18,9 +18,12 @@ export function createSpatialGrid(cellSize = 32) {
   function rebuild(items) {
     grid.clear();
     for (const item of items) {
-      if (!Number.isFinite(item.x) || !Number.isFinite(item.z)) continue;
-      const cx = Math.floor(item.x / cellSize);
-      const cz = Math.floor(item.z / cellSize);
+      const ref = item.data;
+      const ix = (ref && Number.isFinite(ref.x)) ? ref.x : item.x;
+      const iz = (ref && Number.isFinite(ref.z)) ? ref.z : item.z;
+      if (!Number.isFinite(ix) || !Number.isFinite(iz)) continue;
+      const cx = Math.floor(ix / cellSize);
+      const cz = Math.floor(iz / cellSize);
       const key = cellKey(cx, cz);
       let bucket = grid.get(key);
       if (!bucket) {
@@ -51,9 +54,12 @@ export function createSpatialGrid(cellSize = 32) {
         if (!bucket) continue;
         for (let i = 0; i < bucket.length; i++) {
           const item = bucket[i];
-          const dx = item.x - x;
-          const dz = item.z - z;
-          if (dx * dx + dz * dz <= r2) results.push(item.data);
+          const ref = item.data;
+          const ix = (ref && Number.isFinite(ref.x)) ? ref.x : item.x;
+          const iz = (ref && Number.isFinite(ref.z)) ? ref.z : item.z;
+          const dx = ix - x;
+          const dz = iz - z;
+          if (dx * dx + dz * dz <= r2) results.push(ref ?? item.data);
         }
       }
     }

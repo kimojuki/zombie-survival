@@ -1,0 +1,26 @@
+[
+  {
+    "file": "03-decor-part1-vis-init.js",
+    "title": "Visibilite init + reveal",
+    "start": "function _resetTreeDefer",
+    "end": "function _lodWindowMax"
+  },
+  {
+    "file": "03-decor-part2-lod.js",
+    "title": "LOD upgrades + ring cache",
+    "start": "function _lodWindowMax",
+    "end": "function _findNameTag"
+  },
+  {
+    "file": "03-decor-part3-nametag-vis.js",
+    "title": "Nametags + visibilite decor",
+    "start": "function _findNameTag",
+    "end": "async function _fetchDeferredTreesBatch"
+  },
+  {
+    "file": "03-decor-part4-deferred-loaders.js",
+    "title": "Loaders arbres/props differees",
+    "start": "async function _fetchDeferredTreesBatch",
+    "toEnd": true
+  }
+]

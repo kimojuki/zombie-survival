@@ -4,6 +4,7 @@ import {
   beatTriggeredByPosition,
   beatTriggeredByReadable,
   defaultIntroBeats,
+  introPersonalVisibleTo,
   isIntroKitDone,
   migrateIntroBeats,
 } from '../packages/shared/src/intro-beach-beats.mjs';
@@ -14,6 +15,14 @@ test('intro beats default and kit done', () => {
   assert.equal(b.footprints, false);
   assert.equal(isIntroKitDone(b), false);
   assert.ok(isIntroKitDone({ footprints: true, campfire: true, pier: true, kitDone: true }));
+});
+
+test('introPersonalVisibleTo — owner only', () => {
+  const rock = { introPersonal: true, ownerPlayerId: 42, type: 'tool_caillou' };
+  assert.equal(introPersonalVisibleTo(rock, 42), true);
+  assert.equal(introPersonalVisibleTo(rock, 7), false);
+  assert.equal(introPersonalVisibleTo(rock, null), false);
+  assert.equal(introPersonalVisibleTo({ type: 'food_sandwich' }, 7), true);
 });
 
 test('migrate from v2 starterLootStep', () => {
@@ -36,6 +45,46 @@ test('readable triggers footprints and campfire', () => {
   assert.equal(beatTriggeredByReadable('intro_bottle_k', empty), 'footprints');
   const fp = { footprints: true, campfire: false, pier: false, kitDone: false };
   assert.equal(beatTriggeredByReadable('intro_burnt_note_k', fp), 'campfire');
+});
+
+test('blocksStarterRationsDuringIntro until kit done', async () => {
+  const { blocksStarterRationsDuringIntro, defaultIntroBeats } = await import('../packages/shared/src/intro-beach-beats.mjs');
+  assert.equal(blocksStarterRationsDuringIntro({ step: 'explore', introBeats: defaultIntroBeats() }), true);
+  assert.equal(blocksStarterRationsDuringIntro({ step: 'act1_done', completed: true }), false);
+  assert.equal(blocksStarterRationsDuringIntro({
+    step: 'explore',
+    introBeats: { ...defaultIntroBeats(), kitDone: true },
+  }), false);
+});
+
+test('stripLegacyIntroKit removes magic kit before valise', async () => {
+  const { stripLegacyIntroKit, defaultIntroBeats } = await import('../packages/shared/src/intro-beach-beats.mjs');
+  const scenario = { step: 'explore', introBeats: defaultIntroBeats() };
+  const inv = {
+    hotbar: [
+      { type: 'tool_caillou', qty: 1 },
+      { type: 'tool_torche', qty: 1 },
+      { type: 'food_eau_bouteille', qty: 1 },
+      { type: 'food_sandwich', qty: 1 },
+      null,
+      null,
+    ],
+    bag: [],
+    equip: {},
+  };
+  assert.equal(stripLegacyIntroKit(inv, scenario), true);
+  assert.equal(inv.hotbar[0], null);
+  assert.equal(inv.hotbar[1], null);
+  assert.equal(inv.hotbar[2], null);
+  assert.equal(inv.hotbar[3], null);
+  const done = { step: 'explore', introBeats: { ...defaultIntroBeats(), kitDone: true } };
+  const kept = {
+    hotbar: [{ type: 'food_sandwich', qty: 1 }],
+    bag: [],
+    equip: {},
+  };
+  assert.equal(stripLegacyIntroKit(kept, done), false);
+  assert.equal(kept.hotbar[0].type, 'food_sandwich');
 });
 
 test('intro session progress detects picked loot', async () => {

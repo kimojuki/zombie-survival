@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { APP_NAME, ROUTES, SOCKET_EVENTS } from '../packages/shared/src/constants.mjs';
+import { APP_NAME, MAP_PLAYER_CAPACITY, ROUTES, SOCKET_EVENTS } from '../packages/shared/src/constants.mjs';
 import { computeRoadWreckPlacements, ROAD_WRECK_TEMPLATES } from '../packages/shared/src/road-wrecks.mjs';
 
 import { buildZombieEntity, getZombiePrefab, listZombiePrefabIds, pickZombiePrefab, pickZombiePrefabForZone } from '../packages/shared/src/zombie-prefabs.mjs';
@@ -8,6 +8,8 @@ import { buildZombieEntity, getZombiePrefab, listZombiePrefabIds, pickZombiePref
 test('shared constants expose stable app contracts', () => {
   assert.equal(APP_NAME, 'Zombie Survival');
   assert.equal(ROUTES.HEALTH, '/api/health');
+  assert.equal(ROUTES.PUBLIC_STATUS, '/api/public/status');
+  assert.equal(MAP_PLAYER_CAPACITY, 250);
   assert.equal(SOCKET_EVENTS.PLAYER_ATTACK, 'player-attack');
   assert.equal(SOCKET_EVENTS.PLAYER_FOOTSTEP, 'player-footstep');
   assert.equal(SOCKET_EVENTS.ZOMBIE_HIT, 'zombie-hit');

@@ -212,6 +212,12 @@ function createWorldPersist(db, log) {
     if (mergedMeta.lootBuildings != null) {
       await db.setWorldMeta('lootBuildings', JSON.stringify(mergedMeta.lootBuildings));
     }
+    if (mergedMeta.adminRoads != null) {
+      await db.setWorldMeta('adminRoads', JSON.stringify(mergedMeta.adminRoads));
+    }
+    if (mergedMeta.adminRoadSeq != null) {
+      await db.setWorldMeta('adminRoadSeq', String(mergedMeta.adminRoadSeq));
+    }
     if (mergedMeta.worldTime != null) {
       await db.setWorldMeta('worldTime', String(mergedMeta.worldTime));
     }
@@ -321,6 +327,7 @@ function createWorldPersist(db, log) {
         if (!sleep?.playerId) continue;
         const pid = Number(sleep.playerId);
         if (Number.isFinite(pid)) sleep.playerId = pid;
+        if (row.updated_at != null) sleep._worldUpdatedAt = row.updated_at;
         sleepingPlayers.set(sleep.playerId, sleep);
         sleeperCount++;
       }

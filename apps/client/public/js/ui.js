@@ -1,8 +1,8 @@
-// Mobile controls (nipplejs), HUD updates, death/respawn screen
+// Mobile controls + HUD (généré — ui/chunks + npm run bundle:ui)
 (function () {
   'use strict';
 
-  let _state;
+let _state;
   let _touchControlsReady = false;
   let _joyBase = null;
   let _joyThumb = null;
@@ -309,7 +309,8 @@
     _initTouchControls();
   }
 
-  function init(state) {
+
+function init(state) {
     _state = state;
     ZS.applyDeviceBodyClasses?.();
     _initTouchControls();
@@ -400,7 +401,9 @@
   // ── HUD updates ───────────────────────────────────────────────────────────
 
   let _maxHp = 100;
-  function setHealth(hp, max) {
+
+
+function setHealth(hp, max) {
     if (typeof max === 'number' && max > 0) _maxHp = max;
     const h   = Math.max(0, hp);
     const pct = Math.max(0, Math.min(100, (h / _maxHp) * 100));
@@ -520,13 +523,14 @@
     _renderStatusEffects();
   }
 
-  function showNotif(text) {
+  function showNotif(text, ms) {
     const el = document.getElementById('pickup-notif');
     if (!el) return;
     el.textContent = text;
     el.style.opacity = '1';
     clearTimeout(showNotif._t);
-    showNotif._t = setTimeout(() => { el.style.opacity = '0'; }, 1800);
+    const dur = Number.isFinite(ms) ? ms : 1800;
+    showNotif._t = setTimeout(() => { el.style.opacity = '0'; }, dur);
   }
 
   function flashDamage() {
@@ -622,4 +626,5 @@
     showWave, showDeath, hideDeath, setWeaponUI,
   };
   ZS.logout = logout;
+
 }());

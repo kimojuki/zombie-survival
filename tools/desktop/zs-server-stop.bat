@@ -1,25 +1,15 @@
 @echo off
-title Zombie Survival — Arret serveur
-setlocal enabledelayedexpansion
-set "FOUND=0"
-
-echo Recherche serveur sur le port 3000...
-echo.
-
-for /f "tokens=5" %%P in ('netstat -ano ^| findstr ":3000" ^| findstr "LISTENING"') do (
-  set "FOUND=1"
-  echo Arret PID %%P...
-  taskkill /PID %%P /F
-  if !ERRORLEVEL! equ 0 (
-    echo OK — serveur arrete.
-  ) else (
-    echo [ERREUR] Impossible d'arreter PID %%P.
-  )
-)
-
-if "!FOUND!"=="0" (
-  echo Aucun serveur en ecoute sur le port 3000.
-)
+title Zombie Survival — Arret serveurs
+call "%~dp0zs-server-env.bat"
 
 echo.
+echo Arret des serveurs (game %ZS_PORT_GAME%, vite %ZS_PORT_VITE%, auth %ZS_PORT_AUTH%)...
+echo.
+
+powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0zs-kill-ports.ps1" -Ports %ZS_PORT_GAME%,%ZS_PORT_VITE%,%ZS_PORT_AUTH%
+
+echo.
+if "%~1"=="silent" goto :fin
 pause
+
+:fin

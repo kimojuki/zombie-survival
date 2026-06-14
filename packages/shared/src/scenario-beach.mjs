@@ -204,7 +204,8 @@ export function checkPositionAdvance(step, px, pz, extra = {}) {
   const ref = extra.spawnRef || BEACH_SPAWN_REF;
   switch (step) {
     case 'breathe': {
-      if (extra.yawDelta >= BREATHE_MIN_YAW) return 'explore';
+      const yaw = Math.max(extra.yawDelta || 0, extra.yawAccum || 0);
+      if (yaw >= BREATHE_MIN_YAW) return 'explore';
       if (distXZ(px, pz, ref.x, ref.z) >= BREATHE_MIN_DIST) return 'explore';
       return null;
     }

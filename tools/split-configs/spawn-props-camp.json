@@ -1,0 +1,20 @@
+[
+  {
+    "file": "01-props-part1-spawn.js",
+    "title": "Props spawn basiques",
+    "start": "function _add(parent",
+    "end": "function _buildCabinTable"
+  },
+  {
+    "file": "01-props-part2-cabin.js",
+    "title": "Mobilier cabine interieur",
+    "start": "function _buildCabinTable",
+    "end": "function _buildBeachWreckDebris"
+  },
+  {
+    "file": "01-props-part3-beach.js",
+    "title": "Plage, workbench, lean-to",
+    "start": "function _buildBeachWreckDebris",
+    "toEnd": true
+  }
+]

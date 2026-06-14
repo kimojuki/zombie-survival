@@ -56,6 +56,19 @@ Source unique : `apps/client/public/client-version.json` (`version`).
 
 **Après un changement JS/CSS client** : incrémenter uniquement `client-version.json` (plus besoin de Ctrl+F5 manuel).
 
+### Chargement ressources (World Streamer v2)
+
+Migration progressive documentée dans **[design/RESOURCE_LOADING.md](../design/RESOURCE_LOADING.md)**.
+
+| Module | Rôle |
+|--------|------|
+| `src/engine/world-content-loader.js` | Queue décor, anneaux CRITICAL→STREAM, scoring P0 |
+| `src/engine/budget-governor.js` | Budget ms/frame décor |
+| `src/engine/backlog-scheduler.js` | Pression defer/LOD/stream |
+| `src/engine/spatial-chunk-streamer.js` | Couches forêt/plage, visibilité 64 m |
+
+Boot : `game.html` → `src/engine/install.js` → scripts legacy → `network.js` utilise `ZS.Engine.ContentLoader`.
+
 ### UI panneaux (`panel_ui.js`)
 
 Tous les menus modaux jeu (inventaire, craft, coffre, fouille, groupe, QA) partagent :
@@ -202,16 +215,41 @@ Voir [.env.example](../.env.example) — copier vers `.env` local.
 |--------|-----------|
 | Serveur | `PORT`, `JWT_SECRET` |
 | BDD | `DB_CLIENT`, `SQLITE_PATH` ou `DB_HOST`… |
-| Logs | `LOG_LEVEL`, `LOG_*_MS` |
+| Logs | `LOG_LEVEL`, `LOG_DIR`, `LOG_FILE`, `LOG_CONSOLE`, `LOG_*_MS` |
 | Admin | `RCON_PASSWORD`, `ADMIN_USERS` |
 
 ---
 
 ## Logs serveur
 
-Module `src/logger.js` — niveaux : `error`, `warn`, `info`, `debug`, `trace`.
+Module `apps/server/src/logger.js` — niveaux : `error`, `warn`, `info`, `debug`, `trace`.
 
-En dev : `LOG_LEVEL=debug` recommandé.
+| Variable | Défaut | Rôle |
+|----------|--------|------|
+| `LOG_LEVEL` | `debug` (dev) / `info` (prod) | Verbosité console + fichiers |
+| `LOG_DIR` | `logs/server` | Dossier des fichiers log (relatif à la racine repo) |
+| `LOG_FILE` | `1` | `0` = pas d'écriture fichier |
+| `LOG_CONSOLE` | `pretty` | `plain` = sans couleurs ANSI |
+
+### Logs client (chargement)
+
+Module `apps/client/public/js/dev_log.js` — **`ZS.LoadLog`** (filtre DevTools : `zs-load`).
+
+| Activation | Détail |
+|------------|--------|
+| localhost | auto (comme DevLog) |
+| `?loadlog` | force ON · `?loadlog=0` force OFF |
+| `localStorage` | `zs_load_log=1` / `0` |
+
+Timeline : boot scripts → auth → world build → socket/game-init → spawn décor (progression + spawns lents) → résumé `ZS.LoadLog.summary()`.
+
+**Fichiers générés** (si `LOG_FILE` actif) :
+- `logs/server/YYYY-MM-DD.log` — journal complet de la session
+- `logs/server/error.log` — erreurs uniquement (append)
+
+**Boot** : `boot-report.js` trace chaque étape d'initialisation (persist, seed, zombies…) avec durée en ms + résumé final.
+
+En dev : `LOG_LEVEL=debug` recommandé. Au démarrage, la console affiche le chemin des fichiers log.
 
 ---
 
@@ -220,7 +258,7 @@ En dev : `LOG_LEVEL=debug` recommandé.
 - `.env`
 - `database/*.sqlite*`
 - `notes-local/`
-- `.inventory_reset_*_done` (marqueurs one-shot)
+- `logs/` (fichiers log serveur — voir `LOG_DIR`)
 
 Voir `.gitignore`.
 

@@ -1,12 +1,8 @@
-// Menu admin in-game — F8. Hub CMS : monde, joueurs, calibrages, scénario, RCON.
-
+// Hub admin F8 (généré — admin-hub/chunks + npm run bundle:admin-hub)
 (function () {
-
   'use strict';
 
-
-
-  const VIEWS = {
+const VIEWS = {
 
     root: { title: '🛠️ CMS Admin', sub: 'F8 fermer · Hub live multijoueur' },
 
@@ -254,9 +250,7 @@
 
   function isOpen() { return _open; }
 
-
-
-  function _bindChrome() {
+function _bindChrome() {
 
     if (_els.backdrop?.dataset.hubBound === '1') return;
 
@@ -573,9 +567,7 @@
 
   }
 
-
-
-  function _buildWorldView() {
+function _buildWorldView() {
 
     if (!_els.world || _els.world.dataset.built === '1') return;
 
@@ -653,9 +645,7 @@
 
   }
 
-
-
-  function init() {
+function init() {
 
     _els.backdrop = _q('admin-backdrop');
 
@@ -730,7 +720,4 @@
   window.ZS = window.ZS || {};
 
   ZS.AdminHub = { init, open, close, toggle, isOpen, showView: _showView, isAdmin: _isAdmin, hasPerm: _hasPerm, rebuildMenu };
-
 }());
-
-

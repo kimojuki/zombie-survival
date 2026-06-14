@@ -1,0 +1,11 @@
+User-agent: *
+Allow: /
+Disallow: /play.html
+Disallow: /game.html
+Disallow: /admin.html
+Disallow: /webrcon.html
+Disallow: /arm-preview.html
+Disallow: /models-preview.html
+Disallow: /prefab-catalog.html
+
+Sitemap: https://survival.badom.ch/sitemap.xml

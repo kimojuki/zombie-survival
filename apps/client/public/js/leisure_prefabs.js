@@ -1,8 +1,8 @@
-// Prefabs sport, jeux et loisirs — catalogue RCON (salles de jeux, gyms, parcs, campings).
+// Prefabs sport, jeux et loisirs (généré — éditer leisure_prefabs/chunks/*.js puis npm run bundle:leisure-prefabs)
 (function () {
   'use strict';
 
-  function _add(parent, geo, mat, x, y, z, rx, ry, rz) {
+function _add(parent, geo, mat, x, y, z, rx, ry, rz) {
     const m = new THREE.Mesh(geo, mat);
     m.position.set(x, y, z);
     if (rx) m.rotation.x = rx;
@@ -18,7 +18,8 @@
     return ZS.CampTextures?.materials?.() || null;
   }
 
-  function _buildDartboard(root) {
+
+function _buildDartboard(root) {
     const board = new THREE.MeshLambertMaterial({ color: 0x3a2820 });
     const ring = new THREE.MeshLambertMaterial({ color: 0xe8e0d0 });
     const red = new THREE.MeshLambertMaterial({ color: 0xb82828 });
@@ -395,7 +396,8 @@
     _add(root, new THREE.CylinderGeometry(0.012, 0.012, 1.62, 6), dark, 0.08, 0.28, 0.62, 0.35, 0.1, 0);
   }
 
-  function _buildMountainBike(root) {
+
+function _buildMountainBike(root) {
     const frame = new THREE.MeshLambertMaterial({ color: 0x286838 });
     const tire = new THREE.MeshLambertMaterial({ color: 0x2a2a2a });
     const rim = new THREE.MeshLambertMaterial({ color: 0x9a9890 });
@@ -537,7 +539,8 @@
     _add(root, new THREE.CylinderGeometry(0.012, 0.012, 1.42, 6), wood, 0.06, 0.58, 0.42, 0.3, 0.15, 0);
   }
 
-  function _buildRouletteTable(root) {
+
+function _buildRouletteTable(root) {
     const felt = new THREE.MeshLambertMaterial({ color: 0x286838 });
     const wood = new THREE.MeshLambertMaterial({ color: 0x4a3020 });
     const wheel = new THREE.MeshLambertMaterial({ color: 0xc8a060 });
@@ -980,7 +983,8 @@
     root.add(ember);
   }
 
-  function _buildSolarShower(root) {
+
+function _buildSolarShower(root) {
     const bag = new THREE.MeshLambertMaterial({ color: 0x2a2a2a });
     const tube = new THREE.MeshLambertMaterial({ color: 0x4868a8 });
     _add(root, new THREE.BoxGeometry(0.32, 0.52, 0.12), bag, 0, 1.12, 0);
@@ -1012,7 +1016,8 @@
     _add(root, new THREE.BoxGeometry(0.04, 0.04, 0.12), handle, 0, 0.12, -0.82);
   }
 
-  if (ZS.registerDecorPrefab) {
+
+if (ZS.registerDecorPrefab) {
     ZS.registerDecorPrefab('spawn_game_dartboard', { build: _buildDartboard, label: 'Cible fléchettes', category: 'jeux', desc: 'Cible murale ~0,48 m — bar / salle de jeux.' });
     ZS.registerDecorPrefab('spawn_game_foosball', { build: _buildFoosball, label: 'Baby-foot', category: 'jeux', desc: 'Table baby-foot ~1,22 m — face −Z.' });
     ZS.registerDecorPrefab('spawn_game_ping_pong', { build: _buildPingPong, label: 'Table ping-pong', category: 'jeux', desc: 'Table tennis ~1,52 m — filet centré.' });
@@ -1095,4 +1100,5 @@
     ZS.registerDecorPrefab('spawn_loisir_bird_bath', { build: _buildBirdBath, label: 'Bain d\'oiseaux', category: 'loisirs', desc: 'Bassin ~0,78 m — jardin.' });
     ZS.registerDecorPrefab('spawn_loisir_red_wagon', { build: _buildRedWagon, label: 'Petit chariot', category: 'loisirs', desc: 'Wagon enfant ~0,92 m — cour / parc.' });
   }
+
 }());

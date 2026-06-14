@@ -1,8 +1,8 @@
-// Inventory — hotbar (6 slots) + sac (slots selon le sac équipé) + équipement
+// Inventory — hotbar + sac + équipement (généré — éditer inventory/chunks/*.js puis npm run bundle:inventory)
 (function () {
   'use strict';
 
-  const HOTBAR_SIZE = 6;
+const HOTBAR_SIZE = 6;
   const GRAB_RANGE  = 2.2;   // distance max pour ramasser un objet au sol
   const GRAB_RANGE_INTRO = 3.6;
   let _grabTargetId = null;  // objet actuellement visé (à portée)
@@ -31,7 +31,7 @@
 
   // ── Init ───────────────────────────────────────────────────────────────────
 
-  function init(state, scene, socket) {
+function init(state, scene, socket) {
     _state  = state;
     _scene  = scene;
     _socket = socket;
@@ -365,7 +365,8 @@
     struct_storage_chest:               { kind: 'decorPrefab', prefabId: 'storage_chest', w: 1.2, h: 0.7, t: 0.8 },
   };
   const DOOR_KEY_TYPE = 'struct_cle';
-  function _isWallSnapKind(kind) {
+
+function _isWallSnapKind(kind) {
     return kind === 'wall' || kind === 'door' || kind === 'doorway';
   }
   let _ghost = null, _ghostType = null;
@@ -881,7 +882,8 @@
   }
 
   // Construit une structure reçue du serveur (mesh + collisions + sol praticable).
-  function spawnStructure(d) {
+
+function spawnStructure(d) {
     const s = STRUCT[d.type];
     if (!s) return;
     const rotY  = d.rotY || 0;
@@ -929,6 +931,7 @@
       return;
     }
     if (_worldItems.has(d.id)) return;
+    if (d?.introPersonal && d.ownerPlayerId != null && !_isPersonalLootOwner(d)) return;
     if (d.bag) {                                  // butin de mort (caisse)
       const mesh  = _makeBagMesh();
       const baseY = (ZS.getDecorGroundHeight
@@ -1083,7 +1086,7 @@
     return true;
   }
 
-  function addItem(type, qty) {
+function addItem(type, qty) {
     const def = _def(type);
     if (!def) return false;
     if (type === DOOR_KEY_TYPE) return false;
@@ -1444,7 +1447,7 @@
     _syncToServer();
   }
 
-  function _syncToServer() {
+function _syncToServer() {
     /* inventaire authoritaire serveur — plus de push client */
   }
 
@@ -1480,6 +1483,7 @@
     _active = i;
     bar.children[_active].classList.add('active');
     _updateUseBtn();
+    ZS.IntroLessons?.onHotbarChange?.(_hotbar[_active]?.type || null);
     ZS.setHandItem?.(_hotbar[_active]?.type || null);
     ZS.UI?.setWeaponUI?.(_hotbar[_active]?.type || null);
     _showActiveName();
@@ -1919,7 +1923,7 @@
     _detailDesc.textContent = _itemDesc(selItem.type);
   }
 
-  function _buildInvPanel() {
+function _buildInvPanel() {
     _invBackdrop = document.createElement('div');
     _invBackdrop.id = 'inv-backdrop';
     _invBackdrop.className = 'zs-backdrop';
@@ -2120,6 +2124,7 @@
     if (_invBackdrop) _invBackdrop.style.display = _panelOpen ? 'block' : 'none';
     if (_panelOpen) {
       _renderInvPanel();
+      ZS.IntroLessons?.onBagOpen?.();
       ZS.onUiPanelOpen?.();
     } else {
       ZS.onUiPanelClose?.();
@@ -2222,10 +2227,11 @@
   function _makePickupMesh(def, type, opts = {}) {
     const g = new THREE.Group();
     const introWake = !!opts.introWake && type === 'tool_caillou';
+    const mobileBoost = introWake && !!ZS._isMobile ? 1.45 : 1;
 
     // Petit halo lumineux au sol pour repérer l'objet à récolter
     const ring = new THREE.Mesh(
-      new THREE.CylinderGeometry(introWake ? 0.52 : 0.30, introWake ? 0.52 : 0.30, 0.03, 16),
+      new THREE.CylinderGeometry((introWake ? 0.52 : 0.30) * mobileBoost, (introWake ? 0.52 : 0.30) * mobileBoost, 0.03, 16),
       new THREE.MeshLambertMaterial({
         color: introWake ? 0xffc860 : (def.color || 0xffffff),
         transparent: true,
@@ -2236,13 +2242,13 @@
     g.add(ring);
     if (introWake) {
       const glow = new THREE.Mesh(
-        new THREE.CylinderGeometry(0.68, 0.68, 0.02, 20),
-        new THREE.MeshBasicMaterial({ color: 0xffe8a0, transparent: true, opacity: 0.55 }),
+        new THREE.CylinderGeometry(0.68 * mobileBoost, 0.68 * mobileBoost, 0.02, 20),
+        new THREE.MeshBasicMaterial({ color: 0xffe8a0, transparent: true, opacity: ZS._isMobile ? 0.72 : 0.55 }),
       );
       glow.position.y = -0.16;
       g.add(glow);
       g.userData.introGlow = glow;
-      const beacon = new THREE.PointLight(0xffc870, 1.1, 7, 1.8);
+      const beacon = new THREE.PointLight(0xffc870, ZS._isMobile ? 1.45 : 1.1, ZS._isMobile ? 9 : 7, 1.8);
       beacon.position.set(0, 0.22, 0);
       g.add(beacon);
       g.userData.introBeacon = beacon;
@@ -2302,7 +2308,7 @@
     return g;
   }
 
-  window.ZS = window.ZS || {};
+window.ZS = window.ZS || {};
   ZS.Inventory = {
     init, tick, tryGrabNearest: grabNearest,
     spawnWorldItem, removeWorldItem, receivePickup, spawnStructure, collectBag,

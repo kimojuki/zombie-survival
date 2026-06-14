@@ -1,8 +1,8 @@
-// Prefabs arbres — visuels procéduraux (atlas écorce/feuillage), seedable via treeSeed.
+// Prefabs arbres (généré — tree_prefabs/chunks + npm run bundle:tree-prefabs)
 (function () {
   'use strict';
 
-  const _treeAtlas = new THREE.TextureLoader().load('/img/tree_atlas.png');
+const _treeAtlas = new THREE.TextureLoader().load('/img/tree_atlas.png');
   _treeAtlas.wrapS = _treeAtlas.wrapT = THREE.RepeatWrapping;
   _treeAtlas.magFilter = THREE.NearestFilter;
   _treeAtlas.minFilter = THREE.NearestMipmapLinearFilter;
@@ -196,7 +196,8 @@
     root.add(leaf);
   }
 
-  function buildOak(root, opts) {
+
+function buildOak(root, opts) {
     const rng = _rngFromOpts(opts);
     const trunkH = 3.4 + rng() * 2.6;
     const trunkR = 0.14 + rng() * 0.07;
@@ -363,7 +364,8 @@
     return _leafMat(tint);
   }
 
-  function buildPalm(root, opts) {
+
+function buildPalm(root, opts) {
     const rng = _rngFromOpts(opts);
     const lean = (rng() - 0.5) * 0.07;
     const h = 4.8 + rng() * 2.4;
@@ -544,7 +546,8 @@
     root.userData.treeKind = kind;
   }
 
-  const TREE_PREFABS = {
+
+const TREE_PREFABS = {
     tree_oak: { build: buildOak, label: 'Chêne / feuillu' },
     tree_pine: { build: buildPine, label: 'Pin' },
     tree_birch: { build: buildBirch, label: 'Bouleau' },
@@ -572,5 +575,5 @@
     tickTreeLighting,
   };
   ZS.tickTreeLighting = tickTreeLighting;
-}());
 
+}());

@@ -1,0 +1,6 @@
+# MariaDB accessible depuis l'hôte (DBeaver) — profil debug
+# npm run docker:sim:up:debug
+services:
+  mariadb:
+    ports:
+      - '127.0.0.1:3307:3306'

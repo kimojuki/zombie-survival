@@ -68,6 +68,7 @@ Objectif : **60 FPS stable sur mobile**, RAM maîtrisée, **chargement fluide**,
 | Lumières | Cull 4 frames | Torches sans traverse phase 1 ✓ |
 | UI porte | ~10 Hz | Phase 1 ✓ |
 | Arbres décor | Prefabs coupables | Géo/mat cache phase 5 ✓ |
+| Décor forêt proc | Budget tier + cull chunks | Phase 2026-06 ✓ |
 | Rigs zombie | Géo/mat partagés | Phase 4 ✓ |
 
 ### Phase 1 — implémentée

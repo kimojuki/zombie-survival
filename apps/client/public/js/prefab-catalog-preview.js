@@ -1,8 +1,8 @@
-// Aperçu 3D des prefabs décor — catalogue admin (Three.js + scripts legacy ZS).
+// Aperçu 3D prefabs catalogue (généré — prefab-catalog-preview/chunks + npm run bundle:prefab-catalog-preview)
 (function () {
   'use strict';
 
-  const SCRIPTS = [
+const SCRIPTS = [
     '/js/camp_textures.js',
     '/js/campfire.js',
     '/js/world_clock.js',
@@ -193,7 +193,8 @@
     }
   }
 
-  function _loadScript(src, ver) {
+
+function _loadScript(src, ver) {
     const url = `${src}${src.includes('?') ? '&' : '?'}v=${encodeURIComponent(ver)}`;
     const existing = document.querySelector(`script[data-prefab-preview="${CSS.escape(url)}"]`);
     if (existing) return Promise.resolve();
@@ -530,7 +531,8 @@
     if (modalFitState) modalFitState.aspect = w / h;
   }
 
-  function _resetModalView() {
+
+function _resetModalView() {
     if (!modalRoot || !modalCamera || !modalControls || !modalFitState) return;
     _fitCamera(modalCamera, modalRoot, modalFitState.aspect, modalFitState.pad);
     modalControls.target.copy(modalFitState.center);
@@ -607,7 +609,8 @@
     return modal;
   }
 
-  async function openModal(prefabId, meta) {
+
+async function openModal(prefabId, meta) {
     if (typeof meta === 'string') meta = { label: meta };
     meta = meta || {};
 
@@ -727,4 +730,5 @@
     openModal,
     closeModal,
   };
+
 }());

@@ -1,0 +1,20 @@
+{
+  "name": "Zombie Survival",
+  "short_name": "ZS Survival",
+  "description": "Jeu de survie post-apocalyptique free-to-play dans le navigateur — early access, en cours de développement",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "any",
+  "lang": "fr",
+  "background_color": "#070707",
+  "theme_color": "#070707",
+  "icons": [
+    {
+      "src": "/img/favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ]
+}

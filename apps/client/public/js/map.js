@@ -1,8 +1,8 @@
-// Carte tactique RP — item ramassable + overlay canvas (touche M)
+// Carte in-game (généré — map/chunks + npm run bundle:map)
 (function () {
   'use strict';
 
-  const SPAWN_X = -240;
+const SPAWN_X = -240;
   const SPAWN_Z = -226;
 
   let _state, _scene, _itemMesh = null;
@@ -140,7 +140,7 @@
     }
   }
 
-  function _drawPaperBg(ctx, W, H) {
+function _drawPaperBg(ctx, W, H) {
     const bg = ctx.createRadialGradient(W * 0.45, H * 0.5, 20, W * 0.5, H * 0.5, W * 0.75);
     bg.addColorStop(0, '#e2d49e');
     bg.addColorStop(0.5, '#cdb86a');
@@ -374,7 +374,7 @@
     }
   }
 
-  function _drawGates(ctx) {
+function _drawGates(ctx) {
     const gates = ZS.SectorBounds?.SECTOR_01_GATES || [];
     const S = _worldCfg().scale;
     for (const g of gates) {

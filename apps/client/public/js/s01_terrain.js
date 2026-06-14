@@ -17,6 +17,8 @@
   /** Aplats légers autour des POI bâtis — sans les anciens sites de campement. */
   function registerFlatZones() {
     if (!ZS.registerFlatZone) return;
+    ZS.registerFlatZone(165.1, 7.1, 14, 12, 6);
+    ZS.registerFlatZone(0, -6, 12, 10, 5);
     ZS.registerFlatZone(-60, -70, 13, 11, 6);
     ZS.registerFlatZone(-80, 42, 13, 11, 6);
     ZS.registerFlatZone(82, -100, 18, 11, 7);

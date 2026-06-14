@@ -1,6 +1,11 @@
 /**
- * PM2 — prod Infomaniak (exemple)
- * Usage : pm2 start infra/ecosystem.config.cjs
+ * PM2 — LEGACY preview Infomaniak (Node sur hôte, sans Docker)
+ *
+ * NOUVELLE PROD : VM Ubuntu + Docker Compose
+ *   docs/VM_DEPLOY.md · infra/docker/docker-compose.yml
+ *
+ * Ancien mode (deprecated) :
+ *   pm2 start infra/ecosystem.config.cjs --only zombie
  */
 const path = require('path');
 const rootDir = path.resolve(__dirname, '..');

@@ -162,26 +162,37 @@
     } else {
       _decorScene = scene;
     }
-    if (ZS.buildSpawnTrail && TRAIL.length > 1) {
+    // Sentier plage — mesh procédural (visible dès le spawn ; admin peut surcharger via F8).
+    if (ZS.ENABLE_CODEGEN_TRAIL_MESH && ZS.buildSpawnTrail && TRAIL.length > 1) {
       ZS.buildSpawnTrail(scene, TRAIL, ZS.B);
     }
   }
 
-  function finishBeachDecorAsync() {
-    if (!_decorScene) return;
-    const scene = _decorScene;
+  function finishBeachDecorAsync(scene) {
+    const target = scene || _decorScene;
+    if (!target) return Promise.resolve();
     _decorScene = null;
-    const run = () => {
-      try {
-        const p = ZS.buildBeachDecorAsync?.(scene) ?? ZS.buildBeachDecor?.(scene);
-        if (p?.catch) p.catch((e) => console.warn('[beach] decor deferred', e));
-      } catch (e) { console.warn('[beach] decor deferred', e); }
-    };
-    if (typeof requestIdleCallback === 'function') {
-      requestIdleCallback(run, { timeout: 2500 });
-    } else {
-      setTimeout(run, 16);
-    }
+    return new Promise((resolve) => {
+      const run = async () => {
+        ZS.LoadLog?.stepStart?.('beach-decor-build');
+        const t0 = performance.now();
+        try {
+          const p = ZS.buildBeachDecorAsync?.(target) ?? ZS.buildBeachDecor?.(target);
+          if (p?.then) await p;
+          ZS.LoadLog?.stepEnd?.('beach-decor-build', { ms: Math.round(performance.now() - t0) });
+        } catch (e) {
+          console.warn('[beach] decor deferred', e);
+          ZS.LoadLog?.mark?.('beach-decor-async-error', { err: String(e?.message || e) });
+          ZS.LoadLog?.stepEnd?.('beach-decor-build', { ms: Math.round(performance.now() - t0), err: true });
+        }
+        resolve();
+      };
+      if (typeof requestIdleCallback === 'function') {
+        requestIdleCallback(() => { run(); }, { timeout: 2500 });
+      } else {
+        setTimeout(() => { run(); }, 16);
+      }
+    });
   }
 
   function _registerTerrain() {
@@ -201,6 +212,8 @@
     spawn: { ...SPAWN },
     trail: TRAIL.map((p) => p.slice()),
   };
+  ZS.ENABLE_CODEGEN_TRAIL_MESH = true;
   ZS.BEACH_TRAIL_PTS = TRAIL.map((p) => p.slice());
+  ZS.SPAWN_TRAIL_PTS = TRAIL.map((p) => p.slice());
   ZS.Buildings.registerSector({ build, roads: [], spawnOnly: true });
 }());

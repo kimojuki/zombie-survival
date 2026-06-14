@@ -1,0 +1,39 @@
+---
+description: Boucle dev refonte — code, reboot auto, playtest utilisateur, analyse logs
+alwaysApply: true
+---
+
+# Boucle refonte architecture
+
+## Rôles
+
+| Qui | Fait quoi |
+|-----|-----------|
+| **Agent** | Avance la migration/refonte (`src/engine/`, consolidation legacy), reboot serveurs, tests, analyse logs |
+| **Utilisateur** | Lance une partie quand il veut (sans instruction explicite), sauve les logs, dit « c'est bon » |
+
+## Cycle
+
+1. Agent implémente / consolide (petits diffs testables).
+2. Agent reboot backend/client si nécessaire (voir `dev-servers.mdc`).
+3. Utilisateur playteste à son rythme.
+4. Utilisateur dépose logs dans `notes-local/` ou `notes-local/load-logs/` (`localhost-<timestamp>.log`).
+5. Utilisateur signale → agent lit via shell (dossier gitignored).
+6. Agent analyse → corrige ou passe à la phase migration suivante → repeat.
+
+## Logs
+
+- Activer : `localStorage.setItem('zs-load', '1')` puis recharger.
+- Export : sauvegarde console DevTools ou `copy(JSON.stringify(ZS.LoadLog.dump(), null, 2))`.
+- Ne **pas** demander à l'utilisateur de lancer npm start / dev:client.
+
+## Priorités refonte
+
+1. `src/engine/` — scheduler, runner, telemetry (E0 ✓)
+2. Drain defer / LOD stable (perf boot)
+3. `src/net/decor-pressure.js` — extraire `_buildBacklogPlan`
+4. Boot phases unifiées, puis world/ui par slices
+
+## Après chaque session agent
+
+- `DEV_TRACKER.md` + bump `client-version.json` si JS client touché.

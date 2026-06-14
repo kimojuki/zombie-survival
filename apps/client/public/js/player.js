@@ -1,15 +1,15 @@
-// Modèles personnages + bras FPS + items en main (modèles .glb + fallback procédural)
+// Modèles personnages + bras FPS + items (généré — éditer player/chunks/*.js puis npm run bundle:player)
 (function () {
   'use strict';
 
-  const SKIN  = 0xFFCBA4;
+const SKIN  = 0xFFCBA4;
   const SHIRT = 0x3B82F6;
   const PANTS = 0x1E3A8A;
   const SHOES = 0x333333;
 
   // ── Personnages ────────────────────────────────────────────────────────────
 
-  function createPlayerModel(opts = {}) {
+function createPlayerModel(opts = {}) {
     return _createHumanoidRig({ name: 'playerRig', local: !!opts.local });
   }
 
@@ -276,7 +276,7 @@
     lArmMode: 'aimAtHand',
   };
 
-  function _mergeAnim(base, over) {
+function _mergeAnim(base, over) {
     if (!over) return base;
     const out = {};
     for (const k of Object.keys(base)) {
@@ -742,7 +742,7 @@
   const _FPS_SKIN_SHADOW = 0xe8b894;
   const _fpsMatCache = new Map();
 
-  function _fpsMat(color) {
+function _fpsMat(color) {
     let mat = _fpsMatCache.get(color);
     if (!mat) {
       mat = new THREE.MeshLambertMaterial({ color });
@@ -1433,7 +1433,7 @@
 
   // ── Animations FPS ────────────────────────────────────────────────────────
 
-  function triggerArmAnim(fpsGroup, kind, type, opts) {
+function triggerArmAnim(fpsGroup, kind, type, opts) {
     opts = opts || {};
     const grip = getGrip(type || fpsGroup.userData.gripType);
     const animDef = grip.anim[kind] || _ANIM_BASE[kind] || _ANIM_BASE.melee;
@@ -1653,7 +1653,7 @@
     }
   }
 
-  function _fit(type) {
+function _fit(type) {
     if (type === 'tool_caillou') return 0.68;
     if (type === 'wpn_pistolet' || type === 'pistol') return 0.52;
     if (type === 'wpn_fusil_chasse')                  return 1.20;
@@ -1855,7 +1855,7 @@
 
   // ── Mise à jour de l'item en main ─────────────────────────────────────────
 
-  function _clearSharedCenterHolder(fpsGroup) {
+function _clearSharedCenterHolder(fpsGroup) {
     const center = fpsGroup.getObjectByName('centerItemHolder');
     if (!center) return;
     center.visible = false;
@@ -2293,7 +2293,7 @@
 
   // ── Constructeur principal ────────────────────────────────────────────────
 
-  function _buildModel(type) {
+function _buildModel(type) {
     switch (type) {
       // ── Armes à feu ──────────────────────────────────────────────────────
       case 'pistol': case 'wpn_pistolet':   return _pistol();
@@ -2737,7 +2737,7 @@
   const _boxGeoCache = new Map();
   const _matCache = new Map();
 
-  function _boxGeo(w, h, d) {
+function _boxGeo(w, h, d) {
     const key = `${w}|${h}|${d}`;
     let geo = _boxGeoCache.get(key);
     if (!geo) {

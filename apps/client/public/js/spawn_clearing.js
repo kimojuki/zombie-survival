@@ -1,9 +1,9 @@
-// Décor visuel de la clairière de spawn (lisière, sentier, détails)
+// Décor visuel de la clairière de spawn (généré — éditer spawn_clearing/chunks/*.js puis npm run bundle:spawn-clearing)
 // Orientation prefabs : packages/shared/src/decor-prefab-orientation.mjs · docs/DECOR_PREFAB_ORIENTATION.md
 (function () {
   'use strict';
 
-  function _rng(seed) {
+function _rng(seed) {
     let s = seed >>> 0;
     return () => {
       s ^= s << 13; s ^= s >>> 17; s ^= s << 5;
@@ -179,7 +179,7 @@
 
   const SPAWN_TRAIL_PTS = _spawnTrailPoints();
 
-  function _add(parent, geo, mat, x, y, z, rx, ry, rz) {
+function _add(parent, geo, mat, x, y, z, rx, ry, rz) {
     const m = new THREE.Mesh(geo, mat);
     m.position.set(x, y, z);
     if (rx) m.rotation.x = rx;
@@ -364,7 +364,8 @@
    * Table rustique cabane — ~1,15 × 0,70 m, hauteur ~0,74 m.
    * Pivot = centre sol ; plateau horizontal (XZ).
    */
-  function _buildCabinTable(parent, x, y, z, ry) {
+
+function _buildCabinTable(parent, x, y, z, ry) {
     const M = _campMats();
     const g = new THREE.Group();
     g.position.set(x, y, z);
@@ -929,7 +930,8 @@
    * Lavabo cabane — meuble bois ~0,46 m, cuvette porcelaine encastrée, robinet mural.
    * Pivot = centre sol ; face −Z, dos +Z contre mur.
    */
-  function _buildCabinBasin(parent, x, y, z, ry) {
+
+function _buildCabinBasin(parent, x, y, z, ry) {
     const M = _campMats();
     const g = new THREE.Group();
     g.position.set(x, y, z);
@@ -1165,7 +1167,8 @@
    * Débris de naufrage (plage) — planches, corde, filet, coin de caisse.
    * Pivot sol · face détail −Z · ~1,0 × 0,9 m.
    */
-  function _buildBeachWreckDebris(parent, x, y, z, ry) {
+
+function _buildBeachWreckDebris(parent, x, y, z, ry) {
     const M = _campMats();
     const g = new THREE.Group();
     g.position.set(x, y, z);
@@ -1459,7 +1462,8 @@
 
   /** Premier prefab bâtiment RCON : cabane simple, procédurale et réutilisable. */
   /** Pièce 2/7. Miroir packages/shared/src/survivor-shack-wall-north.mjs */
-  function _buildSurvivorShackWallNorth(g) {
+
+function _buildSurvivorShackWallNorth(g) {
     const M = _campMats();
     const wallMat = M ? M.wood(0x9b6a3c) : new THREE.MeshLambertMaterial({ color: 0x9b6a3c });
     const W = 5.25;
@@ -1985,7 +1989,8 @@
   }
 
   /** Lisière de rondins + pierres — jointure douce clairière / herbe */
-  function buildCampGround(scene, cx, cz, baseY, B) {
+
+function buildCampGround(scene, cx, cz, baseY, B) {
     const M = _campMats();
     const stone = M ? M.stone() : new THREE.MeshLambertMaterial({ color: 0x6a6458 });
     const gapCenter = CAMP_GAP_CENTER;
@@ -2060,7 +2065,7 @@
 
   }
 
-  const DECOR_DOORS = new Map();
+const DECOR_DOORS = new Map();
   const DECOR_STORAGES = new Map();
   const DECOR_INTERACTS = new Map();
 
@@ -2165,7 +2170,8 @@
   }
 
   /** Yaw décor — coffre : rotation sur le groupe mesh interne, pas le root. */
-  function _decorYawFromRoot(root) {
+
+function _decorYawFromRoot(root) {
     if (root?.userData?.prefabId === 'storage_chest') {
       const inner = root.children[0];
       if (inner) return inner.rotation.y || 0;
@@ -2187,22 +2193,26 @@
     return spec;
   }
 
-  function _registerDecorCollision(decorId, spec, root) {
+  function _registerDecorCollision(decorId, spec, root, opts = {}) {
     if (!decorId || !ZS.registerDecorColliders || !ZS.buildDecorColliders) return;
+    const force = !!opts.force;
+    if (!force && ZS.Network?.isDecorColliderDefer?.()) return;
     if (root?.userData?.decorSpec) spec = _syncDecorSpecFromRoot(root);
     const cols = ZS.buildDecorColliders(spec);
     ZS.registerDecorColliders(decorId, cols);
     if (spec?.prefabId === 'building_survivor_shack') {
       ZS.BuildingDebug?.onShackCollidersRegistered?.(spec, cols, root || null);
     }
-    ZS.Network?.syncWorldColliders?.();
+    if (!ZS.Network?.isColliderSyncBatch?.()) {
+      ZS.Network?.syncWorldColliders?.();
+    }
   }
 
   function _refreshDecorCollision(root) {
     if (!root?.userData?.decorSpec) return;
     if (root.userData.collide === false) return;
     const spec = _syncDecorSpecFromRoot(root);
-    _registerDecorCollision(spec.decorId, spec, root);
+    _registerDecorCollision(spec.decorId, spec, root, { force: true });
   }
 
   function _setDoorVisual(entry, open, opts = {}) {
@@ -2469,7 +2479,7 @@
     return best;
   }
 
-  const _adminPickHits = [];
+const _adminPickHits = [];
 
   const _ADMIN_PICK_SKIP = new Set(['__ald_preview__']);
 
@@ -2735,7 +2745,8 @@
   }
 
   /** Plus bas vertex du visuel en coordonnées monde (respecte rotY / scale). */
-  function _rockWorldBoundsY(root) {
+
+function _rockWorldBoundsY(root) {
     if (!root) return null;
     root.updateMatrixWorld(true);
     const vis = root.userData.boulderVisual || root;
@@ -2873,7 +2884,16 @@
     }
   }
 
-  function spawnDecorPrefab(scene, prefabId, x, y, z, opts = {}) {
+  /** Props monde seedés serveur — Y client (terrain aplati routes / clairières). */
+  function _prefabUsesClientGround(prefabId, opts) {
+    if (opts.grounded === false) return false;
+    if (prefabId?.startsWith('tree_')) return true;
+    if (prefabId === 'spawn_stone' || prefabId?.startsWith('rock_')) return true;
+    if (opts.fastGround) return true;
+    return false;
+  }
+
+function spawnDecorPrefab(scene, prefabId, x, y, z, opts = {}) {
     const prefab = DECOR_PREFABS[prefabId];
     if (!scene || !prefab) return null;
     const isWreck = prefabId.startsWith('wreck_');
@@ -2933,6 +2953,8 @@
       deckY = sampleShackPadHeight(x || 0, z || 0, opts.rotY || 0) + (Number.isFinite(groundLift) ? groundLift : 0);
     } else if (Number.isFinite(opts.baseY)) {
       deckY = opts.baseY;
+    } else if (_prefabUsesClientGround(prefabId, opts)) {
+      deckY = getDecorGroundHeight(x || 0, z || 0, { groundLift });
     } else if (Number.isFinite(y) && y > 0.25) {
       deckY = y;
     } else if (opts.grounded !== false && !isWreck) {
@@ -2979,7 +3001,12 @@
     const treeDist2 = lp
       ? ((x || 0) - lp.x) ** 2 + ((z || 0) - lp.z) ** 2
       : 0;
-    const useSimpleLod = isTree && (opts.simpleLod || treeDist2 > 42 * 42);
+    const urgentR = window.ZS?.TREE_LOD_URGENT_R ?? 64;
+    const urgentR2 = urgentR * urgentR;
+    const useSimpleLod = isTree && (
+      opts.simpleLod === true
+      || (opts.simpleLod == null && treeDist2 > urgentR2)
+    );
     if (useSimpleLod && ZS.TreePrefabs?.buildSimple) {
       ZS.TreePrefabs.buildSimple(root, prefabId);
       root.userData.simpleLod = true;
@@ -3169,7 +3196,8 @@
    *   ouest  = couchage (sac + bedroll)
    *   nord (+Z) = 2 souches assises
    */
-  function buildCampLayout(scene, cx, cz, baseY, B) {
+
+function buildCampLayout(scene, cx, cz, baseY, B) {
 
     // ── Sud-est : réserve de bois (hors sentier) ─────────────────────────────
     spawnDecorPrefab(scene, 'spawn_log_pile', cx + 1.85, baseY + 0.02, cz - 1.65);
@@ -3223,7 +3251,8 @@
   }
 
   /** Points du sentier spawn → route goudronnée (14, -18) */
-  function _onPath(x, z) {
+
+function _onPath(x, z) {
     if (ZS.Trails?.isNear) return ZS.Trails.isNear(SPAWN_TRAIL_PTS, x, z, 1.15);
     const margin = 1.2;
     for (let i = 0; i < SPAWN_TRAIL_PTS.length - 1; i++) {
@@ -3433,6 +3462,7 @@
 
   /** Mesh sentier + décor ; jonction RN via RoadNetwork.buildMeshes */
   function buildSpawnTrail(scene, pts, B) {
+    if (ZS.ENABLE_CODEGEN_TRAIL_MESH === false) return;
     const path = pts || SPAWN_TRAIL_PTS;
     if (ZS.Trails?.buildMesh) {
       ZS.Trails.buildMesh(scene, path, {
@@ -3453,7 +3483,7 @@
     buildSpawnTrail(scene, SPAWN_TRAIL_PTS, B);
   }
 
-  window.ZS = window.ZS || {};
+window.ZS = window.ZS || {};
   ZS.buildClearingRing  = buildClearingRing;
   ZS.buildSpawnTrail     = buildSpawnTrail;
   ZS.buildSpawnTrailDecor = buildSpawnTrailDecor;

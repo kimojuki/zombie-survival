@@ -108,6 +108,55 @@ body {
 
 .error-msg { color: #fc8181; font-size: 0.85rem; margin-top: 0.75rem; text-align: center; min-height: 1.2em; }
 
+/* Login page only — allow scroll & touch (game body locks both) */
+body.login-page {
+  overflow: auto;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  touch-action: manipulation;
+  user-select: auto;
+  -webkit-user-select: auto;
+  min-height: 100vh;
+  min-height: 100dvh;
+  height: auto;
+}
+body.login-page .login-bg {
+  min-height: 100vh;
+  min-height: 100dvh;
+  padding: max(1rem, env(safe-area-inset-top)) max(1rem, env(safe-area-inset-right)) max(1.25rem, env(safe-area-inset-bottom)) max(1rem, env(safe-area-inset-left));
+}
+body.login-page .login-card {
+  width: min(400px, 100%);
+  padding: clamp(1.25rem, 4vw, 2rem) clamp(1rem, 4vw, 1.75rem);
+}
+body.login-page .form-group input {
+  min-height: 48px;
+  font-size: 16px; /* évite zoom auto iOS */
+}
+body.login-page .btn-primary {
+  min-height: 48px;
+}
+body.login-page .tab-btn {
+  min-height: 44px;
+}
+body.login-page .login-back {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 44px;
+  padding: 0.35rem 0.5rem;
+  color: #888;
+  font-size: 0.85rem;
+  text-decoration: none;
+  -webkit-tap-highlight-color: transparent;
+}
+body.login-page .login-back:hover { color: #bbb; }
+@media (min-width: 768px) {
+  body.login-page .login-card {
+    padding: 2.25rem 2rem;
+  }
+}
+
 .login-card-wide { width: min(440px, 96vw); }
 
 .server-picker { margin-bottom: 1.25rem; }
@@ -190,9 +239,32 @@ body.input-desktop.pointer-locked #game-canvas {
   font-weight: 500;
   color: rgba(255, 255, 255, 0.75);
 }
-body.input-desktop:not(.pointer-locked):not(.rcon-open) #pc-play-hint {
+body.input-desktop:not(.pointer-locked):not(.rcon-open):not(.admin-live-roads-active):not(.admin-live-decor-active):not(.bed-sleep-active) #pc-play-hint {
   display: flex;
 }
+
+#zs-bed-sleep-banner {
+  position: fixed;
+  bottom: 18%;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 9000;
+  pointer-events: none;
+}
+#zs-bed-sleep-banner .zs-bed-sleep-inner {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 10px 18px;
+  border-radius: 8px;
+  background: rgba(12, 18, 28, 0.88);
+  border: 1px solid rgba(140, 200, 255, 0.35);
+  color: #e8f4ff;
+  font: 13px/1.35 Consolas, Monaco, monospace;
+  text-align: center;
+}
+#zs-bed-sleep-banner .hint { opacity: 0.75; font-size: 11px; }
 
 body.input-touch #pc-play-hint,
 body.mode-tablet #pc-play-hint {
@@ -506,6 +578,26 @@ body.chat-open #chat-btn {
   padding: 2px 6px; border-radius: 4px; background: rgba(80, 70, 40, 0.8); color: #e8d090;
 }
 .admin-hub-foot { margin: 12px 2px 0; font-size: 11px; color: #7a8494; line-height: 1.4; }
+.admin-hub-backups-actions { margin: 8px 2px 12px; display: flex; flex-direction: column; gap: 10px; }
+.admin-hub-backups-check { font-size: 12px; color: #c8d4e4; }
+.admin-hub-backups-btns, .admin-hub-backups-import { display: flex; flex-wrap: wrap; gap: 8px; }
+.admin-hub-btn {
+  padding: 8px 12px; border-radius: 8px; border: 1px solid rgba(212, 184, 122, 0.35);
+  background: rgba(42, 74, 58, 0.85); color: #e8f4e8; cursor: pointer; font-size: 12px;
+}
+.admin-hub-btn:hover { filter: brightness(1.08); }
+.admin-hub-btn-ghost { background: rgba(30, 36, 48, 0.85); color: #b8c4d4; }
+.admin-hub-btn-warn { background: rgba(90, 42, 38, 0.9); border-color: rgba(220, 120, 100, 0.45); color: #ffe8e4; }
+.admin-hub-btn-sm { padding: 5px 8px; font-size: 11px; }
+.admin-hub-backups-list { display: flex; flex-direction: column; gap: 8px; max-height: 240px; overflow-y: auto; }
+.admin-hub-backup-row {
+  display: flex; flex-wrap: wrap; gap: 8px; align-items: flex-start; justify-content: space-between;
+  padding: 10px 12px; border-radius: 8px; background: rgba(12, 16, 24, 0.65);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+.admin-hub-backup-main { display: flex; flex-direction: column; gap: 2px; min-width: 0; flex: 1 1 180px; }
+.admin-hub-backup-meta { font-size: 11px; color: #8a96a8; }
+.admin-hub-backups-row-actions { display: flex; flex-wrap: wrap; gap: 6px; }
 .admin-hub-empty { margin: 8px 2px; font-size: 12px; color: #9aa8b8; }
 .admin-hub-calib-toolbar {
   display: flex; flex-wrap: wrap; gap: 8px; margin: 0 2px 12px; align-items: center;
@@ -2054,7 +2146,11 @@ body.death-screen-open.pointer-locked { cursor: default !important; }
   font-size: 0.8rem; font-weight: 700; color: #e85;
   min-width: 2.5rem; text-align: right; font-variant-numeric: tabular-nums;
 }
-#connecting-screen.connecting-fade-out { opacity: 0; transition: opacity 0.32s ease; }
+#connecting-screen.connecting-fade-out {
+  opacity: 0;
+  transition: opacity 0.32s ease;
+  pointer-events: none;
+}
 .connecting-spinner {
   width: 2.25rem; height: 2.25rem;
   border: 3px solid #333; border-top-color: #e85;
@@ -3007,4 +3103,82 @@ body.mode-desktop .inv-detail-desc {
 }
 body.sign-open {
   cursor: default;
+}
+
+/* ── Compte invité → upgrade ── */
+.guest-upgrade-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 12000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+  background: rgba(0, 0, 0, 0.72);
+}
+.guest-upgrade-card {
+  width: min(360px, 100%);
+  padding: 1.25rem 1.35rem;
+  border-radius: 14px;
+  background: #141414;
+  border: 1px solid rgba(232, 93, 58, 0.35);
+  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.5);
+}
+.guest-upgrade-card h2 {
+  font-family: Oswald, sans-serif;
+  font-size: 1.25rem;
+  margin-bottom: 0.35rem;
+}
+.guest-upgrade-lead {
+  font-size: 0.85rem;
+  color: #9a9a9a;
+  margin-bottom: 1rem;
+}
+.guest-upgrade-card label {
+  display: block;
+  font-size: 0.78rem;
+  color: #9a9a9a;
+  margin-bottom: 0.75rem;
+}
+.guest-upgrade-card input {
+  display: block;
+  width: 100%;
+  margin-top: 0.35rem;
+  min-height: 44px;
+  padding: 0.65rem 0.85rem;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(0, 0, 0, 0.35);
+  color: #ececec;
+  font-size: 16px;
+}
+.guest-upgrade-err {
+  min-height: 1.2em;
+  font-size: 0.82rem;
+  color: #fca5a5;
+}
+.guest-upgrade-actions {
+  display: flex;
+  gap: 0.65rem;
+  margin-top: 0.85rem;
+}
+.guest-upgrade-actions button {
+  flex: 1;
+  min-height: 44px;
+  border-radius: 8px;
+  border: none;
+  font-weight: 700;
+  cursor: pointer;
+}
+.guest-upgrade-cancel {
+  background: rgba(255, 255, 255, 0.08);
+  color: #ececec;
+}
+.guest-upgrade-submit {
+  background: linear-gradient(135deg, #c44a2a, #e85d3a);
+  color: #fff;
+}
+#menu-panel .menu-item-accent {
+  color: #fbbf24;
+  border: 1px solid rgba(251, 191, 36, 0.35);
 }

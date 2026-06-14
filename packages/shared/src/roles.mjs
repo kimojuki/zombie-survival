@@ -8,6 +8,7 @@ export const PERMISSIONS = {
   'decor.edit': 'Éditer le décor en live',
   'decor.delete': 'Supprimer du décor',
   'world.map': 'Carte admin du monde',
+  'world.backup': 'Créer / exporter des backups monde',
   'prefab.catalog': 'Catalogue prefabs & revues',
   'players.view': 'Voir les joueurs connectés',
   'players.manage': 'Gérer les joueurs (kick, tp, heal…)',
@@ -36,7 +37,7 @@ export const ROLES = {
     level: 90,
     color: '#e87850',
     permissions: [
-      'hub.access', 'decor.edit', 'decor.delete', 'world.map', 'prefab.catalog',
+      'hub.access', 'decor.edit', 'decor.delete', 'world.map', 'world.backup', 'prefab.catalog',
       'players.view', 'players.manage', 'players.roles',
       'calibration', 'scenario', 'rcon', 'rcon.dangerous', 'dev.access',
     ],
@@ -47,7 +48,7 @@ export const ROLES = {
     level: 70,
     color: '#6eb5ff',
     permissions: [
-      'hub.access', 'decor.edit', 'decor.delete', 'world.map', 'prefab.catalog',
+      'hub.access', 'decor.edit', 'decor.delete', 'world.map', 'world.backup', 'prefab.catalog',
       'players.view', 'calibration', 'scenario', 'rcon',
     ],
   },

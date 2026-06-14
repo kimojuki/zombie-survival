@@ -61,6 +61,14 @@ Index complet : [README.md](README.md#documentation-à-lire-avant-un-push--revie
 - ChunkStreamer force tick en mouvement (forêt procédurale visible plus tôt).
 - Engine v1.4.0 · `client-version.json` → `20260609-prefetch-l3d`.
 
+### Completed — Infomaniak Node + PM2 sans Docker (2026-06-09)
+
+- **Collègue preview** : Node managé Infomaniak + MariaDB cloud + pm2 (pas Docker).
+- **`docs/INFOMANIAK_NODE.md`**, **`.env.infomaniak.example`**, **`scripts/setup-infomaniak.sh`**.
+- **`infra/ecosystem.config.cjs`** — 1 process (`AUTH_MODE=embedded`) ou 2 si standalone.
+- **`deploy-prod.sh`** — pm2 start au premier deploy, backup MySQL, restart auth si standalone.
+- npm : `setup:infomaniak`, `deploy:infomaniak`, `pm2:start|restart|logs`.
+
 ### Completed — LOD texture surge L3l (2026-06-09)
 
 - **Log prod l3h (`1781436144299`)** : build `prefetch-l3h` (L3k+ non déployé) ; spam `stream-pause` ~1/frame ; gap #1 **45s timeout** pending=26 sans spawn à l'arrêt ; arbres `simpleLod` visibles en masse.

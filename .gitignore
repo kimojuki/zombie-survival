@@ -3,6 +3,7 @@ node_modules/
 .env.*
 !.env.example
 !**/.env.example
+!.env.infomaniak.example
 *.log
 .inventory_reset_done
 .inventory_reset_v2_done

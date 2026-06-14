@@ -47,7 +47,9 @@ ADMIN_USERS=votre_username
 | [docs/GIT_WORKFLOW.md](docs/GIT_WORKFLOW.md) | Git équipe — travail parallèle, pull/push, fusion conflits |
 | [SECURITY.md](SECURITY.md) | Secrets, données locales, signalement sécurité |
 | [docs/RCON.md](docs/RCON.md) | Console admin in-game + API |
-| [docs/DEPLOY.md](docs/DEPLOY.md) | Prod Infomaniak, auto-deploy (cron / webhook) |
+| [docs/DEPLOY.md](docs/DEPLOY.md) | Prod Infomaniak (cron / webhook) |
+| [docs/INFOMANIAK_NODE.md](docs/INFOMANIAK_NODE.md) | **Infomaniak Node + PM2 sans Docker** |
+| [docs/VM_DEPLOY.md](docs/VM_DEPLOY.md) | VM Ubuntu + Docker Compose |
 | [docs/RELEASE_NOTES.md](docs/RELEASE_NOTES.md) | **Notes de version joueurs** (early access) |
 | [docs/RELEASE_PROCESS.md](docs/RELEASE_PROCESS.md) | **Deploy sans perte de progression** — checklist |
 | [docs/ROAD_NETWORK.md](docs/ROAD_NETWORK.md) | Architecture routes/sentiers (2026-06) |

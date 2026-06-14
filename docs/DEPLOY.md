@@ -1,8 +1,12 @@
-# Déploiement production (Infomaniak)
+# Déploiement production (Infomaniak Node + PM2)
+
+> **Guide complet sans Docker** : [INFOMANIAK_NODE.md](./INFOMANIAK_NODE.md)  
+> VM Docker (équipe Badom) : [VM_DEPLOY.md](./VM_DEPLOY.md)
 
 URL preview actuelle : `https://3k51myccypp.preview.infomaniak.website`  
 Chemin serveur : `~/sites/jeu.zombieOfficel.ch/zombie-survival`
 
+**Première install** : `bash scripts/setup-infomaniak.sh` puis éditer `.env` (voir `.env.infomaniak.example`).
 Commande manuelle habituelle (normalement **inutile** si le cron tourne) :
 
 ```bash

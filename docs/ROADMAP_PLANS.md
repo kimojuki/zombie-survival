@@ -24,8 +24,8 @@ survival.badom.ch → Cloudflare → :3000 (landing + play + game + socket)
 | B — handoff + proxy auth | **Fait** (code) | Valider : [TEST_STANDALONE.md](./TEST_STANDALONE.md) |
 | C — front reste sur :3000 | **Fait** | Pas de portail séparé |
 | D — split DB accounts | **Fait (local)** | `npm run migrate:accounts-to-auth` |
-| E — deploy VM Docker | **Cible prod** | [VM_DEPLOY.md](./VM_DEPLOY.md) · `infra/docker/` |
-| E legacy — pm2 Infomaniak | Déprécié | `infra/ecosystem.config.cjs` (preview ancienne) |
+| E — deploy VM Docker | **Cible prod équipe** | [VM_DEPLOY.md](./VM_DEPLOY.md) · `infra/docker/` |
+| E infomaniak — Node + pm2 | **Preview collègue** | [INFOMANIAK_NODE.md](./INFOMANIAK_NODE.md) · `setup-infomaniak.sh` |
 | **Docker prod sim** | **Fait** | mono-VM · split db/app : [ARCHITECTURE_TIERS.md](./ARCHITECTURE_TIERS.md) |
 | G — VM db séparée | **Prêt** | `docker-compose.db.yml` + `docker-compose.app.yml` |
 

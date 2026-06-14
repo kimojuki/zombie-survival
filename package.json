@@ -84,7 +84,13 @@
     "bundle:sector-03-maincity": "node tools/bundle-chunk-module.mjs apps/client/public/js/sector_03_maincity/chunks apps/client/public/js/sector_03_maincity.js \"// SECTOR 03 — MAIN CITY (généré — sector_03_maincity/chunks + npm run bundle:sector-03-maincity)\"",
     "bundle:buildings": "node tools/bundle-chunk-module.mjs apps/client/public/js/buildings/chunks apps/client/public/js/buildings.js \"// Buildings — shared utilities (généré — buildings/chunks + npm run bundle:buildings)\"",
     "bundle:client": "node tools/bundle-network.mjs && node tools/bundle-spawn-clearing.mjs && node tools/bundle-world.mjs && node tools/bundle-player.mjs && node tools/bundle-inventory.mjs && node tools/bundle-game.mjs",
-    "bundle:client:all": "npm run bundle:client && npm run bundle:road-network && npm run bundle:urban-prefabs && npm run bundle:admin-live-decor && npm run bundle:leisure-prefabs && npm run bundle:decor-colliders && npm run bundle:fps-arm-tuner && npm run bundle:audio && npm run bundle:sector-02-town && npm run bundle:admin-world-map && npm run bundle:forest-decor && npm run bundle:beach-textures && npm run bundle:build-anchors && npm run bundle:admin-hub && npm run bundle:sector-05-military && npm run bundle:sector-01-forest && npm run bundle:prefab-catalog-preview && npm run bundle:beach-decor && npm run bundle:ui && npm run bundle:craft && npm run bundle:map && npm run bundle:noise && npm run bundle:camp-textures && npm run bundle:admin-live-roads && npm run bundle:tree-prefabs && npm run bundle:admin-zone-overlay && npm run bundle:mapgen && npm run bundle:sector-03-maincity && npm run bundle:buildings"
+    "bundle:client:all": "npm run bundle:client && npm run bundle:road-network && npm run bundle:urban-prefabs && npm run bundle:admin-live-decor && npm run bundle:leisure-prefabs && npm run bundle:decor-colliders && npm run bundle:fps-arm-tuner && npm run bundle:audio && npm run bundle:sector-02-town && npm run bundle:admin-world-map && npm run bundle:forest-decor && npm run bundle:beach-textures && npm run bundle:build-anchors && npm run bundle:admin-hub && npm run bundle:sector-05-military && npm run bundle:sector-01-forest && npm run bundle:prefab-catalog-preview && npm run bundle:beach-decor && npm run bundle:ui && npm run bundle:craft && npm run bundle:map && npm run bundle:noise && npm run bundle:camp-textures && npm run bundle:admin-live-roads && npm run bundle:tree-prefabs && npm run bundle:admin-zone-overlay && npm run bundle:mapgen && npm run bundle:sector-03-maincity && npm run bundle:buildings",
+    "pm2:start": "pm2 start infra/ecosystem.config.cjs",
+    "pm2:restart": "pm2 restart infra/ecosystem.config.cjs",
+    "pm2:stop": "pm2 stop infra/ecosystem.config.cjs",
+    "pm2:logs": "pm2 logs zombie",
+    "setup:infomaniak": "bash scripts/setup-infomaniak.sh",
+    "deploy:infomaniak": "bash scripts/deploy-prod.sh"
   },
   "dependencies": {
     "bcrypt": "^5.1.1",

@@ -21,6 +21,7 @@ Flux Git : `feature/* → dev → master`.
 
 ### Changed
 - Architecture ports documentée : front public `:3000` / `survival.badom.ch`.
+- **Infomaniak Node + PM2** documenté et scripts dédiés (`INFOMANIAK_NODE.md`, parallèle à VM Docker).
 - `apps/server/index.js` allégé → `bootstrap-game-server`, `game/*`, `socket/handlers/*`, RCON modularisé.
 - Performance exploration : surge prefetch/critical/gap, idle gap fill, lod-texture-surge (`client-version` `20260609-lod-texture-l3l`).
 

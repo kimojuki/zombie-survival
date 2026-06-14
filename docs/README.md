@@ -14,8 +14,9 @@ Index pour l'équipe — à maintenir à jour à chaque push.
 | [DECOR_PREFAB_ORIENTATION.md](DECOR_PREFAB_ORIENTATION.md) | Devant / derrière / rotY — convention −Z et repères par prefab |
 | [ARCHITECTURE_TIERS.md](ARCHITECTURE_TIERS.md) | **3 tiers** — VM app + VM db, compose split |
 | [VM_DEPLOY.md](VM_DEPLOY.md) | Prod VM Ubuntu + Docker (mono ou split) |
+| [INFOMANIAK_NODE.md](INFOMANIAK_NODE.md) | **Infomaniak Node + PM2** (sans Docker, MariaDB cloud) |
 | [DOCKER_PROD_SIM.md](DOCKER_PROD_SIM.md) | Simuler la VM sur PC dev (Docker) |
-| [DEPLOY.md](DEPLOY.md) | Legacy Infomaniak / pm2 (migration en cours) |
+| [DEPLOY.md](DEPLOY.md) | Auto-deploy cron / webhook Infomaniak |
 | [adr/](adr/) | Décisions d'architecture |
 
 ## Ailleurs dans le repo

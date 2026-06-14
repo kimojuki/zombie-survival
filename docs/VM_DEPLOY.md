@@ -268,7 +268,16 @@ cloudflared tunnel run zombie-dev
 
 ## Ancien mode Infomaniak / pm2
 
-`infra/ecosystem.config.cjs` et `scripts/deploy-prod.sh` (pm2) restent pour la **preview legacy** le temps de la migration. **Nouvelle prod = VM + Docker uniquement.**
+**Toujours supporté** pour le collègue sur hébergement Node managé Infomaniak (sans Docker).
+
+| Fichier | Rôle |
+|---------|------|
+| [INFOMANIAK_NODE.md](./INFOMANIAK_NODE.md) | Guide complet Node + pm2 + MariaDB cloud |
+| `infra/ecosystem.config.cjs` | pm2 (1 ou 2 process selon `AUTH_MODE`) |
+| `scripts/setup-infomaniak.sh` | Première install |
+| `scripts/deploy-prod.sh` | Deploy git + backup + pm2 |
+
+La **VM Docker** reste la cible prod équipe Badom — voir sections ci-dessus.
 
 ---
 

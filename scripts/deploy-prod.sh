@@ -87,8 +87,12 @@ git clean -fd --exclude=.env --exclude=database 2>/dev/null || true
 
 if git diff "$PREV" "$REMOTE" --name-only 2>/dev/null | grep -qE '^(package\.json|package-lock\.json)$'; then
   log "npm install (dépendances modifiées)"
+  # better-sqlite3 = optionalDependencies (prod MySQL) — un échec compile SQLite ne doit pas tout casser
   if [ -f package-lock.json ]; then
-    npm ci --omit=dev 2>&1 | tee -a "$LOG_FILE"
+    if ! npm ci --omit=dev 2>&1 | tee -a "$LOG_FILE"; then
+      log "ERROR: npm ci failed — Node >=20.19 recommandé sur Infomaniak (prebuilds, pas de g++)"
+      exit 1
+    fi
   else
     npm install --omit=dev 2>&1 | tee -a "$LOG_FILE"
   fi

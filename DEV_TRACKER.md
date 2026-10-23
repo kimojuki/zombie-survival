@@ -27,6 +27,12 @@ Chaque feature ou refonte doit laisser une trace pour l'équipe :
 
 Index complet : [README.md](README.md#documentation-à-lire-avant-un-push--review) · Stratégie refonte : [docs/V2_REFONTE_STRATEGY.md](docs/V2_REFONTE_STRATEGY.md) · **Plans actifs** : [docs/ROADMAP_PLANS.md](docs/ROADMAP_PLANS.md) · **Chargement ressources** : [design/RESOURCE_LOADING.md](design/RESOURCE_LOADING.md)
 
+### Completed — Infomaniak npm ci / better-sqlite3 optionnel (2026-10-23)
+
+- **Cause** : Node 20.4 + `g++` interdit → compile `better-sqlite3` échoue → `npm ci` abort → `Cannot find module 'dotenv'`.
+- **Fix** : `better-sqlite3` → `optionalDependencies` (prod MySQL) ; doc Node ≥ 20.19 ; warn `setup-infomaniak.sh`.
+- **Serveur** : `nvm install 20` (≥20.19), `rm -rf node_modules && npm ci --omit=dev`, `pm2 restart zombie`.
+
 ### Completed — SpatialChunkStreamer L3 (2026-06-09)
 
 - **`spatial-chunk-keys.js`** + **`spatial-chunk-streamer.js`** — grille 64 m, couches forêt/plage, tick visibilité, prefetch NEAR.

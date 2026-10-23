@@ -163,14 +163,23 @@ Par défaut l'équipe Infomaniak utilise **`embedded`** (plus simple, un process
 
 ## Node version (nvm)
 
-Si le Manager n'a pas Node 20 :
+**Recommandé : Node ≥ 20.19** (idéalement la dernière 20.x LTS).
+
+Sur Infomaniak, `g++` est souvent **interdit** : les modules natifs (`better-sqlite3`, parfois `bcrypt`) doivent donc trouver un **binaire précompilé**. Node **20.4.0** est trop vieux → pas de prebuild → `npm ci` échoue → `Cannot find module 'dotenv'`.
+
+`better-sqlite3` est en **`optionalDependencies`** (prod = MySQL uniquement). Un échec de compile SQLite ne doit plus bloquer `npm ci`.
 
 ```bash
 curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.1/install.sh | bash
 source ~/.nvm/nvm.sh
-nvm install 20
+nvm install 20          # dernière 20.x (ex. 20.19+)
+nvm alias default 20
 nvm use 20
-node -v
+node -v                 # vérifier >= 20.19
+hash -r
+# Recharger pm2 avec ce node :
+pm2 kill
+npm install -g pm2
 bash scripts/setup-infomaniak.sh
 ```
 
@@ -196,7 +205,10 @@ Les **bundles client** (`network.js`, etc.) sont **commités** — pas besoin de
 
 | Symptôme | Action |
 |----------|--------|
+| `npm ci` échoue sur `better-sqlite3` / `g++: Permission denied` | Passer Node ≥ 20.19 (`nvm install 20`) ; SQLite est optionnel — re-pull master puis `rm -rf node_modules && npm ci --omit=dev` |
+| `Cannot find module 'dotenv'` | `npm ci` a échoué avant la fin → corriger Node / reinstaller deps (voir ci-dessus) |
 | `better-sqlite3` crash au boot | `.env` → `DB_CLIENT=mysql` (pas sqlite en prod) |
+| `Process or Namespace zombie not found` | Premier start : `pm2 start infra/ecosystem.config.cjs` puis `pm2 save` |
 | Health sans `"chat":true` | `pm2 restart zombie` après deploy |
 | Socket.io 400 / WS failed | `.htaccess` WebSocket + `TRUST_PROXY=true` |
 | 401 `/api/auth/me` | Déconnexion — JWT d'un autre environnement |

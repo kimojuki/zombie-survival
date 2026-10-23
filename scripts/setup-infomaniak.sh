@@ -29,6 +29,11 @@ case "$(node -p "process.version.match(/^v(\\d+)/)[1]")" in
   18|19|20|21|22) ;;
   *) log "WARN: Node 20+ recommandé (engines package.json >=20)" ;;
 esac
+# Infomaniak : pas de g++ → il faut des prebuilds (Node 20.4 trop vieux pour better-sqlite3 / vite)
+NODE_MINOR="$(node -p "const [a,b]=process.versions.node.split('.').map(Number); a===20?b:999")"
+if [ "${NODE_MINOR}" -lt 19 ] 2>/dev/null; then
+  log "WARN: Node $NODE_VER < 20.19 — sur Infomaniak préfère: nvm install 20 && nvm alias default 20"
+fi
 
 if ! command -v pm2 >/dev/null 2>&1; then
   log "pm2 absent — installation globale…"

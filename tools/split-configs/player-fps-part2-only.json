@@ -1,0 +1,8 @@
+[
+  {
+    "file": "03-fps-part2-anim-tick.js",
+    "title": "Anim bras + tick rig",
+    "start": "function triggerArmAnim(fpsGroup, kind, type, opts",
+    "toEnd": true
+  }
+]

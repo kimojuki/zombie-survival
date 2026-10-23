@@ -1,0 +1,70 @@
+---
+description: Procédure Git équipe — travail parallèle, fusion, même version sur dev
+alwaysApply: true
+---
+
+# Git — travail parallèle Bruno + Georges
+
+## Branches
+
+| Branche | Rôle |
+|---------|------|
+| `dev` | Intégration commune — **tout le monde pousse ici** |
+| `feature/*` | Gros chantier isolé, puis merge dans `dev` |
+| `master` | Production — **ne pas pousser** sans demande explicite |
+
+## Début de session (obligatoire)
+
+```bash
+git checkout dev
+git fetch origin
+git pull origin dev
+```
+
+Si conflits au pull : **résoudre en gardant les deux travaux** (S01 + S02), jamais « revert » l'autre.
+
+## Pendant le travail
+
+1. **Petites features** : commit direct sur `dev` ou `feature/nom` court.
+2. **Avant de modifier un fichier déjà touché par l'autre** :
+   ```bash
+   git log -3 --oneline -- <fichier>
+   ```
+   Fusionner additivement — ne pas remplacer une zone fonctionnelle par une autre.
+3. **Fichiers à fusionner avec prudence** (souvent les deux y passent) :
+   - `packages/shared/src/sector-bounds.mjs`, `sectors.mjs`
+   - `apps/client/public/js/sector_bounds.js`, `sector_02_town.js`
+   - `apps/client/public/js/spawn_clearing.js`, `decor_colliders.js`
+   - `packages/shared/src/s01-*.mjs`, `apps/server/index.js`
+4. **Jamais dans Git** : `.env`, `database/*.sqlite*`, `notes-local/`, `tmp-*`, `.world_clean_slate_*`
+5. Mettre à jour `DEV_TRACKER.md` à chaque session.
+
+## Fin de session (obligatoire)
+
+```bash
+git status                    # rien de secret / tmp stagé
+git add <fichiers utiles>
+git commit -m "type: résumé court" -m "Pourquoi en 1-2 phrases."
+git pull origin dev           # récupérer le collègue avant push
+# résoudre conflits si besoin — garder S01 ET S02
+git push origin dev
+```
+
+Informer l'autre : « J'ai poussé X sur dev — pull avant de coder. »
+
+## Conflits — règle d'or
+
+- **Ne pas choisir « ma version »** : lire les deux côtés, combiner les comportements.
+- Exemple : bounds S02 (Georges) + seed coffre S01 (Bruno) = **les deux** dans le même fichier.
+- Après fusion : `node --test tests/sector-bounds.test.mjs tests/s01-cabin01-chest.test.mjs` (+ tests liés au chantier).
+
+## Interdits
+
+- `git push --force` sur `dev` ou `master`
+- Supprimer le code de l'autre pour « simplifier » un fichier partagé
+- Pousser sans `git pull` depuis `origin/dev` depuis >24h
+- Committer sans message (le **pourquoi** dans le corps du commit)
+
+## Référence humaine
+
+Procédure détaillée : `docs/GIT_WORKFLOW.md`

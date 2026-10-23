@@ -1,0 +1,368 @@
+// Client-side zombie manager: creates/updates/removes zombie meshes
+(function () {
+  'use strict';
+
+  const zombieMeshes = new Map(); // id -> entry
+  const _seenIds = new Set();
+  const POS_LERP = 14;
+  let _scene = null;
+
+  function _disposeGroup(group) {
+    if (!group) return;
+    // Géométries/matériaux partagés (player.js caches) — ne pas disposer.
+    group.traverse((c) => {
+      if (c.geometry?.userData?.shared) return;
+      if (c.material?.userData?.shared) return;
+    });
+  }
+
+  function init(scene) {
+    _scene = scene;
+  }
+
+  function syncAll(zombieArray) {
+    _seenIds.clear();
+    for (const z of zombieArray) {
+      _seenIds.add(z.id);
+      if (!zombieMeshes.has(z.id)) {
+        _add(z);
+      } else {
+        _update(z);
+      }
+    }
+    for (const [id] of zombieMeshes) {
+      if (!_seenIds.has(id)) _remove(id);
+    }
+  }
+
+  /** Mise à jour partielle — sync serveur delta (autoritaire). */
+  function applyDelta(zombieArray, removed) {
+    if (removed) {
+      for (let i = 0; i < removed.length; i++) _remove(removed[i]);
+    }
+    if (!zombieArray) return;
+    for (const z of zombieArray) {
+      if (!zombieMeshes.has(z.id)) _add(z);
+      else _update(z);
+    }
+  }
+
+  function spawn(z) {
+    if (!zombieMeshes.has(z.id)) _add(z);
+  }
+
+  function hit(id, health, maxHealth, pos) {
+    const entry = zombieMeshes.get(id);
+    if (!entry) return;
+    if (pos && Number.isFinite(pos.x) && Number.isFinite(pos.z)) {
+      entry.targetX = pos.x;
+      entry.targetZ = pos.z;
+      entry.prevX = pos.x;
+      entry.prevZ = pos.z;
+      if (pos.angle != null) entry.targetAngle = pos.angle;
+    }
+    _flashRed(entry.group);
+    _updateHealthBar(entry, health, maxHealth ?? entry.maxHealth);
+  }
+
+  function die(id) {
+    const entry = zombieMeshes.get(id);
+    if (!entry) return;
+    entry.dying = true;
+    entry.dieTimer = 0;
+    setTimeout(() => _remove(id), 700);
+  }
+
+  const ZOMBIE_ANIM_R2 = 80 * 80;
+  const ZOMBIE_HIDE_R2 = 110 * 110;
+
+  function tick(dt) {
+    const lp = ZS.Network?.getLocalXZ?.() || { x: 0, z: 0 };
+    zombieMeshes.forEach((entry) => {
+      const zx = entry.group.position.x;
+      const zz = entry.group.position.z;
+      const dist2 = (zx - lp.x) ** 2 + (zz - lp.z) ** 2;
+      entry.group.visible = dist2 <= ZOMBIE_HIDE_R2;
+      if (dist2 > ZOMBIE_HIDE_R2) return;
+
+      if (entry.dying) {
+        entry.dieTimer += dt;
+        entry.group.rotation.x = Math.min(Math.PI / 2, entry.dieTimer * 3);
+        entry.group.position.y -= dt * 0.5;
+        return;
+      }
+
+      let diff = entry.targetAngle - entry.currentAngle;
+      while (diff > Math.PI)  diff -= Math.PI * 2;
+      while (diff < -Math.PI) diff += Math.PI * 2;
+      entry.currentAngle += diff * Math.min(1, 15 * dt);
+      entry.group.rotation.y = -(entry.currentAngle + Math.PI / 2);
+
+      const lerpT = Math.min(1, POS_LERP * dt);
+      entry.group.position.x += (entry.targetX - entry.group.position.x) * lerpT;
+      entry.group.position.z += (entry.targetZ - entry.group.position.z) * lerpT;
+      if (Math.hypot(entry.group.position.x - entry.lastTerrainX,
+        entry.group.position.z - entry.lastTerrainZ) > 0.35) {
+        entry.group.position.y = ZS.getTerrainHeight(entry.group.position.x, entry.group.position.z);
+        entry.lastTerrainX = entry.group.position.x;
+        entry.lastTerrainZ = entry.group.position.z;
+      }
+
+      const limbs = entry.group.userData.limbs;
+      if (!limbs) return;
+      if (dist2 > ZOMBIE_ANIM_R2) return;
+
+      entry.animTime += dt;
+      const armTarget = entry.meleeReach ? entry.armPose : entry.armPose * 0.32;
+
+      if (entry.scenarioFrozen) {
+        limbs.lLeg.rotation.x *= 0.5;
+        limbs.rLeg.rotation.x *= 0.5;
+        limbs.lArm.rotation.x *= 0.5;
+        limbs.rArm.rotation.x *= 0.5;
+        return;
+      }
+
+      if (entry.isMoving) {
+        const freq = entry.speed * 2.2;
+        const swing = Math.sin(entry.animTime * freq);
+        limbs.lLeg.rotation.x =  swing * 0.45;
+        limbs.rLeg.rotation.x = -swing * 0.45;
+        limbs.lArm.rotation.x = armTarget + (-swing * 0.28);
+        limbs.rArm.rotation.x = armTarget + ( swing * 0.28);
+      } else {
+        limbs.lLeg.rotation.x *= 0.85;
+        limbs.rLeg.rotation.x *= 0.85;
+        limbs.lArm.rotation.x += (armTarget - limbs.lArm.rotation.x) * 0.12;
+        limbs.rArm.rotation.x += (armTarget - limbs.rArm.rotation.x) * 0.12;
+      }
+    });
+  }
+
+  function nearestDist(x, z) {
+    let best = Infinity;
+    zombieMeshes.forEach((e) => {
+      if (e.dying) return;
+      const d = Math.hypot(e.group.position.x - x, e.group.position.z - z);
+      if (d < best) best = d;
+    });
+    return best;
+  }
+
+  /** Repousse le joueur hors du corps des zombies (collision cylindrique XZ). */
+  function resolvePlayerCollision(px, pz, playerR) {
+    let x = px;
+    let z = pz;
+    const maxDist2 = 900; // 30 m — même cull que les colliders monde
+    zombieMeshes.forEach((entry) => {
+      if (entry.dying) return;
+      const zx = entry.group.position.x;
+      const zz = entry.group.position.z;
+      const dx = x - zx;
+      const dz = z - zz;
+      if (dx * dx + dz * dz > maxDist2) return;
+      const zr = entry.collideRadius || 0.42;
+      const dist = Math.hypot(dx, dz);
+      const min = playerR + zr;
+      if (dist >= min || dist <= 0.001) return;
+      const push = min / dist;
+      x = zx + dx * push;
+      z = zz + dz * push;
+    });
+    return { x, z };
+  }
+
+  function _applySilhouette(group) {
+    group.traverse((child) => {
+      if (!child.isMesh || !child.material) return;
+      if (!child.userData._scenarioOrigColor && child.material.color) {
+        child.userData._scenarioOrigColor = child.material.color.getHex();
+        child.userData._scenarioOrigEmissive = child.material.emissive?.getHex?.() ?? 0;
+      }
+      if (child.material.color) child.material.color.setHex(0x1a1520);
+      if (child.material.emissive) child.material.emissive.setHex(0x050508);
+    });
+  }
+
+  function _clearSilhouette(group) {
+    group.traverse((child) => {
+      if (!child.isMesh || !child.material || child.userData._scenarioOrigColor == null) return;
+      child.material.color.setHex(child.userData._scenarioOrigColor);
+      if (child.material.emissive) {
+        child.material.emissive.setHex(child.userData._scenarioOrigEmissive || 0);
+      }
+      delete child.userData._scenarioOrigColor;
+      delete child.userData._scenarioOrigEmissive;
+    });
+  }
+
+  function _setScenarioFrozen(entry, frozen) {
+    if (!entry) return;
+    entry.scenarioFrozen = !!frozen;
+    if (frozen) {
+      _applySilhouette(entry.group);
+      entry.hbGroup.visible = false;
+    } else {
+      _clearSilhouette(entry.group);
+      entry.hbGroup.visible = true;
+    }
+  }
+
+  function _add(z) {
+    const prefabId = z.prefabId || 'zombie_walker';
+    const group = ZS.createZombieModel(prefabId);
+    const initialAngle = z.angle != null ? z.angle : 0;
+    group.position.set(z.x, ZS.getTerrainHeight(z.x, z.z), z.z);
+    group.rotation.y = -(initialAngle + Math.PI / 2);
+
+    const hbY = group.userData.healthBarY || 2.4;
+    const hbGroup = _makeHealthBar();
+    hbGroup.position.y = hbY;
+    group.add(hbGroup);
+
+    const maxHealth = z.maxHealth || z.health || 100;
+    const armPose = group.userData.rig
+      ? (ZS.ZombiePrefabs?.getVisual?.(prefabId)?.armPose || Math.PI / 2.5)
+      : Math.PI / 2.5;
+
+    const vis = ZS.ZombiePrefabs?.getVisual?.(prefabId) || {};
+    const entry = {
+      group,
+      hbGroup,
+      prefabId,
+      maxHealth,
+      collideRadius: z.collideRadius || vis.collideRadius || 0.42,
+      armPose,
+      animTime:     0,
+      currentAngle: initialAngle,
+      targetAngle:  initialAngle,
+      targetX:      z.x,
+      targetZ:      z.z,
+      speed:        z.speed || 2,
+      isMoving:     false,
+      meleeReach:   !!z.meleeReach,
+      prevX:        z.x,
+      prevZ:        z.z,
+      lastTerrainX: z.x,
+      lastTerrainZ: z.z,
+      scenarioFrozen: !!z.scenarioFrozen,
+    };
+    _updateHealthBar(entry, z.health != null ? z.health : maxHealth, maxHealth);
+    entry.lastHealth = z.health != null ? z.health : maxHealth;
+    if (z.scenarioFrozen) _setScenarioFrozen(entry, true);
+    zombieMeshes.set(z.id, entry);
+    _scene.add(group);
+  }
+
+  function _update(z) {
+    const entry = zombieMeshes.get(z.id);
+    if (!entry || entry.dying) return;
+
+    const moved = Math.hypot(z.x - entry.prevX, z.z - entry.prevZ);
+    const angleSame = z.angle == null || Math.abs(z.angle - entry.targetAngle) < 0.001;
+    const healthSame = z.health == null || z.health === entry.lastHealth;
+    const reachSame = z.meleeReach == null || !!z.meleeReach === !!entry.meleeReach;
+    const frozenSame = z.scenarioFrozen == null || !!z.scenarioFrozen === !!entry.scenarioFrozen;
+    if (moved < 0.0001 && angleSame && healthSame && reachSame && frozenSame) return;
+    if (z.scenarioFrozen != null && !!z.scenarioFrozen !== !!entry.scenarioFrozen) {
+      _setScenarioFrozen(entry, !!z.scenarioFrozen);
+    }
+    entry.targetX = z.x;
+    entry.targetZ = z.z;
+    if (moved > 0.5) {
+      entry.group.position.x = z.x;
+      entry.group.position.z = z.z;
+      entry.group.position.y = ZS.getTerrainHeight(z.x, z.z);
+      entry.lastTerrainX = z.x;
+      entry.lastTerrainZ = z.z;
+    }
+
+    if (z.angle != null) entry.targetAngle = z.angle;
+    if (z.speed  != null) entry.speed = z.speed;
+    if (z.meleeReach != null) entry.meleeReach = !!z.meleeReach;
+    if (z.maxHealth != null) entry.maxHealth = z.maxHealth;
+    if (z.collideRadius != null) entry.collideRadius = z.collideRadius;
+    if (z.health != null && z.health !== entry.lastHealth) {
+      _updateHealthBar(entry, z.health, entry.maxHealth);
+      entry.lastHealth = z.health;
+    }
+
+    entry.isMoving = moved > 0.005;
+    entry.prevX = z.x;
+    entry.prevZ = z.z;
+  }
+
+  function _remove(id) {
+    const entry = zombieMeshes.get(id);
+    if (!entry) return;
+    _scene.remove(entry.group);
+    _disposeGroup(entry.group);
+    zombieMeshes.delete(id);
+  }
+
+  function _flashRed(group) {
+    ZS.flashMeshMaterials?.(group, 0xff4444, 100);
+  }
+
+  function _makeHealthBar() {
+    const g = new THREE.Group();
+    const bgMesh = new THREE.Mesh(
+      new THREE.PlaneGeometry(0.8, 0.1),
+      new THREE.MeshBasicMaterial({ color: 0x333333 })
+    );
+    const fillMesh = new THREE.Mesh(
+      new THREE.PlaneGeometry(0.8, 0.1),
+      new THREE.MeshBasicMaterial({ color: 0x22cc44 })
+    );
+    fillMesh.position.z = 0.001;
+    g.add(bgMesh);
+    g.add(fillMesh);
+    g.userData.fill = fillMesh;
+    return g;
+  }
+
+  function _updateHealthBar(entry, health, maxHealth) {
+    const fill = entry.hbGroup && entry.hbGroup.userData.fill;
+    if (!fill) return;
+    const max = maxHealth || entry.maxHealth || 100;
+    const ratio = Math.max(0, health / max);
+    fill.scale.x = ratio;
+    fill.position.x = -(1 - ratio) * 0.4;
+    fill.material.color.set(ratio > 0.5 ? 0x22cc44 : ratio > 0.25 ? 0xffaa00 : 0xcc2222);
+  }
+
+  const GROAN_RANGE = 30;
+  const _gFwd = new THREE.Vector3(), _gRight = new THREE.Vector3(),
+        _gTo = new THREE.Vector3(), _gUp = new THREE.Vector3(0, 1, 0);
+
+  function _scheduleGroan() {
+    setTimeout(() => {
+      _maybeGroan();
+      _scheduleGroan();
+    }, 2200 + Math.random() * 4000);
+  }
+
+  function _maybeGroan() {
+    const cam = ZS._camera;
+    if (!cam || !ZS.Audio || zombieMeshes.size === 0) return;
+    let best = Infinity, bx = 0, bz = 0;
+    zombieMeshes.forEach((e) => {
+      if (e.dying) return;
+      const dx = e.group.position.x - cam.position.x;
+      const dz = e.group.position.z - cam.position.z;
+      const d = Math.hypot(dx, dz);
+      if (d < best) { best = d; bx = e.group.position.x; bz = e.group.position.z; }
+    });
+    if (best > GROAN_RANGE) return;
+    const vol = (1 - best / GROAN_RANGE) ** 1.5;
+    cam.getWorldDirection(_gFwd); _gFwd.y = 0; _gFwd.normalize();
+    _gRight.crossVectors(_gFwd, _gUp).normalize();
+    _gTo.set(bx - cam.position.x, 0, bz - cam.position.z).normalize();
+    ZS.Audio.zombieGroan(vol, Math.max(-1, Math.min(1, _gTo.dot(_gRight))));
+  }
+
+  _scheduleGroan();
+
+  window.ZS = window.ZS || {};
+  ZS.Zombies = { init, syncAll, applyDelta, spawn, hit, die, tick, nearestDist, resolvePlayerCollision };
+}());

@@ -1,0 +1,156 @@
+// Écran de chargement — progression client + sync serveur
+(function () {
+  'use strict';
+
+  if (window.__zsLoading) return;
+
+  window.ZS = window.ZS || {};
+  /** Plages de % — couvrent tout 0–100 (plus de plafond à 24 %). */
+  const PHASES = Object.freeze({
+    server: { min: 0, max: 10 },
+    scripts: { min: 10, max: 20 },
+    auth: { min: 20, max: 24 },
+    world: { min: 24, max: 42 },
+    socket: { min: 42, max: 50 },
+    sync: { min: 50, max: 88 },
+    finalize: { min: 88, max: 100 },
+  });
+
+  let _pct = 0;
+  let _active = true;
+  let _hideTimer = null;
+  let _readyCallbacks = [];
+
+  function _els() {
+    return {
+      screen: document.getElementById('connecting-screen'),
+      msg: document.getElementById('connecting-msg'),
+      detail: document.getElementById('connecting-detail'),
+      bar: document.getElementById('connecting-progress-bar'),
+      pct: document.getElementById('connecting-progress-pct'),
+    };
+  }
+
+  function _render() {
+    const { screen, bar, pct } = _els();
+    if (screen) screen.style.display = 'flex';
+    if (bar) bar.style.width = `${_pct}%`;
+    if (pct) pct.textContent = `${_pct}%`;
+  }
+
+  function setProgress(pct, msg, detail) {
+    _pct = Math.max(_pct, Math.min(100, Math.round(pct)));
+    _active = _pct < 100;
+    const { msg: m, detail: d } = _els();
+    if (m && msg) m.textContent = msg;
+    if (d && detail !== undefined) d.textContent = detail || '';
+    _render();
+  }
+
+  /** Force une valeur exacte (ex. 100 % avant fade). */
+  function forceProgress(pct, msg, detail) {
+    _pct = Math.min(100, Math.round(pct));
+    _active = _pct < 100;
+    const { msg: m, detail: d } = _els();
+    if (m && msg) m.textContent = msg;
+    if (d && detail !== undefined) d.textContent = detail || '';
+    _render();
+  }
+
+  function setPhase(phaseKey, local01, msg, detail) {
+    const phase = PHASES[phaseKey];
+    const t = Math.max(0, Math.min(1, local01));
+    if (!phase) return setProgress(Math.round(t * 100), msg, detail);
+    const p = phase.min + (phase.max - phase.min) * t;
+    ZS.LoadLog?.phase?.(phaseKey, p, msg, detail);
+    setProgress(p, msg, detail);
+  }
+
+  function show(msg, detail) {
+    _active = true;
+    const { msg: m, detail: d, screen } = _els();
+    if (screen) screen.style.display = 'flex';
+    if (screen) screen.classList.remove('connecting-fade-out');
+    if (m && msg) m.textContent = msg;
+    if (d && detail !== undefined) d.textContent = detail || '';
+    _render();
+  }
+
+  function onReady(fn) {
+    if (typeof fn !== 'function') return;
+    if (!_active && _pct >= 100) {
+      fn();
+      return;
+    }
+    _readyCallbacks.push(fn);
+  }
+
+  function hide({ delay = 350 } = {}) {
+    ZS.LoadLog?.mark?.('loading-hide', { delay, pct: _pct });
+    forceProgress(100, 'Prêt', 'Bonne survie.');
+    _active = false;
+    clearTimeout(_hideTimer);
+    const { screen } = _els();
+    if (screen) screen.style.pointerEvents = 'none';
+    _hideTimer = setTimeout(() => {
+      if (screen) {
+        screen.classList.add('connecting-fade-out');
+        setTimeout(() => {
+          screen.style.display = 'none';
+          screen.classList.remove('connecting-fade-out');
+          const cbs = _readyCallbacks.splice(0);
+          for (const fn of cbs) {
+            try { fn(); } catch (e) { console.error('[loading] onReady', e); }
+          }
+        }, 320);
+      }
+    }, delay);
+  }
+
+  function reset() {
+    clearTimeout(_hideTimer);
+    _pct = 0;
+    _active = true;
+    _readyCallbacks = [];
+    const { screen } = _els();
+    if (screen) {
+      screen.style.display = 'flex';
+      screen.classList.remove('connecting-fade-out');
+    }
+    _render();
+  }
+
+  function isActive() {
+    return _active;
+  }
+
+  const _scriptLoads = new Map();
+
+  /** Charge un script legacy hors chemin critique (cache + dédup in-flight). */
+  function loadScript(src) {
+    if (/^\/js\/(network|game|loading)\.js$/i.test(src)) return Promise.resolve();
+    if (document.querySelector(`script[data-zs-src="${src}"]`)) return Promise.resolve();
+    if (_scriptLoads.has(src)) return _scriptLoads.get(src);
+    const ver = window.__ZS_CLIENT_VERSION || '';
+    const url = src + (src.includes('?') ? '&' : '?') + 'v=' + encodeURIComponent(ver);
+    const p = fetch(url, { cache: 'no-store', credentials: 'same-origin' })
+      .then((r) => {
+        if (!r.ok) throw new Error('load ' + src);
+        return r.text();
+      })
+      .then((code) => {
+        const s = document.createElement('script');
+        s.dataset.zsSrc = src;
+        s.textContent = code + '\n//# sourceURL=' + src;
+        document.body.appendChild(s);
+      });
+    _scriptLoads.set(src, p);
+    p.catch(() => { _scriptLoads.delete(src); });
+    return p;
+  }
+
+  const api = { setProgress, forceProgress, setPhase, show, hide, reset, isActive, onReady, loadScript, PHASES };
+  window.__zsLoading = api;
+  ZS.Loading = api;
+  ZS.loadScript = loadScript;
+}());

@@ -1,0 +1,9 @@
+{
+  "name": "@zombie-survival/shared",
+  "private": true,
+  "type": "module",
+  "exports": {
+    "./constants": "./src/constants.mjs",
+    "./camp-border-logs": "./src/camp-border-logs.mjs"
+  }
+}

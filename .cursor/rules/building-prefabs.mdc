@@ -1,0 +1,37 @@
+---
+description: Bâtiments S01 — prefabs réutilisables, collisions, validation playtest
+globs: apps/client/public/js/spawn_clearing.js,apps/client/public/js/decor_colliders.js,design/BUILDING_PREFABS.md,packages/shared/src/s01-world-placements.mjs
+alwaysApply: false
+---
+
+# Building prefabs (pièces réutilisables)
+
+Chaque élément de bâtiment (porte, mur, linteau, pignon, etc.) est un **prefab autonome** — pas du code jetable dans une seule cabane.
+
+## Règles
+
+1. **Une pièce = un module réutilisable** : constantes partagées (`packages/shared/src/…`), mesh (`spawn_clearing.js`), colliders **locaux au pivot** (`lx`/`lz` + `buildDecorColliders` avec `x,z,rotY,baseY` de l’instance), tests dont spawn multi-positions.
+2. **Intégration complète dès le départ** : collisions alignées sur le mesh, porte `door: true` + toggle ouvert/fermé, `doorOpen` sync réseau, pas de « on fixera les collisions après ».
+3. **Un élément à la fois** : ajouter les colliders **un par un**, playtest avec Bruno, corriger, puis **valider à 100 %** avant l’élément suivant.
+4. **Documentation obligatoire à la validation** : mettre à jour `design/BUILDING_PREFABS.md` (fiche pièce : statut ✅, dimensions, colliders, fichiers, tests, notes playtest). Entrée `DEV_TRACKER.md` le même jour.
+5. **Composer les bâtiments** : cabanes / POI **assemblent** des pièces validées (`building_survivor_shack` = composition), ne dupliquent pas la logique porte/mur.
+6. **Incrémenter** `apps/client/public/client-version.json` à chaque changement client playtesté.
+
+## Fiche pièce (template dans BUILDING_PREFABS.md)
+
+| Champ | Contenu |
+|-------|---------|
+| `prefabId` | ex. `piece_door_wood_shack` (cible) ou clé collider actuelle |
+| Statut | 🔄 playtest / ✅ validé |
+| Mesh | fonction + dimensions locales |
+| Colliders | liste `decor_colliders.js`, comportement ouvert/fermé |
+| Tests | fichiers + commande |
+| Réutilisation | où c’est branché (shack, build_*, S01 seed) |
+
+## Ordre S01 cabane #1 (reconstruction progressive)
+
+1. **Sol** — ✅ (`survivor-shack-floor.mjs`)
+2. **Mur nord** — en cours (`survivor-shack-wall-north.mjs`)
+3. Mur sud → murs latéraux → porte → toit
+
+Une seule pièce mesh + une seule pièce collider à la fois. Ne pas passer au suivant sans ✅ dans `design/BUILDING_PREFABS.md`.

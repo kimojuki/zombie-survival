@@ -1,0 +1,14 @@
+[
+  {
+    "file": "05-ui-part1-drag.js",
+    "title": "Hotbar DOM + drag-drop",
+    "start": "function _syncToServer()",
+    "end": "function _buildInvPanel()"
+  },
+  {
+    "file": "05-ui-part2-panel.js",
+    "title": "Panel inventaire + pickup mesh",
+    "start": "function _buildInvPanel()",
+    "end": "window.ZS = window.ZS || {};"
+  }
+]

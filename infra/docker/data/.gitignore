@@ -1,0 +1,10 @@
+# Données persistantes — NE PAS SUPPRIMER
+# Structure (bind mount hôte, survit crash / docker compose down / rebuild) :
+#
+#   mariadb/   — fichiers InnoDB (progression joueurs + monde + auth)
+#   backups/   — dumps SQL (backup-vm.sh)
+#   logs/      — logs serveur game
+
+*
+!.gitignore
+!README.md

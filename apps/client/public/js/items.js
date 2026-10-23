@@ -1,0 +1,395 @@
+// Item definitions registry — all items from design docs (CHUNK 1–4)
+(function () {
+  'use strict';
+
+  window.ZS = window.ZS || {};
+  ZS.ITEMS = {
+
+    // ── NOURRITURE ──────────────────────────────────────────────────────────
+    food_eau_bouteille: {
+      label: 'Eau en Bouteille', category: 'food', maxStack: 10,
+      icon: '💧', color: 0x4488ff,
+      apport_soif: 45, apport_faim: 0, bonus_endurance: 0, ratio_maladie: 0,
+    },
+    food_boisson_energisante: {
+      label: 'Boisson Énergisante', category: 'food', maxStack: 15,
+      icon: '⚡', color: 0xffdd00,
+      apport_soif: 20, apport_faim: 0, bonus_endurance: 40, ratio_maladie: 0,
+    },
+    food_conserves: {
+      label: 'Conserves', category: 'food', maxStack: 20,
+      icon: '🥫', color: 0xcc8844,
+      apport_soif: -5, apport_faim: 30, bonus_endurance: 0, ratio_maladie: 0,
+    },
+    food_haricots_boite: {
+      label: 'Haricots en Boîte', category: 'food', maxStack: 20,
+      icon: '🫘', color: 0xaa6633,
+      apport_soif: -10, apport_faim: 40, bonus_endurance: 0, ratio_maladie: 0,
+    },
+    food_soupe_conserve: {
+      label: 'Soupe en Conserve', category: 'food', maxStack: 20,
+      icon: '🍲', color: 0xdd9944,
+      apport_soif: 25, apport_faim: 20, bonus_endurance: 5, ratio_maladie: 0,
+    },
+    food_pain: {
+      label: 'Pain', category: 'food', maxStack: 5,
+      icon: '🍞', color: 0xddbb66,
+      apport_soif: -5, apport_faim: 25, bonus_endurance: 0, ratio_maladie: 0,
+    },
+    food_sandwich: {
+      label: 'Sandwich', category: 'food', maxStack: 8,
+      icon: '🥪', color: 0xddb85a,
+      apport_soif: 8, apport_faim: 32, bonus_endurance: 0, ratio_maladie: 0,
+    },
+    food_fruits: {
+      label: 'Fruits', category: 'food', maxStack: 10,
+      icon: '🍎', color: 0xee4444,
+      apport_soif: 10, apport_faim: 15, bonus_endurance: 10, ratio_maladie: 0,
+    },
+    food_viande_crue: {
+      label: 'Viande Crue', category: 'food', maxStack: 5,
+      icon: '🥩', color: 0xcc3333,
+      apport_soif: 0, apport_faim: 15, bonus_endurance: 0, ratio_maladie: 0.75,
+    },
+    food_viande_cuite: {
+      label: 'Viande Cuite', category: 'food', maxStack: 5,
+      icon: '🍗', color: 0xbb6622,
+      apport_soif: 0, apport_faim: 50, bonus_endurance: 15, ratio_maladie: 0,
+    },
+
+    // ── MÉDICAL ─────────────────────────────────────────────────────────────
+    med_bandage: {
+      label: 'Bandage', category: 'medical', maxStack: 5,
+      icon: '🩹', color: 0xffffff,
+      soin_sante: 15, stoppe_saignement: true, guerit_infection: false, temps_utilisation: 3.0,
+    },
+    med_kit_soin: {
+      label: 'Kit de Soin', category: 'medical', maxStack: 2,
+      icon: '🧰', color: 0xff4444,
+      soin_sante: 75, stoppe_saignement: true, guerit_infection: false, temps_utilisation: 6.0,
+    },
+    med_pilules_anti_infection: {
+      label: 'Pilules Anti-infection', category: 'medical', maxStack: 8,
+      icon: '💊', color: 0x66cc88,
+      reduit_infection: 20, pause_infection_sec: 150, temps_utilisation: 1.2,
+    },
+    med_seringue_anti_infection: {
+      label: 'Seringue Anti-infection', category: 'medical', maxStack: 2,
+      icon: '💉', color: 0x44aaff,
+      soin_sante: 15, stoppe_saignement: false, guerit_infection: true, temps_utilisation: 2.0,
+    },
+
+    // ── ARMES MÊLÉE ─────────────────────────────────────────────────────────
+    wpn_couteau: {
+      label: 'Couteau', category: 'melee', maxStack: 1,
+      icon: '🔪', color: 0xcccccc,
+      degats_impact: 15, portee_metre: 2.2, cadence_attaque: 0.4, durabilite_max: 100,
+    },
+    wpn_hache_combat: {
+      label: 'Hache', category: 'melee', maxStack: 1,
+      icon: '🪓', color: 0x885533,
+      degats_impact: 35, portee_metre: 3.0, cadence_attaque: 0.9, durabilite_max: 150,
+    },
+    wpn_barre_fer: {
+      label: 'Barre de Fer', category: 'melee', maxStack: 1,
+      icon: '⚙️', color: 0x888888,
+      degats_impact: 22, portee_metre: 2.8, cadence_attaque: 1.1, durabilite_max: 300,
+    },
+    wpn_machette: {
+      label: 'Machette', category: 'melee', maxStack: 1,
+      icon: '⚔️', color: 0xaaaaaa,
+      degats_impact: 28, portee_metre: 2.8, cadence_attaque: 0.6, durabilite_max: 120,
+    },
+    wpn_arc_artisanal: {
+      label: 'Arc Artisanal', category: 'melee', maxStack: 1,
+      icon: '🏹', color: 0x886633,
+      degats_impact: 20, portee_metre: 4.0, cadence_attaque: 0.9, durabilite_max: 45,
+    },
+    wpn_lance_artisanale: {
+      label: 'Lance Artisanale', category: 'melee', maxStack: 1,
+      icon: '🏹', color: 0x886633,
+      degats_impact: 18, portee_metre: 3.6, cadence_attaque: 0.8, durabilite_max: 40,
+    },
+    wpn_lance_bois: {
+      label: 'Lance en Bois', category: 'melee', maxStack: 1,
+      icon: '🏹', color: 0x886633,
+      degats_impact: 14, portee_metre: 3.2, cadence_attaque: 0.75, durabilite_max: 35,
+    },
+    wpn_lance_pierre: {
+      label: 'Lance en Pierre', category: 'melee', maxStack: 1,
+      icon: '🏹', color: 0x777766,
+      degats_impact: 22, portee_metre: 3.4, cadence_attaque: 0.85, durabilite_max: 50,
+    },
+    wpn_batte_cloutee: {
+      label: 'Batte Cloutée', category: 'melee', maxStack: 1,
+      icon: '🏏', color: 0x886633,
+      degats_impact: 30, portee_metre: 2.8, cadence_attaque: 0.8, durabilite_max: 70,
+    },
+
+    // ── ARMES À FEU ─────────────────────────────────────────────────────────
+    wpn_pistolet: {
+      label: 'Pistolet', category: 'firearm', maxStack: 1,
+      icon: '🔫', color: 0x334466,
+      type_munition_accepte: 'ammo_pistolet', capacite_chargeur: 12,
+      degats_par_balle: 25, temps_rechargement: 2.0, dispersion_balle: 0.15,
+    },
+    wpn_fusil_pompe: {
+      label: 'Fusil à Pompe', category: 'firearm', maxStack: 1,
+      icon: '🔫', color: 0x664422,
+      type_munition_accepte: 'ammo_fusil_pompe', capacite_chargeur: 6,
+      degats_par_balle: 12, temps_rechargement: 4.0, dispersion_balle: 0.85,
+    },
+    wpn_fusil_chasse: {
+      label: 'Fusil de Chasse', category: 'firearm', maxStack: 1,
+      icon: '🔫', color: 0x443322,
+      type_munition_accepte: 'ammo_fusil_chasse', capacite_chargeur: 5,
+      degats_par_balle: 75, temps_rechargement: 3.0, dispersion_balle: 0.01,
+    },
+
+    // ── MUNITIONS ───────────────────────────────────────────────────────────
+    ammo_pistolet: {
+      label: 'Munitions Pistolet', category: 'ammo', maxStack: 50,
+      icon: '🟡', color: 0xffdd00, for_weapon: 'wpn_pistolet',
+    },
+    ammo_fusil_pompe: {
+      label: 'Cartouches Fusil Pompe', category: 'ammo', maxStack: 24,
+      icon: '🟠', color: 0xff8800, for_weapon: 'wpn_fusil_pompe',
+    },
+    ammo_fusil_chasse: {
+      label: 'Cartouches Fusil Chasse', category: 'ammo', maxStack: 20,
+      icon: '🔴', color: 0xff4400, for_weapon: 'wpn_fusil_chasse',
+    },
+
+    // ── ÉQUIPEMENT ──────────────────────────────────────────────────────────
+    eq_petit_sac: {
+      label: 'Petit Sac', category: 'equipment', maxStack: 1,
+      icon: '🎒', color: 0x886633,
+      slot_equipement: 'Dos', slots_inventaire_bonus: 8, valeur_armure: 0,
+    },
+    eq_sac_moyen: {
+      label: 'Sac Moyen', category: 'equipment', maxStack: 1,
+      icon: '🎒', color: 0x664422,
+      slot_equipement: 'Dos', slots_inventaire_bonus: 16, valeur_armure: 0,
+    },
+    eq_grand_sac: {
+      label: 'Grand Sac', category: 'equipment', maxStack: 1,
+      icon: '🎒', color: 0x443322,
+      slot_equipement: 'Dos', slots_inventaire_bonus: 24, valeur_armure: 0,
+    },
+    eq_casque: {
+      label: 'Casque', category: 'equipment', maxStack: 1,
+      icon: '⛑️', color: 0x666666,
+      slot_equipement: 'Tête', valeur_armure: 20, slots_inventaire_bonus: 0,
+    },
+    eq_gilet_protection: {
+      label: 'Gilet', category: 'equipment', maxStack: 1,
+      icon: '🦺', color: 0x444444,
+      slot_equipement: 'Torso', valeur_armure: 40, slots_inventaire_bonus: 0,
+    },
+    eq_gants: {
+      label: 'Gants', category: 'equipment', maxStack: 1,
+      icon: '🧤', color: 0x333333,
+      slot_equipement: 'Mains', valeur_armure: 5, slots_inventaire_bonus: 0,
+    },
+
+    // ── RESSOURCES ──────────────────────────────────────────────────────────
+    res_bois_brut:     { label: 'Bois Brut',    category: 'resource', maxStack: 200, icon: '🪵', color: 0x8b5a2b },
+    res_pierre:        { label: 'Pierre',        category: 'resource', maxStack: 200, icon: '🪨', color: 0x7a7468 },
+    res_planche:       { label: 'Planche',       category: 'resource', maxStack: 200, icon: '🪵', color: 0xbb8844 },
+    res_ferraille:     { label: 'Ferraille',     category: 'resource', maxStack: 100, icon: '⚙️', color: 0x888888 },
+    res_metal:         { label: 'Métal',         category: 'resource', maxStack: 100, icon: '🔩', color: 0xaaaaaa },
+    res_clous:         { label: 'Clous',         category: 'resource', maxStack: 500, icon: '📌', color: 0xcccccc },
+    res_ruban_adhesif: { label: 'Ruban Adhésif', category: 'resource', maxStack: 50,  icon: '🩹', color: 0xffcc00 },
+    res_chiffon:       { label: 'Tissu',         category: 'resource', maxStack: 100, icon: '🧣', color: 0xdddddd },
+    res_corde:         { label: 'Corde',         category: 'resource', maxStack: 50,  icon: '🪢', color: 0xbb9944 },
+
+    // ── OUTILS ──────────────────────────────────────────────────────────────
+    tool_caillou: {
+      label: 'Caillou', category: 'tool', maxStack: 1,
+      icon: '🪨', color: 0x9a9588,
+      type_recolte: 'Bois', efficacite_recolte: 0.5, durabilite_max: 80,
+      degats_impact: 10, portee_metre: 1.85, cadence_attaque: 0.52, recul_metre: 0.6,
+      bois_par_arbre: 2,
+    },
+    tool_marteau: {
+      label: 'Marteau', category: 'tool', maxStack: 1,
+      icon: '🔨', color: 0x884422,
+      type_recolte: 'Construction', efficacite_recolte: 1.0, durabilite_max: 200,
+      degats_impact: 18, portee_metre: 2.4, cadence_attaque: 0.7,   // sert aussi d'arme
+    },
+    tool_hachette: {
+      label: 'Hachette', category: 'tool', maxStack: 1,
+      icon: '🪓', color: 0x664422,
+      type_recolte: 'Bois', efficacite_recolte: 2.5, durabilite_max: 120,
+      degats_impact: 22, portee_metre: 2.8, cadence_attaque: 0.6,
+      bois_par_arbre: 3,
+    },
+    tool_hache_pierre: {
+      label: 'Hache en Pierre', category: 'tool', maxStack: 1,
+      icon: '🪓', color: 0x665544,
+      type_recolte: 'Bois', efficacite_recolte: 1.5, durabilite_max: 100,
+      degats_impact: 18, portee_metre: 2.4, cadence_attaque: 0.65,
+      bois_par_arbre: 2,
+    },
+    tool_pioche: {
+      label: 'Pioche', category: 'tool', maxStack: 1,
+      icon: '⛏️', color: 0x888888,
+      type_recolte: 'Pierre', efficacite_recolte: 3.0, durabilite_max: 150,
+      degats_impact: 25, portee_metre: 2.6, cadence_attaque: 0.9,   // sert aussi d'arme
+    },
+    tool_pioche_pierre: {
+      label: 'Pioche en Pierre', category: 'tool', maxStack: 1,
+      icon: '⛏️', color: 0x666666,
+      type_recolte: 'Pierre', efficacite_recolte: 2.0, durabilite_max: 120,
+      degats_impact: 20, portee_metre: 2.4, cadence_attaque: 0.75,
+    },
+    tool_torche: {
+      label: 'Torche', category: 'tool', maxStack: 1,
+      icon: '🔥', color: 0xff6600,
+      type_recolte: 'Allumage', durabilite_max: Infinity,
+    },
+
+    // ── STRUCTURES ──────────────────────────────────────────────────────────
+    struct_mur_bois: {
+      label: 'Mur en Bois', category: 'structure', maxStack: 5,
+      icon: '🧱', color: 0xbb8844, prefabId: 'build_wall_wood', points_structure_hp: 500,
+    },
+    struct_mur_embrasure_porte: {
+      label: 'Mur à embrasure (porte)', category: 'structure', maxStack: 5,
+      icon: '🪟', color: 0xbb8844, prefabId: 'build_doorway_wood', points_structure_hp: 450,
+    },
+    struct_mur_embrasure_grande_porte: {
+      label: 'Mur à embrasure (grande porte)', category: 'structure', maxStack: 5,
+      icon: '🪟', color: 0xaa7733, prefabId: 'build_large_doorway_wood', points_structure_hp: 550,
+    },
+    struct_porte_bois: {
+      label: 'Porte en Bois', category: 'structure', maxStack: 5,
+      icon: '🚪', color: 0xaa7733, prefabId: 'build_door_wood', points_structure_hp: 350,
+    },
+    struct_grande_porte_bois: {
+      label: 'Grande Porte', category: 'structure', maxStack: 3,
+      icon: '🚪', color: 0x996622, prefabId: 'build_large_door_wood', points_structure_hp: 800,
+    },
+    struct_plancher_bois: {
+      label: 'Fondation', category: 'structure', maxStack: 5,
+      icon: '📦', color: 0xcc9955, prefabId: 'build_floor_wood', points_structure_hp: 400,
+    },
+    struct_plafond_bois: {
+      label: 'Plafond en Bois', category: 'structure', maxStack: 5,
+      icon: '🏠', color: 0xaa8844, prefabId: 'build_ceiling_wood', points_structure_hp: 350,
+    },
+    struct_escalier_bois: {
+      label: 'Escalier en Bois', category: 'structure', maxStack: 3,
+      icon: '🪜', color: 0xbb8833, prefabId: 'build_stair_wood', points_structure_hp: 400,
+    },
+    struct_storage_chest: {
+      label: 'Coffre', category: 'structure', maxStack: 3,
+      icon: '📦', color: 0xb47a42, prefabId: 'storage_chest', points_structure_hp: 250,
+    },
+    tool_verrou: {
+      label: 'Verrou', category: 'tool', maxStack: 5,
+      icon: '🔒', color: 0x777788,
+    },
+    struct_cle: {
+      label: 'Clé', category: 'key', maxStack: 1,
+      icon: '🗝️', color: 0xccaa44,
+    },
+
+    // ── LEGACY (compat sauvegardes existantes) ───────────────────────────────
+    pistol: {
+      label: 'Pistolet', category: 'firearm', maxStack: 1,
+      icon: '🔫', color: 0x334466,
+      type_munition_accepte: 'ammo_pistolet', capacite_chargeur: 12,
+      degats_par_balle: 25, temps_rechargement: 2.0, dispersion_balle: 0.15,
+    },
+    ammo: {
+      label: 'Munitions', category: 'ammo', maxStack: 50,
+      icon: '🟡', color: 0xffdd00, for_weapon: 'pistol',
+    },
+    medkit: {
+      label: 'Trousse', category: 'medical', maxStack: 3,
+      icon: '💊', color: 0xff4444,
+      soin_sante: 50, stoppe_saignement: false, guerit_infection: false, temps_utilisation: 2.0,
+    },
+    food: {
+      label: 'Nourriture', category: 'food', maxStack: 5,
+      icon: '🍗', color: 0x22bb44,
+      apport_soif: 10, apport_faim: 25, bonus_endurance: 0, ratio_maladie: 0,
+    },
+    map: { label: 'Carte tactique', category: 'map', maxStack: 1, icon: '🗺️', color: 0xddcc88 },
+  };
+
+  const ITEM_DESCS = {
+    food_eau_bouteille: 'Eau potable en bouteille. Étanche la soif rapidement.',
+    food_boisson_energisante: 'Boisson sucrée et caféinée. Restaure un peu la soif et l\'endurance.',
+    food_conserves: 'Repas en conserve longue conservation. Rassasie bien, assèche légèrement.',
+    food_haricots_boite: 'Haricots en sauce. Très nourrissant, peu hydratant.',
+    food_soupe_conserve: 'Soupe réchauffable. Bon compromis faim et soif.',
+    food_pain: 'Pain de campagne. Calme la faim modérément.',
+    food_sandwich: 'Sandwich prêt à manger. Bon pour un repas rapide au camp.',
+    food_fruits: 'Fruits frais. Léger, hydratant et un peu énergisant.',
+    food_viande_crue: 'Viande non cuite. Peu nourrissante et risque de maladie élevé.',
+    food_viande_cuite: 'Viande grillée. Repas solide qui redonne des forces.',
+    med_bandage: 'Bande compressive. Stoppe un saignement et soigne un peu.',
+    med_kit_soin: 'Trousse complète. Soin important et arrêt du saignement.',
+    med_pilules_anti_infection: 'Antibiotiques légers. Réduit l\'infection et la freine un moment.',
+    med_seringue_anti_infection: 'Traitement d\'urgence. Guérit une infection zombie et soigne un peu.',
+    wpn_couteau: 'Lame courte. Attaque rapide de mêlée, portée limitée.',
+    wpn_hache_combat: 'Hache lourde. Coups puissants mais lents.',
+    wpn_barre_fer: 'Barre métallique. Arme improvisée lourde et durable.',
+    wpn_machette: 'Lame large. Bon équilibre dégâts et cadence.',
+    wpn_arc_artisanal: 'Arc de fortune. Portée moyenne, artisanal fragile.',
+    wpn_lance_artisanale: 'Lance assemblée. Allonge correcte pour garder les zombies à distance.',
+    wpn_lance_bois: 'Lance rudimentaire en bois. Première arme d\'allonge.',
+    wpn_lance_pierre: 'Pointe en pierre. Plus solide et tranchante que le bois seul.',
+    wpn_batte_cloutee: 'Batte renforcée de clous. Impact brutal au corps à corps.',
+    wpn_pistolet: 'Pistolet semi-auto. Cadence correcte, chargeur de 12 coups.',
+    wpn_fusil_pompe: 'Fusil à pompe. Rafales dévastatrices à courte portée.',
+    wpn_fusil_chasse: 'Fusil de chasse. Très précis et mortel à distance moyenne.',
+    ammo_pistolet: 'Cartouches 9 mm. Pour pistolet.',
+    ammo_fusil_pompe: 'Cartouches à chevrotine. Pour fusil à pompe.',
+    ammo_fusil_chasse: 'Cartouches fusil. Pour fusil de chasse.',
+    eq_petit_sac: 'Sac à dos léger. Ajoute 8 emplacements au sac.',
+    eq_sac_moyen: 'Sac renforcé. Ajoute 16 emplacements au sac.',
+    eq_grand_sac: 'Sac de randonnée. Ajoute 24 emplacements au sac.',
+    eq_casque: 'Protection crânienne. Réduit les dégâts à la tête.',
+    eq_gilet_protection: 'Gilet pare-balles léger. Bonne protection du torse.',
+    eq_gants: 'Gants épais. Protège légèrement les mains.',
+    res_bois_brut: 'Bûches et branches. Matière de base pour outils et construction.',
+    res_pierre: 'Cailloux et fragments. Utile pour outils primitifs.',
+    res_planche: 'Bois découpé. Nécessaire aux structures et craft avancé.',
+    res_ferraille: 'Métal de récupération. Pour armes et renforts.',
+    res_metal: 'Lingots ou pièces métalliques. Matériau de craft solide.',
+    res_clous: 'Clous. Indispensables pour assembler des structures robustes.',
+    res_ruban_adhesif: 'Ruban adhésif résistant. Réparations et bricolage.',
+    res_chiffon: 'Chiffons et tissus. Bandages, corde et torche.',
+    res_corde: 'Corde en fibres. Craft d\'outils et d\'armes.',
+    tool_caillou: 'Caillou taillé. Outil de départ pour couper du bois.',
+    tool_marteau: 'Marteau de chantier. Construction et arme de fortune.',
+    tool_hachette: 'Hachette affûtée. Récolte de bois efficace et combat correct.',
+    tool_hache_pierre: 'Hache primitive. Coupe le bois plus vite qu\'un caillou.',
+    tool_pioche: 'Pioche métallique. Extrait la pierre rapidement.',
+    tool_pioche_pierre: 'Pioche en pierre. Récolte de minerai et roche améliorée.',
+    tool_torche: 'Torche allumable. Éclaire la nuit et peut servir d\'arme.',
+    tool_verrou: 'Mécanisme de verrou. À poser sur une porte pour la sécuriser.',
+    struct_mur_bois: 'Mur en planches. Bloque le passage et protège la base.',
+    struct_mur_embrasure_porte: 'Mur avec ouverture pour une porte standard.',
+    struct_mur_embrasure_grande_porte: 'Mur large pour accueillir une grande porte.',
+    struct_porte_bois: 'Porte en bois. Peut être verrouillée.',
+    struct_grande_porte_bois: 'Double porte renforcée. Entrée large pour véhicules ou groupes.',
+    struct_plancher_bois: 'Dalle de fondation. Base pour murs et plafonds.',
+    struct_plafond_bois: 'Plancher supérieur. Ferme un étage ou un abri.',
+    struct_escalier_bois: 'Escalier en bois. Accès à un niveau supérieur.',
+    struct_storage_chest: 'Coffre de stockage. Dépose des objets partagés ou sécurisés.',
+    struct_cle: 'Clé unique liée à un verrou. Ouvre la porte correspondante.',
+    pistol: 'Pistolet (ancien format). Compatible munitions 9 mm.',
+    ammo: 'Munitions génériques. Pour anciennes sauvegardes.',
+    medkit: 'Trousse de secours basique. Soin modéré.',
+    food: 'Rations diverses. Restaure un peu faim et soif.',
+    map: 'Carte de la région. Affiche le monde et votre position.',
+  };
+
+  for (const [id, text] of Object.entries(ITEM_DESCS)) {
+    if (ZS.ITEMS[id]) ZS.ITEMS[id].desc = text;
+  }
+}());

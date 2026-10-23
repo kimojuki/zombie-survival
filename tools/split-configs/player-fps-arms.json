@@ -1,0 +1,14 @@
+[
+  {
+    "file": "03-fps-part1-pose.js",
+    "title": "FPS bras creation + poses",
+    "start": "function _fpsMat(color)",
+    "end": "function triggerArmAnim(fpsGroup, kind, type, opts)"
+  },
+  {
+    "file": "03-fps-part2-anim-tick.js",
+    "title": "Anim bras + tick rig",
+    "start": "function triggerArmAnim(fpsGroup, kind, type, opts)",
+    "end": "function _fit(type)"
+  }
+]

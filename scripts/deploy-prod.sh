@@ -99,9 +99,43 @@ if ! command -v pm2 >/dev/null 2>&1; then
   exit 1
 fi
 
-pm2 restart "$PM2_NAME" 2>&1 | tee -a "$LOG_FILE"
+ECOSYSTEM="$APP_DIR/infra/ecosystem.config.cjs"
+AUTH_PM2="${ZOMBIE_PM2_AUTH_NAME:-zombie-auth}"
+
+_pm2_ensure() {
+  local name="$1"
+  if pm2 describe "$name" >/dev/null 2>&1; then
+    pm2 restart "$name" 2>&1 | tee -a "$LOG_FILE"
+  else
+    log "pm2: premier démarrage ($name)"
+    if [ -f "$ECOSYSTEM" ]; then
+      pm2 start "$ECOSYSTEM" --only "$name" 2>&1 | tee -a "$LOG_FILE"
+    else
+      pm2 start apps/server/index.js --name "$name" --cwd "$APP_DIR" 2>&1 | tee -a "$LOG_FILE"
+    fi
+  fi
+}
+
+if [ -f "$APP_DIR/tools/pre-deploy-backup.mjs" ]; then
+  log "pre-deploy backup (progression joueurs)"
+  if node "$APP_DIR/tools/pre-deploy-backup.mjs" 2>&1 | tee -a "$LOG_FILE"; then
+    log "pre-deploy backup OK"
+  else
+    log "ERROR: pre-deploy backup failed — deploy aborted (progression joueurs)"
+    exit 1
+  fi
+else
+  log "WARN: tools/pre-deploy-backup.mjs missing — deploy without DB backup"
+fi
+
+_pm2_ensure "$PM2_NAME"
+if grep -qE '^AUTH_MODE=standalone' "$APP_DIR/.env" 2>/dev/null; then
+  log "AUTH_MODE=standalone — restart $AUTH_PM2"
+  _pm2_ensure "$AUTH_PM2"
+fi
+pm2 save 2>&1 | tee -a "$LOG_FILE" || true
 NEW=$(git rev-parse --short HEAD)
-log "pm2 restart $PM2_NAME OK — commit $NEW"
+log "pm2 OK — commit $NEW"
 
 if command -v curl >/dev/null 2>&1; then
   _health_port=3000

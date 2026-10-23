@@ -1,0 +1,20 @@
+[
+  {
+    "file": "02-decor-part1-spawn-item.js",
+    "title": "Spawn item decor unique",
+    "start": "function _spawnDecorItem",
+    "end": "function _gameInitDecorRadius"
+  },
+  {
+    "file": "02-decor-part2-stream-gates.js",
+    "title": "Stream fetch, gates, backlog",
+    "start": "function _gameInitDecorRadius",
+    "end": "function _resetDecorSpawnDefer"
+  },
+  {
+    "file": "02-decor-part3-defer-queue.js",
+    "title": "Defer queue + tick spawn",
+    "start": "function _resetDecorSpawnDefer",
+    "toEnd": true
+  }
+]

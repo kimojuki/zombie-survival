@@ -1,0 +1,656 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <title>Zombie Survival — Jeu de survie post-apocalyptique gratuit dans le navigateur</title>
+  <meta name="description" content="Zombie Survival : FPS open-world post-apocalyptique free-to-play dans le navigateur — early access, en cours de développement. Forêt, plage, craft, zombies, multijoueur. PC, mobile, tablette — sans téléchargement.">
+  <meta name="keywords" content="jeu zombie navigateur, survie post-apocalyptique, free to play, jeu multijoueur web, FPS zombie gratuit, open world browser, jeu mobile navigateur, MMO survie">
+  <meta name="author" content="Zombie Survival">
+  <meta name="robots" content="index, follow, max-image-preview:large">
+  <link rel="canonical" href="https://survival.badom.ch/">
+  <link rel="icon" href="/img/favicon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="/img/favicon.svg">
+  <link rel="manifest" href="/manifest.webmanifest">
+
+  <!-- Open Graph -->
+  <meta property="og:type" content="website">
+  <meta property="og:locale" content="fr_FR">
+  <meta property="og:site_name" content="Zombie Survival">
+  <meta property="og:title" content="Zombie Survival — Survie post-apocalyptique free-to-play">
+  <meta property="og:description" content="Open-world FPS dans le navigateur. Early access — jeu en cours de développement. Gratuit, sans install — PC, tablette, mobile.">
+  <meta property="og:url" content="https://survival.badom.ch/">
+  <meta property="og:image" content="https://survival.badom.ch/img/og-zombie-survival.svg">
+  <meta property="og:image:width" content="1200">
+  <meta property="og:image:height" content="630">
+
+  <!-- Twitter -->
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="Zombie Survival — Jeu de survie navigateur gratuit">
+  <meta name="twitter:description" content="Post-apo, multijoueur, early access. Jeu en cours de développement — jouable dans Chrome, Safari ou Firefox, sans téléchargement.">
+  <meta name="twitter:image" content="https://survival.badom.ch/img/og-zombie-survival.svg">
+
+  <meta name="theme-color" content="#070707">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="Zombie Survival">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Oswald:wght@500;600;700&display=swap" rel="stylesheet">
+  <link rel="preload" href="/css/landing.css" as="style">
+  <link rel="stylesheet" href="/css/landing.css">
+  <script src="/js/landing.js" defer></script>
+
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@graph": [
+      {
+        "@type": "WebSite",
+        "@id": "https://survival.badom.ch/#website",
+        "url": "https://survival.badom.ch/",
+        "name": "Zombie Survival",
+        "description": "Jeu de survie post-apocalyptique free-to-play dans le navigateur — early access, en cours de développement",
+        "inLanguage": "fr-FR"
+      },
+      {
+        "@type": "VideoGame",
+        "@id": "https://survival.badom.ch/#game",
+        "name": "Zombie Survival",
+        "description": "FPS open-world post-apocalyptique multijoueur en early access. Survis aux hordes, crafte, explore des cartes massives — projet en cours de développement.",
+        "url": "https://survival.badom.ch/",
+        "genre": ["Survival", "Action", "Shooter", "Open World"],
+        "gamePlatform": ["Web browser", "Windows", "macOS", "Linux", "Android", "iOS"],
+        "applicationCategory": "Game",
+        "operatingSystem": "Any modern web browser",
+        "playMode": "MultiPlayer",
+        "numberOfPlayers": { "@type": "QuantitativeValue", "minValue": 1, "maxValue": 250 },
+        "offers": {
+          "@type": "Offer",
+          "price": "0",
+          "priceCurrency": "EUR",
+          "availability": "https://schema.org/InStock"
+        },
+        "isAccessibleForFree": true,
+        "inLanguage": "fr"
+      },
+      {
+        "@type": "Organization",
+        "@id": "https://survival.badom.ch/#org",
+        "name": "Zombie Survival",
+        "url": "https://survival.badom.ch/"
+      },
+      {
+        "@type": "FAQPage",
+        "@id": "https://survival.badom.ch/#faq",
+        "mainEntity": [
+          {
+            "@type": "Question",
+            "name": "Le jeu est-il terminé ?",
+            "acceptedAnswer": { "@type": "Answer", "text": "Non. Zombie Survival est en cours de développement (early access). Les secteurs forêt et plage sont jouables ; de nouvelles zones et fonctionnalités arrivent régulièrement." }
+          },
+          {
+            "@type": "Question",
+            "name": "Zombie Survival est-il vraiment gratuit ?",
+            "acceptedAnswer": { "@type": "Answer", "text": "Oui — free-to-play : jouez sans payer, sans abonnement obligatoire, directement dans le navigateur." }
+          },
+          {
+            "@type": "Question",
+            "name": "Dois-je télécharger le jeu ?",
+            "acceptedAnswer": { "@type": "Answer", "text": "Non. Le jeu fonctionne entièrement dans le navigateur via WebGL." }
+          },
+          {
+            "@type": "Question",
+            "name": "Sur quels appareils puis-je jouer ?",
+            "acceptedAnswer": { "@type": "Answer", "text": "PC, Mac, Linux, smartphones et tablettes avec Chrome, Firefox, Safari ou Edge récent." }
+          },
+          {
+            "@type": "Question",
+            "name": "Combien de joueurs par carte ?",
+            "acceptedAnswer": { "@type": "Answer", "text": "Jusqu'à 250 joueurs simultanés par secteur open-world." }
+          }
+        ]
+      },
+      {
+        "@type": "HowTo",
+        "@id": "https://survival.badom.ch/#jouer",
+        "name": "Comment jouer à Zombie Survival",
+        "description": "Créez un compte gratuit et lancez le jeu dans votre navigateur en moins d'une minute.",
+        "step": [
+          { "@type": "HowToStep", "name": "Créer un compte", "text": "Choisissez un pseudo et un mot de passe sur la page Jouer." },
+          { "@type": "HowToStep", "name": "Lancer le jeu", "text": "Le moteur 3D WebGL se charge automatiquement dans le navigateur." },
+          { "@type": "HowToStep", "name": "Survivre", "text": "Explorez, loot, craft et affrontez les zombies seul ou en groupe." }
+        ]
+      }
+    ]
+  }
+  </script>
+</head>
+<body>
+  <a class="landing-skip" href="#contenu">Aller au contenu</a>
+
+  <header class="landing-header">
+    <div class="landing-header-inner">
+      <a class="landing-logo" href="/" aria-label="Zombie Survival — accueil">ZOMBIE <span>SURVIVAL</span></a>
+
+      <div class="landing-header-online landing-online-pill landing-online-pill--compact" data-server-status data-status="loading" aria-live="polite">
+        <span class="landing-online-dot" aria-hidden="true"></span>
+        <span class="landing-online-label"><strong data-online-count>—</strong> en ligne</span>
+      </div>
+
+      <button type="button" class="landing-nav-toggle" data-nav-toggle aria-expanded="false" aria-controls="landing-nav-drawer" aria-label="Ouvrir le menu">
+        <span class="landing-nav-toggle-bar" aria-hidden="true"></span>
+        <span class="landing-nav-toggle-bar" aria-hidden="true"></span>
+        <span class="landing-nav-toggle-bar" aria-hidden="true"></span>
+      </button>
+
+      <nav class="landing-nav landing-nav--desktop" aria-label="Navigation principale">
+        <div class="landing-online-pill landing-online-pill--desktop" data-server-status data-status="loading" aria-live="polite">
+          <span class="landing-online-dot" aria-hidden="true"></span>
+          <span class="landing-online-label"><strong data-online-count>—</strong> en ligne · <span data-server-status-label>Serveur</span></span>
+        </div>
+        <a class="landing-nav-link" href="#jeu">Le jeu</a>
+        <a class="landing-nav-link" href="#pourquoi">Pourquoi</a>
+        <a class="landing-nav-link" href="#univers">Univers</a>
+        <a class="landing-nav-link" href="#survie">Survie</a>
+        <a class="landing-nav-link" href="#cartes">Cartes</a>
+        <a class="landing-nav-link" href="#multijoueur">Multijoueur</a>
+        <a class="landing-nav-link" href="#jouer">Jouer</a>
+        <a class="landing-nav-link" href="#faq">FAQ</a>
+        <a class="landing-btn landing-btn-primary" href="/play.html">Jouer gratuitement</a>
+      </nav>
+    </div>
+
+    <div class="landing-nav-backdrop" data-nav-backdrop aria-hidden="true"></div>
+    <nav id="landing-nav-drawer" class="landing-nav-drawer" data-nav-drawer aria-label="Menu mobile">
+      <a class="landing-nav-drawer-link" href="#jeu">Le jeu</a>
+      <a class="landing-nav-drawer-link" href="#pourquoi">Pourquoi le navigateur</a>
+      <a class="landing-nav-drawer-link" href="#univers">Univers</a>
+      <a class="landing-nav-drawer-link" href="#survie">Survie</a>
+      <a class="landing-nav-drawer-link" href="#cartes">Cartes</a>
+      <a class="landing-nav-drawer-link" href="#multijoueur">Multijoueur</a>
+      <a class="landing-nav-drawer-link" href="#jouer">Comment jouer</a>
+      <a class="landing-nav-drawer-link" href="#faq">FAQ</a>
+      <a class="landing-btn landing-btn-primary landing-nav-drawer-cta" href="/play.html">Jouer gratuitement</a>
+      <div class="landing-nav-drawer-online landing-online-pill" data-server-status data-status="loading">
+        <span class="landing-online-dot" aria-hidden="true"></span>
+        <span><strong data-online-count>—</strong> survivants · <span data-server-status-label>Serveur</span></span>
+      </div>
+    </nav>
+  </header>
+
+  <main id="contenu" data-nav-inert>
+    <section class="landing-hero" aria-labelledby="hero-title">
+      <div class="landing-hero-bg" aria-hidden="true"></div>
+      <div class="landing-hero-grid" aria-hidden="true"></div>
+      <div class="landing-hero-inner">
+      <div class="landing-hero-layout">
+        <div class="landing-hero-copy">
+        <div class="landing-badges">
+          <p class="landing-badge landing-badge--dev">Early access · En cours de développement</p>
+          <p class="landing-badge">Free-to-play · Navigateur · Sans téléchargement</p>
+        </div>
+        <h1 id="hero-title">Survis à l'<em>apocalypse</em> avec des centaines de joueurs</h1>
+        <p class="landing-lead">
+          <strong>Zombie Survival</strong> est un FPS open-world post-apocalyptique jouable directement dans votre navigateur.
+          Le projet est en <strong>early access</strong> : jouable dès maintenant, enrichi en continu — sur PC, tablette ou smartphone.
+        </p>
+        <div class="landing-hero-cta">
+          <a class="landing-btn landing-btn-primary landing-btn-block-sm" href="/play.html">Jouer maintenant — c'est gratuit</a>
+          <a class="landing-btn landing-btn-ghost landing-btn-block-sm" href="#jeu">Découvrir le jeu</a>
+        </div>
+
+        <div class="landing-stats" role="list">
+          <div class="landing-stat landing-stat-live" role="listitem">
+            <strong data-online-count class="landing-count">—</strong>
+            <span>survivants connectés</span>
+          </div>
+          <div class="landing-stat" role="listitem">
+            <strong>100 %</strong>
+            <span>navigateur web</span>
+          </div>
+          <div class="landing-stat" role="listitem">
+            <strong>Gratuit</strong>
+            <span>sans abonnement</span>
+          </div>
+          <div class="landing-stat" role="listitem">
+            <strong>Multi</strong>
+            <span>plateformes</span>
+          </div>
+        </div>
+        </div>
+
+        <aside class="landing-live-panel" aria-labelledby="live-panel-title">
+          <p class="landing-live-panel-kicker" id="live-panel-title">Population en direct</p>
+          <div class="landing-live-panel-row">
+            <span class="landing-live-count" data-online-count aria-live="polite">—</span>
+            <span class="landing-live-cap">/ 250 max</span>
+          </div>
+          <div class="landing-capacity-bar" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-label="Remplissage du serveur">
+            <div class="landing-capacity-fill" data-online-fill style="width:0%"></div>
+          </div>
+          <p class="landing-live-hint"><span data-slots-remaining>250</span> places disponibles · mise à jour auto</p>
+          <p class="landing-live-social" data-live-text>Chargement du statut serveur…</p>
+        </aside>
+      </div>
+      </div>
+    </section>
+
+    <div class="landing-trust-bar" aria-hidden="false">
+      <div class="landing-trust-inner">
+        <span class="landing-trust-item landing-trust-status">
+          <span class="landing-online-dot landing-trust-dot" data-server-status data-status="loading" aria-hidden="true"></span>
+          <span data-server-status-label>Serveur</span>
+        </span>
+        <span class="landing-trust-item landing-trust-item--dev">Early access · En développement</span>
+        <span class="landing-trust-item">Free-to-play</span>
+        <span class="landing-trust-item">Sans téléchargement</span>
+        <span class="landing-trust-item">PC · Mobile · Tablette</span>
+        <span class="landing-trust-item">Monde persistant</span>
+      </div>
+    </div>
+
+    <section id="pourquoi" class="landing-section landing-reveal" aria-labelledby="pourquoi-title">
+      <h2 id="pourquoi-title">Pourquoi jouer dans le navigateur ?</h2>
+      <p class="landing-section-intro">
+        Pas de launcher, pas de file d'attente de patch : ouvrez un onglet et entrez en jeu.
+        Zombie Survival repose sur le web moderne pour être accessible partout, tout de suite.
+      </p>
+      <div class="landing-compare">
+        <article class="landing-compare-col landing-compare-col--win">
+          <h3>Zombie Survival</h3>
+          <ul>
+            <li>Gratuit, sans installation</li>
+            <li>PC · Mac · Linux · mobile · tablette</li>
+            <li>Mises à jour instantanées</li>
+            <li>Même compte sur tous vos appareils</li>
+            <li>250 joueurs par carte open-world</li>
+          </ul>
+        </article>
+        <article class="landing-compare-col landing-compare-col--muted">
+          <h3>Jeu installé classique</h3>
+          <ul>
+            <li>Téléchargement de plusieurs Go</li>
+            <li>Souvent limité à PC ou console</li>
+            <li>Patchs et mises à jour lourdes</li>
+            <li>Comptes et versions séparés</li>
+            <li>Barrière à l'entrée plus haute</li>
+          </ul>
+        </article>
+      </div>
+      <div class="landing-pillars" role="list">
+        <div class="landing-pillar" role="listitem">
+          <strong>0 Mo</strong>
+          <span>à télécharger</span>
+        </div>
+        <div class="landing-pillar" role="listitem">
+          <strong>&lt; 1 min</strong>
+          <span>pour commencer</span>
+        </div>
+        <div class="landing-pillar" role="listitem">
+          <strong>1 compte</strong>
+          <span>tous appareils</span>
+        </div>
+        <div class="landing-pillar" role="listitem">
+          <strong>250</strong>
+          <span>joueurs / carte</span>
+        </div>
+      </div>
+    </section>
+
+    <section id="jeu" class="landing-section landing-section-alt landing-reveal" aria-labelledby="jeu-title">
+      <h2 id="jeu-title">Un jeu de survie post-apocalyptique pensé pour le web</h2>
+      <p class="landing-section-intro">
+        Pas de launcher, pas de patch de 50 Go : ouvrez le site, créez votre survivant et entrez dans un monde
+        persistant où chaque ressource compte et chaque nuit peut être la dernière.
+      </p>
+      <div class="landing-features">
+        <article class="landing-feature">
+          <div class="landing-feature-icon" aria-hidden="true">🧟</div>
+          <h3>Horde &amp; tension permanente</h3>
+          <p>Zombies, faim, soif, blessures — la survie ne pardonne pas. FPS mobile-first avec visée et combat au corps à corps.</p>
+        </article>
+        <article class="landing-feature">
+          <div class="landing-feature-icon" aria-hidden="true">🌍</div>
+          <h3>Open-world persistant</h3>
+          <p>Forêts, routes, cabanes, camps… Un monde partagé qui évolue avec tous les joueurs connectés.</p>
+        </article>
+        <article class="landing-feature">
+          <div class="landing-feature-icon" aria-hidden="true">🔨</div>
+          <h3>Craft &amp; construction</h3>
+          <p>Récupérez du loot, fabriquez des outils, fortifiez votre base et préparez-vous à la prochaine vague.</p>
+        </article>
+        <article class="landing-feature">
+          <div class="landing-feature-icon" aria-hidden="true">👥</div>
+          <h3>Multijoueur coop — ou solo</h3>
+          <p>Formez un groupe, partagez les ressources ou survivez seul. Le chat et la coop sont intégrés au jeu.</p>
+        </article>
+        <article class="landing-feature">
+          <div class="landing-feature-icon" aria-hidden="true">📱</div>
+          <h3>Compatible toutes plateformes</h3>
+          <p>Chrome, Firefox, Safari, Edge — sur Windows, Mac, Linux, Android et iOS. Même compte, partout.</p>
+        </article>
+        <article class="landing-feature">
+          <div class="landing-feature-icon" aria-hidden="true">🌙</div>
+          <h3>Cycle jour / nuit</h3>
+          <p>Le monde change avec l'heure : visibilité réduite, ambiance plus dangereuse. Planifiez vos raids et votre retour au camp.</p>
+        </article>
+        <article class="landing-feature">
+          <div class="landing-feature-icon" aria-hidden="true">🎒</div>
+          <h3>Inventaire &amp; loot</h3>
+          <p>Ramassez des ressources, stockez-les, gérez votre équipement. Chaque objet trouvé peut faire la différence entre la vie et la mort.</p>
+        </article>
+        <article class="landing-feature">
+          <div class="landing-feature-icon" aria-hidden="true">⚡</div>
+          <h3>Free-to-play</h3>
+          <p>Accès gratuit au jeu. Pas de paywall pour entrer sur la carte — jouez, progressez, survivez.</p>
+        </article>
+      </div>
+    </section>
+
+    <section id="univers" class="landing-section landing-reveal" aria-labelledby="univers-title">
+      <h2 id="univers-title">Un monde post-apocalyptique à explorer</h2>
+      <p class="landing-section-intro">
+        Forêts denses, routes abandonnées, cabanes isolées, littoral… Chaque zone a son ambiance,
+        son loot et ses dangers. Le secteur de départ est jouable dès maintenant — le reste de la carte
+        s'étend au fil des mises à jour (projet en cours de développement).
+      </p>
+
+      <div class="landing-showcase" aria-label="Aperçu visuel des environnements">
+        <figure class="landing-showcase-card landing-showcase-card--forest">
+          <figcaption>
+            <strong>Forêt de départ</strong>
+            <span>Arbres, sentiers, camps — votre première base de survie</span>
+          </figcaption>
+        </figure>
+        <figure class="landing-showcase-card landing-showcase-card--beach">
+          <figcaption>
+            <strong>Littoral &amp; plage</strong>
+            <span>Spawn scénarisé, cabanes, horizon ouvert — idéal pour débuter</span>
+          </figcaption>
+        </figure>
+        <figure class="landing-showcase-card landing-showcase-card--road">
+          <figcaption>
+            <strong>Réseau routier</strong>
+            <span>Routes persistantes, véhicules abandonnés, points de repère</span>
+          </figcaption>
+        </figure>
+      </div>
+
+      <div class="landing-world-grid" role="list">
+        <article class="landing-sector landing-sector--live" role="listitem">
+          <span class="landing-sector-tag">Disponible</span>
+          <h3>Forêt de départ</h3>
+          <p>Open-world forestier : exploration, bois, chasse au loot, premières constructions. Secteur actif en production.</p>
+        </article>
+        <article class="landing-sector landing-sector--live" role="listitem">
+          <span class="landing-sector-tag">Disponible</span>
+          <h3>Scénario plage</h3>
+          <p>Arrivée sur le littoral, tutoriel intégré, cabanes et ressources côtières. Parfait pour les nouveaux survivants.</p>
+        </article>
+        <article class="landing-sector" role="listitem">
+          <span class="landing-sector-tag landing-sector-tag--soon">À venir</span>
+          <h3>Petite ville &amp; grande ville</h3>
+          <p>Zones urbaines denses, bâtiments lootables, tension PvE maximale — en cours de développement.</p>
+        </article>
+        <article class="landing-sector" role="listitem">
+          <span class="landing-sector-tag landing-sector-tag--soon">À venir</span>
+          <h3>Zone militaire &amp; industrielle</h3>
+          <p>Équipement rare, défis plus durs, ambiance endgame pour les groupes organisés.</p>
+        </article>
+      </div>
+    </section>
+
+    <section id="survie" class="landing-section landing-section-alt landing-reveal" aria-labelledby="survie-title">
+      <h2 id="survie-title">La survie ne pardonne pas</h2>
+      <p class="landing-section-intro">
+        Zombie Survival, ce n'est pas seulement tirer sur des zombies. Faim, soif, blessures et infection
+        font partie du gameplay — comme dans les grands jeux de survie, directement dans votre navigateur.
+      </p>
+
+      <div class="landing-survival-loop" role="list" aria-label="Piliers de survie">
+        <article class="landing-survival-item" role="listitem">
+          <span class="landing-survival-num" aria-hidden="true">01</span>
+          <h3>Faim &amp; soif</h3>
+          <p>Trouvez de l'eau et de la nourriture avant que la jauge ne tombe. Ignorer vos besoins vitaux affaiblit votre survivant.</p>
+        </article>
+        <article class="landing-survival-item" role="listitem">
+          <span class="landing-survival-num" aria-hidden="true">02</span>
+          <h3>Combat &amp; morsures</h3>
+          <p>Affrontez les morts-vivants au corps à corps ou à distance. Les morsures peuvent infecter — soignez-vous ou payez le prix.</p>
+        </article>
+        <article class="landing-survival-item" role="listitem">
+          <span class="landing-survival-num" aria-hidden="true">03</span>
+          <h3>Craft &amp; abri</h3>
+          <p>Fabriquez des outils, renforcez un camp, stockez vos ressources. Un abri sûr vaut mieux qu'une nuit à l'air libre.</p>
+        </article>
+        <article class="landing-survival-item" role="listitem">
+          <span class="landing-survival-num" aria-hidden="true">04</span>
+          <h3>Progression persistante</h3>
+          <p>Votre état de survie et votre position sont sauvegardés. Reconnectez-vous et reprenez là où vous vous êtes arrêté.</p>
+        </article>
+      </div>
+    </section>
+
+    <section id="cartes" class="landing-section landing-reveal" aria-labelledby="cartes-title">
+      <h2 id="cartes-title">Des cartes massives — jusqu'à 250 joueurs</h2>
+      <p class="landing-section-intro">
+        Nos secteurs open-world sont dimensionnés pour accueillir de larges populations sans sacrifier l'immersion.
+        Rencontres, alliances, embuscades : le monde vit grâce à la présence des autres survivants.
+      </p>
+      <div class="landing-features">
+        <article class="landing-feature">
+          <h3>Cartes 250+ joueurs</h3>
+          <p>Architecture serveur pensée pour la montée en charge — objectif : des centaines de survivants sur une même zone.</p>
+        </article>
+        <article class="landing-feature">
+          <h3>Monde persistant</h3>
+          <p>Votre progression, le loot au sol et le décor persistent entre les sessions. Reconnectez-vous où vous vous êtes arrêté.</p>
+        </article>
+        <article class="landing-feature">
+          <h3>Évolution continue</h3>
+          <p>Nouveaux secteurs, POI, bâtiments et contenus ajoutés régulièrement. La carte grandit avec la communauté.</p>
+        </article>
+      </div>
+      <div class="landing-platforms landing-platforms-grid" aria-label="Plateformes compatibles">
+        <span class="landing-platform">Windows · Chrome / Edge</span>
+        <span class="landing-platform">macOS · Safari</span>
+        <span class="landing-platform">Linux</span>
+        <span class="landing-platform">Android · Chrome</span>
+        <span class="landing-platform">iPhone · iPad · Safari</span>
+      </div>
+    </section>
+
+    <section id="multijoueur" class="landing-section landing-section-alt landing-reveal" aria-labelledby="multijoueur-title">
+      <h2 id="multijoueur-title">Multijoueur : coop, chat &amp; monde partagé</h2>
+      <p class="landing-section-intro">
+        Vous n'êtes pas seul dans l'apocalypse. Croisez d'autres survivants en temps réel,
+        formez des groupes, échangez via le chat — ou restez en solo si vous préférez l'isolement.
+      </p>
+      <div class="landing-features">
+        <article class="landing-feature">
+          <h3>Joueurs visibles en direct</h3>
+          <p>Les autres survivants apparaissent sur la carte. Alliances, trades informels ou simples croisements : le monde est vivant.</p>
+        </article>
+        <article class="landing-feature">
+          <h3>Groupes &amp; coopération</h3>
+          <p>Créez ou rejoignez un groupe pour explorer à plusieurs, partager les ressources et sécuriser une zone ensemble.</p>
+        </article>
+        <article class="landing-feature">
+          <h3>Chat intégré</h3>
+          <p>Communiquez sans quitter le jeu. Coordonnez une expédition, prévenez votre équipe ou saluez un inconnu.</p>
+        </article>
+        <article class="landing-feature">
+          <h3>Monde persistant serveur</h3>
+          <p>Le décor, le loot au sol et la progression continuent même quand vous vous déconnectez. Revenez — le secteur a peut-être changé.</p>
+        </article>
+        <article class="landing-feature">
+          <h3>250 places par carte</h3>
+          <p>Capacité serveur pensée pour des populations massives. Le compteur en direct sur cette page reflète la population actuelle.</p>
+        </article>
+        <article class="landing-feature">
+          <h3>Solo ou en équipe</h3>
+          <p>Aucune obligation de groupe. Jouez en ermite ou en clan — le gameplay s'adapte à votre style de survie.</p>
+        </article>
+      </div>
+    </section>
+
+    <section id="exigences" class="landing-section landing-reveal" aria-labelledby="exigences-title">
+      <h2 id="exigences-title">Configuration recommandée</h2>
+      <p class="landing-section-intro">
+        Aucune installation : un navigateur récent suffit. Le jeu est optimisé mobile-first
+        mais profite d'une connexion stable et d'un appareil récent pour le confort graphique.
+      </p>
+      <div class="landing-req-grid">
+        <article class="landing-req-card">
+          <h3>Navigateur</h3>
+          <ul>
+            <li>Chrome 90+ · Edge 90+ · Firefox 90+</li>
+            <li>Safari 15+ (iOS / macOS)</li>
+            <li>WebGL 2 activé</li>
+          </ul>
+        </article>
+        <article class="landing-req-card">
+          <h3>Mobile &amp; tablette</h3>
+          <ul>
+            <li>Android 10+ · iOS 15+</li>
+            <li>4 Go RAM recommandés</li>
+            <li>Wi-Fi ou 4G/5G stable</li>
+            <li>Mode paysage conseillé sur smartphone</li>
+          </ul>
+        </article>
+        <article class="landing-req-card">
+          <h3>PC &amp; Mac</h3>
+          <ul>
+            <li>Windows 10+ · macOS 11+ · Linux récent</li>
+            <li>Souris + clavier pour viser (FPS)</li>
+            <li>Écran 1280×720 minimum</li>
+          </ul>
+        </article>
+        <article class="landing-req-card landing-req-card--tip">
+          <h3>Conseil</h3>
+          <p>Première connexion : laissez le monde se charger quelques secondes. Fermez les onglets lourds sur mobile pour de meilleures performances.</p>
+        </article>
+      </div>
+    </section>
+
+    <section id="jouer" class="landing-section landing-section-alt landing-reveal" aria-labelledby="jouer-title">
+      <h2 id="jouer-title">Comment jouer en quelques étapes</h2>
+      <p class="landing-section-intro">De Google à la plage spawn en moins d'une minute.</p>
+      <ol class="landing-steps">
+        <li class="landing-step">
+          <div>
+            <h3>Créez votre compte gratuit</h3>
+            <p>Choisissez un pseudo, un mot de passe — aucune installation requise.</p>
+          </div>
+        </li>
+        <li class="landing-step">
+          <div>
+            <h3>Lancez le jeu dans le navigateur</h3>
+            <p>Le moteur 3D se charge automatiquement. Idéal en Wi-Fi ou 4G stable.</p>
+          </div>
+        </li>
+        <li class="landing-step">
+          <div>
+            <h3>Survis à l'apocalypse</h3>
+            <p>Explorez, loot, craft, construisez — seul ou en équipe. La nuit tombe, les morts se rapprochent.</p>
+          </div>
+        </li>
+        <li class="landing-step">
+          <div>
+            <h3>Mobile : mode paysage</h3>
+            <p>Sur smartphone, tournez l'appareil en paysage pour une meilleure visibilité et des contrôles FPS confortables.</p>
+          </div>
+        </li>
+      </ol>
+    </section>
+
+    <section id="faq" class="landing-section landing-faq landing-reveal" aria-labelledby="faq-title">
+      <h2 id="faq-title">Questions fréquentes</h2>
+      <p class="landing-section-intro">Tout ce qu'il faut savoir avant de lancer une partie.</p>
+
+      <details>
+        <summary>Le jeu est-il terminé ?</summary>
+        <p>Non. Zombie Survival est en cours de développement (early access). Les secteurs forêt et plage sont jouables ; de nouvelles zones, bâtiments et mécaniques arrivent régulièrement. Des bugs ou des ajustements de gameplay peuvent survenir entre les mises à jour.</p>
+      </details>
+      <details>
+        <summary>Zombie Survival est-il vraiment gratuit ?</summary>
+        <p>Oui — free-to-play signifie que vous pouvez jouer sans payer. Le jeu est accessible via navigateur sans abonnement obligatoire.</p>
+      </details>
+      <details>
+        <summary>Dois-je télécharger le jeu ?</summary>
+        <p>Non. Zombie Survival fonctionne entièrement dans le navigateur (WebGL). Ouvrez le site, connectez-vous et jouez.</p>
+      </details>
+      <details>
+        <summary>Sur quels appareils puis-je jouer ?</summary>
+        <p>PC, Mac, Linux, smartphones et tablettes avec un navigateur récent (Chrome, Firefox, Safari, Edge). Le jeu est conçu mobile-first.</p>
+      </details>
+      <details>
+        <summary>Combien de joueurs par carte ?</summary>
+        <p>Nos cartes open-world ciblent plus de 250 joueurs simultanés par secteur. L'infrastructure évolue pour tenir cette promesse à grande échelle.</p>
+      </details>
+      <details>
+        <summary>Est-ce un jeu multijoueur en ligne ?</summary>
+        <p>Oui — monde persistant partagé, autres joueurs visibles en temps réel, chat, groupes et coopération possibles.</p>
+      </details>
+      <details>
+        <summary>Quel type de jeu est Zombie Survival ?</summary>
+        <p>Un survival shooter post-apocalyptique : FPS, open-world, zombies, craft, construction de base et exploration — dans l'esprit des grands jeux de survie, mais dans le navigateur.</p>
+      </details>
+      <details>
+        <summary>Faut-il une connexion internet ?</summary>
+        <p>Oui — c'est un MMO navigateur en temps réel. Une connexion Wi-Fi ou 4G/5G stable est recommandée, surtout au premier chargement du monde 3D.</p>
+      </details>
+      <details>
+        <summary>Ma progression est-elle sauvegardée ?</summary>
+        <p>Oui. Votre compte, position, inventaire et état de survie persistent entre les sessions sur le serveur.</p>
+      </details>
+      <details>
+        <summary>Puis-je jouer avec des amis ?</summary>
+        <p>Oui — créez un groupe en jeu, coordonnez-vous via le chat et explorez le même secteur. Vous pouvez aussi vous retrouver à un point de rendez-vous sur la carte.</p>
+      </details>
+      <details>
+        <summary>Le jeu est-il en français ?</summary>
+        <p>Oui — l'interface et le site sont en français. Le jeu est développé par une équipe francophone.</p>
+      </details>
+      <details>
+        <summary>Ça consomme beaucoup de batterie sur mobile ?</summary>
+        <p>Un jeu 3D temps réel est exigeant. Réduisez la luminosité, fermez les apps en arrière-plan et privilégiez le Wi-Fi pour limiter la chauffe et la consommation.</p>
+      </details>
+    </section>
+
+    <section class="landing-cta-band landing-reveal" aria-labelledby="cta-title" data-sticky-cta-hide>
+      <h2 id="cta-title">Prêt à survivre ?</h2>
+      <p data-live-text>Rejoignez les survivants en ligne.</p>
+      <a class="landing-btn landing-btn-primary" href="/play.html">Jouer gratuitement</a>
+    </section>
+  </main>
+
+  <footer class="landing-footer" data-nav-inert>
+    <div class="landing-footer-inner">
+      <p class="landing-footer-brand">ZOMBIE <span>SURVIVAL</span></p>
+      <nav class="landing-footer-nav" aria-label="Liens pied de page">
+        <a href="/play.html">Jouer</a>
+        <a href="#pourquoi">Pourquoi</a>
+        <a href="#univers">Univers</a>
+        <a href="#survie">Survie</a>
+        <a href="#multijoueur">Multijoueur</a>
+        <a href="#faq">FAQ</a>
+      </nav>
+      <p class="landing-footer-copy">© 2026 Zombie Survival — Early access · jeu en cours de développement · free-to-play dans le navigateur.</p>
+    </div>
+  </footer>
+
+  <aside class="landing-sticky-cta" aria-label="Jouer maintenant" data-nav-inert>
+    <div class="landing-sticky-cta-inner">
+      <div class="landing-sticky-cta-meta">
+        <span class="landing-online-dot" data-server-status data-status="loading" aria-hidden="true"></span>
+        <span><strong data-online-count>—</strong> en ligne</span>
+      </div>
+      <a class="landing-btn landing-btn-primary" href="/play.html">Jouer</a>
+    </div>
+  </aside>
+</body>
+</html>

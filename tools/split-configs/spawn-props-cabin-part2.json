@@ -1,0 +1,14 @@
+[
+  {
+    "file": "01-props-part2a-cabin-furniture.js",
+    "title": "Mobilier cabine leger",
+    "start": "function _buildCabinTable",
+    "end": "function _buildCabinBasin"
+  },
+  {
+    "file": "01-props-part2b-cabin-heavy.js",
+    "title": "Basin, horloge, portemanteau",
+    "start": "function _buildCabinBasin",
+    "toEnd": true
+  }
+]

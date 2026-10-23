@@ -8,8 +8,8 @@ Vue d'ensemble pour onboarding et reviews PR.
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│  Navigateur (public/)                                       │
-│  game.html → scripts ZS.* (ordre fixe, CACHE_BUST)         │
+│  Navigateur (apps/client)                                  │
+│  game.html → Vite + scripts ZS.* legacy                    │
 │                                                             │
 │  game.js ── boucle render + input                           │
 │  world.js ─ terrain, jour/nuit, végétation                  │
@@ -17,34 +17,74 @@ Vue d'ensemble pour onboarding et reviews PR.
 │  vehicles.js ─ carcasses le long des routes                 │
 │  network.js ─ Socket.io sync                                │
 │  rcon.js ─ console admin UI                                 │
+│  spawn_clearing.js ─ prefabs décor camp + clairière spawn   │
+│    (coffre : yaw mesh interne — voir docs/S01_DECOR_PLACEMENT.md) │
+│  camp_textures.js ─ textures bois/toile (prefabs décor)     │
 │  sector_*.js ─ contenu monde par zone                       │
 └──────────────────────┬──────────────────────────────────────┘
                        │ Socket.io (JWT auth)
                        │ REST /api/auth/*
 ┌──────────────────────▼──────────────────────────────────────┐
-│  server.js                                                    │
+│  apps/server/index.js                                        │
 │  • players, zombies, items, structures (Maps en mémoire)   │
 │  • Zombie AI tick 100ms + jour/nuit partagé                  │
 │  • Loot bâtiments, butins de mort, structures joueurs        │
-│  • RCON (src/rcon.js)                                        │
+│  • Persistance monde autoritaire → BDD (flush ~500 ms)       │
+│  • RCON (apps/server/src/rcon.js)                            │
 └──────────────────────┬──────────────────────────────────────┘
                        │
 ┌──────────────────────▼──────────────────────────────────────┐
-│  src/db.js — SQLite (dev) ou MySQL/MariaDB (prod)            │
-│  Table players : position, health, kills, inventory JSON     │
+│  apps/server/src/db.js — SQLite dev ou MySQL/MariaDB prod    │
+│  players : position, health, kills, inventory JSON           │
+│  world_decor / world_structures / world_items / world_meta   │
+│  world_zombies / world_sleepers                              │
 └─────────────────────────────────────────────────────────────┘
 ```
 
 ---
 
-## Chargement client (`game.html`)
+## Chargement client (`apps/client/game.html`)
 
-Ordre des scripts (important) :
+### Version client et cache
 
-1. `noise.js` — hauteur terrain
-2. `road_network.js` — **avant** buildings
-3. `buildings.js`, `vehicles.js`, secteurs, `world.js`
-4. `rcon.js`, `chat.js`, `network.js`, `game.js`
+Source unique : `apps/client/public/client-version.json` (`version`).
+
+1. Au chargement, le client appelle `GET /api/client-version` (no-store).
+2. Si la version diffère de `localStorage.zs_client_version` → purge `caches` + rechargement forcé (`?v=…&_=…`).
+3. CSS, `loading.js` et tous les scripts legacy reçoivent `?v=<version>`.
+4. `game.html` est servi avec `Cache-Control: no-store` ; les assets JS/CSS en `no-cache`.
+
+**Après un changement JS/CSS client** : incrémenter uniquement `client-version.json` (plus besoin de Ctrl+F5 manuel).
+
+### Chargement ressources (World Streamer v2)
+
+Migration progressive documentée dans **[design/RESOURCE_LOADING.md](../design/RESOURCE_LOADING.md)**.
+
+| Module | Rôle |
+|--------|------|
+| `src/engine/world-content-loader.js` | Queue décor, anneaux CRITICAL→STREAM, scoring P0 |
+| `src/engine/budget-governor.js` | Budget ms/frame décor |
+| `src/engine/backlog-scheduler.js` | Pression defer/LOD/stream |
+| `src/engine/spatial-chunk-streamer.js` | Couches forêt/plage, visibilité 64 m |
+
+Boot : `game.html` → `src/engine/install.js` → scripts legacy → `network.js` utilise `ZS.Engine.ContentLoader`.
+
+### UI panneaux (`panel_ui.js`)
+
+Tous les menus modaux jeu (inventaire, craft, coffre, fouille, groupe, QA) partagent :
+
+- **JS** : `ZS.PanelUI` (`create`, `makeHeader`, `makeSlot`, `makeSplitBody`, grilles hotbar/sac/coffre).
+- **CSS** : classes `.zs-panel`, `.zs-backdrop`, `.zs-panel-hdr`, `.zs-panel-hint` — section *Panneaux ZS unifiés* dans `style.css`.
+
+Pour changer le look global (couleurs, taille desktop, header) : modifier `style.css` (bloc unifié) et/ou `panel_ui.js`, pas chaque fichier séparément.
+
+Ordre des scripts legacy (important) dans `apps/client/src/bootstrap/legacy-modules.js` :
+
+1. `noise.js`, `camp_textures.js`, `buildings.js`
+2. `road_network.js`, `trails.js`, `spawn_clearing.js`, `vehicle_prefabs.js`, `proc_roads.js`, `proc_spawn.js` — **spawn + sentier + RN + épaves**
+3. `world.js`, `game.js` — pas de secteurs legacy (`sector_*.js` non chargés)
+
+Pipeline monde (`world.js`) : `registerTerrain` → `applyRoadFlattening` → `buildTerrain` → `buildAll` → `RoadNetwork.buildMeshes(scene, ZS.B.M)`.
 
 Le premier client connecté envoie au serveur :
 - `world-colliders` — collision zombies
@@ -58,12 +98,38 @@ Le premier client connecté envoie au serveur :
 | Système | Autorité | Notes |
 |---------|----------|-------|
 | Position joueur | Hybride | Client envoie `move`, serveur rebroadcast |
-| Zombies | Serveur | IA, dégâts, respawn |
+| Zombies | Serveur + BDD | IA tick 100 ms ; positions ~5 s (`world_zombies`) |
 | Tir / hit | Serveur | Raycast vs zombies |
-| Jour/nuit | Serveur | `_worldTime`, sync via `zombie-tick` |
-| Inventaire / survie | Client + persist | `inventory-sync`, `survival-sync` |
+| Jour/nuit | Serveur + BDD | `_worldTime` dans `world_meta` |
+| Inventaire / survie / craft | Serveur | `inventory-authoritative`, `survival-update`, `craft-queue` |
 | Routes / terrain | Client | Généré localement, identique pour tous |
 | Admin RCON | Serveur | Commandes via socket ou API |
+| Décor monde | Serveur + BDD | Arbres, rochers, épaves, barrières, builds — IDs `seed_*` ; chop/mine/portes persistés |
+| Joueur endormi | Serveur + BDD | `world_sleepers` (corps déco + inventaire) |
+| Constructions joueur | Serveur + BDD | `place-decor-prefab` → `world_decor` |
+| Loot / drops au sol | Serveur + BDD | `world_items` ; TTL 30 min sauf loot bâtiments |
+| Colliders / eau / loot bâtiments | Client → serveur + BDD | Premier client ; snapshot `world_meta` |
+
+### Décor camp et textures (`camp_textures.js`)
+
+Les **prefabs décor** (caisses, sacs, bedroll, établi, abri, poteaux…) sont des meshes procéduraux texturés avec les PNG du dossier `apps/client/public/textures/camp/` :
+
+| Texture | Usage |
+|---------|--------|
+| `wood_planks_light.png` | Planches, caisses, établi, bûches |
+| `wood_planks.png` | Montants / cadres bois foncé |
+| `olive_canvas.png` | Toile, sacs, couvertures |
+| `trail_forest.png` | Sentiers piéton (`type: trail` dans RoadNetwork) |
+| `spawn_ground.png` | Patch sol clairière spawn |
+
+API client : `ZS.CampTextures.load(url, repeatX, repeatY)` et `ZS.CampTextures.materials()` (cache partagé avec `mapgen.js`).
+
+Pose in-game / admin :
+- **Prefabs** : `ZS.spawnDecorPrefab(scene, prefabId, x, y, z)` — liste via `ZS.listDecorPrefabs()`
+- **Items posés** : `ZS.spawnDecorItem(scene, type, x, y, z)` — réutilise `getItemModel()` (loot équipable ≠ prefab bois/toile)
+- **Éditeur décor live** : F8 → Calibrages → `admin-live-decor.js` — catalogue prefabs, preview raycast (`ZS.raycastViewToGround`), pose `POST /api/admin/decor`, calibrage `PATCH /api/admin/decor/:id`
+- **Sentiers (refonte)** : `proc_roads.js` génère le tracé (`buildTrailTowardRoad`) ; `ZS.Trails.buildMesh` + jonction `RoadNetwork` — voir [docs/ROAD_NETWORK.md](ROAD_NETWORK.md)
+- **RCON** : `decoradd prefab …` — voir [docs/RCON.md](RCON.md)
 
 ### Contrôles
 
@@ -71,6 +137,19 @@ Le premier client connecté envoie au serveur :
 |------------|-------------|--------|-----|
 | **PC** | WASD / flèches | Pointer lock (clic zone jeu) | Clic gauche |
 | **Mobile** | Joystick gauche | Glisser zone droite | Bouton 🔫 |
+
+### Audio multijoueur
+
+| Event | Direction | Rôle |
+|-------|-----------|------|
+| `attack` | client → serveur | `{ kind, weapon? }` — relai `player-attack` avec position serveur |
+| `player-attack` | serveur → autres | `{ id, kind, weapon, x, z, t }` — tir / mêlée spatialisés |
+| `footstep` | client → serveur | `{ surface, sprint }` — rate limit 200 ms |
+| `player-footstep` | serveur → autres | `{ id, surface, sprint, x, z, t }` — pas spatialisés |
+
+**Local uniquement** (normal) : ambiance biome (position propre), bruissements forêt, oiseaux optionnels, filtre sous l’eau.
+
+**Monde synchronisé** (tous les clients) : `decor-door-state` (porte spatialisée), `decor-tree-chop` / `decor-tree-fell` (coupe + impact chute), `decor-rock-mine` (broadcast).
 
 ### Chat joueurs
 
@@ -88,7 +167,7 @@ Le premier client connecté envoie au serveur :
 
 Après envoi sur PC, le **pointer lock** reprend automatiquement.
 
-**Serveur** : rate limit 800 ms par joueur. **`GET /api/health`** expose `"chat": true` si le handler est actif — **redémarrer Node** (`pm2 restart zombie`) après toute modif de `server.js`.
+**Serveur** : rate limit 800 ms par joueur. **`GET /api/health`** expose `"chat": true` si le handler est actif — **redémarrer Node** (`pm2 restart zombie`) après toute modif de `apps/server/index.js`.
 
 Anti-doublon client : ignore l’écho serveur via `senderId` (socket.id), pas via le pseudo.
 
@@ -136,16 +215,41 @@ Voir [.env.example](../.env.example) — copier vers `.env` local.
 |--------|-----------|
 | Serveur | `PORT`, `JWT_SECRET` |
 | BDD | `DB_CLIENT`, `SQLITE_PATH` ou `DB_HOST`… |
-| Logs | `LOG_LEVEL`, `LOG_*_MS` |
+| Logs | `LOG_LEVEL`, `LOG_DIR`, `LOG_FILE`, `LOG_CONSOLE`, `LOG_*_MS` |
 | Admin | `RCON_PASSWORD`, `ADMIN_USERS` |
 
 ---
 
 ## Logs serveur
 
-Module `src/logger.js` — niveaux : `error`, `warn`, `info`, `debug`, `trace`.
+Module `apps/server/src/logger.js` — niveaux : `error`, `warn`, `info`, `debug`, `trace`.
 
-En dev : `LOG_LEVEL=debug` recommandé.
+| Variable | Défaut | Rôle |
+|----------|--------|------|
+| `LOG_LEVEL` | `debug` (dev) / `info` (prod) | Verbosité console + fichiers |
+| `LOG_DIR` | `logs/server` | Dossier des fichiers log (relatif à la racine repo) |
+| `LOG_FILE` | `1` | `0` = pas d'écriture fichier |
+| `LOG_CONSOLE` | `pretty` | `plain` = sans couleurs ANSI |
+
+### Logs client (chargement)
+
+Module `apps/client/public/js/dev_log.js` — **`ZS.LoadLog`** (filtre DevTools : `zs-load`).
+
+| Activation | Détail |
+|------------|--------|
+| localhost | auto (comme DevLog) |
+| `?loadlog` | force ON · `?loadlog=0` force OFF |
+| `localStorage` | `zs_load_log=1` / `0` |
+
+Timeline : boot scripts → auth → world build → socket/game-init → spawn décor (progression + spawns lents) → résumé `ZS.LoadLog.summary()`.
+
+**Fichiers générés** (si `LOG_FILE` actif) :
+- `logs/server/YYYY-MM-DD.log` — journal complet de la session
+- `logs/server/error.log` — erreurs uniquement (append)
+
+**Boot** : `boot-report.js` trace chaque étape d'initialisation (persist, seed, zombies…) avec durée en ms + résumé final.
+
+En dev : `LOG_LEVEL=debug` recommandé. Au démarrage, la console affiche le chemin des fichiers log.
 
 ---
 
@@ -154,6 +258,90 @@ En dev : `LOG_LEVEL=debug` recommandé.
 - `.env`
 - `database/*.sqlite*`
 - `notes-local/`
-- `.inventory_reset_*_done` (marqueurs one-shot)
+- `logs/` (fichiers log serveur — voir `LOG_DIR`)
 
 Voir `.gitignore`.
+
+---
+
+## Server authority (anti-cheat)
+
+Depuis 2026-06-07, le serveur est **source de vérité** pour l'inventaire, la survie, le craft, le combat et la récolte.
+
+### Pattern intent → validate → snapshot
+
+```
+Client emit(intent) → Serveur valide → mute p.inv / p.survival
+                  → inventory-authoritative / survival-update
+```
+
+| Domaine | Events client | Réponse serveur |
+|---------|---------------|-----------------|
+| Inventaire | `item-pickup`, `item-drop`, `inventory-move`, `use-item`, `weapon-reload` | `inventory-authoritative` ; `use-item` résout par **type** puis slot — voir [INVENTORY_CONSUMPTION.md](./INVENTORY_CONSUMPTION.md) |
+| Survie | *(aucun push)* | `survival-update` (tick 1 s) |
+| Craft | `craft-queue`, `craft-cancel` | `craft-queue-state`, `craft-complete` |
+| Combat | `shoot` + `weaponType`, `weapon-reload` | stats `weapon-stats.mjs` (plombs + dispersion serveur) ; 1 event/pompe ; usure via `wearInvTool` |
+| Mouvement | `move` | cap vitesse + clamp `WORLD_RADIUS` / Y + **secteur 01** (`sector-bounds.mjs`) ; `move-correction` si triche |
+| Récolte | `decor-chop`, `decor-mine` + `toolType` | grant items serveur |
+| Construction | `place-structure`, `place-decor-prefab` | consume inv avant spawn |
+| Mort | *(serveur only)* | `player-death` |
+
+### Rejetés / ignorés
+
+- `inventory-sync` — log debug, ignoré
+- `survival-sync` — ignoré
+- `player-died` client — ignoré (mort via tick survie / zombies)
+- Snapshot `inv` dans lock/unlock porte — supprimé
+
+### Modules
+
+| Fichier | Rôle |
+|---------|------|
+| `apps/server/src/inventory-ops.js` | `ensureSlotGrid`, `findStackByType`, `cloneInv`, `_addStackToInv`, `_removeFromSlot` |
+| `apps/server/src/inv-debug.js` | Snapshots inventaire + logs `[inv-debug]` serveur |
+| `apps/client/public/js/consume_debug.js` | Logs `[inv-debug]` client, compare, `dumpWithServer()` |
+| `apps/server/src/survival-tick.js` | Faim/soif/infection/dégâts |
+| `apps/server/src/craft-queue.js` | File craft par joueur |
+| `packages/shared/src/item-effects.mjs` | Effets consommables |
+| `packages/shared/src/craft-recipes.mjs` | Recettes partagées |
+| `packages/shared/src/weapon-stats.mjs` | Dégâts/portée/cadence |
+
+### Mouvement
+
+`move` : anti-teleport léger (max ~11 u/s × 1.5). Rejet → `move-correction`. Client envoie max 20 Hz.
+
+### Performance réseau / client
+
+| Optimisation | Détail |
+|--------------|--------|
+| Inventaire | `_scheduleInvAuth` coalesce les emits dans le même tick Node |
+| Tir / récolte | ammo + usure outil → un seul `inventory-authoritative` |
+| Client inv | `applyAuthoritativeInv` préserve le slot hotbar actif (pas de reset UI) |
+| Zombies | `zombie-tick` payload compact ; client throttle hauteur terrain |
+| Survie | dégâts faim/soif via `survival-update` (pas de double `take-damage`) |
+| Morsure zombie | infection **uniquement** sur morsure (~32 % des coups) ; griffes = saignement possible ; PvP n'infecte pas |
+
+### Monde
+
+`world-colliders` : terrain first-client only ; plus de merge décor client.
+
+### Intro plage (beats v3)
+
+Flux **intent → validate → snapshot** comme le reste de l’inventaire.
+
+```
+Client E sur veilleuse → intro-torch-pickup { id, x, z }
+  → tryCampfireBeatNear (zone feu depuis decorItems)
+  → onTorchCampfirePickup → inventory-authoritative
+```
+
+| Fichier | Rôle |
+|---------|------|
+| `packages/shared/src/intro-beach-beats.mjs` | États beats, `beatTriggeredByPosition`, migration |
+| `packages/shared/src/beach-intro-placements.mjs` | Zones beat, `resolveIntroCampfireZone`, placements monde |
+| `apps/server/src/intro-beach-beats.mjs` | Spawn loot perso, pickup torche, ticks beats |
+| `apps/client/public/js/beach_intro_prefabs.js` | Prefab ring + torche intégrée, visibilité sync |
+| `apps/client/public/js/spawn_scenario.js` | `mergeServerScenario`, golden hour |
+
+La zone campfire suit le décor `spawn_beach_campfire_ring` en base (déplacement admin OK). Spec design : `design/secteur/INTRO_BEACH_SCENARIO_V3.md`.
+

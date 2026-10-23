@@ -1,0 +1,20 @@
+# Cloudflare Tunnel — dev local ou VM prod
+# Doc : docs/VM_DEPLOY.md · docs/DOCKER_PROD_SIM.md
+#
+# Chaîne :
+#   Joueur → Cloudflare HTTPS :443 → cloudflared → http://127.0.0.1:443 → nginx → game
+#   (pas de TLS sur l'origin — Cloudflare gère le SSL)
+#
+# Prérequis : npm run docker:sim:up  puis  cloudflared tunnel run zombie-dev
+
+tunnel: zombie-dev
+credentials-file: C:/Users/YOU/.cloudflared/<tunnel-id>.json
+
+ingress:
+  - hostname: survival.badom.ch
+    service: http://127.0.0.1:443
+    originRequest:
+      connectTimeout: 30s
+      disableChunkedEncoding: true
+      httpHostHeader: survival.badom.ch
+  - service: http_status:404

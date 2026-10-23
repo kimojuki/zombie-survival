@@ -1,0 +1,107 @@
+# VM App — nginx + game + auth (sans MariaDB)
+# DB distante via DB_HOST / AUTH_DB_HOST — voir docs/ARCHITECTURE_TIERS.md
+#
+# Dev (2 stacks même PC) :
+#   docker compose -f docker-compose.db.yml up -d
+#   DB_HOST=mariadb docker compose -f docker-compose.app.yml up -d
+#
+# Prod (2 VM) :
+#   DB_HOST=10.0.0.10  (IP privée VM db)
+
+name: zs-app
+
+services:
+  auth:
+    build:
+      context: ../..
+      dockerfile: infra/docker/Dockerfile
+    image: zs-node:prod-sim
+    restart: unless-stopped
+    stop_grace_period: 15s
+    env_file: .env
+    environment:
+      NODE_ENV: production
+      AUTH_HOST: 0.0.0.0
+      AUTH_PORT: 3001
+      HEALTH_PORT: 3001
+      TRUST_PROXY: 'true'
+      DB_CLIENT: mysql
+      AUTH_DB_CLIENT: mysql
+      DB_HOST: ${DB_HOST:?DB_HOST requis — IP VM db ou mariadb}
+      AUTH_DB_HOST: ${AUTH_DB_HOST:-${DB_HOST}}
+      DB_PORT: ${DB_PORT:-3306}
+      AUTH_DB_PORT: ${AUTH_DB_PORT:-3306}
+      DB_USER: ${DB_USER:-zs_app}
+      AUTH_DB_USER: ${AUTH_DB_USER:-${DB_USER:-zs_app}}
+      DB_PASS: ${DB_PASS}
+      AUTH_DB_PASS: ${AUTH_DB_PASS:-${DB_PASS}}
+      DB_NAME: zombie_game_db
+      AUTH_DB_NAME: zombie_auth_db
+    entrypoint: ['sh', 'infra/docker/scripts/auth-entrypoint.sh']
+    expose:
+      - '3001'
+    networks:
+      - zs-app-internal
+      - zs-db-net
+    healthcheck:
+      test: ['CMD', 'curl', '-sf', 'http://127.0.0.1:3001/api/health']
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 60s
+    mem_limit: 512m
+    cpus: 0.5
+
+  game:
+    build:
+      context: ../..
+      dockerfile: infra/docker/Dockerfile
+    image: zs-node:prod-sim
+    restart: unless-stopped
+    stop_grace_period: 60s
+    env_file: .env
+    environment:
+      NODE_ENV: production
+      HOST: 0.0.0.0
+      PORT: 3000
+      HEALTH_PORT: 3000
+      TRUST_PROXY: 'true'
+      AUTH_MODE: standalone
+      AUTH_INTERNAL_URL: http://auth:3001
+      DB_CLIENT: mysql
+      DB_HOST: ${DB_HOST}
+      DB_PORT: ${DB_PORT:-3306}
+      DB_USER: ${DB_USER:-zs_app}
+      DB_PASS: ${DB_PASS}
+      DB_NAME: zombie_game_db
+      LOG_DIR: /app/logs/server
+    entrypoint: ['sh', 'infra/docker/scripts/game-entrypoint.sh']
+    volumes:
+      - ${ZS_DATA_DIR:-./data}/logs:/app/logs/server
+    expose:
+      - '3000'
+    depends_on:
+      auth:
+        condition: service_healthy
+    networks:
+      - zs-app-internal
+      - zs-db-net
+      - zs-edge
+    healthcheck:
+      test: ['CMD', 'curl', '-sf', 'http://127.0.0.1:3000/api/health']
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 120s
+    mem_limit: 8g
+    cpus: 3
+
+networks:
+  zs-app-internal:
+    internal: true
+  zs-db-net:
+    external: true
+    name: zs-db-net
+  zs-edge:
+    external: true
+    name: zs-edge

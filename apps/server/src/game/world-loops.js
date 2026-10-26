@@ -248,15 +248,28 @@ setInterval(() => {
       : false;
     if (nearestDist < detectRange && hasLOS) {
       z.aggroTimer = AGGRO_MEMORY;
+      z.lastSeenX = nearestP.x;
+      z.lastSeenZ = nearestP.z;
     } else if (z.aggroTimer > 0 && nearestDist < detectRange * 1.25 && !hasLOS) {
       z.aggroTimer = Math.max(0, z.aggroTimer - DT * AGGRO_LOST_SIGHT_DRAIN);
     } else {
       z.aggroTimer = Math.max(0, z.aggroTimer - DT);
     }
+    if (nearestP && hasLOS) {
+      z.lastSeenX = nearestP.x;
+      z.lastSeenZ = nearestP.z;
+    }
 
-    if (z.aggroTimer > 0 && nearestP && hasLOS) {
-      // Chase at full speed
-      const ang = Math.atan2(nearestP.z - z.z, nearestP.x - z.x);
+    // Poursuite tant qu'aggro : la LOS n'est PAS requise pour bouger (arbres/props
+    // bloquent souvent la vue et figeaient les zombies en wander). L'attaque reste
+    // gated par LOS. Sans joueur visible, chase lastSeen.
+    const chaseTx = nearestP ? nearestP.x
+      : (Number.isFinite(z.lastSeenX) ? z.lastSeenX : null);
+    const chaseTz = nearestP ? nearestP.z
+      : (Number.isFinite(z.lastSeenZ) ? z.lastSeenZ : null);
+
+    if (z.aggroTimer > 0 && chaseTx != null && chaseTz != null) {
+      const ang = Math.atan2(chaseTz - z.z, chaseTx - z.x);
       z.angle = ang;
       // Déplacement + collision murs/objets (glisse le long, entre par les portes)
       const waterMul = getWaterSlowFactor(z.x, z.z);
@@ -270,41 +283,45 @@ setInterval(() => {
       z.attackTimer = Math.max(0, (z.attackTimer || 0) - DT);
       const zDmg = z.damage || ZOMBIE_DMG;
       const zCd = z.attackCd || ZOMBIE_ATTACK_CD;
-      const hitDist = Math.hypot(nearestP.x - z.x, nearestP.z - z.z);
-      const hitLOS = hitDist < detectRange * 1.5 ? hasLOS : false;
-      z.meleeReach = hitDist < ZOMBIE_ATTACK_RANGE + 0.15 && hitLOS;
-      if (hitDist < ZOMBIE_ATTACK_RANGE && hitLOS
-          && !nearestP.invincible && nearestP.posSynced && z.attackTimer <= 0) {
-        z.attackTimer = zCd;
-        if (nearestP.bedSleep) _wakeFromBedSleep(nearestP, 'damage');
-        nearestP.health = Math.max(0, nearestP.health - zDmg);
-        if (!nearestP.survival) nearestP.survival = { ...DEFAULT_SURVIVAL };
-        const zSv = nearestP.survival;
-        const svMod = getSurvivalMod();
-        const biteFx = svMod
-          ? svMod.applyZombieMeleeSurvival(zSv, zDmg)
-          : { bit: false, infected: false };
-        nearestP.dirty = true;
-        const hitSock = io.sockets.sockets.get(nearestP.socketId);
-        if (hitSock) {
-          hitSock.emit('take-damage', {
-            dmg: zDmg,
-            health: nearestP.health,
-            bite: biteFx.bit,
-            infected: biteFx.infected,
+      if (nearestP) {
+        const hitDist = Math.hypot(nearestP.x - z.x, nearestP.z - z.z);
+        const hitLOS = hitDist < detectRange * 1.5 ? hasLOS : false;
+        z.meleeReach = hitDist < ZOMBIE_ATTACK_RANGE + 0.15 && hitLOS;
+        if (hitDist < ZOMBIE_ATTACK_RANGE && hitLOS
+            && !nearestP.invincible && nearestP.posSynced && z.attackTimer <= 0) {
+          z.attackTimer = zCd;
+          if (nearestP.bedSleep) _wakeFromBedSleep(nearestP, 'damage');
+          nearestP.health = Math.max(0, nearestP.health - zDmg);
+          if (!nearestP.survival) nearestP.survival = { ...DEFAULT_SURVIVAL };
+          const zSv = nearestP.survival;
+          const svMod = getSurvivalMod();
+          const biteFx = svMod
+            ? svMod.applyZombieMeleeSurvival(zSv, zDmg)
+            : { bit: false, infected: false };
+          nearestP.dirty = true;
+          const hitSock = io.sockets.sockets.get(nearestP.socketId);
+          if (hitSock) {
+            hitSock.emit('take-damage', {
+              dmg: zDmg,
+              health: nearestP.health,
+              bite: biteFx.bit,
+              infected: biteFx.infected,
+            });
+            _emitSurvivalUpdate(hitSock, nearestP);
+          }
+          if (nearestP.health <= 0) _handlePlayerDeath(nearestP);
+          log.throttled(\`zombie-hit:\${nearestP.username}\`, 2000, () => {
+            log.debug('combat', 'zombie hit player', {
+              player: nearestP.username,
+              prefab: z.prefabId,
+              dmg: zDmg,
+              health: nearestP.health,
+              pos: { x: +nearestP.x.toFixed(1), z: +nearestP.z.toFixed(1) },
+            });
           });
-          _emitSurvivalUpdate(hitSock, nearestP);
         }
-        if (nearestP.health <= 0) _handlePlayerDeath(nearestP);
-        log.throttled(\`zombie-hit:\${nearestP.username}\`, 2000, () => {
-          log.debug('combat', 'zombie hit player', {
-            player: nearestP.username,
-            prefab: z.prefabId,
-            dmg: zDmg,
-            health: nearestP.health,
-            pos: { x: +nearestP.x.toFixed(1), z: +nearestP.z.toFixed(1) },
-          });
-        });
+      } else {
+        z.meleeReach = false;
       }
     } else {
       z.meleeReach = false;

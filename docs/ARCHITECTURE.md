@@ -98,7 +98,7 @@ Le premier client connecté envoie au serveur :
 | Système | Autorité | Notes |
 |---------|----------|-------|
 | Position joueur | Hybride | Client envoie `move`, serveur rebroadcast |
-| Zombies | Serveur + BDD | IA tick 100 ms ; positions ~5 s (`world_zombies`) |
+| Zombies | Serveur + BDD | IA tick 100 ms ; chase tant qu’aggro (LOS pour detect/attaque seulement) ; positions persistées (`world_zombies`) |
 | Tir / hit | Serveur | Raycast vs zombies |
 | Jour/nuit | Serveur + BDD | `_worldTime` dans `world_meta` |
 | Inventaire / survie / craft | Serveur | `inventory-authoritative`, `survival-update`, `craft-queue` |

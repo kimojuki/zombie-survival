@@ -1,5 +1,11 @@
 'use strict';
 
+const {
+  normalizeLoadedZombie,
+  shouldPersistZombie,
+  zombiePayloadForPersist,
+} = require('./game/zombie-normalize');
+
 /** Prefabs posés par les joueurs (liste de référence pour docs / RCON). */
 const PLAYER_BUILD_PREFABS = new Set([
   'storage_chest',
@@ -108,7 +114,7 @@ function createWorldPersist(db, log) {
   }
 
   function scheduleUpsertZombie(z) {
-    if (!z?.id) return;
+    if (!shouldPersistZombie(z)) return;
     pendingZombieDeletes.delete(z.id);
     pendingZombieUpserts.set(z.id, z);
     queueFlush();
@@ -184,7 +190,9 @@ function createWorldPersist(db, log) {
     pendingZombieDeletes.clear();
 
     for (const [, z] of pendingZombieUpserts) {
-      await db.upsertWorldZombie(z.id, JSON.stringify(z));
+      const payload = zombiePayloadForPersist(z);
+      if (!payload) continue;
+      await db.upsertWorldZombie(z.id, JSON.stringify(payload));
     }
     pendingZombieUpserts.clear();
 
@@ -301,13 +309,20 @@ function createWorldPersist(db, log) {
     if (zombies && db.loadAllWorldZombies) {
       const zombieRows = await db.loadAllWorldZombies();
       for (const row of zombieRows) {
-        let z;
+        let raw;
         try {
-          z = JSON.parse(row.payload);
+          raw = JSON.parse(row.payload);
         } catch {
           continue;
         }
-        if (!z?.id) continue;
+        const z = normalizeLoadedZombie(raw);
+        if (!z) {
+          // Tutoriel / payload cassé : nettoyer la ligne pour ne pas recharger des statues
+          if (raw?.id != null && db.deleteWorldZombie) {
+            try { await db.deleteWorldZombie(raw.id); } catch { /* ignore */ }
+          }
+          continue;
+        }
         zombies.set(z.id, z);
         maxZombieId = Math.max(maxZombieId, Number(z.id) || 0);
         zombieCount++;

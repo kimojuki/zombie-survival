@@ -4,7 +4,7 @@
 
   const zombieMeshes = new Map(); // id -> entry
   const _seenIds = new Set();
-  const POS_LERP = 14;
+  const POS_LERP = 22;
   let _scene = null;
 
   function _disposeGroup(group) {
@@ -271,7 +271,8 @@
     }
     entry.targetX = z.x;
     entry.targetZ = z.z;
-    if (moved > 0.5) {
+    // Snap plus tôt pour éviter l'impression de statues (lerp en retard sur le serveur)
+    if (moved > 0.22) {
       entry.group.position.x = z.x;
       entry.group.position.z = z.z;
       entry.group.position.y = ZS.getTerrainHeight(z.x, z.z);
@@ -289,7 +290,7 @@
       entry.lastHealth = z.health;
     }
 
-    entry.isMoving = moved > 0.005;
+    entry.isMoving = moved > 0.003;
     entry.prevX = z.x;
     entry.prevZ = z.z;
   }

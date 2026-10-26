@@ -14,6 +14,11 @@ function sanitizeZombieRuntime(z, opts = {}) {
     z.frozen = false;
     z.scenarioFrozen = false;
   }
+  // Combat tutoriel : ne jamais rester frozen si aggro / fight
+  if (z.tutorial && z.frozen && (z.aggroTimer > 0 || z._forceUnfreeze)) {
+    z.frozen = false;
+    z.scenarioFrozen = false;
+  }
   if (!Number.isFinite(z.speed) || z.speed <= 0) {
     z.speed = typeof defaultSpeed === 'function' ? defaultSpeed() : defaultSpeed;
   }
@@ -25,6 +30,39 @@ function sanitizeZombieRuntime(z, opts = {}) {
   if (!Number.isFinite(z.aggroTimer) || z.aggroTimer < 0) z.aggroTimer = 0;
   if (!Number.isFinite(z.x) || !Number.isFinite(z.z)) return false;
   return true;
+}
+
+function _tryMove(z, ang, dist, resolveZombieCollision, zR) {
+  const tx = z.x + Math.cos(ang) * dist;
+  const tz = z.z + Math.sin(ang) * dist;
+  const out = resolveZombieCollision(tx, tz, zR);
+  return { x: out[0], z: out[1], moved: Math.hypot(out[0] - z.x, out[1] - z.z) };
+}
+
+/**
+ * Si coincé dans des colliders, tente glissades puis nudge libre.
+ */
+function _unstuck(z, resolveZombieCollision, zR) {
+  const base = Number.isFinite(z.wanderAngle) ? z.wanderAngle : Math.random() * Math.PI * 2;
+  const tries = [0, 0.7, -0.7, 1.5, -1.5, Math.PI];
+  for (let i = 0; i < tries.length; i++) {
+    const ang = base + tries[i];
+    const step = _tryMove(z, ang, 0.85, resolveZombieCollision, zR);
+    if (step.moved > 0.2) {
+      z.x = step.x;
+      z.z = step.z;
+      z.wanderAngle = ang;
+      z.angle = ang;
+      return step.moved;
+    }
+  }
+  // Dernier recours : sortir sans collision (évite statues dans la géométrie)
+  const ang = base + Math.PI * (Math.random() * 0.5 - 0.25);
+  z.x += Math.cos(ang) * 0.75;
+  z.z += Math.sin(ang) * 0.75;
+  z.wanderAngle = ang;
+  z.angle = ang;
+  return 0.75;
 }
 
 /**
@@ -39,9 +77,9 @@ function stepZombieAi(z, ctx) {
     DETECT_RANGE = 12,
     AGGRO_MEMORY = 5,
     AGGRO_LOST_SIGHT_DRAIN = 4,
-    WANDER_SPEED = 0.25,
-    WANDER_TURN_MIN = 2,
-    WANDER_TURN_MAX = 5,
+    WANDER_SPEED = 0.55,
+    WANDER_TURN_MIN = 1.2,
+    WANDER_TURN_MAX = 3.5,
     WORLD_RADIUS = 500,
     resolveZombieCollision = (x, zz) => [x, zz],
     getWaterSlowFactor = () => 1,
@@ -80,12 +118,13 @@ function stepZombieAi(z, ctx) {
     : (Number.isFinite(z.lastSeenZ) ? z.lastSeenZ : null);
 
   let mode = 'wander';
+  const waterMul = getWaterSlowFactor(z.x, z.z);
+  const zR = z.collideRadius || ZOMBIE_R;
+
   if (z.aggroTimer > 0 && chaseTx != null && chaseTz != null) {
     mode = 'chase';
     const ang = Math.atan2(chaseTz - z.z, chaseTx - z.x);
     z.angle = ang;
-    const waterMul = getWaterSlowFactor(z.x, z.z);
-    const zR = z.collideRadius || ZOMBIE_R;
     const chase = resolveZombieCollision(
       z.x + Math.cos(ang) * z.speed * waterMul * DT,
       z.z + Math.sin(ang) * z.speed * waterMul * DT,
@@ -101,12 +140,10 @@ function stepZombieAi(z, ctx) {
       z.wanderTimer = WANDER_TURN_MIN + Math.random() * (WANDER_TURN_MAX - WANDER_TURN_MIN);
     }
     z.angle = z.wanderAngle;
-    const waterMul = getWaterSlowFactor(z.x, z.z);
     const wx = Math.max(-WORLD_RADIUS, Math.min(WORLD_RADIUS,
       z.x + Math.cos(z.wanderAngle) * z.speed * WANDER_SPEED * waterMul * DT));
     const wz = Math.max(-WORLD_RADIUS, Math.min(WORLD_RADIUS,
       z.z + Math.sin(z.wanderAngle) * z.speed * WANDER_SPEED * waterMul * DT));
-    const zR = z.collideRadius || ZOMBIE_R;
     const wander = resolveZombieCollision(wx, wz, zR);
     z.x = wander[0];
     z.z = wander[1];
@@ -118,8 +155,20 @@ function stepZombieAi(z, ctx) {
     return { mode: 'frozen', moved: 0 };
   }
 
-  const moved = Math.hypot(z.x - prevX, z.z - prevZ);
-  // Force sync client même pour les petits pas de wander (< ancien EPS 0.05).
+  let moved = Math.hypot(z.x - prevX, z.z - prevZ);
+
+  // Coincé dans murs/arbres → déblocage forcé (sinon statues visibles)
+  if (moved < 0.004) {
+    z._stuckTicks = (z._stuckTicks || 0) + 1;
+    if (z._stuckTicks >= 8) {
+      moved = _unstuck(z, resolveZombieCollision, zR);
+      z._stuckTicks = 0;
+    }
+  } else {
+    z._stuckTicks = 0;
+  }
+
+  // Force sync client même pour petits pas
   if (moved > 0.001) z._syncDirty = true;
   return { mode, moved };
 }

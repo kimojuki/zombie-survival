@@ -27,6 +27,13 @@ Chaque feature ou refonte doit laisser une trace pour l'équipe :
 
 Index complet : [README.md](README.md#documentation-à-lire-avant-un-push--review) · Stratégie refonte : [docs/V2_REFONTE_STRATEGY.md](docs/V2_REFONTE_STRATEGY.md) · **Plans actifs** : [docs/ROADMAP_PLANS.md](docs/ROADMAP_PLANS.md) · **Chargement ressources** : [design/RESOURCE_LOADING.md](design/RESOURCE_LOADING.md)
 
+### Completed — Zombies toujours immobiles : unstuck + wander (2026-10-26)
+
+- **Cause restante** : coincés dans colliders (move net ~0) ; tutoriel `frozen` trop long ; wander encore trop lent / sync 2 s.
+- **Fix** : `_unstuck` après 8 ticks bloqués ; `WANDER_SPEED` 0.55 ; full sync 1 s ; fight/reveal force unfreeze ; client lerp/snap plus agressif.
+- **Tests** : unstuck dans `zombie-ai-step` ; live movement ; `client-version` → `20261026-zombie-unstuck2`.
+- **CI** : lint — ignore `**/chunks/**`, fix fallthrough / dupe `pool` / regex-spaces / ESM `decor-game-init.js` (0 errors).
+
 ### Completed — Zombies immobiles + hits ratés (2026-10-26)
 
 - **Causes** : sync delta filtrée (EPS 0.05 ≈ pas de wander) ; `frozen`/speed NaN runtime ; aim dx/dz ~0 (regard vertical) ignoré ; hitRadius trop strict vs désync.

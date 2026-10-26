@@ -78,35 +78,7 @@
 
     if (!_mod(e)) return false;
 
-
-
-    switch (e.code) {
-
-      case 'KeyR':
-
-      case 'KeyL':
-
-      case 'KeyF':
-
-      case 'KeyP':
-
-      case 'KeyS':
-
-      case 'KeyH':
-
-      case 'KeyJ':
-
-      case 'KeyD':
-
-      case 'KeyG':
-
-        return true;
-
-      default:
-
-        return false;
-
-    }
+    return ['KeyR', 'KeyL', 'KeyF', 'KeyP', 'KeyS', 'KeyH', 'KeyJ', 'KeyD', 'KeyG'].includes(e.code);
 
   }
 

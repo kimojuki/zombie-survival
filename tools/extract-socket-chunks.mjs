@@ -106,9 +106,9 @@ const CHUNKS = [
 ];
 
 function extractTemplateBody(src) {
-  const m = src.match(/\$\{INVENTORY_HANDLERS\}\n\n([\s\S]*?)\n    \}\n  `\)/);
+  const m = src.match(/\$\{INVENTORY_HANDLERS\}\n\n([\s\S]*?)\n {4}\}\n {2}`\)/);
   if (m) return m[1];
-  const m2 = src.match(/with \(deps\) \{\n\n([\s\S]*?)\n    \}\n  `\)/);
+  const m2 = src.match(/with \(deps\) \{\n\n([\s\S]*?)\n {4}\}\n {2}`\)/);
   if (m2) return m2[1].replace(/^\/\*\* use-item[\s\S]*?\n\}\n\n/, '');
   throw new Error('template body not found');
 }

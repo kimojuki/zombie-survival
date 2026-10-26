@@ -6,6 +6,8 @@ export default [
     ignores: [
       'node_modules/**',
       'apps/client/dist/**',
+      // Fragments concaténés par bundle:* — non parseables seuls
+      '**/chunks/**',
       'build/**',
       'public/**',
       'database/**',
@@ -38,7 +40,7 @@ export default [
     },
   },
   {
-    files: ['**/*.mjs', 'apps/client/src/**/*.js'],
+    files: ['**/*.mjs', 'apps/client/src/**/*.js', 'apps/server/src/decor-game-init.js'],
     languageOptions: {
       sourceType: 'module',
     },

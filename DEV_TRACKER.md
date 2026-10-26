@@ -27,6 +27,12 @@ Chaque feature ou refonte doit laisser une trace pour l'équipe :
 
 Index complet : [README.md](README.md#documentation-à-lire-avant-un-push--review) · Stratégie refonte : [docs/V2_REFONTE_STRATEGY.md](docs/V2_REFONTE_STRATEGY.md) · **Plans actifs** : [docs/ROADMAP_PLANS.md](docs/ROADMAP_PLANS.md) · **Chargement ressources** : [design/RESOURCE_LOADING.md](design/RESOURCE_LOADING.md)
 
+### Completed — Fix déplacement zombies (LOS + persist gel) (2026-10-26)
+
+- **Cause** : poursuite exigeait LOS continue → arbres/props figeaient l’IA en wander lent ; zombies tutoriel/`frozen` persistés = statues après reboot ; typo fallback collision `nx` au lieu de `nz`.
+- **Fix** : chase tant qu’aggro (attaque toujours gated LOS) + `lastSeen` ; `zombie-normalize.js` au load/upsert ; correction fallback box.
+- **Tests** : `tests/zombie-normalize.test.mjs`.
+
 ### Completed — Infomaniak npm ci / better-sqlite3 optionnel (2026-10-23)
 
 - **Cause** : Node 20.4 + `g++` interdit → compile `better-sqlite3` échoue → `npm ci` abort → `Cannot find module 'dotenv'`.

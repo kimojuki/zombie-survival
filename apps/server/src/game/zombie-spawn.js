@@ -225,7 +225,7 @@ function createZombieSpawn(deps) {
           if (m === l) nx = c.cx - c.hw - agentR;
           else if (m === r) nx = c.cx + c.hw + agentR;
           else if (m === t) nz = c.cz - c.hd - agentR;
-          else nx = c.cz + c.hd + agentR;
+          else nz = c.cz + c.hd + agentR;
         }
       } else if (c.x !== undefined) {
         const dx = nx - c.x;

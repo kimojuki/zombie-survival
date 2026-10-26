@@ -26,9 +26,9 @@ const AGGRO_LOST_SIGHT_DRAIN = 4;
 const ZOMBIE_ATTACK_RANGE = 1.35;
 const ZOMBIE_DMG = 8;
 const ZOMBIE_ATTACK_CD = 0.9;
-const WANDER_SPEED = 0.25;
-const WANDER_TURN_MIN = 2;
-const WANDER_TURN_MAX = 5;
+const WANDER_SPEED = 0.55;
+const WANDER_TURN_MIN = 1.2;
+const WANDER_TURN_MAX = 3.5;
 
 /**
  * Spawn zombies, population cible, collision autoritaire.

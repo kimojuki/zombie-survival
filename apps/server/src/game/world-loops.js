@@ -79,9 +79,9 @@ function _zombiesNear(px, pz, list) {
   return out;
 }
 
-const ZOMBIE_FULL_SYNC_EVERY = 20;
-// Wander ≈ speed*0.25*DT ≈ 0.05 m/tick — l'ancien seuil 0.05 filtrait presque tous les moves.
-const ZOMBIE_SYNC_POS_EPS2 = 0.015 * 0.015;
+const ZOMBIE_FULL_SYNC_EVERY = 10; // 1 s — positions toujours rafraîchies côté client
+// Wander ~ speed*0.55*DT — seuil bas pour ne pas filtrer les petits pas
+const ZOMBIE_SYNC_POS_EPS2 = 0.01 * 0.01;
 const ZOMBIE_SYNC_ANGLE_EPS = 0.04;
 const PLAYER_SPATIAL_QUERY_R = 28;
 const PLAYER_MOVE_RADIUS = 150;

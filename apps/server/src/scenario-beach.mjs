@@ -232,19 +232,29 @@ export function createScenarioBeach(ctx) {
   }
 
   function shouldSkipZombieAi(z, pList) {
-    if (z.frozen) return true;
-    if (!z.tutorial || z.ownerPlayerId == null) return false;
+    if (!z.tutorial || z.ownerPlayerId == null) {
+      // Monde : jamais skip pour frozen orphelin (sanitize le lève)
+      return false;
+    }
     const owner = pList.find((p) => normPlayerId(p.id) === normPlayerId(z.ownerPlayerId));
     if (!owner) return true;
     const sc = owner.inv?.scenario;
     if (!sc || isAct1Done(sc)) return true;
-    if (sc.step === 'fight') {
+    // Combat : toujours dégeler + aggro
+    if (sc.step === 'fight' || sc.step === 'reveal') {
+      z.frozen = false;
+      z.scenarioFrozen = false;
+      z._forceUnfreeze = true;
+      if (sc.step === 'fight' && z.aggroTimer < 1) z.aggroTimer = 4;
       const dist = Math.hypot(owner.x - z.x, owner.z - z.z);
-      if (dist > TUTORIAL_FLEE_DIST) {
+      if (sc.step === 'fight' && dist > TUTORIAL_FLEE_DIST) {
         z.aggroTimer = 0;
         return true;
       }
+      return false;
     }
+    // Silhouette / approach : reste figé (cinématique)
+    if (z.frozen) return true;
     return false;
   }
 

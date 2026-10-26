@@ -27,6 +27,12 @@ Chaque feature ou refonte doit laisser une trace pour l'équipe :
 
 Index complet : [README.md](README.md#documentation-à-lire-avant-un-push--review) · Stratégie refonte : [docs/V2_REFONTE_STRATEGY.md](docs/V2_REFONTE_STRATEGY.md) · **Plans actifs** : [docs/ROADMAP_PLANS.md](docs/ROADMAP_PLANS.md) · **Chargement ressources** : [design/RESOURCE_LOADING.md](design/RESOURCE_LOADING.md)
 
+### Completed — Zombies immobiles + hits ratés (2026-10-26)
+
+- **Causes** : sync delta filtrée (EPS 0.05 ≈ pas de wander) ; `frozen`/speed NaN runtime ; aim dx/dz ~0 (regard vertical) ignoré ; hitRadius trop strict vs désync.
+- **Fix** : `zombie-ai-step.js` (sanitize + chase + `_syncDirty`) ; EPS sync 0.015 ; broadcast sock fallback ; aim fallback `rotY` ; hitR plancher 0.85 ; client `hit` marque `isMoving`.
+- **Tests** : `zombie-ai-step`, `zombie-combat-aim`, `zombie-live-movement` ; `client-version` → `20261026-zombie-move-sync`.
+
 ### Completed — Fix déplacement zombies (LOS + persist gel) (2026-10-26)
 
 - **Cause** : poursuite exigeait LOS continue → arbres/props figeaient l’IA en wander lent ; zombies tutoriel/`frozen` persistés = statues après reboot ; typo fallback collision `nx` au lieu de `nz`.

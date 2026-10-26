@@ -55,11 +55,13 @@
     const entry = zombieMeshes.get(id);
     if (!entry) return;
     if (pos && Number.isFinite(pos.x) && Number.isFinite(pos.z)) {
+      const knocked = Math.hypot(pos.x - entry.targetX, pos.z - entry.targetZ);
       entry.targetX = pos.x;
       entry.targetZ = pos.z;
       entry.prevX = pos.x;
       entry.prevZ = pos.z;
       if (pos.angle != null) entry.targetAngle = pos.angle;
+      if (knocked > 0.01) entry.isMoving = true;
     }
     _flashRed(entry.group);
     _updateHealthBar(entry, health, maxHealth ?? entry.maxHealth);

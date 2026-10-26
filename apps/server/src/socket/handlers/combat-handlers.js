@@ -28,9 +28,19 @@ const COMBAT_HANDLERS = `
     if (p._deathHandled) return;
     const combatMod = _combatMod || await combatModPromise;
     const wmod = _weaponStatsMod || await weaponStatsModPromise;
-    const len = Math.hypot(d.dx, d.dz);
-    if (len < 0.001) return;
-    const nx = d.dx / len, nz = d.dz / len;
+    let len = Math.hypot(d.dx, d.dz);
+    let nx;
+    let nz;
+    if (len < 0.05) {
+      // Visée quasi verticale (dx/dz ~0) : fallback facing joueur (rotY Three.js, forward -Z).
+      const yaw = Number.isFinite(p.rotY) ? p.rotY : 0;
+      nx = -Math.sin(yaw);
+      nz = -Math.cos(yaw);
+      len = 1;
+    } else {
+      nx = d.dx / len;
+      nz = d.dz / len;
+    }
     const weaponType = String(d.weaponType || p.equipped || '__fist__').slice(0, 60);
     const stats = wmod.getWeaponStats(weaponType);
     if (!wmod.playerHasWeapon(p.inv, weaponType, _iterInvStacks)) return;

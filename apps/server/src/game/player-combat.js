@@ -253,7 +253,8 @@ function createPlayerCombat(deps) {
     }
 
     for (const z of zombieList) {
-      const hitR = z.hitRadius || ray.radius || playerR;
+      // Rayon hit généreux : hitRadius prefab + radius arme, plancher 0.85 (latence / désync visuel).
+      const hitR = Math.max(z.hitRadius || 0, ray.radius || 0, 0.85);
       const hit = combatMod.rayHitXZ(ray.ox, ray.oz, ray.nx, ray.nz, ray.range, z.x, z.z, hitR);
       if (hit && hit.t < minT) {
         minT = hit.t;

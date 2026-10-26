@@ -113,6 +113,7 @@ function buildServerRuntimeContext(deps) {
       ensureZombiePopulation: zombieSpawn.ensureZombiePopulation,
       _trimZombiePopulation: (...args) => zombieSpawn.trimZombiePopulation(...args),
       _zombieHasLineOfSight: zombieSpawn.zombieHasLineOfSight,
+      _stepZombieAi: require('./game/zombie-ai-step').stepZombieAi,
       _dropZombieKillLoot: playerCombat.dropZombieKillLoot,
       getSurvivalMod: () => lazyMods.survival,
       DEFAULT_SURVIVAL,

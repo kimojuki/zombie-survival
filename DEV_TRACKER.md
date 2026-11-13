@@ -34,6 +34,12 @@ Index complet : [README.md](README.md#documentation-à-lire-avant-un-push--revie
 - Lock : `skills-lock.json` (source + hashes pour `npx skills update` / `check`).
 - Pertinent pour ce jeu : `router`, `threejs-*`, `fps-shooter`, `survival-crafting`, disciplines (game-ai, save-systems, performance-optimization, …).
 - Note : le catalogue complet (Godot/Unity/Unreal/…) peut saturer le budget de listing des skills ; si besoin, réduire à `router` + web-engines + genres utiles.
+- **CI quality** : lint `dev` déjà rouge — correctifs ESLint pour débloquer la PR :
+  - `eslint.config.mjs` ignore `.agents/**`, `.claude/skills/**`, `**/chunks/**` ; `apps/server/src/**/*.js` en `module`
+  - `browser-shortcuts-guard.js` — Set à la place du switch fallthrough
+  - `bootstrap-game-server.js` — clé `pool` dupliquée
+  - `extract-socket-chunks.mjs` — `no-regex-spaces`
+  - `client-version.json` → `20261113-gamedev-skills`
 
 ### Completed — SpatialChunkStreamer L3 (2026-06-09)
 

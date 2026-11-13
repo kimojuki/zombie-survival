@@ -13,6 +13,11 @@ export default [
       'worlDesign/**',
       'coverage/**',
       '*.config.cjs',
+      // Agent skill packs (markdown + engine snippets, not app code)
+      '.agents/**',
+      '.claude/skills/**',
+      // Extracted IIFE fragments — incomplete JS by design
+      '**/chunks/**',
     ],
   },
   js.configs.recommended,
@@ -38,7 +43,7 @@ export default [
     },
   },
   {
-    files: ['**/*.mjs', 'apps/client/src/**/*.js'],
+    files: ['**/*.mjs', 'apps/client/src/**/*.js', 'apps/server/src/**/*.js'],
     languageOptions: {
       sourceType: 'module',
     },

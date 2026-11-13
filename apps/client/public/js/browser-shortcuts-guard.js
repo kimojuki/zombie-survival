@@ -14,6 +14,10 @@
 
   const TEXT_EDIT_CODES = new Set(['KeyA', 'KeyC', 'KeyV', 'KeyX', 'KeyZ', 'KeyY']);
 
+  const BROWSER_MOD_CODES = new Set([
+    'KeyR', 'KeyL', 'KeyF', 'KeyP', 'KeyS', 'KeyH', 'KeyJ', 'KeyD', 'KeyG',
+  ]);
+
 
 
   function _mod(e) {
@@ -78,35 +82,7 @@
 
     if (!_mod(e)) return false;
 
-
-
-    switch (e.code) {
-
-      case 'KeyR':
-
-      case 'KeyL':
-
-      case 'KeyF':
-
-      case 'KeyP':
-
-      case 'KeyS':
-
-      case 'KeyH':
-
-      case 'KeyJ':
-
-      case 'KeyD':
-
-      case 'KeyG':
-
-        return true;
-
-      default:
-
-        return false;
-
-    }
+    return BROWSER_MOD_CODES.has(e.code);
 
   }
 

@@ -315,7 +315,6 @@ async function bootstrapGameServer(serverDir) {
     server,
     path,
     fs,
-    pool,
     USE_CLIENT_BUILD,
     ZOMBIE_COUNT,
     RESOURCE_REGEN_URL: stack.mods.urls.RESOURCE_REGEN_URL,

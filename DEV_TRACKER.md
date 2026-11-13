@@ -27,6 +27,14 @@ Chaque feature ou refonte doit laisser une trace pour l'équipe :
 
 Index complet : [README.md](README.md#documentation-à-lire-avant-un-push--review) · Stratégie refonte : [docs/V2_REFONTE_STRATEGY.md](docs/V2_REFONTE_STRATEGY.md) · **Plans actifs** : [docs/ROADMAP_PLANS.md](docs/ROADMAP_PLANS.md) · **Chargement ressources** : [design/RESOURCE_LOADING.md](design/RESOURCE_LOADING.md)
 
+### Completed — awesome-gamedev-agent-skills (2026-11-13)
+
+- Installé [gamedev-skills/awesome-gamedev-agent-skills](https://github.com/gamedev-skills/awesome-gamedev-agent-skills) via `npx skills add` (80 skills + router).
+- Emplacements projet : `.agents/skills/` (Cursor) et `.claude/skills/` (Claude Code) — copies, pas symlinks.
+- Lock : `skills-lock.json` (source + hashes pour `npx skills update` / `check`).
+- Pertinent pour ce jeu : `router`, `threejs-*`, `fps-shooter`, `survival-crafting`, disciplines (game-ai, save-systems, performance-optimization, …).
+- Note : le catalogue complet (Godot/Unity/Unreal/…) peut saturer le budget de listing des skills ; si besoin, réduire à `router` + web-engines + genres utiles.
+
 ### Completed — SpatialChunkStreamer L3 (2026-06-09)
 
 - **`spatial-chunk-keys.js`** + **`spatial-chunk-streamer.js`** — grille 64 m, couches forêt/plage, tick visibilité, prefetch NEAR.
